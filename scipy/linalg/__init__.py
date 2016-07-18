@@ -45,6 +45,7 @@ Basics
    norm - Matrix and vector norm
    lstsq - Solve a linear least-squares problem
    pinv - Pseudo-inverse (Moore-Penrose) using lstsq
+   pinv3 - Pseudo-inverse using hermitian matrix
    pinvh - Pseudo-inverse of hermitian matrix
    kron - Kronecker product of two arrays
    khatri_rao - Khatri-Rao product of two arrays

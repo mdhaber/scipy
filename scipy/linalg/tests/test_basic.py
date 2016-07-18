@@ -12,7 +12,7 @@ from numpy.testing import (assert_equal, assert_almost_equal, assert_,
 import pytest
 from pytest import raises as assert_raises
 
-from scipy.linalg import (solve, inv, det, lstsq, pinv, pinvh, norm,
+from scipy.linalg import (solve, inv, det, lstsq, pinv, pinv3, pinvh, norm,
                           solve_banded, solveh_banded, solve_triangular,
                           solve_circulant, circulant, LinAlgError, block_diag,
                           matrix_balance, qr, LinAlgWarning)
@@ -1544,6 +1544,8 @@ class TestPinv:
         a = array([[1, 2, 3], [4, 5, 6], [7, 8, 10]], dtype=float)
         a_pinv = pinv(a)
         assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
+        a_pinv = pinv3(a)
+        assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
 
     def test_simple_complex(self):
         a = (array([[1, 2, 3], [4, 5, 6], [7, 8, 10]],
@@ -1551,33 +1553,43 @@ class TestPinv:
                                        dtype=float))
         a_pinv = pinv(a)
         assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
+        a_pinv = pinv3(a)
+        assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
 
     def test_simple_singular(self):
         a = array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=float)
         a_pinv = pinv(a)
+        a_pinv3 = pinv3(a)
         expected = array([[-6.38888889e-01, -1.66666667e-01, 3.05555556e-01],
                           [-5.55555556e-02, 1.30136518e-16, 5.55555556e-02],
                           [5.27777778e-01, 1.66666667e-01, -1.94444444e-01]])
         assert_array_almost_equal(a_pinv, expected)
+        assert_array_almost_equal(a_pinv3, expected)
 
     def test_simple_cols(self):
         a = array([[1, 2, 3], [4, 5, 6]], dtype=float)
         a_pinv = pinv(a)
+        a_pinv3 = pinv3(a)
         expected = array([[-0.94444444, 0.44444444],
                           [-0.11111111, 0.11111111],
                           [0.72222222, -0.22222222]])
         assert_array_almost_equal(a_pinv, expected)
+        assert_array_almost_equal(a_pinv3, expected)
 
     def test_simple_rows(self):
         a = array([[1, 2], [3, 4], [5, 6]], dtype=float)
         a_pinv = pinv(a)
+        a_pinv3 = pinv3(a)
         expected = array([[-1.33333333, -0.33333333, 0.66666667],
                           [1.08333333, 0.33333333, -0.41666667]])
         assert_array_almost_equal(a_pinv, expected)
+        assert_array_almost_equal(a_pinv3, expected)
 
     def test_check_finite(self):
         a = array([[1, 2, 3], [4, 5, 6.], [7, 8, 10]])
         a_pinv = pinv(a, check_finite=False)
+        assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
+        a_pinv = pinv3(a, check_finite=False)
         assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
 
     def test_native_list_argument(self):
