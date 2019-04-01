@@ -166,7 +166,9 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
 
     constraints : {NonLinearConstraint, LinearConstraint, Bounds}
         Constraints on the solver, over and about those applied by the `bounds`
-        kwd. Uses the approach by Lampinen [5]_.
+        kwd. Uses the approach by Lampinen [5]_. The `polish` keyword is
+        incompatible with `constraints` (because 'L-BFGS-B is not a constrained
+        solver). Therefore, if `constraints` apply polishing is turned off.
 
         .. versionadded:: 1.3.0
 
@@ -239,6 +241,19 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
     ...                                 workers=2)
     >>> result.x, result.fun
     (array([1., 1., 1., 1., 1.]), 1.9216496320061384e-19)
+
+    Let's try and do a constrained minimization
+    >>> from scipy.optimize import NonlinearConstraint
+    >>> def constr_f(x):
+    ...     return np.array(x[0] + x[1])
+    >>>
+    >>> # the sum of x[0] and x[1] must be less than 1.9
+    >>> nlc = NonlinearConstraint(constr_f, -np.inf, 1.9)
+    >>> bounds = [(0,2), (0, 2)]
+    >>> result = differential_evolution(rosen, bounds, constraints=(nlc),
+    ...                                 seed=1)
+    >>> result.x, result.fun
+    (array([0.96633867, 0.93363577]), 0.0011361355854792312)
 
     Next find the minimum of the Ackley function
     (https://en.wikipedia.org/wiki/Test_functions_for_optimization).
@@ -425,7 +440,9 @@ class DifferentialEvolutionSolver(object):
         Requires that `func` be pickleable.
     constraints : {NonLinearConstraint, LinearConstraint, Bounds}
         Constraints on the solver, over and above those specified by the
-        `bounds` kwd.
+        `bounds` kwd. The `polish` keyword is incompatible with `constraints`
+        (because 'L-BFGS-B is not a constrained solver). Therefore, if
+        `constraints` apply polishing is turned off.
     """
 
     # Dispatch of mutation strategy method (binomial or exponential).
@@ -586,6 +603,10 @@ class DifferentialEvolutionSolver(object):
                 constraints.keep_feasible = feas
                 raise e
             constraints.keep_feasible = feas
+
+        # turn off polishing if constraints are applicable
+        if self.constraints:
+            self.polish = False
 
         self.constraint_violation = np.zeros((self.num_population_members, 1))
         self.feasible = np.ones(self.num_population_members, bool)
@@ -809,6 +830,12 @@ class DifferentialEvolutionSolver(object):
                 self.population_energies[0] = result.fun
                 self.population[0] = self._unscale_parameters(result.x)
 
+        if self.constraints:
+            DE_result.constr = [c.excess_violation(result.x) for
+                                c in self.constraints]
+            DE_result.constr_violation = np.max(
+                np.concatenate(DE_result.constr))
+
         return DE_result
 
     def _calculate_population_energies(self, population):
@@ -872,9 +899,22 @@ class DifferentialEvolutionSolver(object):
         self.constraint_violation[[l, 0], :])
 
     def _constraint_violation_fn(self, x):
-        # works out constraint violation for each of the constraints for a
-        # given solution
-        return np.sum([c.excess_violation(x) for c in self.constraints], axis=0)
+        """
+        Calculates total constraint violation for all the constraints, for a given
+        solution.
+
+        Parameters
+        ----------
+        x : ndarray
+            Solution vector
+
+        Returns
+        -------
+        cv : ndarray
+            Total violation of constraints. Has shape (M,), where M is the number
+            of constraints
+        """
+        return np.concatenate([c.excess_violation(x) for c in self.constraints])
 
     def _calculate_population_feasibilities(self, population):
         """
@@ -900,6 +940,7 @@ class DifferentialEvolutionSolver(object):
             return np.ones(num_members, bool), np.zeros((num_members, 1))
 
         parameters_pop = self._scale_parameters(population)
+
         constraint_violation = np.array([self._constraint_violation_fn(x)
                                          for x in parameters_pop])
         feasible = ~(np.sum(constraint_violation, axis=1) > 0)

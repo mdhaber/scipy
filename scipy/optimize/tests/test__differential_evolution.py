@@ -5,10 +5,11 @@ import multiprocessing
 
 from scipy.optimize import _differentialevolution
 from scipy.optimize._differentialevolution import DifferentialEvolutionSolver
-from scipy.optimize import differential_evolution
-from scipy.optimize._constraints import Bounds
-import numpy as np
+from scipy.optimize import differential_evolution, minimize
+from scipy.optimize._constraints import Bounds, NonlinearConstraint
 from scipy.optimize import rosen
+
+import numpy as np
 from numpy.testing import (assert_equal, assert_allclose,
                            assert_almost_equal,
                            assert_string_equal, assert_)
@@ -554,3 +555,98 @@ class TestDifferentialEvolutionSolver(object):
         solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)])
         solver.solve()
         assert_(solver.converged())
+
+    def test_constraint_setup(self):
+        def constr_f(x):
+            return [x[0] + x[1]]
+        def constr_f2(x):
+            return [x[0]**2 + x[1], x[0] - x[1]]
+
+        nlc = NonlinearConstraint(constr_f, -np.inf, 1.9)
+
+        solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)],
+                                             constraints=(nlc))
+
+        # is constraint violation function correct
+        cv = solver._constraint_violation_fn([1.0, 1.0])
+        assert_almost_equal(cv, 0.1)
+
+        # are population feasibilities correct
+        # [0.5, 0.5] corresponds to scaled values of [1., 1.]
+        feas, cv = solver._calculate_population_feasibilities(
+            np.array([[0.5, 0.5], [1., 1.]]))
+        assert_equal(feas, [False, False])
+        assert_almost_equal(cv, np.array([[0.1], [2.1]]))
+        assert(cv.shape == (2, 1))
+
+        nlc2 = NonlinearConstraint(constr_f2, -np.inf, 1.8)
+        solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)],
+                                             constraints=(nlc, nlc2))
+
+        # for multiple constraints the constraint violations should
+        # be concatenated.
+        cv = solver._constraint_violation_fn([1.2, 1.])
+        assert_almost_equal(cv, [0.3, 0.64, 0])
+
+        feas, cv = solver._calculate_population_feasibilities(
+            np.array([[0.5, 0.5], [0.6, 0.5]]))
+        assert_equal(feas, [False, False])
+        assert_almost_equal(cv, np.array([[0.1, 0.2, 0], [0.3, 0.64, 0]]))
+
+        cv = solver._constraint_violation_fn([2., 2.])
+        assert_almost_equal(cv, [2.1, 4.2, 0])
+
+        feas, cv = solver._calculate_population_feasibilities(
+            np.array([[0.5, 0.5], [1., 1.]]))
+        assert_equal(feas, [False, False])
+        assert_almost_equal(cv, np.array([[0.1, 0.2, 0], [2.1, 4.2, 0]]))
+        assert(cv.shape == (2, 3))
+
+        # should accept valid values
+        cv = solver._constraint_violation_fn([0.5, 0.5])
+        assert_almost_equal(cv, [0., 0., 0.])
+
+        feas, cv = solver._calculate_population_feasibilities(
+            np.array([[0.25, 0.25], [1., 1.]]))
+        assert_equal(feas, [True, False])
+        assert_almost_equal(cv, np.array([[0.0, 0.0, 0.], [2.1, 4.2, 0]]))
+        assert(cv.shape == (2, 3))
+
+    def test_constraint_solve(self):
+        def constr_f(x):
+            return np.array([x[0] + x[1]])
+
+        nlc = NonlinearConstraint(constr_f, -np.inf, 1.9)
+
+        solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)],
+                                             constraints=(nlc))
+
+        res = solver.solve()
+        assert(constr_f(res.x) <= 1.9)
+        assert(res.success)
+
+    def test_accept_trial(self):
+        # _accept_trial(self, energy_trial, feasible_trial, cv_trial,
+        #               energy_orig, feasible_orig, cv_orig)
+        def constr_f(x):
+            return [x[0] + x[1]]
+        nlc = NonlinearConstraint(constr_f, -np.inf, 1.9)
+        solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)],
+                                             constraints=(nlc))
+        fn = solver._accept_trial
+        # both solutions are feasible, select lower energy
+        assert(fn(0.1, True, np.array([0.]), 1.0, True, np.array([0.])))
+        assert(fn(1.0, True, np.array([0.]), 0.1, True, np.array([0.]))
+               == False)
+
+        # trial is feasible, original is not
+        assert(fn(9.9, True, np.array([0.]), 1.0, False, np.array([1.])))
+
+        # trial and original are infeasible
+        # cv_trial have to be <= cv_original to be better
+        assert(fn(0.1, False, np.array([0.5, 0.5]),
+                  1.0, False, np.array([1., 1.0])))
+        assert(fn(0.1, False, np.array([0.5, 0.5]),
+                  1.0, False, np.array([1., 0.50])))
+        assert(fn(1.0, False, np.array([0.5, 0.5]),
+                  1.0, False, np.array([1., 0.4])) == False)
