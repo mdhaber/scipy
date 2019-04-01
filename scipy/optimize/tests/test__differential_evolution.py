@@ -559,6 +559,7 @@ class TestDifferentialEvolutionSolver(object):
     def test_constraint_setup(self):
         def constr_f(x):
             return [x[0] + x[1]]
+
         def constr_f2(x):
             return [x[0]**2 + x[1], x[0] - x[1]]
 
