@@ -831,7 +831,7 @@ class DifferentialEvolutionSolver(object):
                 self.population[0] = self._unscale_parameters(result.x)
 
         if self.constraints:
-            DE_result.constr = [c.excess_violation(result.x) for
+            DE_result.constr = [c.excess_violation(DE_result.x) for
                                 c in self.constraints]
             DE_result.constr_violation = np.max(
                 np.concatenate(DE_result.constr))
@@ -1121,7 +1121,7 @@ class DifferentialEvolutionSolver(object):
             self.feasible = np.where(loc,
                                      feasible,
                                      self.feasible)
-            self.constraint_violation = np.where(loc,
+            self.constraint_violation = np.where(loc[:, np.newaxis],
                                                  cv,
                                                  self.constraint_violation)
 
