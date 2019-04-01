@@ -835,6 +835,7 @@ class DifferentialEvolutionSolver(object):
                                 c in self.constraints]
             DE_result.constr_violation = np.max(
                 np.concatenate(DE_result.constr))
+            DE_result.maxcv = DE_result.constr_violation
 
         return DE_result
 
