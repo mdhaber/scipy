@@ -10,7 +10,8 @@ from scipy.optimize import OptimizeResult, minimize
 from scipy.optimize.optimize import _status_message
 from scipy._lib._util import check_random_state, MapWrapper
 from scipy._lib.six import xrange, string_types
-from scipy.optimize._constraints import (Bounds, new_bounds_to_old)
+from scipy.optimize._constraints import (Bounds, new_bounds_to_old,
+                                         PreparedConstraint)
 
 
 __all__ = ['differential_evolution']
@@ -23,7 +24,7 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
                            mutation=(0.5, 1), recombination=0.7, seed=None,
                            callback=None, disp=False, polish=True,
                            init='latinhypercube', atol=0, updating='immediate',
-                           workers=1):
+                           workers=1, constraints=()):
     """Finds the global minimum of a multivariate function.
 
     Differential Evolution is stochastic in nature (does not use gradient
@@ -163,6 +164,12 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
 
         .. versionadded:: 1.2.0
 
+    constraints : {NonLinearConstraint, LinearConstraint, Bounds}
+        Constraints on the solver, over and about those applied by the `bounds`
+        kwd. Uses the approach by Lampinen [5]_.
+
+        .. versionadded:: 1.3.0
+
     Returns
     -------
     res : OptimizeResult
@@ -258,6 +265,10 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
            Characterization of structures from X-ray scattering data using
            genetic algorithms, Phil. Trans. R. Soc. Lond. A, 1999, 357,
            2827-2848
+    .. [5] Lampinen, J., A constraint handling approach for the differential
+           evolution algorithm. Proceedings of the 2002 Congress on
+           Evolutionary Computation. CEC'02 (Cat. No. 02TH8600). Vol. 2. IEEE,
+           2002.
     """
 
     # using a context manager means that any created Pool objects are
@@ -272,7 +283,8 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
                                      callback=callback,
                                      disp=disp, init=init, atol=atol,
                                      updating=updating,
-                                     workers=workers) as solver:
+                                     workers=workers,
+                                     constraints=constraints) as solver:
         ret = solver.solve()
 
     return ret
@@ -411,7 +423,9 @@ class DifferentialEvolutionSolver(object):
         This option will override the `updating` keyword to
         `updating='deferred'` if `workers != 1`.
         Requires that `func` be pickleable.
-
+    constraints : {NonLinearConstraint, LinearConstraint, Bounds}
+        Constraints on the solver, over and above those specified by the
+        `bounds` kwd.
     """
 
     # Dispatch of mutation strategy method (binomial or exponential).
@@ -437,7 +451,7 @@ class DifferentialEvolutionSolver(object):
                  tol=0.01, mutation=(0.5, 1), recombination=0.7, seed=None,
                  maxfun=np.inf, callback=None, disp=False, polish=True,
                  init='latinhypercube', atol=0, updating='immediate',
-                 workers=1):
+                 workers=1, constraints=()):
 
         if strategy in self._binomial:
             self.mutation_func = getattr(self, self._binomial[strategy])
@@ -543,6 +557,38 @@ class DifferentialEvolutionSolver(object):
                 raise ValueError(self.__init_error_msg)
         else:
             self.init_population_array(init)
+
+        # infrastructure for constraints
+        # dummy parameter vector for preparing constraints
+        x0 = self._scale_parameters(self.population[0])
+        self.constraints = []
+
+        if hasattr(constraints, '__len__'):
+            # sequence of constraints, this will also deal with default
+            # keyword parameter
+            for c in constraints:
+                try:
+                    feas = c.keep_feasible
+                    # need to switch off feasibility because it's not
+                    # guaranteed that any x0 is feasible
+                    c.keep_feasible = False
+                    self.constraints.append(PreparedConstraint(c, x0))
+                except Exception as e:
+                    c.keep_feasible = feas
+                    raise e
+                c.keep_feasible = feas
+        else:
+            feas = constraints.keep_feasible
+            constraints.keep_feasible = False
+            try:
+                self.constraints = [PreparedConstraint(constraints, x0)]
+            except Exception as e:
+                constraints.keep_feasible = feas
+                raise e
+            constraints.keep_feasible = feas
+
+        self.constraint_violation = np.zeros((self.num_population_members, 1))
+        self.feasible = np.ones(self.num_population_members, bool)
 
         self.disp = disp
 
@@ -684,8 +730,14 @@ class DifferentialEvolutionSolver(object):
         # that someone can set maxiter=0, at which point we still want the
         # initial energies to be calculated (the following loop isn't run).
         if np.all(np.isinf(self.population_energies)):
-            self.population_energies[:] = self._calculate_population_energies(
-                self.population)
+            self.feasible, self.constraint_violation = (
+                self._calculate_population_feasibilities(self.population))
+
+            # only work out population energies for feasible solutions
+            self.population_energies[self.feasible] = (
+                self._calculate_population_energies(
+                    self.population[self.feasible]))
+
             self._promote_lowest_energy()
 
         # do the optimisation.
@@ -761,7 +813,7 @@ class DifferentialEvolutionSolver(object):
 
     def _calculate_population_energies(self, population):
         """
-        Calculate the energies of all the population members at the same time.
+        Calculate the energies of a population.
 
         Parameters
         ----------
@@ -800,12 +852,59 @@ class DifferentialEvolutionSolver(object):
         return energies
 
     def _promote_lowest_energy(self):
-        # promotes the lowest energy to the first entry in the population
-        l = np.argmin(self.population_energies)
+        # swaps 'best solution' into first population entry
 
-        # put the lowest energy into the best solution position.
+        idx = np.arange(self.num_population_members)
+        feasible_solutions = idx[self.feasible]
+        if feasible_solutions.size:
+            # find the best feasible solution
+            idx_t = np.argmin(self.population_energies[feasible_solutions])
+            l = feasible_solutions[idx_t]
+        else:
+            # no solution was feasible, use 'best' infeasible solution, which
+            # will violate constraints the least
+            l = np.argmin(np.sum(self.constraint_violation, axis=1))
+
         self.population_energies[[0, l]] = self.population_energies[[l, 0]]
         self.population[[0, l], :] = self.population[[l, 0], :]
+        self.feasible[[0, l]] = self.feasible[[l, 0]]
+        self.constraint_violation[[0, l], :] = (
+        self.constraint_violation[[l, 0], :])
+
+    def _constraint_violation_fn(self, x):
+        # works out constraint violation for each of the constraints for a
+        # given solution
+        return np.sum([c.excess_violation(x) for c in self.constraints], axis=0)
+
+    def _calculate_population_feasibilities(self, population):
+        """
+        Calculate the feasibilities of a population.
+
+        Parameters
+        ----------
+        population : ndarray
+            An array of parameter vectors normalised to [0, 1] using lower
+            and upper limits. Has shape ``(np.size(population, 0), len(x))``.
+
+        Returns
+        -------
+        feasible, constraint_violation : ndarray, ndarray
+            Boolean array of feasibility for each population member, and an
+            array of the constraint violation for each population member,
+            has shape ``(np.size(population, 0), M)``, where M is the number of
+            constraints
+        """
+        num_members = np.size(population, 0)
+        if not self.constraints:
+            # shortcut for no constraints
+            return np.ones(num_members, bool), np.zeros((num_members, 1))
+
+        parameters_pop = self._scale_parameters(population)
+        constraint_violation = np.array([self._constraint_violation_fn(x)
+                                         for x in parameters_pop])
+        feasible = ~(np.sum(constraint_violation, axis=1) > 0)
+
+        return feasible, constraint_violation
 
     def __iter__(self):
         return self
@@ -823,6 +922,49 @@ class DifferentialEvolutionSolver(object):
         self._mapwrapper.close()
         self._mapwrapper.terminate()
 
+    def _accept_trial(self, energy_trial, feasible_trial, cv_trial,
+                      energy_orig, feasible_orig, cv_orig):
+        """
+        Trial is accepted if:
+        * it satisfies all constraints and provides a lower or equal objective
+          function value, while both the compared solutions are feasible
+        - or -
+        * it is feasible while Xi, G is infeasible,
+        - or -
+        * it is infeasible, but provides a lower or equal constraint violation
+          for all constraint functions.
+
+        Parameters
+        ----------
+        energy_trial : float
+            Energy of the trial solution
+        feasible_trial : float
+            Feasibility of trial solution
+        cv_trial : array-like
+            Excess constraint violation for the trial solution
+        energy_orig : float
+            Energy of the original solution
+        feasible_orig : float
+            Feasibility of original solution
+        cv_orig : array-like
+            Excess constraint violation for the original solution
+
+        Returns
+        -------
+        accepted : bool
+
+        """
+        if feasible_orig and feasible_trial:
+            return energy_trial < energy_orig
+        elif feasible_trial and not feasible_orig:
+            return True
+        elif not feasible_trial and (cv_trial <= cv_orig).all():
+            # cv_trial < cv_orig would imply that both trial and orig are not
+            # feasible
+            return True
+
+        return False
+
     def __next__(self):
         """
         Evolve the population by a single generation
@@ -837,8 +979,15 @@ class DifferentialEvolutionSolver(object):
         # the population may have just been initialized (all entries are
         # np.inf). If it has you have to calculate the initial energies
         if np.all(np.isinf(self.population_energies)):
-            self.population_energies[:] = self._calculate_population_energies(
-                self.population)
+            self.feasible, self.constraint_violation = (
+                self._calculate_population_feasibilities(self.population))
+
+            # only need to work out population energies for those that are
+            # feasible
+            self.population_energies[self.feasible] = (
+                self._calculate_population_energies(
+                    self.population[self.feasible]))
+
             self._promote_lowest_energy()
 
         if self.dither is not None:
@@ -861,18 +1010,37 @@ class DifferentialEvolutionSolver(object):
                 parameters = self._scale_parameters(trial)
 
                 # determine the energy of the objective function
-                energy = self.func(parameters)
-                self._nfev += 1
+                if self.constraints:
+                    cv = self._constraint_violation_fn(parameters)
+                    feasible = False
+                    energy = np.inf
+                    if not np.sum(cv) > 0:
+                        # solution is feasible
+                        feasible = True
+                        energy = self.func(parameters)
+                        self._nfev += 1
+                else:
+                    feasible = True
+                    cv = np.atleast_2d([0.])
+                    energy = self.func(parameters)
+                    self._nfev += 1
 
-                # if the energy of the trial candidate is lower than the
-                # original population member then replace it
-                if energy < self.population_energies[candidate]:
+                # compare trial and population member
+                if self._accept_trial(energy, feasible, cv,
+                                      self.population_energies[candidate],
+                                      self.feasible[candidate],
+                                      self.constraint_violation[candidate]):
                     self.population[candidate] = trial
                     self.population_energies[candidate] = energy
+                    self.feasible[candidate] = feasible
+                    self.constraint_violation[candidate] = cv
 
-                    # if the trial candidate also has a lower energy than the
-                    # best solution then promote it to the best solution.
-                    if energy < self.population_energies[0]:
+                    # if the trial candidate is also better than the best
+                    # solution then promote it.
+                    if self._accept_trial(energy, feasible, cv,
+                                          self.population_energies[0],
+                                          self.feasible[0],
+                                          self.constraint_violation[0]):
                         self._promote_lowest_energy()
 
         elif self._updating == 'deferred':
@@ -888,17 +1056,32 @@ class DifferentialEvolutionSolver(object):
             # enforce bounds
             self._ensure_constraint(trial_pop)
 
-            # determine the energies of the objective function
-            trial_energies = self._calculate_population_energies(trial_pop)
+            # determine the energies of the objective function, but only for
+            # feasible trials
+            feasible, cv = self._calculate_population_feasibilities(trial_pop)
+            trial_energies = np.full(self.num_population_members, np.inf)
 
-            # which solutions are improved?
-            loc = trial_energies < self.population_energies
+            # only calculate for feasible entries
+            trial_energies[feasible] = self._calculate_population_energies(
+                trial_pop[feasible])
+
+            # which solutions are 'improved'?
+            loc = [self._accept_trial(*val) for val in
+                   zip(trial_energies, feasible, cv, self.population_energies,
+                       self.feasible, self.constraint_violation)]
+            loc = np.array(loc)
             self.population = np.where(loc[:, np.newaxis],
                                        trial_pop,
                                        self.population)
             self.population_energies = np.where(loc,
                                                 trial_energies,
                                                 self.population_energies)
+            self.feasible = np.where(loc,
+                                     feasible,
+                                     self.feasible)
+            self.constraint_violation = np.where(loc,
+                                                 cv,
+                                                 self.constraint_violation)
 
             # make sure the best solution is updated if updating='deferred'.
             # put the lowest energy into the best solution position.
