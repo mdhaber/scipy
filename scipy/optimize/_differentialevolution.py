@@ -181,7 +181,9 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
         ``message`` which describes the cause of the termination. See
         `OptimizeResult` for a description of other attributes.  If `polish`
         was employed, and a lower minimum was obtained by the polishing, then
-        OptimizeResult also contains the ``jac`` attribute.
+        OptimizeResult also contains the ``jac`` attribute.  If the eventual
+        solution does not satisfy the applied constraints ``success`` will be
+        `False`.
 
     Notes
     -----
@@ -836,6 +838,9 @@ class DifferentialEvolutionSolver(object):
             DE_result.constr_violation = np.max(
                 np.concatenate(DE_result.constr))
             DE_result.maxcv = DE_result.constr_violation
+            if DE_result.maxcv > 0:
+                # if the result is infeasible then success must be False
+                DE_result.success = False
 
         return DE_result
 
