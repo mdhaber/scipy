@@ -8,7 +8,7 @@ from __future__ import division, print_function, absolute_import
 import numpy as np
 from scipy.linalg import svd
 import scipy
-
+import scipy.io
 
 def _row_count(A):
     """
@@ -418,11 +418,18 @@ def _remove_redundancy(A, b):
     # iteration would also work in theory, but is only efficient if the
     # smallest nonzero eigenvalue of A A^T is close to the largest nonzero
     # eigenvalue.
-
+    alldata = {}
     while abs(s_min) < tol:
         v = U[:, -1]  # TODO: return these so user can eliminate from problem?
         # rows need to be represented in significant amount
         eligibleRows = np.abs(v) > tol * 10e6
+        alldata['s_min'] = s_min
+        alldata['v'] = v
+        alldata['A'] = A
+        alldata['tol'] = tol
+        alldata['b'] = b
+        alldata['vdotb'] = np.abs(v.dot(b))
+        scipy.io.savemat('data_8174_2.mat', alldata)
         if not np.any(eligibleRows) or np.any(np.abs(v.dot(A)) > tol):
             status = 4
             message = ("Due to numerical issues, redundant equality "
