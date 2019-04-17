@@ -245,13 +245,14 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
     (array([1., 1., 1., 1., 1.]), 1.9216496320061384e-19)
 
     Let's try and do a constrained minimization
-    >>> from scipy.optimize import NonlinearConstraint
+    >>> from scipy.optimize import NonlinearConstraint, Bounds
     >>> def constr_f(x):
     ...     return np.array(x[0] + x[1])
     >>>
     >>> # the sum of x[0] and x[1] must be less than 1.9
     >>> nlc = NonlinearConstraint(constr_f, -np.inf, 1.9)
-    >>> bounds = [(0,2), (0, 2)]
+    >>> # specify limits using a `Bounds` object.
+    >>> bounds = Bounds([0., 0.], [2., 2.])
     >>> result = differential_evolution(rosen, bounds, constraints=(nlc),
     ...                                 seed=1)
     >>> result.x, result.fun
