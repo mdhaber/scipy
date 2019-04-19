@@ -834,7 +834,7 @@ class DifferentialEvolutionSolver(object):
                 self.population[0] = self._unscale_parameters(result.x)
 
         if self.constraints:
-            DE_result.constr = [c.excess_violation(DE_result.x) for
+            DE_result.constr = [c.violation(DE_result.x) for
                                 c in self.constraints]
             DE_result.constr_violation = np.max(
                 np.concatenate(DE_result.constr))
@@ -918,10 +918,11 @@ class DifferentialEvolutionSolver(object):
         Returns
         -------
         cv : ndarray
-            Total violation of constraints. Has shape (M,), where M is the number
-            of constraints
+            Total violation of constraints. Has shape ``(M,)``, where M is the
+            number of constraints (if each constraint function only returns one
+            value)
         """
-        return np.concatenate([c.excess_violation(x) for c in self.constraints])
+        return np.concatenate([c.violation(x) for c in self.constraints])
 
     def _calculate_population_feasibilities(self, population):
         """
@@ -937,9 +938,9 @@ class DifferentialEvolutionSolver(object):
         -------
         feasible, constraint_violation : ndarray, ndarray
             Boolean array of feasibility for each population member, and an
-            array of the constraint violation for each population member,
-            has shape ``(np.size(population, 0), M)``, where M is the number of
-            constraints
+            array of the constraint violation for each population member.
+            constraint_violation has shape ``(np.size(population, 0), M)``,
+            where M is the number of constraints.
         """
         num_members = np.size(population, 0)
         if not self.constraints:
