@@ -556,7 +556,7 @@ class TestDifferentialEvolutionSolver(object):
         solver.solve()
         assert_(solver.converged())
 
-    def test_constraint_setup(self):
+    def test_constraint_violation_fn(self):
         def constr_f(x):
             return [x[0] + x[1]]
 
@@ -568,9 +568,36 @@ class TestDifferentialEvolutionSolver(object):
         solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)],
                                              constraints=(nlc))
 
-        # is constraint violation function correct
         cv = solver._constraint_violation_fn([1.0, 1.0])
         assert_almost_equal(cv, 0.1)
+
+        nlc2 = NonlinearConstraint(constr_f2, -np.inf, 1.8)
+        solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)],
+                                             constraints=(nlc, nlc2))
+
+        # for multiple constraints the constraint violations should
+        # be concatenated.
+        cv = solver._constraint_violation_fn([1.2, 1.])
+        assert_almost_equal(cv, [0.3, 0.64, 0])
+
+        cv = solver._constraint_violation_fn([2., 2.])
+        assert_almost_equal(cv, [2.1, 4.2, 0])
+
+        # should accept valid values
+        cv = solver._constraint_violation_fn([0.5, 0.5])
+        assert_almost_equal(cv, [0., 0., 0.])
+
+    def test_constraint_population_feasibilities(self):
+        def constr_f(x):
+            return [x[0] + x[1]]
+
+        def constr_f2(x):
+            return [x[0]**2 + x[1], x[0] - x[1]]
+
+        nlc = NonlinearConstraint(constr_f, -np.inf, 1.9)
+
+        solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)],
+                                             constraints=(nlc))
 
         # are population feasibilities correct
         # [0.5, 0.5] corresponds to scaled values of [1., 1.]
@@ -584,28 +611,16 @@ class TestDifferentialEvolutionSolver(object):
         solver = DifferentialEvolutionSolver(rosen, [(0, 2), (0, 2)],
                                              constraints=(nlc, nlc2))
 
-        # for multiple constraints the constraint violations should
-        # be concatenated.
-        cv = solver._constraint_violation_fn([1.2, 1.])
-        assert_almost_equal(cv, [0.3, 0.64, 0])
-
         feas, cv = solver._calculate_population_feasibilities(
             np.array([[0.5, 0.5], [0.6, 0.5]]))
         assert_equal(feas, [False, False])
         assert_almost_equal(cv, np.array([[0.1, 0.2, 0], [0.3, 0.64, 0]]))
-
-        cv = solver._constraint_violation_fn([2., 2.])
-        assert_almost_equal(cv, [2.1, 4.2, 0])
 
         feas, cv = solver._calculate_population_feasibilities(
             np.array([[0.5, 0.5], [1., 1.]]))
         assert_equal(feas, [False, False])
         assert_almost_equal(cv, np.array([[0.1, 0.2, 0], [2.1, 4.2, 0]]))
         assert(cv.shape == (2, 3))
-
-        # should accept valid values
-        cv = solver._constraint_violation_fn([0.5, 0.5])
-        assert_almost_equal(cv, [0., 0., 0.])
 
         feas, cv = solver._calculate_population_feasibilities(
             np.array([[0.25, 0.25], [1., 1.]]))
