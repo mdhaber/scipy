@@ -6,7 +6,8 @@ import multiprocessing
 from scipy.optimize import _differentialevolution
 from scipy.optimize._differentialevolution import DifferentialEvolutionSolver
 from scipy.optimize import differential_evolution, minimize
-from scipy.optimize._constraints import Bounds, NonlinearConstraint
+from scipy.optimize._constraints import (Bounds, NonlinearConstraint,
+                                         LinearConstraint)
 from scipy.optimize import rosen
 
 import numpy as np
@@ -666,3 +667,42 @@ class TestDifferentialEvolutionSolver(object):
                   1.0, False, np.array([1., 0.50])))
         assert (fn(1.0, False, np.array([0.5, 0.5]),
                   1.0, False, np.array([1., 0.4])) == False)
+
+    def test_L1(self):
+        # Lampinen ([5]) test problem 1
+
+        def f(x):
+            temp = x
+            x = np.zeros(14)
+            x[1:] = temp  # 1-indexed to match reference
+            fun = np.sum(5*x[1:5]) - 5*x[1:5]@x[1:5] - np.sum(x[5:])
+            return fun
+
+        A = np.zeros((10, 14))  # 1-indexed to match reference
+        A[1, [1, 2, 10, 11]] = 2, 2, 1, 1
+        A[2, [1, 10]] = -8, 1
+        A[3, [4, 5, 10]] = -2, -1, 1
+        A[4, [1, 3, 10, 11]] = 2, 2, 1, 1
+        A[5, [2, 11]] = -8, 1
+        A[6, [6, 7, 11]] = -2, -1, 1
+        A[7, [2, 3, 11, 12]] = 2, 2, 1, 1
+        A[8, [3, 12]] = -8, 1
+        A[9, [8, 9, 12]] = -2, -1, 1
+        A = A[1:, 1:]
+
+        b = np.array([10, 0, 0, 10, 0, 0, 10, 0, 0])
+
+        L = LinearConstraint(A, -np.inf, b)
+
+        bounds = [(0, 1)]*9 + [(0, 100)]*3 + [(0, 1)]
+
+        # using parameters from [5]
+        res = differential_evolution(f, bounds, maxiter=4000, popsize=20,
+                                     mutation=0.9, recombination=0.9,
+                                     constraints=(L))
+
+        x_opt = (1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 1)
+        f_opt = -15
+
+        assert_allclose(res.x, x_opt, atol=1e-1, rtol=1e-1)
+        assert_allclose(res.fun, f_opt, atol=3e-2, rtol=3e-2)
