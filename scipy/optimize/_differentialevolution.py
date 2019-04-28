@@ -165,7 +165,7 @@ def differential_evolution(func, bounds, args=(), strategy='best1bin',
         .. versionadded:: 1.2.0
 
     constraints : {NonLinearConstraint, LinearConstraint, Bounds}
-        Constraints on the solver, over and about those applied by the `bounds`
+        Constraints on the solver, over and above those applied by the `bounds`
         kwd. Uses the approach by Lampinen [5]_. The `polish` keyword is
         incompatible with `constraints` (because 'L-BFGS-B is not a constrained
         solver). Therefore, if `constraints` apply polishing is turned off.
