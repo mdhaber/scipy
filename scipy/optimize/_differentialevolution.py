@@ -10,8 +10,9 @@ from scipy.optimize import OptimizeResult, minimize
 from scipy.optimize.optimize import _status_message
 from scipy._lib._util import check_random_state, MapWrapper
 from scipy._lib.six import xrange, string_types
+
 from scipy.optimize._constraints import (Bounds, new_bounds_to_old,
-                                         PreparedConstraint)
+                                         NonlinearConstraint, LinearConstraint)
 
 
 __all__ = ['differential_evolution']
@@ -579,7 +580,8 @@ class DifferentialEvolutionSolver(object):
             self.init_population_array(init)
 
         # infrastructure for constraints
-        # dummy parameter vector for preparing constraints
+        # dummy parameter vector for preparing constraints, this is required so
+        # that the number of constraints is known.
         x0 = self._scale_parameters(self.population[0])
         self.constraints = []
 
@@ -587,25 +589,9 @@ class DifferentialEvolutionSolver(object):
             # sequence of constraints, this will also deal with default
             # keyword parameter
             for c in constraints:
-                try:
-                    feas = c.keep_feasible
-                    # need to switch off feasibility because it's not
-                    # guaranteed that any x0 is feasible
-                    c.keep_feasible = False
-                    self.constraints.append(PreparedConstraint(c, x0))
-                except Exception as e:
-                    c.keep_feasible = feas
-                    raise e
-                c.keep_feasible = feas
+                self.constraints.append(_ConstraintWrapper(c, x0))
         else:
-            feas = constraints.keep_feasible
-            constraints.keep_feasible = False
-            try:
-                self.constraints = [PreparedConstraint(constraints, x0)]
-            except Exception as e:
-                constraints.keep_feasible = feas
-                raise e
-            constraints.keep_feasible = feas
+            self.constraints = [_ConstraintWrapper(constraints, x0)]
 
         # turn off polishing if constraints are applicable
         if self.constraints:
@@ -1258,3 +1244,86 @@ class _FunctionWrapper(object):
 
     def __call__(self, x):
         return self.f(x, *self.args)
+
+
+class _ConstraintWrapper(object):
+    """Object to wrap/evaluate user defined constraints.
+
+    Very similar in practice to `PreparedConstraint`, except that no evaluation
+    of jac/hess is performed (explicit or implicit).
+
+    If created successfully, it will contain the attributes listed below.
+
+    Parameters
+    ----------
+    constraint : {`NonlinearConstraint`, `LinearConstraint`, `Bounds`}
+        Constraint to check and prepare.
+    x0 : array_like
+        Initial vector of independent variables.
+
+    Attributes
+    ----------
+    fun : callable
+        Function defining the constraint wrapped by one of the convenience
+        classes.
+    bounds : 2-tuple
+        Contains lower and upper bounds for the constraints --- lb and ub.
+        These are converted to ndarray and have a size equal to the number of
+        the constraints.
+    """
+    def __init__(self, constraint, x0):
+        self.constraint = constraint
+
+        if isinstance(constraint, NonlinearConstraint):
+            def fun(x):
+                return np.atleast_1d(constraint.fun(x))
+        elif isinstance(constraint, LinearConstraint):
+            def fun(x):
+                A = np.atleast_2d(constraint.A)
+                return A.dot(x)
+        elif isinstance(constraint, Bounds):
+            def fun(x):
+                A = np.eye(len(x))
+                return A.dot(x)
+        else:
+            raise ValueError("`constraint` of an unknown type is passed.")
+
+        self.constraint = constraint
+        self.fun = fun
+
+        lb = np.asarray(constraint.lb, dtype=float)
+        ub = np.asarray(constraint.ub, dtype=float)
+
+        f0 = fun(x0)
+        m = f0.size
+
+        if lb.ndim == 0:
+            lb = np.resize(lb, m)
+        if ub.ndim == 0:
+            ub = np.resize(ub, m)
+
+        self.bounds = (lb, ub)
+
+    def __call__(self, x):
+        return np.atleast_1d(self.fun(x))
+
+    def violation(self, x):
+        """How much the constraint is exceeded by.
+
+        Parameters
+        ----------
+        x : array-like
+            Vector of independent variables
+
+        Returns
+        -------
+        excess : array-like
+            How much the constraint is exceeded by, for each of the
+            constraints specified by `_ConstraintWrapper.fun`.
+        """
+        ev = self.fun(np.asarray(x))
+
+        excess_lb = np.maximum(self.bounds[0] - ev, 0)
+        excess_ub = np.maximum(ev - self.bounds[1], 0)
+
+        return excess_lb + excess_ub
