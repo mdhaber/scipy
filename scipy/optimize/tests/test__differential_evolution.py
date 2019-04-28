@@ -4,7 +4,8 @@ Unit tests for the differential global minimization algorithm.
 import multiprocessing
 
 from scipy.optimize import _differentialevolution
-from scipy.optimize._differentialevolution import DifferentialEvolutionSolver
+from scipy.optimize._differentialevolution import (DifferentialEvolutionSolver,
+                                                   _ConstraintWrapper)
 from scipy.optimize import differential_evolution, minimize
 from scipy.optimize._constraints import (Bounds, NonlinearConstraint,
                                          LinearConstraint)
@@ -12,7 +13,7 @@ from scipy.optimize import rosen
 
 import numpy as np
 from numpy.testing import (assert_equal, assert_allclose,
-                           assert_almost_equal,
+                           assert_almost_equal, assert_array_equal,
                            assert_string_equal, assert_)
 from pytest import raises as assert_raises, warns
 
@@ -985,3 +986,39 @@ class TestDifferentialEvolutionSolver(object):
         assert_(np.all(np.array(c1(res.x)) <= 0.001))
         assert_(np.all(res.x >= np.array(bounds)[:, 0]))
         assert_(np.all(res.x <= np.array(bounds)[:, 1]))
+
+    def test_constraint_wrapper(self):
+        lb = np.array([0, 20, 30])
+        ub = np.array([0.5, np.inf, 70])
+        x0 = np.array([1, 2, 3])
+        pc = _ConstraintWrapper(Bounds(lb, ub), x0)
+        assert (pc.violation(x0) > 0).any()
+        assert (pc.violation([0.25, 21, 31]) == 0).all()
+
+        x0 = np.array([1, 2, 3, 4])
+        A = np.array([[1, 2, 3, 4], [5, 0, 0, 6], [7, 0, 8, 0]])
+        pc = _ConstraintWrapper(LinearConstraint(A, -np.inf, 0), x0)
+        assert (pc.violation(x0) > 0).any()
+        assert (pc.violation([-10, 2, -10, 4]) == 0).all()
+
+        def fun(x):
+            return A.dot(x)
+
+        nonlinear = NonlinearConstraint(fun, -np.inf, 0)
+        pc = _ConstraintWrapper(nonlinear, [-10, 2, -10, 4])
+        assert (pc.violation(x0) > 0).any()
+        assert (pc.violation([-10, 2, -10, 4]) == 0).all()
+
+    def test_constraint_wrapper_violation(self):
+        def cons_f(x):
+            return np.array([x[0] ** 2 + x[1], x[0] ** 2 - x[1]])
+
+        nlc = NonlinearConstraint(cons_f, [-1, -0.8500], [2, 2])
+        pc = _ConstraintWrapper(nlc, [0.5, 1])
+        assert np.size(pc.bounds[0]) == 2
+
+        assert_array_equal(pc.violation([0.5, 1]), [0., 0.])
+        assert_almost_equal(pc.violation([0.5, 1.2]), [0., 0.1])
+        assert_almost_equal(pc.violation([1.2, 1.2]), [0.64, 0])
+        assert_almost_equal(pc.violation([0.1, -1.2]), [0.19, 0])
+        assert_almost_equal(pc.violation([0.1, 2]), [0.01, 1.14])
