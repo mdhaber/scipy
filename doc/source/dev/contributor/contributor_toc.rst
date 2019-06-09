@@ -30,13 +30,15 @@ Editing SciPy
 - `PEP8 and SciPy`_ gives some tips for ensuring that your code is PEP8 compliant.
 - :ref:`git-development` is a guide to using ``git``, the distributed version-control system used to manage the changes made to SciPy code from around the world. It is written in the context of NumPy, but working with SciPy is essentially identical - just substitute the text SciPy/``scipy`` wherever NumPy/``numpy`` appears.
 - :ref:`scipy-api` contains some important notes about how SciPy code is organized and documents the structure of the SciPy API. If you are going to import other SciPy code, read this first.
-- `NumPy Distutils - Users Guide <https://github.com/numpy/numpy/blob/master/doc/DISTUTILS.rst.txt>`_ - Check this out before adding any new files to SciPy.
-- `SciPy Core Developer Guide <https://docs.scipy.org/doc/scipy/reference/dev/index.html>`_ has background information including how decisions are made and how a release is prepared. It's geared toward :ref:`Core Developers<governance>`, but contains useful information for all contributors.
+- `NumPy Distutils - Users Guide`_ - Check this out before adding any new files to SciPy.
+- :ref:`core-dev-guide` has background information including how decisions are made and how a release is prepared. It's geared toward :ref:`Core Developers<governance>`, but contains useful information for all contributors.
  
 .. _unit-tests:
 
 Unit Tests
 ----------
+- **`NumPy/SciPy Testing Guidelines`_** is the definitive guide to writing SciPy unit tests.
+- **`Running SciPy Tests Locally`_** documents ``runtests.py``, a convenient script for building SciPy and running tests locally.
 
 .. _docs:
 
@@ -56,3 +58,9 @@ Cython
 .. _Scipy Development Workflow: https://youtu.be/HgU01gJbzMY
 
 .. _PEP8 and SciPy: https://github.com/scipy/scipy/wiki/PEP8-and-SciPy
+
+.. _NumPy Distutils - Users Guide: https://github.com/numpy/numpy/blob/master/doc/DISTUTILS.rst.txt
+
+.. _NumPy/SciPy Testing Guidelines: https://github.com/numpy/numpy/blob/master/doc/TESTS.rst.txt
+
+.. _Running SciPy Tests Locally: https://github.com/scipy/scipy/wiki/Running-SciPy-Tests

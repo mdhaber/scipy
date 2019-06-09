@@ -1,3 +1,4 @@
+.. _core-dev-guide:
 **************************
 SciPy Core Developer Guide
 **************************
