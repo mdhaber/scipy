@@ -27,13 +27,11 @@ Building SciPy
 
 #. Download, install, and test the latest release of the `Anaconda Distribution of Python`_. In addition to the latest version of Python 3, the Anaconda distribution includes dozens of the most popular Python packages for scientific computing, the Spyder integrated development environment (IDE), the ``conda`` package manager, and tools for managing virtual environments. 
 
-#. Install Apple Developer Tools. 
-An easy way to do this is to `open a terminal window <https://blog.teamtreehouse.com/introduction-to-the-mac-os-x-command-line>`_, enter the command ``xcode-select --install``, and follow the prompts. Apple Developer Tools includes `git <https://git-scm.com/>`_, the software we need to download and manage the SciPy source code.
+#. Install Apple Developer Tools. An easy way to do this is to `open a terminal window <https://blog.teamtreehouse.com/introduction-to-the-mac-os-x-command-line>`_, enter the command ``xcode-select --install``, and follow the prompts. Apple Developer Tools includes `git <https://git-scm.com/>`_, the software we need to download and manage the SciPy source code.
 
 #. Browse to the `SciPy repository on GitHub <https://github.com/scipy/scipy>`_ and `create your own fork <https://help.github.com/en/articles/fork-a-repo>`_. You'll need to create a GitHub account if you don't already have one.
 
-#. Browse to your fork.
-Your fork will have a URL like `https://github.com/mdhaber/scipy <https://github.com/mdhaber/scipy>`_, except with your GitHub username in place of "mdhaber".
+#. Browse to your fork. Your fork will have a URL like `https://github.com/mdhaber/scipy <https://github.com/mdhaber/scipy>`_, except with your GitHub username in place of "mdhaber".
 
 #. Click the big, green "Clone or download" button, and copy the ".git" URL to the clipboard. The URL will be the same as your fork's URL, except it will end in ".git".
 
@@ -44,18 +42,13 @@ Note that this creates in the terminal's working directory a ``scipy`` folder co
 
 #. In the terminal, navigate into the ``scipy`` root directory (e.g. ``cd scipy``).
 
-#. Install `Homebrew`_.
-Enter into the terminal 
-|br|
-``/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"``
-|br|
-or follow the installation instructions listed on the Homebrew website. 
+#. Install `Homebrew`_. Enter into the terminal |br| ``/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"`` |br| or follow the installation instructions listed on the Homebrew website. 
 Homebrew is a package manager for macOS that will help you download `gcc`, the software we will use to compile C, C++, and Fortran code included in SciPy.
 
 
-.. _Anaconda SciPy Dev: Part I (macOS): https://youtu.be/1rPOSNd0ULI
+.. _Anaconda SciPy Dev\: Part I (macOS): https://youtu.be/1rPOSNd0ULI
 
-.. _Anaconda SciPy Dev: Part II (macOS): https://youtu.be/Faz29u5xIZc
+.. _Anaconda SciPy Dev\: Part II (macOS): https://youtu.be/Faz29u5xIZc
 
 .. _Anaconda Distribution of Python: https://www.anaconda.com/distribution/
 
