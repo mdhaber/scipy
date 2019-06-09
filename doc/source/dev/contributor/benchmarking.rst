@@ -1,4 +1,4 @@
-.. _benchmarking-with-asv
+.. _benchmarking-with-asv:
 
 Benchmarking SciPy with Airspeed Velocity
 =========================================
@@ -6,13 +6,14 @@ Benchmarking SciPy with Airspeed Velocity
 *This document introduces benchmarking, including reviewing SciPy
 benchmark test results online, writing a benchmark test, and running it
 locally. For a video run-through of writing a test and running it
-locally, see*\ `Benchmarking SciPy`_\ *.*
+locally, see* \ `Benchmarking SciPy`_\ *.*
 
-As written in the `airspeed velocity (asv) documentation`_: > airspeed
-velocity (asv) is a tool for benchmarking Python packages over their
-lifetime. Runtime, memory consumption and even custom-computed values
-may be tracked. The results are displayed in an interactive web frontend
-that requires only a basic static webserver to host.
+As written in the `airspeed velocity (asv) documentation`_: 
+
+ airspeed velocity (asv) is a tool for benchmarking Python packages over their
+ lifetime. Runtime, memory consumption and even custom-computed values
+ may be tracked. The results are displayed in an interactive web frontend
+ that requires only a basic static webserver to host.
 
 To see what this means, take a look at `airspeed velocity of an unladen
 scipy`_. Each plot summarizes the execution time of a particular test
@@ -32,12 +33,12 @@ consider writing benchmarks.
 Writing benchmarks
 ------------------
 
-*The*\ `Writing benchmarks`_\ *section of the airspeed velocity
+*The* \`Writing benchmarks`_\ *section of the airspeed velocity
 documentation is the definitive guide to writing benchmarks. Please see
 also the*\ `SciPy benchmarks readme`_\ *.*
 
 To see how benchmarks are written, take a look at
-```scipy/benchmarks/benchmarks/optimize_linprog.py```_. Each subclass of
+|scipy/benchmarks/benchmarks/optimize_linprog.py|. Each subclass of
 ``Benchmark`` defines a benchmark test. For example, the ``KleeMinty``
 class defines a benchmark test based on the `Klee-Minty hypercube
 problem`_, a diabolical test of the simplex algorithm for linear
@@ -195,5 +196,7 @@ check out the ``asv find`` command and the ``--quick``,
 .. _airspeed velocity of an unladen scipy: https://pv.github.io/scipy-bench/
 .. _Writing benchmarks: https://asv.readthedocs.io/en/stable/writing_benchmarks.html
 .. _SciPy benchmarks readme: https://github.com/scipy/scipy/blob/master/benchmarks/README.rst
-.. _``scipy/benchmarks/benchmarks/optimize_linprog.py``: https://github.com/scipy/scipy/blob/master/benchmarks/benchmarks/optimize_linprog.py
 .. _Klee-Minty hypercube problem: https://en.wikipedia.org/wiki/Klee%E2%80%93Minty_cube
+
+.. |scipy/benchmarks/benchmarks/optimize_linprog.py| replace:: ``scipy/benchmarks/benchmarks/optimize_linprog.py``
+.. _scipy/benchmarks/benchmarks/optimize_linprog.py: https://docs.python.org/3/using/cmdline.html#environment-variables
