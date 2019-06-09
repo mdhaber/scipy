@@ -10,8 +10,8 @@ This table of contents is designed to help you quickly find the information you 
 - :ref:`editing-scipy` - how to edit SciPy Python code, with tips on finding which module contains SciPy functionality to be edited, adding new modules to SciPy, and complying with PEP8 style standards
 - :ref:`unit-tests` - how to write and run unit tests for SciPy with the pytest framework
 - :ref:`docs` - how to write reStructuredText documentation that complies with docstring standards, build documentation locally, and view documentation built during continuous integration checks
-- :ref:`benchmarking` - how to benchmark code with AirSpeed Velocity
-- :ref:`cython` - how to add fast, compiled code to SciPy
+- :ref:`toc-benchmarking` - how to benchmark code with AirSpeed Velocity
+- :ref:`toc-cython` - how to add fast, compiled code to SciPy
 
 .. _dev-env:
 
@@ -47,17 +47,17 @@ Documentation
 - `numpydoc docstring guide`_ contains everything you need to know about writing docstrings, which are rendered to produce HTML documentation using `Sphinx`_.
 - `Rendering SciPy Documentation <https://github.com/scipy/scipy/wiki/Rendering-SciPy-Documentation>`_ - It's important to check how changes to the documentation render before merging a PR; this document explains how you can do that.
 
-.. _benchmarks:
+.. _toc-bench:
 
 Benchmarks
 ----------
 - `SciPy Benchmarks <https://github.com/scipy/scipy/wiki/Benchmarking-SciPy-with-Airspeed-Velocity>`_ explains how to add benchmarks to SciPy using `Airspeed Velocity`_.
 
-.. _cython:
+.. _toc-cython:
 
 Cython
 ------
-- `Adding Cython to SciPy <https://github.com/scipy/scipy/wiki/Adding-Cython-to-SciPy>`_ - Extending and compiling Python code with `Cython <https://cython.org/>`_ can significantly improve its performance. This document helps you get started.
+- `Adding Cython to SciPy <https://github.com/scipy/scipy/wiki/Adding-Cython-to-SciPy>`_ - Extending and compiling Python code with `Cython`_ can significantly improve its performance. This document helps you get started.
 
 .. _Scipy Development Workflow: https://youtu.be/HgU01gJbzMY
 
@@ -74,3 +74,6 @@ Cython
 .. _Sphinx: http://www.sphinx-doc.org/en/master/
 
 .. _Airspeed Velocity: https://asv.readthedocs.io/en/stable/
+
+.. _Cython: https://cython.org/
+ 
