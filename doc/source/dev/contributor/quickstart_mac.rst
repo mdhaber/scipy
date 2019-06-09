@@ -37,13 +37,23 @@ Building SciPy
 
 #. Create a folder for the SciPy source code in a convenient place on your computer. `Navigate to it in the terminal <https://blog.teamtreehouse.com/introduction-to-the-mac-os-x-command-line>`_.
 
-#. Enter the command ``git clone`` followed by your fork's .git URL.
-Note that this creates in the terminal's working directory a ``scipy`` folder containing the SciPy source code.
+#. Enter the command ``git clone`` followed by your fork's .git URL. Note that this creates in the terminal's working directory a ``scipy`` folder containing the SciPy source code.
 
 #. In the terminal, navigate into the ``scipy`` root directory (e.g. ``cd scipy``).
 
-#. Install `Homebrew`_. Enter into the terminal |br| ``/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"`` |br| or follow the installation instructions listed on the Homebrew website. 
-Homebrew is a package manager for macOS that will help you download `gcc`, the software we will use to compile C, C++, and Fortran code included in SciPy.
+#. Install `Homebrew`_. Enter into the terminal |br| ``/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"`` |br| or follow the installation instructions listed on the Homebrew website. Homebrew is a package manager for macOS that will help you download `gcc`, the software we will use to compile C, C++, and Fortran code included in SciPy.
+
+#. Use Homebrew to install ``gcc`` by entering the command ``brew install gcc``.
+
+#. In the terminal, update/upgrade all of SciPy's dependencies: ``conda update setuptools wheel cython numpy matplotlib pytest``
+
+#. (Optional) Check your present working directory by entering ``pwd`` at the terminal. You should be in the root ``/scipy`` directory, not in a directory ending ``/scipy/scipy``.
+
+#. Do an in-place build: enter ``python3 setup.py build_ext --inplace``. |br| This will compile the C, C++, and Fortran code that comes with SciPy. We installed `python3` with Anaconda. `setup.py` is a script in the root directory of SciPy, which is why you have to be in the SciPy root directory to call it. `build_ext` is a command defined in `setup.py`, and `--inplace` is an option we'll use to ensure that the compiling happens in the SciPy directory you already have rather than some other folder on your computer.
+
+#. Test the build: enter ``python3 runtests.py -v``. `runtests.py` is another script in the SciPy root directory. It runs a suite of tests that make sure SciPy is working as it should, and `-v` activates the `--verbose` option to show all the test output.
+
+If the tests were successful, you now have a working development build of SciPy! You could stop here, but you would only be able to use this development build from within the SciPy root directory. This would be inconvenient, for instance, if you wrote a script that `import`s something you changed in SciPy but wanted to save it elsewhere on your computer. Without taking additional steps to add this version of SciPy to the ``PYTHONPATH` <https://docs.python.org/3/using/cmdline.html#environment-variables)>`_ this script would `import` from the version of SciPy distributed with Anaconda rather than the development version you just built. (See `here <https://chrisyeh96.github.io/2017/08/08/definitive-guide-python-imports.html>`_ for much more information about how Python imports modules.)
 
 
 .. _Anaconda SciPy Dev\: Part I (macOS): https://youtu.be/1rPOSNd0ULI
