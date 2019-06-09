@@ -56,6 +56,7 @@ test name:
    python runtests.py -v -t scipy/optimize/tests/test_linprog.py::TestLinprogIPDense::test_nontrivial_problem
    
 Other useful options include: 
+
 -  ``-c`` or ``--coverage`` to generate a test coverage report in
    ``scipy/build/coverage/index.html``. *Note:* |pytest-cov|_ *must be
    installed.*
