@@ -205,22 +205,22 @@ and a motivation for your changes.
 Checklist before submitting a PR
 --------------------------------
 
-  - Are there unit tests with good code coverage?
-  - Do all public function have docstrings including examples?
-  - Is the code style correct (PEP8, pyflakes)
-  - Is the commit message `formatted correctly`_?
-  - Is the new functionality tagged with ``.. versionadded:: X.Y.Z`` (with
-    X.Y.Z the version number of the next release - can be found in setup.py)?
-  - Is the new functionality mentioned in the release notes of the next
-    release?
-  - Is the new functionality added to the reference guide?
-  - In case of larger additions, is there a tutorial or more extensive
-    module-level description?
-  - In case compiled code is added, is it integrated correctly via setup.py
-  - If you are a first-time contributor, did you add yourself to THANKS.txt?
-    Please note that this is perfectly normal and desirable - the aim is to
-    give every single contributor credit, and if you don't add yourself it's
-    simply extra work for the reviewer (or worse, the reviewer may forget).
-  - Did you check that the code can be distributed under a BSD license?
+-  Are there unit tests with good code coverage?
+-  Do all public function have docstrings including examples?
+-  Is the code style correct (PEP8, pyflakes)
+-  Is the commit message `formatted correctly`_?
+-  Is the new functionality tagged with ``.. versionadded:: X.Y.Z`` (with
+   X.Y.Z the version number of the next release - can be found in setup.py)?
+-  Is the new functionality mentioned in the release notes of the next
+   release?
+-  Is the new functionality added to the reference guide?
+-  In case of larger additions, is there a tutorial or more extensive
+   module-level description?
+-  In case compiled code is added, is it integrated correctly via setup.py
+-  If you are a first-time contributor, did you add yourself to THANKS.txt?
+   Please note that this is perfectly normal and desirable - the aim is to
+   give every single contributor credit, and if you don't add yourself it's
+   simply extra work for the reviewer (or worse, the reviewer may forget).
+-  Did you check that the code can be distributed under a BSD license?
 
 .. include:: git_links.inc
