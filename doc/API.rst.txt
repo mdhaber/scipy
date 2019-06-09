@@ -1,6 +1,11 @@
-API - importing from SciPy
-==========================
+.. _scipy-api:
 
+SciPy API
+=========
+
+Importing from SciPy
+---------------------
+  
 In Python the distinction between what is the public API of a library and what
 are private implementation details is not always clear.  Unlike in other
 languages like Java, it is possible in Python to access "private" function or
@@ -138,3 +143,47 @@ change is made.
 
   - ``scipy.stats.distributions``
   - `scipy.stats.mstats`
+
+  
+SciPy structure
+---------------
+
+All SciPy modules should follow the following conventions. In the
+following, a *SciPy module* is defined as a Python package, say
+``yyy``, that is located in the scipy/ directory.
+
+* Ideally, each SciPy module should be as self-contained as possible.
+  That is, it should have minimal dependencies on other packages or
+  modules.  Even dependencies on other SciPy modules should be kept to
+  a minimum.  A dependency on NumPy is of course assumed.
+
+* Directory ``yyy/`` contains:
+
+  - A file ``setup.py`` that defines
+    ``configuration(parent_package='',top_path=None)`` function
+    for `numpy.distutils`.
+
+  - A directory ``tests/`` that contains files ``test_<name>.py``
+    corresponding to modules ``yyy/<name>{.py,.so,/}``.
+
+* Private modules should be prefixed with an underscore ``_``,
+  for instance ``yyy/_somemodule.py``.
+
+* User-visible functions should have good documentation following
+  the NumPy documentation style, see `how to document`_
+
+* The ``__init__.py`` of the module should contain the main reference
+  documentation in its docstring. This is connected to the Sphinx
+  documentation under ``doc/`` via Sphinx's automodule directive.
+
+  The reference documentation should first give a categorized list of
+  the contents of the module using ``autosummary::`` directives, and
+  after that explain points essential for understanding the use of the
+  module.
+
+  Tutorial-style documentation with extensive examples should be
+  separate, and put under ``doc/source/tutorial/``
+
+See the existing SciPy submodules for guidance.
+
+For further details on NumPy distutils, see `NumPy Distutils - User's Guide <https://github.com/numpy/numpy/blob/master/doc/DISTUTILS.rst.txt>`_.
