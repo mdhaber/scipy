@@ -84,9 +84,9 @@ Currently we have *two* versions of SciPy: the latest release as installed by An
 
    - ``env_vars.sh`` is the name of two new plain text files with the contents
    
-		- ``export PYTHONPATH=/scipy`` (where ``scipy`` is to be replaced with the full path of the SciPy root directory), and
-		
-		- ``unset PYTHONPATH``,
+	- ``export PYTHONPATH=/scipy`` (where ``scipy`` is to be replaced with the full path of the SciPy root directory), and
+	
+	- ``unset PYTHONPATH``,
    
    respectively.
 
