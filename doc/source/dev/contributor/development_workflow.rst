@@ -223,4 +223,4 @@ Checklist before submitting a PR
    simply extra work for the reviewer (or worse, the reviewer may forget).
 -  Did you check that the code can be distributed under a BSD license?
 
-.. include:: ../git_links.inc
+.. include:: ../gitwash/git_links_link.rst
