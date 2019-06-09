@@ -57,7 +57,7 @@ Benchmarks
 
 Cython
 ------
-- `Adding Cython to SciPy <https://github.com/scipy/scipy/wiki/Adding-Cython-to-SciPy>`_ - Extending and compiling Python code with `Cython`_ can significantly improve its performance. This document helps you get started.
+- `Adding Cython to SciPy <https://github.com/scipy/scipy/wiki/Adding-Cython-to-SciPy>`_ - Extending and compiling Python code with |Cython|_ can significantly improve its performance. This document helps you get started.
 
 .. _Scipy Development Workflow: https://youtu.be/HgU01gJbzMY
 
@@ -73,6 +73,9 @@ Cython
 
 .. _Sphinx: http://www.sphinx-doc.org/en/master/
 
+.. _Airspeed Velocity: https://asv.readthedocs.io/en/stable/
+
+.. |Cython| replace:: Cython
 .. _Cython: https://cython.org/
 
-.. _Airspeed Velocity: https://asv.readthedocs.io/en/stable/
+
