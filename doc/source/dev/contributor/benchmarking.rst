@@ -163,9 +163,11 @@ track its performance over time.
 
    python run.py run --bench optimize_linprog.KleeMinty --steps 10 7fa17f..
 
-   *Note: this will take a while, because SciPy has to be rebuilt for each
-commit! For more information about specifying ranges of commits, see
-the* \ `git revisions documentation`_\ *.*
+.. note::
+
+   this will take a while, because SciPy has to be rebuilt for each
+   commit! For more information about specifying ranges of commits, see
+   the* \ `git revisions documentation`_\ *.*
 
 To “publish” the results (prepare them to be viewed) and “preview” them
 in an interactive console:
