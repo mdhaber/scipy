@@ -51,11 +51,13 @@ Documentation
 
 Benchmarks
 ----------
+- `SciPy Benchmarks <https://github.com/scipy/scipy/tree/master/benchmarks>`_ explains how to add benchmarks to SciPy using `Airspeed Velocity`_.
 
 .. _cython:
 
 Cython
 ------
+- `Adding Cython to SciPy <https://github.com/scipy/scipy/wiki/Adding-Cython-to-SciPy>`_ - Extending and compiling Python code with `Cython`_ can significantly improve its performance. This document helps you get started.
 
 .. _Scipy Development Workflow: https://youtu.be/HgU01gJbzMY
 
@@ -70,3 +72,7 @@ Cython
 .. _numpydoc docstring guide: https://numpydoc.readthedocs.io/en/latest/format.html
 
 .. _Sphinx: http://www.sphinx-doc.org/en/master/
+
+.. _Airspeed Velocity: https://asv.readthedocs.io/en/stable/
+
+.. _Cython: https://cython.org/
