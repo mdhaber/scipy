@@ -53,7 +53,7 @@ Building SciPy
 
 #. Test the build: enter ``python3 runtests.py -v``. `runtests.py` is another script in the SciPy root directory. It runs a suite of tests that make sure SciPy is working as it should, and ``-v`` activates the ``--verbose`` option to show all the test output.
 
-If the tests were successful, you now have a working development build of SciPy! You could stop here, but you would only be able to use this development build from within the SciPy root directory. This would be inconvenient, for instance, if you wrote a script that `import`s something you changed in SciPy but wanted to save it elsewhere on your computer. Without taking additional steps to add this version of SciPy to the `PYTHONPATH <https://docs.python.org/3/using/cmdline.html#environment-variables)>`_ this script would ``import`` from the version of SciPy distributed with Anaconda rather than the development version you just built. (See `here <https://chrisyeh96.github.io/2017/08/08/definitive-guide-python-imports.html>`_ for much more information about how Python imports modules.)
+If the tests were successful, you now have a working development build of SciPy! You could stop here, but you would only be able to use this development build from within the SciPy root directory. This would be inconvenient, for instance, if you wrote a script that `import`s something you changed in SciPy but wanted to save it elsewhere on your computer. Without taking additional steps to add this version of SciPy to the |PYTHONPATH|_ this script would ``import`` from the version of SciPy distributed with Anaconda rather than the development version you just built. (See `here <https://chrisyeh96.github.io/2017/08/08/definitive-guide-python-imports.html>`_ for much more information about how Python imports modules.)
 
 Installing SciPy
 --------------
@@ -100,6 +100,9 @@ Currently we have *two* versions of SciPy: the latest release as installed by An
 .. _Anaconda Distribution of Python: https://www.anaconda.com/distribution/
 
 .. _Homebrew: https://brew.sh/
+
+.. |PYTHONPATH| replace:: ``PYTHONPATH``
+.. _PYTHONPATH: https://docs.python.org/3/using/cmdline.html#environment-variables)
 
 .. |br| raw:: html
 
