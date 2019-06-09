@@ -37,13 +37,15 @@ Editing SciPy
 
 Unit Tests
 ----------
-- **`NumPy/SciPy Testing Guidelines`_** is the definitive guide to writing SciPy unit tests.
-- **`Running SciPy Tests Locally`_** documents ``runtests.py``, a convenient script for building SciPy and running tests locally.
+- `NumPy/SciPy Testing Guidelines`_ is the definitive guide to writing SciPy unit tests.
+- `Running SciPy Tests Locally`_ documents ``runtests.py``, a convenient script for building SciPy and running tests locally.
 
 .. _docs:
 
 Documentation
 -------------
+- `numpydoc docstring guide`_ contains everything you need to know about writing docstrings, which are rendered to produce HTML documentation using `Sphinx`_.
+- `Rendering SciPy Documentation <https://github.com/scipy/scipy/wiki/Rendering-SciPy-Documentation>`_ - It's important to check how changes to the documentation render before merging a PR; this document explains how you can do that.
 
 .. _benchmarks:
 
@@ -64,3 +66,7 @@ Cython
 .. _NumPy/SciPy Testing Guidelines: https://github.com/numpy/numpy/blob/master/doc/TESTS.rst.txt
 
 .. _Running SciPy Tests Locally: https://github.com/scipy/scipy/wiki/Running-SciPy-Tests
+
+.. _numpydoc docstring guide: https://numpydoc.readthedocs.io/en/latest/format.html
+
+.. _Sphinx: http://www.sphinx-doc.org/en/master/
