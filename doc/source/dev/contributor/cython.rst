@@ -39,9 +39,9 @@ simplex method performs many elementary row operations on matrices, and
 so it was a natural candidate to be Cythonized.
 
 Note that ``scipy/optimize/_linprog_rs.py`` imports the ``BGLU`` and
-``LU`` classes from |bglu-dense|_ exactly as if they were regular
+``LU`` classes from ``._bglu_dense`` exactly as if they were regular
 Python classes. But they’re not. ``BGLU`` and ``LU`` are Cython classes
-defined in ```/scipy/optimize/_bglu_dense.pyx```_. There is nothing
+defined in |bglu-dense|_. There is nothing
 about the way they are imported or used that suggests that they are
 written in Cython; the only way so far that we can tell they are Cython
 classes is that they are defined in a file with a ``.pyx`` extension.
@@ -65,7 +65,7 @@ and ``BGLU`` classes from the extension ``_bglu_dense``.
 Excercise
 =========
 
-*See a video run-through of this exercise: *\ `Cythonizing SciPy Code`_ .
+*See a video run-through of this exercise:* \ `Cythonizing SciPy Code`_ \ .
 
 #. Update Cython and create a new branch
    (e.g. ``git checkout -b cython_test``) in which to make some
@@ -168,7 +168,7 @@ Excercise
    from scipy.optimize.mycython import myfun
    %timeit myfun()
 
-I get something like: ``68.6 ns ± 1.95 ns per loop`` The Cython code ran
+I get something like: ``68.6 ns ± 1.95 ns per loop``. The Cython code ran
 about 10 million times faster than the original Python code.
 
 In this case, the compiler probably optimized-away the loop, simply
