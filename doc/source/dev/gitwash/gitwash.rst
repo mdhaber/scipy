@@ -28,6 +28,7 @@ Contents:
    development_setup
    configure_git
    dot2_dot3
+   useful_git
    git_resources
 
 .. include:: git_links.inc
