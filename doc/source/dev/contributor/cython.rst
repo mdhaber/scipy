@@ -31,7 +31,7 @@ code with Cython:
    compiled by your C compiler to machine code when SciPy is built.
 
 Example
-=======
+-------
 
 |linprog-rs|_ contains the implementation of the
 revised simplex method for ``scipy.optimize.linprog``. The revised
@@ -63,9 +63,9 @@ be compiled to machine code, and we will be able to import the ``LU``
 and ``BGLU`` classes from the extension ``_bglu_dense``.
 
 Excercise
-=========
+---------
 
-*See a video run-through of this exercise:* \ `Cythonizing SciPy Code`_ \ .
+*See a video run-through of this exercise:* \ `Cythonizing SciPy Code`_ \
 
 #. Update Cython and create a new branch
    (e.g. ``git checkout -b cython_test``) in which to make some
