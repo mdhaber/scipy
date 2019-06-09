@@ -224,3 +224,5 @@ Checklist before submitting a PR
 -  Did you check that the code can be distributed under a BSD license?
 
 .. include:: ../gitwash/git_links.inc
+
+.. _formatted correctly: https://docs.scipy.org/doc/numpy/dev/gitwash/development_workflow.html#writing-the-commit-message
