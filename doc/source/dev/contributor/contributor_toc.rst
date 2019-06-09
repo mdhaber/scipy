@@ -51,7 +51,7 @@ Documentation
 
 Benchmarks
 ----------
-- `SciPy Benchmarks <https://github.com/scipy/scipy/tree/master/benchmarks>`_ explains how to add benchmarks to SciPy using `Airspeed Velocity`_.
+- `SciPy Benchmarks <https://github.com/scipy/scipy/wiki/Benchmarking-SciPy-with-Airspeed-Velocity>`_ explains how to add benchmarks to SciPy using `Airspeed Velocity`_.
 
 .. _cython:
 
