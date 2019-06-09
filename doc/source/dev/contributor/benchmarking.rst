@@ -33,9 +33,9 @@ consider writing benchmarks.
 Writing benchmarks
 ------------------
 
-*The* \`Writing benchmarks`_\ *section of the airspeed velocity
+*The* \ `Writing benchmarks`_\ *section of the airspeed velocity
 documentation is the definitive guide to writing benchmarks. Please see
-also the*\ `SciPy benchmarks readme`_\ *.*
+also the* \ `SciPy benchmarks readme`_\ *.*
 
 To see how benchmarks are written, take a look at
 |scipy/benchmarks/benchmarks/optimize_linprog.py|. Each subclass of
@@ -44,13 +44,12 @@ class defines a benchmark test based on the `Klee-Minty hypercube
 problem`_, a diabolical test of the simplex algorithm for linear
 programming. The class has four parts: 
 
-- ``setup`` prepares the
-   benchmark to run. The execution time of this function is *not* counted
-   in the benchmark results, so this is a good place to set up all
-   variables that define the problem. In the ``KleeMinty`` example, this
-   involves generating arrays ``c``, ``A_ub``, and ``b_ub`` corresponding
-   with a Klee-Minty hypercube in ``dims`` dimensions and storing them as
-   instance variables.
+-  ``setup`` prepares the benchmark to run. The execution time of this
+   function is *not* counted in the benchmark results, so this is a good
+   place to set up all variables that define the problem. In the ``KleeMinty``
+   example, this involves generating arrays ``c``, ``A_ub``, and ``b_ub``
+   corresponding with a Klee-Minty hypercube in ``dims`` dimensions and
+   storing them as instance variables.
 -  ``time_klee_minty`` actually runs the benchmark test. This function
    executes after a ``KleeMinty`` object has been instantiated and
    ``setup`` has run, so it gets the arrays defining the problem from
@@ -80,7 +79,7 @@ toggled using the control panel on the left.
 Running benchmarks locally
 --------------------------
 
-*Note: before beginning, ensure that*\ `airspeed velocity`_\ *is
+*Note: before beginning, ensure that* \ `airspeed velocity`_\ *is
 installed.*
 
 After contributing new benchmarks, you should test them locally before
@@ -124,10 +123,10 @@ as ``master``:
 All of the commands above display the results in plain text in the
 console, and the results are not saved for comparison with future
 commits. For greater control, a graphical view, and to have results
-saved for future comparison, you can use ```scipy/benchmarks/run.py```_
+saved for future comparison, you can use |scipy/benchmarks/run.py|
 to run the benchmarks.
 
-``run.py`` is a “wrapper” for the ``asv`` terminal command, the use of
+``run.py`` is a "wrapper" for the ``asv`` terminal command, the use of
 which is described in `Using airspeed velocity`_. ``run.py`` simply sets
 some environment variables for you, then sends all remaining command
 line arguments to ``asv``.
@@ -166,7 +165,7 @@ track its performance over time.
 
    *Note: this will take a while, because SciPy has to be rebuilt for each
 commit! For more information about specifying ranges of commits, see
-the*\ `git revisions documentation`_\ *.*
+the* \ `git revisions documentation`_\ *.*
 
 To “publish” the results (prepare them to be viewed) and “preview” them
 in an interactive console:
@@ -188,15 +187,20 @@ check out the ``asv find`` command and the ``--quick``,
 .. _git revisions documentation: https://git-scm.com/docs/gitrevisions#_specifying_ranges
 .. _Commands: https://asv.readthedocs.io/en/stable/commands.html#commands
 .. _airspeed velocity: https://github.com/airspeed-velocity/asv
-.. _``scipy/benchmarks/run.py``: https://github.com/scipy/scipy/blob/master/benchmarks/run.py
 .. _Using airspeed velocity: https://asv.readthedocs.io/en/stable/using.html#running-benchmarks
-.. _``7fa17f2369e0e5ad055b23cc1a5ee079f9e8ca32``: https://github.com/scipy/scipy/commit/7fa17f2369e0e5ad055b23cc1a5ee079f9e8ca32
 .. _Benchmarking SciPy: https://youtu.be/edLQ8KRpupQ
 .. _airspeed velocity (asv) documentation: https://asv.readthedocs.io/en/stable/
 .. _airspeed velocity of an unladen scipy: https://pv.github.io/scipy-bench/
 .. _Writing benchmarks: https://asv.readthedocs.io/en/stable/writing_benchmarks.html
 .. _SciPy benchmarks readme: https://github.com/scipy/scipy/blob/master/benchmarks/README.rst
 .. _Klee-Minty hypercube problem: https://en.wikipedia.org/wiki/Klee%E2%80%93Minty_cube
+.. _KleeMinty.time_klee_minty:https://pv.github.io/scipy-bench/#optimize_linprog.KleeMinty.time_klee_minty
 
 .. |scipy/benchmarks/benchmarks/optimize_linprog.py| replace:: ``scipy/benchmarks/benchmarks/optimize_linprog.py``
 .. _scipy/benchmarks/benchmarks/optimize_linprog.py: https://docs.python.org/3/using/cmdline.html#environment-variables
+
+.. |scipy/benchmarks/run.py| replace:: ``scipy/benchmarks/benchmarks/optimize_linprog.py``
+.. _scipy/benchmarks/run.py: https://docs.python.org/3/using/cmdline.html#environment-variables
+
+.. |7fa17f2369e0e5ad055b23cc1a5ee079f9e8ca32| replace:: ``7fa17f2369e0e5ad055b23cc1a5ee079f9e8ca32``
+.. _7fa17f2369e0e5ad055b23cc1a5ee079f9e8ca32: https://github.com/scipy/scipy/commit/7fa17f2369e0e5ad055b23cc1a5ee079f9e8ca32
