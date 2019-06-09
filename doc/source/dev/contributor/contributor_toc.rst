@@ -73,6 +73,6 @@ Cython
 
 .. _Sphinx: http://www.sphinx-doc.org/en/master/
 
-.. _Airspeed Velocity: https://asv.readthedocs.io/en/stable/
-
 .. _Cython: https://cython.org/
+
+.. _Airspeed Velocity: https://asv.readthedocs.io/en/stable/
