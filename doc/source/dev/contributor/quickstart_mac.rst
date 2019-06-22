@@ -78,10 +78,16 @@ Currently we have *two* versions of SciPy: the latest release as installed by An
 
 #. Enter ``conda install cython numpy matplotlib pytest spyder``. |br| Note that we're only installing SciPy's build dependencies (and Spyder so we can use the IDE), but not SciPy itself.
 
-#. Enter ``conda develop /scipy``, where ``scipy`` is to be replaced with the full path of the SciPy root directory. |br| This instructs ``conda`` to add the root SciPy directory to the ``PYTHONPATH`` environment variable whenever our ``scipydev`` virtual environment is activated. That way, when we ``import`` SciPy code, the code is imported from our development version of SciPy.  *Note: this step differs from the process shown in* `Anaconda SciPy Dev: Part II (macOS)`_ *that involves creating special folders and files deep within the Anaconda directory. You can ignore that part of the video from 0:38 to 1:38; this is much simpler!*
+#. Enter ``conda develop /scipy``, where ``scipy`` is to be replaced with the full path of the SciPy root directory. |br| This instructs ``conda`` to add the root SciPy directory to the |PYTHONPATH|_ environment variable whenever our ``scipydev`` virtual environment is activated. That way, when we ``import`` SciPy code, the code is imported from our development version of SciPy.  *Note: this step differs from the process shown in* `Anaconda SciPy Dev: Part II (macOS)`_ *, which involves creating special folders and files deep within the Anaconda directory. You can ignore that part of the video from 0:38 to 1:38; this is much simpler!*
 
-#. In a new terminal window, test your setup. If you activate your virtual environment (e.g. ``conda activate scipydev``) and run Python code that imports from SciPy, any changes you make to the SciPy code should be reflected when the code runs. After deactivating the virtual environment (``conda deactivate``), Python imports from the version of SciPy installed by Anaconda.
+#. In a new terminal window, test your setup. If you activate your virtual environment (e.g. ``conda activate scipydev``) and run Python code that imports from SciPy, any changes you make to the SciPy code should be reflected when the code runs. After deactivating the virtual environment (``conda deactivate``), Python imports from the version of SciPy installed by Anaconda. You can also check which version of SciPy you're using by executing in Python::
 
+      import scipy
+      print(scipy.__version__)
+
+   If you have successfully imported a development version of SciPy, the word ``dev`` will appear in the output, e.g.::
+
+      1.4.0.dev0+be97f1a
 
 .. _Anaconda SciPy Dev\: Part I (macOS): https://youtu.be/1rPOSNd0ULI
 
