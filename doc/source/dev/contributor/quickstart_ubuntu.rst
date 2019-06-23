@@ -47,7 +47,7 @@ Building SciPy
 
 #. In the terminal, navigate into the ``scipy`` root directory (e.g. ``cd scipy``).
 
-#. Install `Homebrew`_. Enter into the terminal |br| ``sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"`` |br| or follow the installation instructions listed on the `Homebrew on Linux <Homebrew>`_ website. Homebrew requires additional packages to be installed, and lists the required commands in the terminal window. Copy and paste these commands into the terminal to complete the Homebrew setup. If no additional commands are given, they may be found `here <https://docs.brew.sh/Homebrew-on-Linux>`_.
+#. Install `Homebrew on Linux`_. Enter into the terminal |br| ``sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"`` |br| or follow the installation instructions listed on the `Homebrew on Linux`_ website. Homebrew requires additional packages to be installed, and lists the required commands in the terminal window. Copy and paste these commands into the terminal to complete the Homebrew setup. If no additional commands are given, they may be found `here <https://docs.brew.sh/Homebrew-on-Linux>`_.
 
    Homebrew is a package manager that will help you download ``gcc``, the software we will use to compile C, C++, and Fortran code included in SciPy.
 
@@ -102,8 +102,6 @@ Currently we have *two* versions of SciPy: the latest release as installed by An
 .. _Anaconda SciPy Dev\: Part II (macOS): https://youtu.be/Faz29u5xIZc
 
 .. _Anaconda Distribution of Python: https://www.anaconda.com/distribution/
-
-.. _Homebrew: https://docs.brew.sh/Homebrew-on-Linux
 
 .. _Homebrew on Linux: https://docs.brew.sh/Homebrew-on-Linux
 
