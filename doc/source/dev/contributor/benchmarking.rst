@@ -1,4 +1,5 @@
 :orphan:
+
 .. highlight:: console
 
 .. _benchmarking-with-asv:
