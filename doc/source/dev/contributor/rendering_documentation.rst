@@ -51,8 +51,7 @@ Checking Documentation on the Cloud
 -----------------------------------
 
 Once a PR is opened, you can check that documentation renders correctly
-on the cloud. If you are signed in to GitHub, checking cloud-built
-documentation is easy.
+on the cloud.
 
 #. Log in to `GitHub`_.
 #. Log in `CircleCI`_ using your GitHub account.
