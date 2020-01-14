@@ -11,7 +11,7 @@ try:
     from numpy.testing import suppress_warnings
     from scipy.optimize._remove_redundancy import _remove_redundancy, _remove_redundancy_dense, _remove_redundancy_sparse
     from scipy.optimize._linprog_util import _presolve, _clean_inputs, _LPProblem
-    from scipy.sparse import csc_matrix, issparse
+    from scipy.sparse import csc_matrix, csr_matrix, issparse
     import numpy as np
     import os
 except ImportError:
@@ -31,6 +31,7 @@ methods = [("interior-point", {"sparse": True}),
            ("revised simplex", {})]
 rr_methods = [_remove_redundancy, _remove_redundancy_dense,
               _remove_redundancy_sparse]
+presolve_methods = ['sparse', 'dense']
 
 problems = ['25FV47', '80BAU3B', 'ADLITTLE', 'AFIRO', 'AGG', 'AGG2', 'AGG3',
             'BANDM', 'BEACONFD', 'BLEND', 'BNL1', 'BNL2', 'BORE3D', 'BRANDY',
@@ -53,6 +54,8 @@ if not slow:
                 'SC105', 'SCTAP1', 'SHARE2B', 'STOCFOR1']
     rr_problems = ['AFIRO', 'BLEND', 'FINNIS', 'RECIPE', 'SCSD6', 'VTP-BASE',
                    'DEGEN2', 'ETAMACRO', 'RECIPE']
+
+presolve_problems = problems
 
 
 def klee_minty(D):
@@ -243,3 +246,31 @@ class Netlib_RR(Benchmark):
             return float(self.error1)
         else:
             return float(self.error2)
+
+
+class Netlib_presolve(Benchmark):
+    params = [
+        presolve_methods,
+        presolve_problems
+    ]
+    param_names = ['method', 'problems']
+
+    def setup(self, meth, prob):
+
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        data = np.load(dir_path + "/linprog_benchmark_files/" + prob + ".npz",
+                       allow_pickle=True)
+
+        c, A_eq, A_ub, b_ub, b_eq = (data["c"], data["A_eq"], data["A_ub"],
+                                     data["b_ub"], data["b_eq"])
+        bounds = np.squeeze(data["bounds"])
+        x0 = np.zeros(c.shape)
+
+        lp = _LPProblem(c, A_ub, b_ub, A_eq, b_eq, bounds, x0)
+        self.lp_cleaned = _clean_inputs(lp)
+        if meth == "sparse":
+            self.lp_cleaned.A_eq = csr_matrix(self.lp_cleaned.A_eq)
+            self.lp_cleaned.A_ub = csr_matrix(self.lp_cleaned.A_ub)
+
+    def time_netlib_rr(self, meth, prob):
+        res = _presolve(self.lp_cleaned, rr=False, tol=1e-9)[0]
