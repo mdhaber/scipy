@@ -583,8 +583,6 @@ class LinprogCommonTests(object):
         _assert_success(res, desired_fun=3)
 
     def test_zero_row_2(self):
-        if 'highs' in self.method:
-            pytest.skip('HiGHS broken')
         A_ub = [[0, 0, 0], [1, 1, 1], [0, 0, 0]]
         b_ub = [0, 3, 0]
         c = [1, 2, 3]
@@ -654,8 +652,6 @@ class LinprogCommonTests(object):
             assert_equal(res.nit, 0)
 
     def test_singleton_row_ub_2(self):
-        if 'highs' in self.method:
-            pytest.skip('HiGHS broken')
         c = [1, 1, 1, 2]
         A_ub = [[1, 0, 0, 0], [0, 2, 0, 0], [-1, 0, 0, 0], [1, 1, 1, 1]]
         b_ub = [1, 2, -0.5, 4]
@@ -753,8 +749,6 @@ class LinprogCommonTests(object):
             assert_equal(res.message[:36], "The problem is (trivially) unbounded")
 
     def test_cyclic_recovery(self):
-        if 'highs' in self.method:
-            pytest.skip('HiGHS broken')
         # Test linprogs recovery from cycling using the Klee-Minty problem
         # Klee-Minty  https://www.math.ubc.ca/~israel/m340/kleemin3.pdf
         c = np.array([100, 10, 1]) * -1  # maximize
