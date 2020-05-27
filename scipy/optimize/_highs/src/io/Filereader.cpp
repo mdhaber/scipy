@@ -59,10 +59,6 @@ void interpretFilereaderRetcode(FILE* logfile, const std::string filename,
       HighsLogMessage(logfile, HighsMessageType::ERROR,
                       "Parser not implemented for %s", filename.c_str());
       break;
-    case FilereaderRetcode::TIMEOUT:
-      HighsLogMessage(logfile, HighsMessageType::ERROR,
-                      "Parser reached timeout.", filename.c_str());
-      break;
   }
 }
 

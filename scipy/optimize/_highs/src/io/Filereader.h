@@ -22,8 +22,7 @@ enum class FilereaderRetcode {
   OK = 0,
   FILENOTFOUND = 1,
   PARSERERROR = 2,
-  NOT_IMPLEMENTED = 3,
-  TIMEOUT
+  NOT_IMPLEMENTED = 3
 };
 
 void interpretFilereaderRetcode(FILE* logfile, const std::string filename,

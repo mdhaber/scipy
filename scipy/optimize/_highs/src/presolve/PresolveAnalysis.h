@@ -20,10 +20,6 @@
 
 #include "util/HighsTimer.h"
 
-namespace presolve {
-
-constexpr double inf = std::numeric_limits<double>::infinity();
-
 enum PresolveRule {
   // Presolve rules.
   EMPTY_ROW,
@@ -128,11 +124,8 @@ class PresolveTimer {
       assert(rules_[id].rule_id == id);
       clocks[id] = rules_[id].clock_id;
     }
-    const int total_presolve_time_as_rule = TOTAL_PRESOLVE_TIME;
-    const double ideal_time = getRuleTime(total_presolve_time_as_rule);
-
     std::cout << std::endl;
-    timer_.report_tl("grep-Presolve", clocks, ideal_time, 0);
+    timer_.report("grep-Presolve", clocks);
     std::cout << std::endl;
   }
 
@@ -141,27 +134,10 @@ class PresolveTimer {
 
   HighsTimer& timer_;
 
-  double getRuleTime(const int rule_id) {
-    return timer_.read(rules_[rule_id].clock_id);
-  }
-
-  inline double getTime() { return timer_.readRunHighsClock(); }
-
-  inline bool reachLimit() {
-    if (time_limit == inf || time_limit <= 0) return false;
-    if (getTime() < time_limit) return false;
-    return true;
-  }
-
-  double start_time = 0.0;
-  double time_limit = 0.0;
-
  private:
   std::vector<PresolveRuleInfo> rules_;
 
   double total_time_ = 0.0;
 };
-
-}  // namespace presolve
 
 #endif
