@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -41,17 +40,8 @@ enum class FreeFormatParserReturnCode {
   SUCCESS,
   PARSERERROR,
   FILENOTFOUND,
-  FIXED_FORMAT,
-  TIMEOUT,
+  FIXED_FORMAT
 };
-
-namespace free_format_parser {
-
-// private:
-using wall_clock = std::chrono::high_resolution_clock;
-using time_point = wall_clock::time_point;
-
-double getWallTime();
 
 class HMpsFF {
  public:
@@ -60,11 +50,7 @@ class HMpsFF {
                                          const std::string filename,
                                          HighsLp& lp);
 
-  double time_limit = HIGHS_CONST_INF;
-
  private:
-  double start_time;
-
   int numRow;
   int numCol;
   int nnz;
@@ -112,8 +98,7 @@ class HMpsFF {
     END,
     FAIL,
     COMMENT,
-    FIXED_FORMAT,
-    TIMEOUT
+    FIXED_FORMAT
   };
 
   enum class boundtype { LE, EQ, GE, FR };
@@ -140,5 +125,4 @@ class HMpsFF {
   HMpsFF::parsekey parseBounds(FILE* logfile, std::ifstream& file);
 };
 
-}  // namespace free_format_parser
 #endif /* IO_HMPSFF_H_ */

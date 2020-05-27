@@ -17,8 +17,6 @@ using std::cout;
 using std::endl;
 using std::setw;
 
-namespace presolve {
-
 HPreData::HPreData() {}
 
 double HPreData::getRowValue(int i) {
@@ -218,9 +216,3 @@ void HPreData::printAR(int i) {
   }
   cout << endl;
 }
-
-void initPresolve(PresolveStats& stats) {
-  std::cout << "Init Presolve form HiGHS" << std::endl;
-}
-
-}  // namespace presolve
