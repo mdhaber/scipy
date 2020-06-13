@@ -144,9 +144,12 @@ cdef apply_options(dict options, Highs & highs):
     ]):
         val = options.get(opt, None)
         if val is not None:
-            opt_status = highs.setHighsOptionValueInt(opt.encode(), val)
-            if opt_status != HighsStatusOK:
+            if not isinstance(val, int):
                 warn(_opt_warning(opt.encode(), val), OptimizeWarning)
+            else:
+                opt_status = highs.setHighsOptionValueInt(opt.encode(), val)
+                if opt_status != HighsStatusOK:
+                    warn(_opt_warning(opt.encode(), val), OptimizeWarning)
 
     # Do all the doubles
     for opt in set([
