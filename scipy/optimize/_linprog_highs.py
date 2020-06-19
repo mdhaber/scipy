@@ -150,32 +150,30 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
                 All messaging to stdout is supressed.
 
             ``1``: Verbose
-                Includes a once-per-iteration report on simplex/ipm
-                progress and information about each nonzero row and
-                column.
+                Provide only a once-per-iteration report on
+                progress and information about nonzero rows and
+                columns of the model (for simplex method only).
 
             ``2``: Detailed
-                Includes technical information about progress and
-                events in applying the simplex method.
+                Provide only technical information about progress and
+                events (for simplex method only).
 
-            ``3``: Verbose | Detailed
+            ``3``: Provide both Verbose and Detailed reports
 
-            ``4``: Minimal messaging
-                Once-per-solve information about progress as well as a
-                once-per-basis-matrix-reinversion report on progress in
-                simplex or a once-per-iteration report on progress in IPX.
+            ``4``: Minimal
+                Provide only once-per-solve information about progress
+                as well as a once-per-basis-matrix-reinversion report
+                on progress in simplex or a once-per-iteration report
+                on progress in IPX.
 
-            ``5``: Minimal | Verbose
+            ``5``: Provide both Minimal and Verbose reports
 
-            ``6``: Minimal | Detailed
+            ``6``: Provide both Minimal and Detailed reports
 
-            ``7``: Verbose | Detailed | Minimal
+            ``7``: Provide Verbose, Detailed, and Minimal reports
 
         Default is 4, but note: this option is ignored unless
         option ``disp`` is ``True``.
-        ``message_level`` behaves like a bitmask, i.e., any
-        combination of levels is possible using the bit-or
-        operator.
     primal_feasibility_tolerance : double
         Primal feasibility tolerance.  Default is 1e-07.
         The minimum of this and ``dual_feasibility_tolerance``
