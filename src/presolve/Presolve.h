@@ -25,6 +25,7 @@
 #include "lp_data/HighsLp.h"
 #include "presolve/HPreData.h"
 #include "presolve/PresolveAnalysis.h"
+#include "test/DevKkt.h"
 
 using std::list;
 using std::string;
@@ -47,7 +48,9 @@ enum class HighsPresolveStatus {
   Empty,
   Reduced,
   ReducedToEmpty,
-  NullError
+  Timeout,
+  NullError,
+  OptionsError,
 };
 
 namespace presolve {
@@ -67,45 +70,38 @@ const std::map<Presolver, std::string> kPresolverNames{
     {Presolver::kMainDoubletonEq, "Doubleton eq ()"},
     {Presolver::kMainDominatedCols, "Dominated Cols()"}};
 
-struct MainLoop {
-  int rows;
-  int cols;
-  int nnz;
-};
-
-struct DevStats {
-  int n_loops = 0;
-  std::vector<MainLoop> loops;
-};
-
 class Presolve : public HPreData {
  public:
-  Presolve(HighsTimer& timer_ref) : timer(timer_ref) {
-    tol = 0.0000001;
-    noPostSolve = false;
-    objShift = 0;
-    hasChange = true;
-    iKKTcheck = 0;
-    countsFile = "";
-  }
+  Presolve(HighsTimer& timer_ref) : timer(timer_ref) {}
+  virtual ~Presolve() {}
 
   HighsPresolveStatus presolve();
   HighsPostsolveStatus postsolve(const HighsSolution& reduced_solution,
-                                 HighsSolution& recovered_solution);
+                                 const HighsBasis& reduced_basis,
+                                 HighsSolution& recovered_solution,
+                                 HighsBasis& recovered_basis);
 
-  void setBasisInfo(const std::vector<HighsBasisStatus>& pass_col_status,
-                    const std::vector<HighsBasisStatus>& pass_row_status);
-  const std::vector<HighsBasisStatus>& getRowStatus() { return row_status; }
-  const std::vector<HighsBasisStatus>& getColStatus() { return col_status; }
-
+  void setNumericalTolerances();
   void load(const HighsLp& lp);
   // todo: clear the public from below.
   string modelName;
 
+  // Options
   std::vector<Presolver> order;
 
+  int max_iterations = 0;
+
+  void setTimeLimit(const double limit) {
+    assert(limit < inf && limit > 0);
+    timer.time_limit = limit;
+  }
+
+  int iPrint = 0;
+  int message_level;
+  FILE* output;
+
  private:
-  int iKKTcheck;
+  int iKKTcheck = 0;
   int presolve(int print);
 
   const bool report_postsolve = false;
@@ -142,10 +138,11 @@ class Presolve : public HPreData {
     Empty = 3,
     Optimal = 4,
     Reduced = 5,
+    Timeout = 6,
   };
 
  private:
-  bool hasChange;
+  bool hasChange = true;
   int status = 0;  // 0 is unassigned, see enum stat
 
   list<int> singRow;  // singleton rows
@@ -168,7 +165,8 @@ class Presolve : public HPreData {
   void resizeImpliedBounds();
 
   // easy transformations
-  void removeIfFixed(int j);
+  void removeFixedCol(int j);
+  void removeFixed();
   void removeEmptyRow(int i);
   void removeEmptyColumn(int j);
   void removeRow(int i);
@@ -238,26 +236,37 @@ class Presolve : public HPreData {
   void countRemovedRows(PresolveRule rule);
   void countRemovedCols(PresolveRule rule);
 
-  double tol;
+  double tol = 0.0000001;
+  const double default_primal_feasiblility_tolerance = 1e-7;
+  const double default_dual_feasiblility_tolerance = 1e-7;
+  const double default_small_matrix_value = 1e-9;
+  double inconsistent_bounds_tolerance;
+  double fixed_column_tolerance;
+  double doubleton_equation_bound_tolerance;
+  double doubleton_inequality_bound_tolerance;
+  double presolve_small_matrix_value;
+  double empty_row_bound_tolerance;
+  double dominated_column_tolerance;
+  double weakly_dominated_column_tolerance;
 
   // postsolve
-  bool noPostSolve;
+  bool noPostSolve = false;
 
-  void addChange(PresolveRule type, int row, int col);
-  void fillStackRowBounds(int col);
+  void addChange(const PresolveRule type, const int row, const int col);
+  void fillStackRowBounds(const int col);
   void setKKTcheckerData();
 
-  void getBoundOnLByZj(int row, int j, double* lo, double* up, double colLow,
-                       double colUpp);
-  double getRowDualPost(int row, int col);
-  double getColumnDualPost(int col);
-  string getDualsForcingRow(int row, vector<int>& fRjs);
-  void getDualsSingletonRow(int row, int col);
-  void getDualsDoubletonEquation(int row, int col);
+  void getBoundOnLByZj(const int row, const int j, double* lo, double* up,
+                       const double colLow, const double colUpp);
+  double getRowDualPost(const int row, const int col);
+  double getColumnDualPost(const int col);
+  string getDualsForcingRow(const int row, vector<int>& fRjs);
+  void getDualsSingletonRow(const int row, const int col);
+  void getDualsDoubletonEquation(const int row, const int col);
   void recordCounts(const string fileName);
   void trimA();
 
-  void setBasisElement(change c);
+  void setBasisElement(const change c);
 
   // test basis matrix singularity
   //
@@ -269,14 +278,18 @@ class Presolve : public HPreData {
   //	int testBasisMatrixSingularity();
   //
 
-  string countsFile;
-
   // Dev presolve
   // April 2020
   void reportDevMainLoop();
   void reportDevMidMainLoop();
-  DevStats dev_stats;
+  PresolveStats stats;
   int runPresolvers(const std::vector<Presolver>& order);
+
+  void checkKkt(const bool final = false);
+  dev_kkt_check::State initState(const bool intermediate = false);
+
+  void caseTwoSingletonsDoubletonEquation(const int row, const int x,
+                                          const int y);
 };
 
 }  // namespace presolve
