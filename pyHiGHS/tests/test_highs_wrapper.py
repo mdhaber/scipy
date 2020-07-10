@@ -9,11 +9,7 @@ import unittest
 import numpy as np
 from scipy.sparse import csc_matrix
 
-try:
-    from _highs.highs_wrapper import highs_wrapper
-except ModuleNotFoundError:
-    # Test is being called from within scipy
-    from scipy.optmize._highs.highs_wrapper import highs_wrapper
+from _highs.highs_wrapper import highs_wrapper
 
 
 class TestHighsWrapperCoverage(unittest.TestCase):
