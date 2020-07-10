@@ -12,7 +12,7 @@ from scipy.sparse import csc_matrix
 try:
     from _highs.highs_wrapper import highs_wrapper
 except ModuleNotFoundError:
-    def highs_wrapper(c, A, lhs, rhs, lb, ub, options):
+    def highs_wrapper(c, Aptr, indices, data, lhs, rhs, lb, ub, options):
         return {'fun': None}
 
 
