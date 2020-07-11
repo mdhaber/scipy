@@ -266,7 +266,7 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
                 A string descriptor of the algorithm status.
 
         Callback functions are not currently supported by the HiGHS methods.
-        
+
     options : dict, optional
         A dictionary of solver options. All methods accept the following
         options:
@@ -351,7 +351,7 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
     :ref:`'highs-simplex' <optimize.linprog-highs-simplex>` and
     :ref:`'highs-ipm' <optimize.linprog-highs-ipm>` are interfaces to the
     HiGHS simplex and interior-point method solvers [13]_, respectively.
-    :ref:`'highs' <optimize.linprog-highs>` chooses between 
+    :ref:`'highs' <optimize.linprog-highs>` chooses between
     the two automatically. These are the fastest linear
     programming solvers in SciPy, especially for large, sparse problems;
     which of these two is faster is problem-dependent.
@@ -479,7 +479,7 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
             Mathematical Programming Study 4 (1975): 146-166.
     .. [13] Huangfu, Q., Galabova, I., Feldmeier, M., and Hall, J. A. J.
             "HiGHS - high performance software for linear optimization."
-            Available 4/16/2020 at https://www.maths.ed.ac.uk/hall/HiGHS/#guide
+            Accessed 4/16/2020 at https://www.maths.ed.ac.uk/hall/HiGHS/#guide
     .. [14] Huangfu, Q. and Hall, J. A. J. "Parallelizing the dual revised
             simplex method." Mathematical Programming Computation, 10 (1),
             119-142, 2018. DOI: 10.1007/s12532-017-0130-5
