@@ -423,14 +423,14 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
     # HiGHS represents constraints as lhs/rhs, so
     # Ax + s = b => Ax = b - s
     # and we need to split up s by A_ub and A_eq
-    if res.get('slack'):
-        slack = res.get('slack')
+    if 'slack' in res:
+        slack = res['slack']
         con = np.array(slack[len(b_ub):])
         slack = np.array(slack[:len(b_ub)])
     else:
         slack, con = None, None
 
-    sol = {'x': np.array(res['x']) if res.get('x') else None,
+    sol = {'x': np.array(res['x']) if 'x' in res else None,
            'slack': slack,
            # TODO: Add/test dual info like:
            # 'lambda': res.get('lambda'),
