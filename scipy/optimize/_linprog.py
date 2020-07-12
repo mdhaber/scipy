@@ -181,7 +181,7 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
     :math:`b_{ub}`, :math:`b_{eq}`, :math:`l`, and :math:`u` are vectors; and
     :math:`A_{ub}` and :math:`A_{eq}` are matrices.
 
-    Informally, that's:
+    Alternatively, that's:
 
     minimize::
 
@@ -348,19 +348,19 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
     This section describes the available solvers that can be selected by the
     'method' parameter.
 
-    :ref:`'highs-simplex' <optimize.linprog-highs-simplex>` and
-    :ref:`'highs-ipm' <optimize.linprog-highs-ipm>` are interfaces to the
+    `'highs-simplex'` and
+    `'highs-ipm'` are interfaces to the
     HiGHS simplex and interior-point method solvers [13]_, respectively.
-    :ref:`'highs' <optimize.linprog-highs>` chooses between
+    `'highs'` chooses between
     the two automatically. These are the fastest linear
     programming solvers in SciPy, especially for large, sparse problems;
     which of these two is faster is problem-dependent.
-    :ref:`'interior-point' <optimize.linprog-interior-point>` is the default
+    `'interior-point'` is the default
     as it was the fastest and most robust method before the recent
     addition of the HiGHS solvers.
-    :ref:`'revised simplex' <optimize.linprog-revised_simplex>` is more
+    `'revised simplex'` is more
     accurate than interior-point for the problems it solves.
-    :ref:`'simplex' <optimize.linprog-simplex>` is the legacy method and is
+    `'simplex'` is the legacy method and is
     included for backwards compatibility and educational purposes.
 
     Method *highs-simplex* is a wrapper of the C++ high performance dual
@@ -542,6 +542,10 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
     """
 
     meth = method.lower()
+    methods = {"simplex", "revised simplex", "interior-point",
+               "highs", "highs-simplex", "highs-ipm"}
+    if meth not in methods:
+        raise ValueError(f"Unknown solver '{method}'")
 
     if x0 is not None and meth != "revised simplex":
         warning_message = "x0 is used only when method is 'revised simplex'. "
@@ -557,8 +561,7 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
                                       "callback interface.")
         highs_solvers = {'highs-ipm': 'ipm', 'highs-simplex': 'simplex',
                          'highs': None}
-        if meth not in highs_solvers:
-            raise ValueError('Unknown solver %s' % method)
+
         sol = _linprog_highs(lp, solver=highs_solvers[meth],
                              **solver_options)
         return OptimizeResult(sol)
@@ -600,8 +603,6 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
             x, status, message, iteration = _linprog_rs(
                 c, c0=c0, A=A, b=b, x0=x0, callback=callback,
                 postsolve_args=postsolve_args, **solver_options)
-        else:
-            raise ValueError('Unknown solver %s' % method)
 
     # Eliminate artificial variables, re-introduce presolved variables, etc.
     disp = solver_options.get('disp', False)
