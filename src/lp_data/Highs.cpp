@@ -310,6 +310,7 @@ HighsStatus Highs::run() {
         options_.highs_debug_level, min_highs_debug_level);
     options_.highs_debug_level = min_highs_debug_level;
   }
+  writeModel("HighsRunModel.mps");
 #endif
 
 #ifdef OPENMP
@@ -573,12 +574,26 @@ basis_.valid_, hmos_[0].basis_.valid_);
         beforeReturnFromRun(return_status);
         return return_status;
       }
+      case HighsPresolveStatus::Timeout: {
+        model_status_ = HighsModelStatus::PRESOLVE_ERROR;
+        HighsPrintMessage(options_.output, options_.message_level, ML_ALWAYS,
+                          "Presolve reached timeout\n");
+        if (run_highs_clock_already_running) timer_.stopRunHighsClock();
+        return HighsStatus::Warning;
+      }
+      case HighsPresolveStatus::OptionsError: {
+        model_status_ = HighsModelStatus::PRESOLVE_ERROR;
+        HighsPrintMessage(options_.output, options_.message_level, ML_ALWAYS,
+                          "Presolve options error.\n");
+        if (run_highs_clock_already_running) timer_.stopRunHighsClock();
+        return HighsStatus::Warning;
+      }
       default: {
         // case HighsPresolveStatus::Error
         model_status_ = HighsModelStatus::PRESOLVE_ERROR;
         HighsPrintMessage(options_.output, options_.message_level, ML_ALWAYS,
-                          "Presolve failed");
-        if (!run_highs_clock_already_running) timer_.stopRunHighsClock();
+                          "Presolve failed.\n");
+        if (run_highs_clock_already_running) timer_.stopRunHighsClock();
         // Transfer the model status to the scaled model status and orriginal
         // HMO statuses;
         scaled_model_status_ = model_status_;
@@ -599,18 +614,15 @@ basis_.valid_, hmos_[0].basis_.valid_);
         // solution(?) and basis that is, hopefully, optimal. This is
         // confirmed or corrected by hot-starting the simplex solver
         if (presolve_status == HighsPresolveStatus::ReducedToEmpty) {
-          // Have to resize the solution to correspond to an empty
-          // problem because runPostsolve checks this. Size of basis
-          // seems unimportant
-          hmos_[solved_hmo].solution_.col_value.resize(0);
-          hmos_[solved_hmo].solution_.row_value.resize(0);
-          hmos_[solved_hmo].solution_.col_dual.resize(0);
-          hmos_[solved_hmo].solution_.row_dual.resize(0);
+          clearSolutionUtil(hmos_[solved_hmo].solution_);
+          clearBasisUtil(hmos_[solved_hmo].basis_);
         }
 
         presolve_.data_.reduced_solution_ = hmos_[solved_hmo].solution_;
-        presolve_.setBasisInfo(hmos_[solved_hmo].basis_.col_status,
-                               hmos_[solved_hmo].basis_.row_status);
+        presolve_.data_.reduced_basis_.col_status =
+            hmos_[solved_hmo].basis_.col_status;
+        presolve_.data_.reduced_basis_.row_status =
+            hmos_[solved_hmo].basis_.row_status;
 
         this_postsolve_time = -timer_.read(timer_.postsolve_clock);
         timer_.start(timer_.postsolve_clock);
@@ -630,15 +642,21 @@ basis_.valid_, hmos_[0].basis_.valid_);
           resetModelStatusAndSolutionParams(hmos_[original_hmo]);
           // Set solution and its status
           hmos_[original_hmo].solution_ = presolve_.data_.recovered_solution_;
-          //
+
           // Set basis and its status
-          hmos_[original_hmo].basis_.col_status =
-              presolve_.data_.presolve_[0].getColStatus();
-          hmos_[original_hmo].basis_.row_status =
-              presolve_.data_.presolve_[0].getRowStatus();
           hmos_[original_hmo].basis_.valid_ = true;
-          analyseHighsBasicSolution(options_.logfile, hmos_[original_hmo],
-                                    "after returning from postsolve");
+          hmos_[original_hmo].basis_.col_status =
+              presolve_.data_.recovered_basis_.col_status;
+          hmos_[original_hmo].basis_.row_status =
+              presolve_.data_.recovered_basis_.row_status;
+
+          int save_highs_debug_level = options_.highs_debug_level;
+          options_.highs_debug_level = HIGHS_DEBUG_LEVEL_COSTLY;
+          debugHighsBasicSolution("After returning from postsolve", options_,
+                                  lp_, hmos_[original_hmo].basis_,
+                                  hmos_[original_hmo].solution_);
+          options_.highs_debug_level = save_highs_debug_level;
+
           // Now hot-start the simplex solver for the original_hmo
           solved_hmo = original_hmo;
           // Save the options to allow the best simplex strategy to
@@ -822,6 +840,19 @@ const HighsModelStatus& Highs::getModelStatus(const bool scaled_model) const {
     return model_status_;
   }
 }
+
+/*
+double Highs::getObjectiveValue() {
+  double objective_value = 0;
+  if (hmos_.size() == 0)
+    return 0;
+}
+
+int Highs::getSimplexIterationCount() {
+  int  = 0;
+  return 0;
+}
+*/
 
 HighsStatus Highs::getBasicVariables(int* basic_variables) {
   if (hmos_.size() == 0) return HighsStatus::Error;
@@ -1509,9 +1540,47 @@ HighsPresolveStatus Highs::runPresolve() {
 
   // Clear info from previous runs if lp_ has been modified.
   if (presolve_.has_run_) presolve_.clear();
+  double start_presolve = timer_.readRunHighsClock();
+
+  // Set time limit.
+  if (options_.time_limit > 0 && options_.time_limit < HIGHS_CONST_INF) {
+    double left = options_.time_limit - start_presolve;
+    if (left <= 0) {
+      HighsPrintMessage(options_.output, options_.message_level, ML_VERBOSE,
+                        "Time limit reached while reading in matrix\n");
+      return HighsPresolveStatus::Timeout;
+    }
+
+    HighsPrintMessage(options_.output, options_.message_level, ML_VERBOSE,
+                      "Time limit set: reading matrix took %.2g, presolve "
+                      "time left: %.2g\n",
+                      start_presolve, left);
+    presolve_.options_.time_limit = left;
+  }
 
   // Presolve.
   presolve_.init(lp_, timer_);
+  if (options_.time_limit > 0 && options_.time_limit < HIGHS_CONST_INF) {
+    double current = timer_.readRunHighsClock();
+    double time_init = current - start_presolve;
+    double left = presolve_.options_.time_limit - time_init;
+    if (left <= 0) {
+      HighsPrintMessage(
+          options_.output, options_.message_level, ML_VERBOSE,
+          "Time limit reached while copying matrix into presolve.\n");
+      return HighsPresolveStatus::Timeout;
+    }
+
+    HighsPrintMessage(options_.output, options_.message_level, ML_VERBOSE,
+                      "Time limit set: copying matrix took %.2g, presolve "
+                      "time left: %.2g\n",
+                      time_init, left);
+    presolve_.options_.time_limit = options_.time_limit;
+  }
+
+  presolve_.data_.presolve_[0].message_level = options_.message_level;
+  presolve_.data_.presolve_[0].output = options_.output;
+
   HighsPresolveStatus presolve_return_status = presolve_.run();
 
   // Handle max case.
@@ -1557,8 +1626,9 @@ HighsPostsolveStatus Highs::runPostsolve() {
 
   HighsPostsolveStatus postsolve_status =
       presolve_.data_.presolve_[0].postsolve(
-          presolve_.data_.reduced_solution_,
-          presolve_.data_.recovered_solution_);
+          presolve_.data_.reduced_solution_, presolve_.data_.reduced_basis_,
+          presolve_.data_.recovered_solution_,
+          presolve_.data_.recovered_basis_);
 
   if (postsolve_status != HighsPostsolveStatus::SolutionRecovered)
     return postsolve_status;
@@ -1774,17 +1844,10 @@ void Highs::clearModelStatus() {
 void Highs::clearSolution() {
   info_.primal_status = (int)PrimalDualStatus::STATUS_NOTSET;
   info_.dual_status = (int)PrimalDualStatus::STATUS_NOTSET;
-  solution_.col_value.resize(0);
-  solution_.col_dual.resize(0);
-  solution_.row_value.resize(0);
-  solution_.row_dual.resize(0);
+  clearSolutionUtil(solution_);
 }
 
-void Highs::clearBasis() {
-  basis_.valid_ = false;
-  basis_.col_status.resize(0);
-  basis_.row_status.resize(0);
-}
+void Highs::clearBasis() { clearBasisUtil(basis_); }
 
 void Highs::clearInfo() { info_.clear(); }
 
@@ -1794,6 +1857,7 @@ void Highs::beforeReturnFromRun(HighsStatus& return_status) {
     // No model has been loaded: ensure that the status, solution,
     // basis and info associated with any previous model are cleared
     clearSolver();
+    return;
   } else {
     // A model has been loaded: remove any additional HMO created when solving
     if (hmos_.size() > 1) hmos_.pop_back();
@@ -1875,11 +1939,14 @@ void Highs::beforeReturnFromRun(HighsStatus& return_status) {
     }
   }
   if (have_solution) assert(isSolutionConsistent(lp_, solution_));
+  bool have_basis = false;
   if (basis_.valid_) {
-    if (!isBasisConsistent(lp_, basis_)) {
-      printf("Basis not consistent when it should be\n");
-    }
-    assert(isBasisConsistent(lp_, basis_));
+    have_basis = isBasisConsistent(lp_, basis_);
+    assert(have_basis);
+  }
+  if (have_solution && have_basis) {
+    debugHighsBasicSolution("Before return from run()", options_, lp_, basis_,
+                            solution_, info_, model_status_);
   }
 }
 
