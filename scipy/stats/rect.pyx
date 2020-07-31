@@ -1,6 +1,6 @@
 # distutils: language = c++
 
-from Rectangle cimport Rectangle
+from .rect cimport Rectangle
 
 cdef class PyRectangle:
     cdef Rectangle c_rect

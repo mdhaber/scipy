@@ -1,23 +1,39 @@
-# distutils: language = c++
+#include <iostream>
+#include "Rectangle.h"
 
-from Rectangle cimport Rectangle
+namespace shapes {
 
-# Create a Cython extension type which holds a C++ instance
-# as an attribute and create a bunch of forwarding methods
-# Python extension type.
-cdef class PyRectangle:
-    cdef Rectangle c_rect  # Hold a C++ instance which we're wrapping
+    // Default constructor
+    Rectangle::Rectangle () {}
 
-    def __cinit__(self, int x0, int y0, int x1, int y1):
-        self.c_rect = Rectangle(x0, y0, x1, y1)
+    // Overloaded constructor
+    Rectangle::Rectangle (int x0, int y0, int x1, int y1) {
+        this->x0 = x0;
+        this->y0 = y0;
+        this->x1 = x1;
+        this->y1 = y1;
+    }
 
-    def get_area(self):
-        return self.c_rect.getArea()
+    // Destructor
+    Rectangle::~Rectangle () {}
 
-    def get_size(self):
-        cdef int width, height
-        self.c_rect.getSize(&width, &height)
-        return width, height
+    // Return the area of the rectangle
+    int Rectangle::getArea () {
+        return (this->x1 - this->x0) * (this->y1 - this->y0);
+    }
 
-    def move(self, dx, dy):
-        self.c_rect.move(dx, dy)
+    // Get the size of the rectangle.
+    // Put the size in the pointer args
+    void Rectangle::getSize (int *width, int *height) {
+        (*width) = x1 - x0;
+        (*height) = y1 - y0;
+    }
+
+    // Move the rectangle by dx dy
+    void Rectangle::move (int dx, int dy) {
+        this->x0 += dx;
+        this->y0 += dy;
+        this->x1 += dx;
+        this->y1 += dy;
+    }
+}
