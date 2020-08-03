@@ -28,8 +28,10 @@ def configuration(parent_package='',top_path=None):
         sources=['mvn.pyf','mvndst.f'],
     )
         
-    # What do I add here to build Rectangle?
-    
+    # Build cython rectangle demo
+    config.add_data_files('rect.pxd')
+    ext = config.add_extension(
+        'rect', sources=['rect.cxx'])
     return config
 
 
