@@ -1,5 +1,5 @@
-cdef extern from "HelloWorld.cpp":
+cdef extern from "helloworld/HelloWorld.cpp":
     pass
 
-cdef extern from "HelloWorld.h":
+cdef extern from "helloworld/HelloWorld.h":
     int hello_world(double* x, int n)
