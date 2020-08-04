@@ -33,6 +33,11 @@ def configuration(parent_package='',top_path=None):
     config.add_extension(
         'rect', sources=['rect.cxx'])
 
+    # Build hello world demo
+    config.add_data_files('HelloWorld.pxd')
+    config.add_extension(
+        'hello', sources=['hello.cxx'])
+
     return config
 
 
