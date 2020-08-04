@@ -27,11 +27,12 @@ def configuration(parent_package='',top_path=None):
     config.add_extension('mvn',
         sources=['mvn.pyf','mvndst.f'],
     )
-        
+
     # Build cython rectangle demo
-    config.add_data_files('rect.pxd')
-    ext = config.add_extension(
+    config.add_data_files('Rectangle.pxd')
+    config.add_extension(
         'rect', sources=['rect.cxx'])
+
     return config
 
 
