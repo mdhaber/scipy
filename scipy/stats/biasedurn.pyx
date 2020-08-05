@@ -2,7 +2,7 @@
 
 from .BiasedUrn cimport CFishersNCHypergeometric, StochasticLib3
 
-cdef class PyFishersNCHypergeometric:
+cdef class _PyFishersNCHypergeometric:
     cdef CFishersNCHypergeometric c_fnch
 
     def __cinit__(self, int n, int m, int N, double odds, double accuracy):
@@ -25,7 +25,7 @@ cdef class PyFishersNCHypergeometric:
         self.c_fnch.moments(&mean, &var)
         return mean, var
 
-cdef class PyStochasticLib3:
+cdef class _PyStochasticLib3:
     cdef StochasticLib3 c_sl3
 
     def __cinit__(self, int seed):

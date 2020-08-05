@@ -185,8 +185,6 @@ from ._stats import (_kendall_dis, _toint64, _weightedrankedtau,
                      _local_correlations)
 from ._rvs_sampling import rvs_ratio_uniforms
 from ._hypotests import epps_singleton_2samp
-from .rect import PyRectangle
-from .hello import py_hello_world
 
 
 __all__ = ['find_repeats', 'gmean', 'hmean', 'mode', 'tmean', 'tvar',
@@ -211,7 +209,7 @@ __all__ = ['find_repeats', 'gmean', 'hmean', 'mode', 'tmean', 'tvar',
            'tiecorrect', 'ranksums', 'kruskal', 'friedmanchisquare',
            'rankdata', 'rvs_ratio_uniforms',
            'combine_pvalues', 'wasserstein_distance', 'energy_distance',
-           'brunnermunzel', 'epps_singleton_2samp', 'PyRectangle', 'py_hello_world']
+           'brunnermunzel', 'epps_singleton_2samp']
 
 
 def _contains_nan(a, nan_policy='propagate'):
