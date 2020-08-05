@@ -38,6 +38,11 @@ def configuration(parent_package='',top_path=None):
     config.add_extension(
         'hello', sources=['hello.cxx'])
 
+    # Build BiasedUrn
+    config.add_data_files('BiasedUrn.pxd')
+    config.add_extension(
+        'biasedurn', sources=['biasedurn.cxx'])
+
     return config
 
 
