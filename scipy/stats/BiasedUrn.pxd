@@ -1,5 +1,5 @@
 # Declare the class with cdef
-cdef extern from "biasedurn/stocc.h":
+cdef extern from "biasedurn/stocc.h" nogil:
     cdef cppclass CFishersNCHypergeometric:
         CFishersNCHypergeometric() except +
         CFishersNCHypergeometric(int, int, int, double, double) except +

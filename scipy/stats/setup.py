@@ -1,6 +1,6 @@
 from os.path import join
 
-
+      
 def configuration(parent_package='',top_path=None):
     from numpy.distutils.misc_util import Configuration
     config = Configuration('stats', parent_package, top_path)
@@ -37,7 +37,7 @@ def configuration(parent_package='',top_path=None):
                               'biasedurn/stoc1.cpp',
                               'biasedurn/stoc3.cpp',
                               'biasedurn/mersenne.cpp'])
-
+    
     return config
 
 

@@ -10,13 +10,13 @@ cdef class _PyFishersNCHypergeometric:
 
     def mode(self):
         return self.c_fnch.mode()
-        
+
     def mean(self):
         return self.c_fnch.mean()
-        
+
     def variance(self):
         return self.c_fnch.variance()
-        
+
     def probability(self, int x):
         return self.c_fnch.probability(x)
 
