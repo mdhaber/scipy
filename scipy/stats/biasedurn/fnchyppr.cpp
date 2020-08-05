@@ -23,6 +23,7 @@
 *****************************************************************************/
 
 #include <string.h>                    // memcpy function
+#include <stdexcept>                   // runtime_error
 #include "stocc.h"                     // class definition
 
 
@@ -31,7 +32,7 @@ Methods for class CFishersNCHypergeometric
 ***********************************************************************/
 
 void FatalError(const char * ErrorText) {
-  throw *ErrorText;
+   throw std::runtime_error(ErrorText);
 }
 
 CFishersNCHypergeometric::CFishersNCHypergeometric(){}
