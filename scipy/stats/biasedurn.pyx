@@ -30,7 +30,7 @@ cdef class _PyStochasticLib3:
 
     def __cinit__(self, int seed):
         self.c_sl3 = StochasticLib3(seed)
-                
+
     def SetAccuracy(self, double accur):
         return self.c_sl3.SetAccuracy(accur)
 

@@ -1,198 +1,79 @@
-/*****************************   randomc.h   **********************************
-* Author:        Agner Fog
-* Date created:  1997
-* Last modified: 2008-11-16
-* Project:       randomc.h
-* Source URL:    www.agner.org/random
-*
-* Description:
-* This header file contains class declarations and other definitions for the 
-* randomc class library of uniform random number generators in C++ language.
-*
-* Overview of classes:
-* ====================
-*
-* class CRandomMersenne:
-* Random number generator of type Mersenne twister.
-* Source file mersenne.cpp
-*
-* class CRandomMother:
-* Random number generator of type Mother-of-All (Multiply with carry).
-* Source file mother.cpp
-*
-* class CRandomSFMT:
-* Random number generator of type SIMD-oriented Fast Mersenne Twister.
-* The class definition is not included here because it is not
-* portable to all platforms. See sfmt.h and sfmt.cpp for details.
-*
-* Member functions (methods):
-* ===========================
-*
-* All these classes have identical member functions:
-*
-* Constructor(int seed):
-* The seed can be any integer. The time may be used as seed.
-* Executing a program twice with the same seed will give the same sequence 
-* of random numbers. A different seed will give a different sequence.
-*
-* void RandomInit(int seed);
-* Re-initializes the random number generator with a new seed.
-*
-* void RandomInitByArray(int const seeds[], int NumSeeds);
-* In CRandomMersenne and CRandomSFMT only: Use this function if you want 
-* to initialize with a seed with more than 32 bits. All bits in the seeds[]
-* array will influence the sequence of random numbers generated. NumSeeds 
-* is the number of entries in the seeds[] array.
-*
-* double Random();
-* Gives a floating point random number in the interval 0 <= x < 1.
-* The resolution is 32 bits in CRandomMother and CRandomMersenne, and
-* 52 bits in CRandomSFMT.
-*
-* int IRandom(int min, int max);
-* Gives an integer random number in the interval min <= x <= max.
-* (max-min < MAXINT).
-* The precision is 2^-32 (defined as the difference in frequency between 
-* possible output values). The frequencies are exact if max-min+1 is a
-* power of 2.
-*
-* int IRandomX(int min, int max);
-* Same as IRandom, but exact. In CRandomMersenne and CRandomSFMT only.
-* The frequencies of all output values are exactly the same for an 
-* infinitely long sequence. (Only relevant for extremely long sequences).
-*
-* uint32_t BRandom();
-* Gives 32 random bits. 
-*
-*
-* Example:
-* ========
-* The file EX-RAN.CPP contains an example of how to generate random numbers.
-*
-*
-* Library version:
-* ================
-* Optimized versions of these random number generators are provided as function
-* libraries in randoma.zip. These function libraries are coded in assembly
-* language and support only x86 platforms, including 32-bit and 64-bit
-* Windows, Linux, BSD, Mac OS-X (Intel based). Use randoma.h from randoma.zip
-*
-*
-* Non-uniform random number generators:
-* =====================================
-* Random number generators with various non-uniform distributions are 
-* available in stocc.zip (www.agner.org/random).
-*
-*
-* Further documentation:
-* ======================
-* The file ran-instructions.pdf contains further documentation and 
-* instructions for these random number generators.
-*
-* Copyright 1997-2008 by Agner Fog. 
-* GNU General Public License http://www.gnu.org/licenses/gpl.html
-*******************************************************************************/
 
 #ifndef RANDOMC_H
 #define RANDOMC_H
 
-// Define integer types with known size: int32_t, uint32_t, int64_t, uint64_t.
-// If this doesn't work then insert compiler-specific definitions here:
-#if defined(__GNUC__) || (defined(_MSC_VER) && _MSC_VER >= 1600)
-  // Compilers supporting C99 or C++0x have stdint.h defining these integer types
-  #include <stdint.h>
-  #define INT64_SUPPORTED // Remove this if the compiler doesn't support 64-bit integers
-#elif defined(_WIN16) || defined(__MSDOS__) || defined(_MSDOS) 
-  // 16 bit systems use long int for 32 bit integer.
-  typedef   signed long int int32_t;
-  typedef unsigned long int uint32_t;
-#elif defined(_MSC_VER)
-  // Older Microsoft compilers have their own definition
-  typedef   signed __int32  int32_t;
-  typedef unsigned __int32 uint32_t;
-  typedef   signed __int64  int64_t;
-  typedef unsigned __int64 uint64_t;
-  #define INT64_SUPPORTED // Remove this if the compiler doesn't support 64-bit integers
-#else
-  // This works with most compilers
-  typedef signed int          int32_t;
-  typedef unsigned int       uint32_t;
-  typedef long long           int64_t;
-  typedef unsigned long long uint64_t;
-  #define INT64_SUPPORTED // Remove this if the compiler doesn't support 64-bit integers
-#endif
+#include <iostream>
+#include <stdint.h>
 
 
-/***********************************************************************
-System-specific user interface functions
-***********************************************************************/
+/**
+ * START
+ * Taken from numpy/numpy/random/src/mt19937/mt19937.h
+ *
+ * Some functions in numpy header are not extern, so we
+ * have to reproduce them here.
+ */
+#define RK_STATE_LEN 624
+extern "C" {
+  typedef struct s_mt19937_state {
+    uint32_t key[RK_STATE_LEN];
+    int pos;
+  } mt19937_state;
+  void mt19937_seed(mt19937_state *state, uint32_t seed);
+  void mt19937_gen(mt19937_state *state);
+}
+/* Slightly optimized reference implementation of the Mersenne Twister */
+static inline uint32_t mt19937_next(mt19937_state *state) {
+  uint32_t y;
 
-void EndOfProgram(void);               // System-specific exit code (userintf.cpp)
+  if (state->pos == RK_STATE_LEN) {
+    // Move to function to help inlining
+    mt19937_gen(state);
+  }
+  y = state->key[state->pos++];
 
-void FatalError(const char *ErrorText);// System-specific error reporting (userintf.cpp)
+  /* Tempering */
+  y ^= (y >> 11);
+  y ^= (y << 7) & 0x9d2c5680UL;
+  y ^= (y << 15) & 0xefc60000UL;
+  y ^= (y >> 18);
 
-#if defined(__cplusplus)               // class definitions only in C++
-/***********************************************************************
-Define random number generator classes
-***********************************************************************/
+  return y;
+}
+static inline double mt19937_next_double(mt19937_state *state) {
+  int32_t a = mt19937_next(state) >> 5, b = mt19937_next(state) >> 6;
+  return (a * 67108864.0 + b) / 9007199254740992.0;
+}
+/**
+ * END
+ */
 
-class CRandomMersenne {                // Encapsulate random number generator
-// Choose which version of Mersenne Twister you want:
-#if 0 
-// Define constants for type MT11213A:
-#define MERS_N   351
-#define MERS_M   175
-#define MERS_R   19
-#define MERS_U   11
-#define MERS_S   7
-#define MERS_T   15
-#define MERS_L   17
-#define MERS_A   0xE4BD75F5
-#define MERS_B   0x655E5280
-#define MERS_C   0xFFD58000
-#else    
-// or constants for type MT19937:
-#define MERS_N   624
-#define MERS_M   397
-#define MERS_R   31
-#define MERS_U   11
-#define MERS_S   7
-#define MERS_T   15
-#define MERS_L   18
-#define MERS_A   0x9908B0DF
-#define MERS_B   0x9D2C5680
-#define MERS_C   0xEFC60000
-#endif
 
+// implemented in fnchyppr.cpp
+void FatalError(const char* msg);
+
+class CRandomMersenne {
 public:
-   CRandomMersenne(int seed) {         // Constructor
-      RandomInit(seed); LastInterval = 0;}
-   void RandomInit(int seed);          // Re-seed
-   void RandomInitByArray(int const seeds[], int NumSeeds); // Seed by more than 32 bits
-   int IRandom (int min, int max);     // Output random integer
-   int IRandomX(int min, int max);     // Output random integer, exact
-   double Random();                    // Output random float
-   uint32_t BRandom();                 // Output random bits
+
+  CRandomMersenne(int seed) {
+    RandomInit(seed);
+  }
+
+  void RandomInit(int seed) {
+    mt19937_seed(&_rng_state, seed);
+  }
+
+  int IRandom (int min, int max) {
+    // Based on Lemire's method:
+    uint32_t word = mt19937_next(&_rng_state);
+    return (uint32_t)(((uint64_t)word * (uint64_t)(max - min)) >> 32) + min;
+  }
+
+  double Random() {
+    return mt19937_next_double(&_rng_state);
+  }
 private:
-   void Init0(int seed);               // Basic initialization procedure
-   uint32_t mt[MERS_N];                // State vector
-   int mti;                            // Index into mt
-   uint32_t LastInterval;              // Last interval length for IRandomX
-   uint32_t RLimit;                    // Rejection limit used by IRandomX
-};    
-
-
-class CRandomMother {                  // Encapsulate random number generator
-public:
-   void RandomInit(int seed);          // Initialization
-   int IRandom(int min, int max);      // Get integer random number in desired interval
-   double Random();                    // Get floating point random number
-   uint32_t BRandom();                 // Output random bits
-   CRandomMother(int seed) {           // Constructor
-      RandomInit(seed);}
-protected:
-   uint32_t x[5];                      // History buffer
+  mt19937_state _rng_state;
 };
 
-#endif // __cplusplus
-#endif // RANDOMC_H
+#endif

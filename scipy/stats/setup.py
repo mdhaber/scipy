@@ -1,6 +1,7 @@
 from os.path import join
+import pathlib
+import numpy as np
 
-      
 def configuration(parent_package='',top_path=None):
     from numpy.distutils.misc_util import Configuration
     config = Configuration('stats', parent_package, top_path)
@@ -29,15 +30,24 @@ def configuration(parent_package='',top_path=None):
     )
 
     # Build BiasedUrn
+    # Find MT19937 shared lib packaged with numpy
+    mt_lib = list((pathlib.Path(np.get_include()).parent.parent / 'random').glob('_mt19937*'))[0]
     config.add_data_files('BiasedUrn.pxd')
     config.add_extension(
-        'biasedurn', sources=['biasedurn.cxx',
-                              'biasedurn/fnchyppr.cpp',
-                              'biasedurn/wnchyppr.cpp',
-                              'biasedurn/stoc1.cpp',
-                              'biasedurn/stoc3.cpp',
-                              'biasedurn/mersenne.cpp'])
-    
+        'biasedurn',
+        sources=['biasedurn.cxx',
+                 'biasedurn/fnchyppr.cpp',
+                 'biasedurn/wnchyppr.cpp',
+                 'biasedurn/stoc1.cpp',
+                 'biasedurn/stoc3.cpp',
+                 #'biasedurn/mersenne.cpp',
+        ],
+        library_dirs=[str(mt_lib.parent)],
+        libraries=[':' + mt_lib.name], # TODO: hacky, not sure if cross-platform
+                                       # produces -l:[path-to-shared-lib].so on Ubuntu 18
+        runtime_library_dirs=[str(mt_lib.parent)],
+    )
+
     return config
 
 
