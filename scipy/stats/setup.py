@@ -41,7 +41,16 @@ def configuration(parent_package='',top_path=None):
     # Build BiasedUrn
     config.add_data_files('BiasedUrn.pxd')
     config.add_extension(
-        'biasedurn', sources=['biasedurn.cxx'])
+        'biasedurn',
+        sources=[
+            'biasedurn.cxx',
+            'biasedurn/fnchyppr.cpp',
+            'biasedurn/wnchyppr.cpp',
+            'biasedurn/stoc1.cpp',
+            'biasedurn/stoc3.cpp',
+            'biasedurn/mersenne.cpp',
+        ],
+    )
 
     return config
 

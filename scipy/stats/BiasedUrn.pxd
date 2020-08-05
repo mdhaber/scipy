@@ -1,20 +1,6 @@
-cdef extern from "biasedurn/fnchyppr.cpp":
-    pass
-    
-cdef extern from "biasedurn/wnchyppr.cpp":
-    pass
 
-cdef extern from "biasedurn/stoc1.cpp":
-    pass
-    
-cdef extern from "biasedurn/stoc3.cpp":
-    pass 
-    
-cdef extern from "biasedurn/mersenne.cpp":
-    pass       
-    
 # Declare the class with cdef
-cdef extern from "biasedurn/stocc.h":
+cdef extern from "biasedurn/stocc.h" nogil:
     cdef cppclass CFishersNCHypergeometric:
         CFishersNCHypergeometric() except +
         CFishersNCHypergeometric(int, int, int, double, double) except +
