@@ -28,20 +28,15 @@ def configuration(parent_package='',top_path=None):
         sources=['mvn.pyf','mvndst.f'],
     )
 
-    # Build cython rectangle demo
-    config.add_data_files('Rectangle.pxd')
-    config.add_extension(
-        'rect', sources=['rect.cxx'])
-
-    # Build hello world demo
-    config.add_data_files('HelloWorld.pxd')
-    config.add_extension(
-        'hello', sources=['hello.cxx'])
-
     # Build BiasedUrn
     config.add_data_files('BiasedUrn.pxd')
     config.add_extension(
-        'biasedurn', sources=['biasedurn.cxx'])
+        'biasedurn', sources=['biasedurn.cxx',
+                              'biasedurn/fnchyppr.cpp',
+                              'biasedurn/wnchyppr.cpp',
+                              'biasedurn/stoc1.cpp',
+                              'biasedurn/stoc3.cpp',
+                              'biasedurn/mersenne.cpp'])
 
     return config
 
