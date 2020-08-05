@@ -2,21 +2,39 @@
 #define RANDOMC_H
 
 #include <iostream>
-#include <random>
+
+#include <string>
+#include "stdint.h"
+
+#include "mt19937.h"
 
 class CRandomMersenne {
 public:
-  CRandomMersenne(uint32_t seed);
-  void RandomInit(uint32_t seed);
-  uint32_t IRandom (uint32_t min, uint32_t max);
-  double Random();
+
+  CRandomMersenne(uint32_t seed) {
+    RandomInit(seed);
+  }
+
+  void RandomInit(uint32_t seed) {
+    mt19937_seed(&_rng_state, seed);
+  }
+
+  uint32_t IRandom (uint32_t min, uint32_t max) {
+    uint32_t word = mt19937_next32(&_rng_state);
+    return (uint32_t)(((uint64_t)word * (uint64_t)(max - min)) >> 32) + min;
+  }
+
+  double Random() {
+    return mt19937_next_double(&_rng_state);
+  };
+
 private:
-  std::mt19937 gen;
-  std::uniform_real_distribution<double> udist{0.0, 1.0}; // is this the correct interval?
+  mt19937_state _rng_state;
 };
 
+
 void FatalError(const std::string& msg) {
-  std::cout << "Bad things are happening: " << msg << std::endl;
+  throw std::domain_error("Bad things are happening!");
 }
 
 #endif
