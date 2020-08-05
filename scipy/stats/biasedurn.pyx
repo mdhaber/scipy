@@ -10,13 +10,13 @@ cdef class PyFishersNCHypergeometric:
 
     def mode(self):
         return self.c_fnch.mode()
-        
+
     def mean(self):
         return self.c_fnch.mean()
-        
+
     def variance(self):
         return self.c_fnch.variance()
-        
+
     def probability(self, int x):
         return self.c_fnch.probability(x)
 
@@ -30,7 +30,7 @@ cdef class PyStochasticLib3:
 
     def __cinit__(self, int seed):
         self.c_sl3 = StochasticLib3(seed)
-                
+
     def SetAccuracy(self, double accur):
         return self.c_sl3.SetAccuracy(accur)
 
