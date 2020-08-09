@@ -1,6 +1,7 @@
 # distutils: language = c++
 
 from .BiasedUrn cimport CFishersNCHypergeometric, StochasticLib3
+import numpy as np
 
 cdef class _PyFishersNCHypergeometric:
     cdef CFishersNCHypergeometric c_fnch
@@ -29,8 +30,15 @@ cdef class _PyStochasticLib3:
     cdef StochasticLib3 c_sl3
 
     def __cinit__(self, int seed):
-        self.c_sl3 = StochasticLib3(seed)
-                
+        self.c_sl3 = StochasticLib3(seed);
+        
+    def FillCache(self, double[::1] rand_cache):
+        self.c_sl3.FillCache(&rand_cache[0], rand_cache.shape[0]);
+        
+    def GetRandom(self):
+        x = self.c_sl3.GetRandom();
+        return x;
+        
     def SetAccuracy(self, double accur):
         return self.c_sl3.SetAccuracy(accur)
 

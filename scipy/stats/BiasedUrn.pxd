@@ -12,5 +12,7 @@ cdef extern from "biasedurn/stocc.h" nogil:
     cdef cppclass StochasticLib3:
         StochasticLib3() except +
         StochasticLib3(int seed) except +
-        void SetAccuracy(double accur);
+        void FillCache(double * rand_cache, int n_cache)
+        double GetRandom()
+        void SetAccuracy(double accur)
         int FishersNCHyp (int n, int m, int N, double odds)

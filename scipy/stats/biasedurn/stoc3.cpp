@@ -64,7 +64,6 @@ void StochasticLib3::SetAccuracy(double accur) {
    accuracy = accur;
 }
 
-
 /***********************************************************************
 Wallenius Non-central Hypergeometric distribution
 ***********************************************************************/
@@ -136,7 +135,7 @@ int32_t StochasticLib3::WalleniusNCHypUrn (int32_t n, int32_t m, int32_t N, doub
    x = 0;  m2 = N - m;
    mw1 = m * odds;  mw2 = m2;
    do {
-      if (Random() * (mw1 + mw2) < mw1) {
+      if (this->GetRandom() * (mw1 + mw2) < mw1) {
          x++;  m--;
          if (m == 0) break;
          mw1 = m * odds;
@@ -185,7 +184,7 @@ int32_t StochasticLib3::WalleniusNCHypTable (int32_t n, int32_t m, int32_t N, do
    }
 
    while (1) {                                   // repeat in the rare case of failure
-      u = Random();                              // uniform variate to convert
+      u = this->GetRandom();                              // uniform variate to convert
       for (x=0; x<wall_tablen; x++) {            // chop-down search
          u -= wall_ytable[x];
          if (u < 0.) return x + wall_x1;         // value found
@@ -285,9 +284,9 @@ int32_t StochasticLib3::WalleniusNCHypRatioOfUnifoms (int32_t n, int32_t m, int3
 
    // use ratio-of-uniforms rejection method
    while(1) {                                    // rejection loop
-      u = Random();
+      u = this->GetRandom();
       if (u == 0.) continue;                     // avoid division by 0
-      x = wnc_a + wnc_h * (Random()-0.5)/u;
+      x = wnc_a + wnc_h * (this->GetRandom()-0.5)/u;
       if (x < 0. || x > 2E9) continue;           // reject, avoid overflow
       xi = (int32_t)(x);                         // truncate
       if (xi < wnc_bound1 || xi > wnc_bound2) {
@@ -342,7 +341,7 @@ int32_t StochasticLib3::WalleniusNCHypInversion (int32_t n, int32_t m, int32_t N
    updown = 3;                                   // start searching both up and down
 
    while(1) {                                    // loop until accepted (normally executes only once)
-      u = Random();                              // uniform random number to be converted
+      u = this->GetRandom();                              // uniform random number to be converted
       while (updown) {                           // search loop
          if (updown & 1) {                       // search down
             if (wall_x1 < xmin) {
@@ -554,7 +553,7 @@ int32_t * source, double * weights, int32_t n, int colors) {
          j = colors2-1;
          do {
             // get random color according to probability distribution wcum
-            p = Random() * wcum[colors2-1];
+            p = this->GetRandom() * wcum[colors2-1];
             // get color from search in probability distribution wcum
             for (i=0; i < j; i++) { 
                if (p < wcum[i]) break;
@@ -723,7 +722,7 @@ int32_t * source, double * weights, int32_t n, int colors) {
                osample[c2] = n1 - x;
                f1 = wmnc.probability(osample);
                g0 = f1 * g0;  g1 = f0 * g1;
-               if (g0 >= g1 || g0 > g1 * Random()) {
+               if (g0 >= g1 || g0 > g1 * this->GetRandom()) {
                   // new state accepted
                   f0 = -1.;
                }
@@ -922,7 +921,7 @@ int32_t StochasticLib3::FishersNCHypInversion (int32_t n, int32_t m, int32_t N, 
    }
 
    // uniform random
-   u = Random() * fnc_scale;
+   u = this->GetRandom() * fnc_scale;
 
    // recursive calculation:
    // f(x) = f(x-1) * (m-x+1)*(n-x+1)*odds / (x*(L+x))
@@ -997,9 +996,9 @@ int32_t StochasticLib3::FishersNCHypRatioOfUnifoms (int32_t n, int32_t m, int32_
    }
 
    while(1) {
-      u = Random();
+      u = this->GetRandom();
       if (u == 0) continue;                      // avoid divide by 0
-      x = fnc_a + fnc_h * (Random()-0.5)/u;
+      x = fnc_a + fnc_h * (this->GetRandom()-0.5)/u;
       if (x < 0. || x > 2E9) continue;           // reject, avoid overflow
       k = (int32_t)(x);                          // truncate
       if (k > fnc_bound) continue;               // reject if outside safety bound

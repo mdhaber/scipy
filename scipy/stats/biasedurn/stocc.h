@@ -291,7 +291,9 @@ public:
    void Multinomial (int32_t * destination, int32_t * source, int32_t n, int colors);// Multinomial distribution
    void MultiHypergeometric (int32_t * destination, int32_t * source, int32_t n, int colors); // Multivariate hypergeometric distribution
    void Shuffle(int * list, int min, int n); // Shuffle integers
-
+   void FillCache(double * rand_cache, int n_cache); // Cache of random numbers
+   double GetRandom(); // Get a random number from the cache
+    
    // functions used internally
 protected:
    static double fc_lnpk(int32_t k, int32_t N_Mn, int32_t M, int32_t n); // used by Hypergeometric
@@ -334,6 +336,11 @@ protected:
    double bino_h;                                          // hat width
    double bino_g;                                          // value at mode
    double bino_r1;                                         // p/(1-p) or ln(p/(1-p))
+   
+   // Variables added for use in SciPy
+   double * rand_cache;
+   int n_cache;
+   int i_cache;
 };
 
 
@@ -400,6 +407,7 @@ public:
    void MultiComplWalleniusNCHyp (int32_t * destination, int32_t * source, double * weights, int32_t n, int colors); // Multivariate complementary Wallenius noncentral hypergeometric distribution
    void MultiFishersNCHyp (int32_t * destination, int32_t * source, double * weights, int32_t n, int colors); // Multivariate Fisher's noncentral hypergeometric distribution
    // subfunctions for each approximation method
+   
 protected:
    int32_t WalleniusNCHypUrn (int32_t n, int32_t m, int32_t N, double odds); // WalleniusNCHyp by urn model
    int32_t WalleniusNCHypInversion (int32_t n, int32_t m, int32_t N, double odds); // WalleniusNCHyp by inversion method
