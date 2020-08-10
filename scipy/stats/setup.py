@@ -35,8 +35,7 @@ def configuration(parent_package='',top_path=None):
                               'biasedurn/fnchyppr.cpp',
                               'biasedurn/wnchyppr.cpp',
                               'biasedurn/stoc1.cpp',
-                              'biasedurn/stoc3.cpp',
-                              'biasedurn/mersenne.cpp'])
+                              'biasedurn/stoc3.cpp'])
     
     return config
 

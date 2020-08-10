@@ -60,8 +60,6 @@
 * void MultiHypergeometric (int32_t * destination, int32_t * source, int32_t n, int colors);
 * Multivariate hypergeometric distribution.
 *
-* void Shuffle(int * list, int min, int n);
-* Shuffle a list of integers.
 *
 *
 * class StochasticLib2:
@@ -203,29 +201,6 @@
 #include <math.h>
 #include "randomc.h"
 
-#ifdef R_BUILD
-   #include "stocR.h"           // Include this when building R-language interface
-#endif
-
-
-/***********************************************************************
- Choose which uniform random number generator to base these classes on
-***********************************************************************/
-
-// STOC_BASE defines which base class to use for the non-uniform
-// random number generator classes StochasticLib1, 2, and 3.
-#ifndef STOC_BASE
-   #ifdef R_BUILD
-      // Inherit from StocRBase when building for R-language interface
-      #define STOC_BASE StocRBase
-   #else
-      #define STOC_BASE CRandomMersenne     // C++ Mersenne Twister
-      // Or choose any other random number generator base class, for example:
-      //#include "randoma.h"
-      //#define STOC_BASE CRandomSFMTA      // Binary library SFMT generator
-   #endif
-#endif
-
 /***********************************************************************
          Other simple functions
 ***********************************************************************/
@@ -276,7 +251,7 @@ extern "C" double NumSDev[ERFRES_N];
          Class StochasticLib1
 ***********************************************************************/
 
-class StochasticLib1 : public STOC_BASE {
+class StochasticLib1 {
    // This class encapsulates the random variate generating functions.
    // May be derived from any of the random number generators.
 public:
@@ -290,9 +265,8 @@ public:
    void Multinomial (int32_t * destination, double * source, int32_t n, int colors); // Multinomial distribution
    void Multinomial (int32_t * destination, int32_t * source, int32_t n, int colors);// Multinomial distribution
    void MultiHypergeometric (int32_t * destination, int32_t * source, int32_t n, int colors); // Multivariate hypergeometric distribution
-   void Shuffle(int * list, int min, int n); // Shuffle integers
    void FillCache(double * rand_cache, int n_cache); // Cache of random numbers
-   double GetRandom(); // Get a random number from the cache
+   double Random(); // Get a random number from the cache
     
    // functions used internally
 protected:

@@ -24,7 +24,8 @@
 *****************************************************************************/
 
 #include "stocc.h"     // class definition
-
+#include <stdexcept>
+#include <string.h> 
 
 /***********************************************************************
 constants
@@ -76,8 +77,7 @@ double LnFac(int32_t n) {
 /***********************************************************************
 Constructor
 ***********************************************************************/
-StochasticLib1::StochasticLib1 (int seed)
-: STOC_BASE(seed) {
+StochasticLib1::StochasticLib1 (int seed) {
    // Initialize variables for various distributions
    normal_x2_valid = 0;
    hyp_n_last = hyp_m_last = hyp_N_last = -1; // Last values of hypergeometric parameters
@@ -91,10 +91,10 @@ void StochasticLib1::FillCache (double * rand_cache, int n_cache) {
     this->i_cache = 0;
 }
 
-double StochasticLib1::GetRandom () {
+double StochasticLib1::Random () {
     double x;
     if (this->i_cache >= this->n_cache){
-        x = -1;
+        throw std::out_of_range("Random cache exhausted.");
     }
     else {
         x = this->rand_cache[this->i_cache];
@@ -218,7 +218,7 @@ int32_t StochasticLib1::HypInversionMod (int32_t n, int32_t m, int32_t N) {
 
    // loop until accepted
    while(1) {
-      U = this->GetRandom();                    // uniform random number to be converted
+      U = Random();                    // uniform random number to be converted
 
       // start chop-down search at mode
       if ((U -= hyp_fm) <= 0.) return(hyp_mode);
@@ -298,9 +298,9 @@ int32_t StochasticLib1::HypRatioOfUnifoms (int32_t n, int32_t m, int32_t N) {
       if (hyp_bound > n) hyp_bound = n;
    }    
    while(1) {
-      u = this->GetRandom();                              // uniform random number
+      u = Random();                              // uniform random number
       if (u == 0) continue;                      // avoid division by 0
-      x = hyp_a + hyp_h * (this->GetRandom()-0.5) / u;    // generate hat distribution
+      x = hyp_a + hyp_h * (Random()-0.5) / u;    // generate hat distribution
       if (x < 0. || x > 2E9) continue;           // reject, avoid overflow
       k = (int32_t)x;
       if (k > hyp_bound) continue;               // reject if outside range
@@ -438,8 +438,8 @@ int32_t StochasticLib1::PoissonLow(double L) {
    */   
    double d, r;
    d = sqrt(L);
-   if (this->GetRandom() >= d) return 0;
-   r = this->GetRandom() * d;
+   if (Random() >= d) return 0;
+   r = Random() * d;
    if (r > L * (1.-L)) return 0;
    if (r > 0.5 * L*L * (1.-L)) return 1;
    return 2;
@@ -465,7 +465,7 @@ int32_t StochasticLib1::PoissonInver(double L) {
       pois_f0 = exp(-L);               // f(0) = probability of x=0
    }
    while (1) {  
-      r = this->GetRandom();  x = 0;  f = pois_f0;
+      r = Random();  x = 0;  f = pois_f0;
       do {                             // recursive calculation: f(x) = f(x-1) * L / x
          r -= f;
          if (r <= 0) return x;
@@ -505,9 +505,9 @@ int32_t StochasticLib1::PoissonRatioUniforms(double L) {
       pois_bound = (int32_t)(pois_a + 6.0 * pois_h);  // safety-bound
    }
    while(1) {
-      u = this->GetRandom();
+      u = Random();
       if (u == 0) continue;                           // avoid division by 0
-      x = pois_a + pois_h * (this->GetRandom() - 0.5) / u;
+      x = pois_a + pois_h * (Random() - 0.5) / u;
       if (x < 0 || x >= pois_bound) continue;         // reject if outside valid range
       k = (int32_t)(x);
       lf = k * pois_g - LnFac(k) - pois_f0;
@@ -603,7 +603,7 @@ int32_t StochasticLib1::BinomialInver (int32_t n, double p) {
    q = p / (1. - p);
 
    while (1) {
-      r = this->GetRandom();
+      r = Random();
       // recursive calculation: f(x) = f(x-1) * (n-x+1)/x*p/(1-p)
       f = f0;  x = 0;  i = n;
       do {
@@ -657,9 +657,9 @@ int32_t StochasticLib1::BinomialRatioOfUniforms (int32_t n, double p) {
    }
 
    while (1) {                                   // rejection loop
-      u = this->GetRandom();
+      u = Random();
       if (u == 0) continue;                      // avoid division by 0
-      x = bino_a + bino_h * (this->GetRandom() - 0.5) / u;
+      x = bino_a + bino_h * (Random() - 0.5) / u;
       if (x < 0. || x > bino_bound) continue;    // reject, avoid overflow
       k = (int32_t)x;                            // truncate
       lf = (k-bino_mode)*bino_r1+bino_g-LnFac(k)-LnFac(n-k);// ln(f(k))
@@ -770,8 +770,8 @@ double StochasticLib1::Normal(double m, double s) {
    }    
    // make two normally distributed variates by Box-Muller transformation
    do {
-      normal_x1 = 2. * this->GetRandom() - 1.;
-      normal_x2 = 2. * this->GetRandom() - 1.;
+      normal_x1 = 2. * Random() - 1.;
+      normal_x2 = 2. * Random() - 1.;
       w = normal_x1*normal_x1 + normal_x2*normal_x2;
    }
    while (w >= 1. || w < 1E-30);
@@ -801,35 +801,7 @@ int StochasticLib1::Bernoulli(double p) {
    // Bernoulli distribution with parameter p. This function returns 
    // 0 or 1 with probability (1-p) and p, respectively.
    if (p < 0 || p > 1) FatalError("Parameter out of range in Bernoulli function");
-   return this->GetRandom() < p;
-}
-
-
-/***********************************************************************
-Shuffle function
-***********************************************************************/
-void StochasticLib1::Shuffle(int * list, int min, int n) {
-   /*
-   This function makes a list of the n numbers from min to min+n-1
-   in random order.
-
-   The parameter 'list' must be an array with at least n elements.
-   The array index goes from 0 to n-1.
-
-   If you want to shuffle something else than integers then use the 
-   integers in list as an index into a table of the items you want to shuffle.
-   */
-
-   int i, j, swap;
-   // put numbers from min to min+n-1 into list
-   for (i=0, j=min; i<n; i++, j++) list[i] = j;
-   // shuffle list
-   for (i=0; i<n-1; i++) {
-      // item number i has n-i numbers to choose between
-      j = IRandom(i,n-1);
-      // swap items i and j
-      swap = list[j];  list[j] = list[i];  list[i] = swap;
-   }
+   return Random() < p;
 }
 
 #endif  // ifndef R_BUILD
