@@ -16,4 +16,3 @@ cdef extern from "biasedurn/stocc.h" nogil:
         double Random() except +
         void SetAccuracy(double accur)
         int FishersNCHyp (int n, int m, int N, double odds) except +
-        rvs_fisher (int n, int m, int N, double odds, int size)

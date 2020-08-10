@@ -42,13 +42,18 @@ cdef class _PyStochasticLib3:
     def SetAccuracy(self, double accur):
         return self.c_sl3.SetAccuracy(accur)
         
-    def rvs_fisher(self, int n, int m, int N, double odds, int size, int FOS=1):
-        
+    def rvs_fisher(self, int n, int m, int N, double odds, int size, random_state=None, int FOS=2):
+
         rvs = np.zeros(size)
-        
+
+        if random_state is None or isinstance(random_state, int):
+            rng = np.random.RandomState(random_state)
+        else:  # could avoid this by renaming random_state to rng
+            rng = random_state
+
         if (n < 30 and N < 1024 and odds > 1.E-5 and odds < 1.E5):
             # inversion by chop down method will be used
-            cache = np.random.rand(size)
+            cache = rng.random(size)
             self.FillCache(cache)
             for i in range(size):
                 rvs[i] = self.FishersNCHyp(n, m, N, odds)
@@ -59,7 +64,7 @@ cdef class _PyStochasticLib3:
             remaining_size = size
             while i < size:
                 try:
-                    cache = np.random.rand(remaining_size * FOS)
+                    cache = rng.random(remaining_size * FOS)
                     self.FillCache(cache)
                     for j in range(i, size):
                         rvs[j] = self.FishersNCHyp(n, m, N, odds)
