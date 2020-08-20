@@ -14,7 +14,7 @@
 #ifndef LP_DATA_HIGHS_OPTIONS_H_
 #define LP_DATA_HIGHS_OPTIONS_H_
 
-#include <cstring>  // For strrchr
+#include <cstring>  // For strlen
 #include <vector>
 
 #include "io/HighsIO.h"
@@ -241,6 +241,7 @@ struct HighsOptionsStruct {
   double large_matrix_value;
   double primal_feasibility_tolerance;
   double dual_feasibility_tolerance;
+  double ipm_optimality_tolerance;
   double dual_objective_value_upper_bound;
   int highs_debug_level;
   int simplex_strategy;
@@ -260,7 +261,6 @@ struct HighsOptionsStruct {
 
   // Advanced options
   bool run_crossover;
-  bool run_as_hsol;
   bool mps_parser_type_free;
   int keep_n_rows;
   int allowed_simplex_matrix_scale_factor;
@@ -269,6 +269,7 @@ struct HighsOptionsStruct {
   int simplex_permute_strategy;
   int dual_simplex_cleanup_strategy;
   int simplex_price_strategy;
+  int dual_chuzc_sort_strategy;
   bool simplex_initial_condition_check;
   double simplex_initial_condition_tolerance;
   double dual_steepest_edge_weight_log_error_threshhold;
@@ -408,6 +409,11 @@ class HighsOptions : public HighsOptionsStruct {
     records.push_back(record_double);
 
     record_double = new OptionRecordDouble(
+        "ipm_optimality_tolerance", "IPM optimality tolerance", advanced,
+        &ipm_optimality_tolerance, 1e-12, 1e-8, HIGHS_CONST_INF);
+    records.push_back(record_double);
+
+    record_double = new OptionRecordDouble(
         "dual_objective_value_upper_bound",
         "Upper bound on objective value for dual simplex: algorithm terminates "
         "if reached",
@@ -530,10 +536,6 @@ class HighsOptions : public HighsOptionsStruct {
                                        advanced, &run_crossover, true);
     records.push_back(record_bool);
 
-    record_bool = new OptionRecordBool(
-        "run_as_hsol", "Run HiGHS simplex solver as if it were hsol", advanced,
-        &run_as_hsol, false);
-    records.push_back(record_bool);
     record_bool = new OptionRecordBool("mps_parser_type_free",
                                        "Use the free format MPS file reader",
                                        advanced, &mps_parser_type_free, true);
@@ -584,6 +586,12 @@ class HighsOptions : public HighsOptionsStruct {
         &simplex_price_strategy, SIMPLEX_PRICE_STRATEGY_MIN,
         SIMPLEX_PRICE_STRATEGY_ROW_SWITCH_COL_SWITCH,
         SIMPLEX_PRICE_STRATEGY_MAX);
+    records.push_back(record_int);
+
+    record_int = new OptionRecordInt(
+        "dual_chuzc_sort_strategy", "Strategy for CHUZC sort in dual simplex",
+        advanced, &dual_chuzc_sort_strategy, SIMPLEX_DUAL_CHUZC_STRATEGY_MIN,
+        SIMPLEX_DUAL_CHUZC_STRATEGY_CHOOSE, SIMPLEX_DUAL_CHUZC_STRATEGY_MAX);
     records.push_back(record_int);
 
     record_bool =
@@ -641,7 +649,5 @@ class HighsOptions : public HighsOptionsStruct {
  public:
   std::vector<OptionRecord*> records;
 };
-
-void setHsolOptions(HighsOptions& options);
 
 #endif

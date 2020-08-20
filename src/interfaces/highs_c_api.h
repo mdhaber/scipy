@@ -73,6 +73,12 @@ int Highs_clearModel(void* highs  //!< HiGHS object reference
 );
 
 /*
+ * @brief
+ */
+int Highs_runQuiet(void* highs  //!< HiGHS object reference
+);
+
+/*
  * @brief Runs HiGHS
  */
 int Highs_run(void* highs  //!< HiGHS object reference
@@ -225,6 +231,24 @@ void Highs_getBasis(
 int Highs_getModelStatus(
     void* highs,            //!< HiGHS object reference
     const int scaled_model  //!< 0 (nonzero) for status of (scaled) model
+);
+
+/**
+ * @brief Returns the objective function value (if known)
+ */
+double Highs_getObjectiveValue(void* highs  //!< HiGHS object reference,
+);
+
+/**
+ * @brief Returns the simplex iteration count (if known)
+ */
+int Highs_getIterationCount(void* highs  //!< HiGHS object reference,
+);
+
+/**
+ * @brief Returns the simplex iteration count (if known)
+ */
+int Highs_getSimplexIterationCount(void* highs  //!< HiGHS object reference,
 );
 
 /**
@@ -765,4 +789,3 @@ const char* Highs_primalDualStatusToChar(
 #endif
 
 #endif
-

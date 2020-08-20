@@ -96,6 +96,13 @@ int Highs_passLp(void* highs, int numcol, int numrow, int numnz,
 }
 
 int Highs_clearModel(void* highs) { return (int)((Highs*)highs)->clearModel(); }
+
+int Highs_runQuiet(void* highs) {
+  int return_status = (int)((Highs*)highs)->setHighsLogfile(NULL);
+  if (return_status) return return_status;
+  return (int)((Highs*)highs)->setHighsOutput(NULL);
+}
+
 int Highs_setHighsBoolOptionValue(void* highs, const char* option,
                                   const int value) {
   return (int)((Highs*)highs)
@@ -197,6 +204,18 @@ void Highs_getBasis(void* highs, int* colstatus, int* rowstatus) {
 
 int Highs_getModelStatus(void* highs, const int scaled_model) {
   return (int)((Highs*)highs)->getModelStatus(scaled_model);
+}
+
+double Highs_getObjectiveValue(void* highs) {
+  return ((Highs*)highs)->getObjectiveValue();
+}
+
+int Highs_getIterationCount(void* highs) {
+  return Highs_getSimplexIterationCount(highs);
+}
+
+int Highs_getSimplexIterationCount(void* highs) {
+  return (int)((Highs*)highs)->getSimplexIterationCount();
 }
 
 int Highs_getBasicVariables(void* highs, int* basic_variables) {
