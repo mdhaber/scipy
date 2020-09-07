@@ -1580,6 +1580,7 @@ class LinprogHiGHSTests(LinprogCommonTests):
                               {"primal_feasibility_tolerance": -1},
                               {"ipm_optimality_tolerance": -1},
                               {"simplex_dual_edge_weight_strategy": "ekki"},
+                              {"start_crossover_tolerance": -1},
                               ])
     def test_invalid_option_values(self, options):
         def f(options):

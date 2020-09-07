@@ -43,10 +43,9 @@ from ._highs.constants import (
 
     HIGHS_SIMPLEX_CRASH_STRATEGY_OFF,
 
+    HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_CHOOSE,
     HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_DANTZIG,
     HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_DEVEX,
-    HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_STEEPEST_EDGE_TO_DEVEX_SWITCH
-    as HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STEEP2DVX,
     HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_STEEPEST_EDGE,
 )
 from scipy.sparse import csc_matrix, vstack, issparse
@@ -82,6 +81,7 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
                    primal_feasibility_tolerance=None,
                    ipm_optimality_tolerance=None,
                    simplex_dual_edge_weight_strategy=None,
+                   start_crossover_tolerance=None,
                    **unknown_options):
     r"""
     Solve the following linear programming problem using one of the HiGHS
@@ -129,7 +129,7 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
         possible value for a ``double`` on the platform.
     simplex_dual_edge_weight_strategy : str (default: None)
         Strategy for simplex dual edge weights. The default, ``None``,
-        automatically selects one of the following.
+        uses ``'choose'``.
 
         ``'dantzig'`` uses Dantzig's original strategy of choosing the most
         negative reduced cost.
@@ -139,13 +139,15 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
         ``steepest`` uses the exact steepest edge strategy as described in
         [16]_.
 
-        ``'steepest-devex'`` begins with the exact steepest edge strategy
+        ``'choose'`` begins with the exact steepest edge strategy
         until the computation is too costly or inexact and then switches to
         the devex method.
 
-        Curently, using ``None`` always selects ``'steepest-devex'``, but this
-        may change as new options become available.
-
+    start_crossover_tolerance : double
+        Tolerance to be satisfied before IPM crossover will start. Only used
+        when ``solver='ipm'``. Default is 1e-8. Minimum possible value is
+        1e-12 and must be smaller than the largest possible value for a
+        ``double`` on the platform.
     unknown_options : dict
         Optional arguments not used by this particular solver. If
         ``unknown_options`` is non-empty, a warning is issued listing all
@@ -211,9 +213,9 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
         'simplex_dual_edge_weight_strategy',
         choices={'dantzig': HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_DANTZIG,
                  'devex': HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_DEVEX,
-                 'steepest-devex': HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STEEP2DVX,
                  'steepest':
                  HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_STEEPEST_EDGE,
+                 'choose': HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_CHOOSE,
                  None: None})
 
     statuses = {
@@ -302,10 +304,10 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
             simplex_dual_edge_weight_strategy_enum,
         'simplex_strategy': HIGHS_SIMPLEX_STRATEGY_DUAL,
         'simplex_crash_strategy': HIGHS_SIMPLEX_CRASH_STRATEGY_OFF,
+        'start_crossover_tolerance': start_crossover_tolerance,
+        'ipm_iteration_limit': maxiter,
+        'simplex_iteration_limit': maxiter,
     }
-
-    options['ipm_iteration_limit'] = maxiter
-    options['simplex_iteration_limit'] = maxiter
 
     # np.inf doesn't work; use very large constant
     rhs = _replace_inf(rhs)
@@ -325,9 +327,6 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
         slack = np.array(slack[:len(b_ub)])
     else:
         slack, con = None, None
-
-    # this needs to be updated if we start choosing the solver intelligently
-    solvers = {"ipm": "highs-ipm", "simplex": "highs-ds", None: "highs-ds"}
 
     sol = {'x': np.array(res['x']) if 'x' in res else None,
            'slack': slack,
