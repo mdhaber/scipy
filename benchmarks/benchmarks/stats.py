@@ -99,6 +99,59 @@ class Distribution(Benchmark):
     # Retain old benchmark results (remove this if changing the benchmark)
     time_distribution.version = "fb22ae5386501008d945783921fe44aef3f82c1dafc40cddfaccaeec38b792b0"
 
+# 06a820d8df4f2e09d7e36267b5decda73b1d1a72 - ww
+# c3e640c13c58bffa127eb8d3d4cae220d9c99c33 - master
+class BetaDistribution(Benchmark):
+    pass
+
+class BetaDistributionSF(BetaDistribution):
+
+    # Columns are x, a, b, cdf, sf.
+    # The values of cdf and sf were computed using mpmath.
+    _beta_cdf_sf = np.array([
+        [1e-20, 3.0, 0.5, 3.1249999999999994e-61, 1.0],
+        [1e-20, 0.5, 3.0, 1.875e-10, 0.9999999998125],
+        [0.999, 2, 10, 1.0, 1.0990000000000097e-29],
+        [0.9999999999999994, 3.0, 0.5, 0.9999999558234914, 4.417650858175538e-08],
+        [0.9999999999999994, 0.5, 3.0, 1.0, 5.345529420184392e-47],
+    ])
+
+    param_names = ['params']
+    params = _beta_cdf_sf
+
+    def time_sf(self, params):
+        x, a, b, cdf, sf = params
+        stats.beta.sf(x, a=a, b=b)
+
+    def track_sf(self, params):
+        x, a, b, cdf, sf = params
+        res = stats.beta.sf(x, a=a, b=b)
+        return np.abs(sf - res)
+
+
+class BetaDistributionISF(BetaDistribution):
+
+    # Columns are p, a, b, isf.
+    # The p column was computed using mpmath.
+    _beta_isf = np.array([
+        [0.99981250000125, 0.5, 3.0, 1.0e-8],
+        [2.0000030000132007e-17, 0.5, 3.0, 0.999996],
+        [5.930192380246625e-07, 3.0, 0.5, 0.9999999999999],
+        [0.9996750253207289, 3.0, 0.5, 0.1],
+    ])
+
+    param_names = ['params']
+    params = _beta_isf
+
+    def time_isf(self, params):
+        p, a, b, isf = params
+        stats.beta.isf(p, a=a, b=b)
+
+    def track_isf(self, params):
+        p, a, b, isf = params
+        res = stats.beta.isf(p, a=a, b=b)
+        return np.abs(isf - res)
+
 
 class DescriptiveStats(Benchmark):
     param_names = ['n_levels']
