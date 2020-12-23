@@ -6,13 +6,12 @@ class _KlassMap(NamedTuple):
     scipy_name: str
     ctor_args: tuple
 
-# map boost stats classes to scipy class names and number of
-# constructor arguments; b -> (s, #)
+# map boost stats classes to scipy class names and
+# constructor arguments; b -> (s, ('ctor', 'args', ...))
 _klass_mapper = {
     'beta': _KlassMap('beta', ('a', 'b')),
     'binomial': _KlassMap('binom', ('n', 'p')),
     'negative_binomial': _KlassMap('nbinom', ('n', 'p')),
-    'non_central_chi_squared': _KlassMap('ncx2', ('df', 'nc')),
 }
 
 

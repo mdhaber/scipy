@@ -4410,41 +4410,38 @@ def test_distribution_too_many_args():
     stats.ncf.pdf(x, 3, 4, 5, 6, 1.0)  # 3 args, plus loc/scale
 
 
-@pytest.mark.parametrize('dist', [stats.ncx2, stats.boost.ncx2])
-def test_ncx2_tails_ticket_955(dist):
+def test_ncx2_tails_ticket_955():
     # Trac #955 -- check that the cdf computed by special functions
     # matches the integrated pdf
-    a = dist.cdf(np.arange(20, 25, 0.2), 2, 1.07458615e+02)
-    b = dist._cdfvec(np.arange(20, 25, 0.2), 2, 1.07458615e+02)
+    a = stats.ncx2.cdf(np.arange(20, 25, 0.2), 2, 1.07458615e+02)
+    b = stats.ncx2._cdfvec(np.arange(20, 25, 0.2), 2, 1.07458615e+02)
     assert_allclose(a, b, rtol=1e-3, atol=0)
 
 
-@pytest.mark.parametrize('dist', [stats.ncx2, stats.boost.ncx2])
-def test_ncx2_tails_pdf(dist):
+def test_ncx2_tails_pdf():
     # ncx2.pdf does not return nans in extreme tails(example from gh-1577)
     # NB: this is to check that nan_to_num is not needed in ncx2.pdf
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
         assert_equal(dist.pdf(1, np.arange(340, 350), 2), 0)
-        logval = dist.logpdf(1, np.arange(340, 350), 2)
+        logval = stats.ncx2.logpdf(1, np.arange(340, 350), 2)
 
     assert_(np.isneginf(logval).all())
 
     # Verify logpdf has extended precision when pdf underflows to 0
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
-        assert_equal(dist.pdf(10000, 3, 12), 0)
-        assert_allclose(dist.logpdf(10000, 3, 12), -4662.444377524883)
+        assert_equal(stats.ncx2.pdf(10000, 3, 12), 0)
+        assert_allclose(stats.ncx2.logpdf(10000, 3, 12), -4662.444377524883)
 
 
-@pytest.mark.parametrize('dist', [stats.ncx2, stats.boost.ncx2])
 @pytest.mark.parametrize('method, expected', [
     ('cdf', np.array([2.497951336e-09, 3.437288941e-10])),
     ('pdf', np.array([1.238579980e-07, 1.710041145e-08])),
     ('logpdf', np.array([-15.90413011, -17.88416331])),
     ('ppf', np.array([4.865182052, 7.017182271]))
 ])
-def test_ncx2_zero_nc(dist, method, expected):
+def test_ncx2_zero_nc(method, expected):
     # gh-5441
     # ncx2 with nc=0 is identical to chi2
     # Comparison to R (v3.5.1)
@@ -4454,27 +4451,24 @@ def test_ncx2_zero_nc(dist, method, expected):
     # > dchisq(0.1, df=10, ncp=c(0,4), log=TRUE)
     # > qchisq(0.1, df=10, ncp=c(0,4))
 
-    result = getattr(dist, method)(0.1, nc=[0, 4], df=10)
+    result = getattr(stats.ncx2, method)(0.1, nc=[0, 4], df=10)
     assert_allclose(result, expected, atol=1e-15)
 
 
-@pytest.mark.parametrize('dist', [stats.ncx2, stats.boost.ncx2])
-def test_ncx2_zero_nc_rvs(dist):
+def test_ncx2_zero_nc_rvs():
     # gh-5441
     # ncx2 with nc=0 is identical to chi2
-    result = dist.rvs(df=10, nc=0, random_state=1)
+    result = stats.ncx2.rvs(df=10, nc=0, random_state=1)
     expected = stats.chi2.rvs(df=10, random_state=1)
     assert_allclose(result, expected, atol=1e-15)
 
 
-@pytest.mark.parametrize('dist', [stats.ncx2, stats.boost.ncx2])
-def test_ncx2_gh12731(dist):
+def test_ncx2_gh12731():
     # test that gh-12731 is resolved; previously these were all 0.5
     nc = 10**np.arange(5, 10)
-    assert_equal(dist.cdf(1e4, df=1, nc=nc), 0)
+    assert_equal(stats.ncx2.cdf(1e4, df=1, nc=nc), 0)
 
 
-@pytest.mark.parametrize('dist', [stats.ncx2, stats.boost.ncx2])
 def test_ncx2_gh8665(dist):
     # test that gh-8665 is resolved; previously this tended to nonzero value
     x = np.array([4.99515382e+00, 1.07617327e+01, 2.31854502e+01,
@@ -4484,7 +4478,7 @@ def test_ncx2_gh8665(dist):
                   4.99515382e+04])
     nu, lam = 20, 499.51538166556196
 
-    sf = dist.sf(x, df=nu, nc=lam)
+    sf = stats.ncx2.sf(x, df=nu, nc=lam)
     # computed in R. Couldn't find a survival function implementation
     # options(digits=16)
     # x <- c(4.99515382e+00, 1.07617327e+01, 2.31854502e+01, 4.99515382e+01,
@@ -4747,10 +4741,9 @@ def test_docstrings():
                 assert_(re.search(regex, dist.__doc__) is None)
 
 
-@pytest.mark.parametrize('dist', [stats.ncx2, stats.boost.ncx2])
-def test_infinite_input(dist):
+def test_infinite_input():
     assert_almost_equal(stats.skellam.sf(np.inf, 10, 11), 0)
-    assert_almost_equal(dist._cdf(np.inf, 8, 0.1), 1)
+    assert_almost_equal(stats.ncx2._cdf(np.inf, 8, 0.1), 1)
 
 
 def test_lomax_accuracy():
