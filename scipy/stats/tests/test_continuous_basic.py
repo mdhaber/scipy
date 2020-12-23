@@ -505,14 +505,12 @@ def check_pdf_logpdf_at_endpoints(distfn, args, msg):
         for msg in suppress_messsages:
             sup.filter(category=RuntimeWarning, message=msg)
 
-        print(vals, args)
-        # assert False
         pdf = distfn.pdf(vals, *args)
-        # logpdf = distfn.logpdf(vals, *args)
-        # pdf = pdf[(pdf != 0) & np.isfinite(pdf)]
-        # logpdf = logpdf[np.isfinite(logpdf)]
-        # msg += " - logpdf-log(pdf) relationship"
-        # npt.assert_almost_equal(np.log(pdf), logpdf, decimal=7, err_msg=msg)
+        logpdf = distfn.logpdf(vals, *args)
+        pdf = pdf[(pdf != 0) & np.isfinite(pdf)]
+        logpdf = logpdf[np.isfinite(logpdf)]
+        msg += " - logpdf-log(pdf) relationship"
+        npt.assert_almost_equal(np.log(pdf), logpdf, decimal=7, err_msg=msg)
 
 
 def check_sf_logsf(distfn, args, msg):
