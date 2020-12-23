@@ -130,10 +130,4 @@ distdiscrete = [
     ['skellam', (15, 8)],
     ['zipf', (6.5,)],
     ['yulesimon', (11.0,)],
-    ['nhypergeom', (20, 7, 1)],
-
-    # Boost variants
-    ['boost.binom', (5, 0.4)],
-    ['boost.nbinom', (5, 0.5)],
-    ['boost.nbinom', (0.4, 0.4)],  # from tickets: 583
-]
+    ['nhypergeom', (20, 7, 1)]]

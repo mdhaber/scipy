@@ -13,7 +13,7 @@ import numpy as np
 
 from ._distn_infrastructure import (
         rv_discrete, _ncx2_pdf, _ncx2_cdf, get_distribution_names)
-
+import scipy.stats._boost as _boost
 
 class binom_gen(rv_discrete):
     r"""A binomial discrete random variable.
@@ -59,33 +59,27 @@ class binom_gen(rv_discrete):
 
     def _pmf(self, x, n, p):
         # binom.pmf(k) = choose(n, k) * p**k * (1-p)**(n-k)
-        return exp(self._logpmf(x, n, p))
+        return _boost._binom_pdf(x, n, p)
 
     def _cdf(self, x, n, p):
-        k = floor(x)
-        vals = special.bdtr(k, n, p)
-        return vals
+        return _boost._binom_cdf(x, n, p)
 
     def _sf(self, x, n, p):
-        k = floor(x)
-        return special.bdtrc(k, n, p)
+        return _boost._binom_icdf(x, n, p)
 
+    def _isf(self, x, n, p):
+        return _boost._binom_iquantile(x, n, p)
+    
     def _ppf(self, q, n, p):
-        vals = ceil(special.bdtrik(q, n, p))
-        vals1 = np.maximum(vals - 1, 0)
-        temp = special.bdtr(vals1, n, p)
-        return np.where(temp >= q, vals1, vals)
+        return _boost._binom_quantile(q, n, p)
 
-    def _stats(self, n, p, moments='mv'):
-        q = 1.0 - p
-        mu = n * p
-        var = n * p * q
-        g1, g2 = None, None
-        if 's' in moments:
-            g1 = (q - p) / sqrt(var)
-        if 'k' in moments:
-            g2 = (1.0 - 6*p*q) / var
-        return mu, var, g1, g2
+    def _stats(self, n, p):
+        return(
+            _boost._binom_mean(n, p),
+            _boost._binom_variance(n, p),
+            _boost._binom_skewness(n, p),
+            _boost._binom_kurtosis_excess(n, p),
+        )
 
     def _entropy(self, n, p):
         k = np.r_[0:n + 1]
@@ -145,6 +139,9 @@ class bernoulli_gen(binom_gen):
     def _sf(self, x, p):
         return binom._sf(x, 1, p)
 
+    def _isf(self, x, p):
+        return binom._isf(x, 1, p)        
+    
     def _ppf(self, q, p):
         return binom._ppf(q, 1, p)
 

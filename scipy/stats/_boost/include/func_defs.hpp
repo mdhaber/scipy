@@ -5,7 +5,9 @@
 #include <cmath>
 #include "boost/math/distributions.hpp"
 
-typedef boost::math::policies::policy<> Policy;
+// Round up to achieve correct ppf(cdf) round-trips for discrete distributions
+typedef boost::math::policies::policy<
+  boost::math::policies::discrete_quantile<boost::math::policies::integer_round_up > > Policy;
 
 template<template <typename, typename> class Dist, class RealType, class ... Args>
 RealType boost_pdf(const RealType x, const Args ... args) {

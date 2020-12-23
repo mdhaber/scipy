@@ -34,6 +34,9 @@ def configuration(parent_package='', top_path=None):
             include_dirs=INCLUDES,
             define_macros=DEFINES,
             language='c++',
+            depends=[
+                'include/func_defs.hpp',
+            ],
         )
         # Add c++11/14 support:
         ext._pre_build_hook = pre_build_hook
