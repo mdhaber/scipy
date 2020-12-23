@@ -12,7 +12,7 @@ def configuration(parent_package='', top_path=None):
     from _generate_pyx import _klass_mapper
     from numpy.distutils.misc_util import Configuration
     import numpy as np
-    config = Configuration('boost', parent_package, top_path)
+    config = Configuration('_boost', parent_package, top_path)
 
     DEFINES = [
         ('BOOST_MATH_DOMAIN_ERROR_POLICY', 'ignore_error'),  # return nan instead of throwing
@@ -38,8 +38,6 @@ def configuration(parent_package='', top_path=None):
         # Add c++11/14 support:
         ext._pre_build_hook = pre_build_hook
 
-    config.add_subpackage('_stats')
-    config.add_subpackage('tests')
     return config
 
 
