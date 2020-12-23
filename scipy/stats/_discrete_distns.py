@@ -275,35 +275,31 @@ class nbinom_gen(rv_discrete):
 
     def _pmf(self, x, n, p):
         # nbinom.pmf(k) = choose(k+n-1, n-1) * p**n * (1-p)**k
-        return exp(self._logpmf(x, n, p))
-
+        return _boost._nbinom_pdf(x, n, p)
+    
     def _logpmf(self, x, n, p):
         coeff = gamln(n+x) - gamln(x+1) - gamln(n)
         return coeff + n*log(p) + special.xlog1py(x, -p)
 
     def _cdf(self, x, n, p):
-        k = floor(x)
-        return special.betainc(n, k+1, p)
+        return _boost._nbinom_cdf(x, n, p)
+    
+    def _sf(self, x, n, p):
+        return _boost._nbinom_icdf(x, n, p)
 
-    def _sf_skip(self, x, n, p):
-        # skip because special.nbdtrc doesn't work for 0<n<1
-        k = floor(x)
-        return special.nbdtrc(k, n, p)
-
+    def _isf(self, x, n, p):
+        return _boost._nbinom_iquantile(x, n, p)
+    
     def _ppf(self, q, n, p):
-        vals = ceil(special.nbdtrik(q, n, p))
-        vals1 = (vals-1).clip(0.0, np.inf)
-        temp = self._cdf(vals1, n, p)
-        return np.where(temp >= q, vals1, vals)
+        return _boost._nbinom_quantile(q, n, p)
 
     def _stats(self, n, p):
-        Q = 1.0 / p
-        P = Q - 1.0
-        mu = n*P
-        var = n*P*Q
-        g1 = (Q+P)/sqrt(n*P*Q)
-        g2 = (1.0 + 6*P*Q) / (n*P*Q)
-        return mu, var, g1, g2
+        return(
+            _boost._nbinom_mean(n, p),
+            _boost._nbinom_variance(n, p),
+            _boost._nbinom_skewness(n, p),
+            _boost._nbinom_kurtosis_excess(n, p),
+        )
 
 
 nbinom = nbinom_gen(name='nbinom')

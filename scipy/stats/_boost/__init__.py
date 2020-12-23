@@ -7,3 +7,8 @@ from scipy.stats._boost.binom_ufunc import (
     _binom_pdf, _binom_cdf, _binom_icdf, _binom_quantile, _binom_iquantile,
     _binom_mean, _binom_variance, _binom_skewness, _binom_kurtosis_excess,
 )
+
+from scipy.stats._boost.nbinom_ufunc import (
+    _nbinom_pdf, _nbinom_cdf, _nbinom_icdf, _nbinom_quantile, _nbinom_iquantile,
+    _nbinom_mean, _nbinom_variance, _nbinom_skewness, _nbinom_kurtosis_excess,
+)
