@@ -130,4 +130,5 @@ distdiscrete = [
     ['skellam', (15, 8)],
     ['zipf', (6.5,)],
     ['yulesimon', (11.0,)],
-    ['nhypergeom', (20, 7, 1)]]
+    ['nhypergeom', (20, 7, 1)]
+]

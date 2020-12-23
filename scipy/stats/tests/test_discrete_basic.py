@@ -149,7 +149,6 @@ def check_cdf_ppf(distfn, arg, supp, msg):
     if not hasattr(distfn, 'xk'):
         _a, _b = distfn.support(*arg)
         supp1 = supp[supp < _b]
-        print(supp1, distfn.inc)
         npt.assert_array_equal(distfn.ppf(distfn.cdf(supp1, *arg) + 1e-8, *arg),
                                supp1 + distfn.inc, msg + ' ppf-cdf-next')
         # -1e-8 could cause an error if pmf < 1e-8

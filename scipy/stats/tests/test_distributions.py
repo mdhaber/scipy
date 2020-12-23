@@ -4459,7 +4459,7 @@ def test_ncx2_tails_pdf():
     # NB: this is to check that nan_to_num is not needed in ncx2.pdf
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
-        assert_equal(dist.pdf(1, np.arange(340, 350), 2), 0)
+        assert_equal(stats.ncx2.pdf(1, np.arange(340, 350), 2), 0)
         logval = stats.ncx2.logpdf(1, np.arange(340, 350), 2)
 
     assert_(np.isneginf(logval).all())
@@ -4505,7 +4505,7 @@ def test_ncx2_gh12731():
     assert_equal(stats.ncx2.cdf(1e4, df=1, nc=nc), 0)
 
 
-def test_ncx2_gh8665(dist):
+def test_ncx2_gh8665():
     # test that gh-8665 is resolved; previously this tended to nonzero value
     x = np.array([4.99515382e+00, 1.07617327e+01, 2.31854502e+01,
                   4.99515382e+01, 1.07617327e+02, 2.31854502e+02,
