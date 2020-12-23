@@ -108,11 +108,7 @@ distcont = [
     ['wald', ()],
     ['weibull_max', (2.8687961709100187,)],
     ['weibull_min', (1.7866166930421596,)],
-    ['wrapcauchy', (0.031071279018614728,)],
-
-    # Boost variants
-    ['boost.beta', (2.3098496451481823, 0.62687954300963677)],
-]
+    ['wrapcauchy', (0.031071279018614728,)]]
 
 
 distdiscrete = [

@@ -2415,6 +2415,42 @@ class TestBeta(object):
         x = [0.1, 0.5, 0.6]
         assert_raises(ValueError, stats.beta.fit, x, fa=0.5, fix_a=0.5)
 
+    def test_issue_12635():
+        # Confirm that Boost's beta distribution resolves gh-12635. Check against R:
+        # options(digits=16)
+        # p = 0.9999999999997369
+        # a = 75.0
+        # b = 66334470.0
+        # print(qbeta(p, a, b))
+        p, a, b = 0.9999999999997369, 75.0, 66334470.0
+        assert np.allclose(boost_beta.ppf(p, a, b), 2.343620802982393e-06)
+
+    def test_issue_12794():
+        # Confirm that Boost's beta distribution resolves gh-12794. Check against R.
+        # options(digits=16)
+        # p = 1e-11
+        # count_list = c(10,100,1000)
+        # print(qbeta(1-p, count_list + 1, 100000 - count_list))
+        inv_R = np.array([0.0004944464889611935,
+                          0.0018360586912635726,
+                          0.0122663919942518351])
+        count_list = np.array([10, 100, 1000])
+        p = 1e-11
+        inv = boost_beta.isf(p, count_list + 1, 100000 - count_list)
+        assert np.allclose(inv, inv_R)
+        res = boost_beta.sf(inv, count_list + 1, 100000 - count_list)
+        assert np.allclose(res, p)
+
+    def test_issue_12796():
+        #Confirm that Boost's beta distribution succeeds in the case of gh-12796
+        alpha_2 = 5e-6
+        count_ = np.arange(1, 20)
+        nobs = 100000
+        q, a, b = 1 - alpha_2, count_ + 1, nobs - count_
+        inv = boost_beta.ppf(q, a, b)
+        res = boost_beta.cdf(inv, a, b)
+        assert np.allclose(res, 1 - alpha_2)
+
 
 class TestBetaPrime(object):
     def test_logpdf(self):
@@ -2865,7 +2901,7 @@ class TestFitMethod(object):
             pytest.skip("%s fit known to fail or deprecated" % dist)
         x = np.array([1.6483, 2.7169, 2.4667, 1.1791, 3.5433, np.nan])
         y = np.array([1.6483, 2.7169, 2.4667, 1.1791, 3.5433, np.inf])
-        distfunc = getattr(stats.boost, dist[len('boost.'):]) if 'boost.' in dist else getattr(stats, dist)
+        distfunc = getattr(stats, dist)
         assert_raises(RuntimeError, distfunc.fit, x, floc=0, fscale=1)
         assert_raises(RuntimeError, distfunc.fit, y, floc=0, fscale=1)
 

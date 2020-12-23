@@ -6900,11 +6900,7 @@ def _parse_kstest_args(data1, data2, args, N):
         rvsfunc = data1
 
     if isinstance(data2, str):
-        try:
-            cdf = getattr(distributions, data2).cdf
-        except AttributeError:
-            import scipy.stats.boost
-            cdf = getattr(scipy.stats.boost, data2[len('boost.'):]).cdf
+        cdf = getattr(distributions, data2).cdf
         data2 = None
     elif callable(data2):
         cdf = data2
