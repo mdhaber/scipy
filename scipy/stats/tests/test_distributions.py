@@ -2415,7 +2415,7 @@ class TestBeta(object):
         x = [0.1, 0.5, 0.6]
         assert_raises(ValueError, stats.beta.fit, x, fa=0.5, fix_a=0.5)
 
-    def test_issue_12635():
+    def test_issue_12635(self):
         # Confirm that Boost's beta distribution resolves gh-12635. Check against R:
         # options(digits=16)
         # p = 0.9999999999997369
@@ -2423,9 +2423,9 @@ class TestBeta(object):
         # b = 66334470.0
         # print(qbeta(p, a, b))
         p, a, b = 0.9999999999997369, 75.0, 66334470.0
-        assert np.allclose(boost_beta.ppf(p, a, b), 2.343620802982393e-06)
+        assert_allclose(stats.beta.ppf(p, a, b), 2.343620802982393e-06)
 
-    def test_issue_12794():
+    def test_issue_12794(self):
         # Confirm that Boost's beta distribution resolves gh-12794. Check against R.
         # options(digits=16)
         # p = 1e-11
@@ -2436,20 +2436,20 @@ class TestBeta(object):
                           0.0122663919942518351])
         count_list = np.array([10, 100, 1000])
         p = 1e-11
-        inv = boost_beta.isf(p, count_list + 1, 100000 - count_list)
-        assert np.allclose(inv, inv_R)
-        res = boost_beta.sf(inv, count_list + 1, 100000 - count_list)
-        assert np.allclose(res, p)
+        inv = stats.beta.isf(p, count_list + 1, 100000 - count_list)
+        assert_allclose(inv, inv_R)
+        res = stats.beta.sf(inv, count_list + 1, 100000 - count_list)
+        assert_allclose(res, p)
 
-    def test_issue_12796():
+    def test_issue_12796(self):
         #Confirm that Boost's beta distribution succeeds in the case of gh-12796
         alpha_2 = 5e-6
         count_ = np.arange(1, 20)
         nobs = 100000
         q, a, b = 1 - alpha_2, count_ + 1, nobs - count_
-        inv = boost_beta.ppf(q, a, b)
-        res = boost_beta.cdf(inv, a, b)
-        assert np.allclose(res, 1 - alpha_2)
+        inv = stats.beta.ppf(q, a, b)
+        res = stats.beta.cdf(inv, a, b)
+        assert_allclose(res, 1 - alpha_2)
 
 
 class TestBetaPrime(object):
