@@ -33,7 +33,7 @@ if __name__ == '__main__':
     for b, s in _klass_mapper.items():
         ufunc_gen(
             wrapper_prefix=s.scipy_name,
-            types=['NPY_DOUBLE', 'NPY_FLOAT'],
+            types=['NPY_FLOAT', 'NPY_DOUBLE', 'NPY_LONGDOUBLE'],
             num_ctor_args=len(s.ctor_args),
             filename=f'{src_dir}/{s.scipy_name}_ufunc.pyx',
             boost_dist=f'{b}_distribution',

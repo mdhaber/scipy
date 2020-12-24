@@ -38,16 +38,15 @@ import_ufunc()
 _ufunc_front_matter = '''
 cdef PyUFuncGenericFunction loop_func{wrapper_idx}[{num_types}]
 cdef void* func{wrapper_idx}[1*{num_types}]
-cdef char types{wrapper_idx}[4*{num_types}]
+cdef char types{wrapper_idx}[{num_arg_types}*{num_types}]
 '''
+
+_ufunc_type = 'types{wrapper_idx}[{idx}+{ufunc_idx}*{num_arg_types}] = {NPY_TYPE}'
 
 _ufunc_type_guts = '''
 loop_func{wrapper_idx}[{type_idx}] = <PyUFuncGenericFunction>{loop_fun}[{ctype}, NINPUTS{num_inputs}]
 func{wrapper_idx}[{type_idx}] = <void*>boost_{func_name}{num_ctor_args}[{boost_name}, {argtypes}]
-types{wrapper_idx}[0+{type_idx}*4] = {NPY_TYPE}
-types{wrapper_idx}[1+{type_idx}*4] = {NPY_TYPE}
-types{wrapper_idx}[2+{type_idx}*4] = {NPY_TYPE}
-types{wrapper_idx}[3+{type_idx}*4] = {NPY_TYPE}
+{TYPES}
 '''
 
 _ufunc_template = '''
@@ -114,6 +113,7 @@ def ufunc_gen(wrapper_prefix: str, types: list, num_ctor_args: int, filename: st
                 print(f'skipping {w.ufunc_name} ufunc because it has 0 inputs')
                 continue
             fp.write(_ufunc_front_matter.format(
+                num_arg_types=w.num_inputs+1,
                 num_types=len(types),
                 wrapper_idx=ii,
                 num_inputs=w.num_inputs,
@@ -125,6 +125,13 @@ def ufunc_gen(wrapper_prefix: str, types: list, num_ctor_args: int, filename: st
                     'NPY_FLOAT': 'float',
                     'NPY_FLOAT16': 'float16_t',
                 }[t]
+                ufunc_types = '\n'.join([_ufunc_type.format(
+                    wrapper_idx=ii,
+                    idx=tidx,
+                    ufunc_idx=jj,
+                    num_arg_types=w.num_inputs+1,
+                    NPY_TYPE=t,
+                ) for tidx in range(w.num_inputs+1)])
                 fp.write(_ufunc_type_guts.format(
                     type_idx=jj,
                     NPY_TYPE=t,
@@ -136,6 +143,7 @@ def ufunc_gen(wrapper_prefix: str, types: list, num_ctor_args: int, filename: st
                     argtypes=', '.join([ctype]*(num_ctor_args+1)),
                     boost_name=boost_dist,
                     num_ctor_args=num_ctor_args,
+                    TYPES=ufunc_types,
                 ))
 
             fp.write(_ufunc_template.format(
