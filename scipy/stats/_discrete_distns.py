@@ -73,13 +73,15 @@ class binom_gen(rv_discrete):
     def _ppf(self, q, n, p):
         return _boost._binom_quantile(q, n, p)
 
-    def _stats(self, n, p):
-        return(
-            _boost._binom_mean(n, p),
-            _boost._binom_variance(n, p),
-            _boost._binom_skewness(n, p),
-            _boost._binom_kurtosis_excess(n, p),
-        )
+    def _stats(self, n, p, moments='mv'):
+        mu = _boost._binom_mean(n, p)
+        var = _boost._binom_variance(n, p)
+        g1, g2 = None, None
+        if 's' in moments:
+            g1 = _boost._binom_skewness(n, p)
+        if 'k' in moments:
+            g2 = _boost._binom_kurtosis_excess(n, p)
+        return mu, var, g1, g2
 
     def _entropy(self, n, p):
         k = np.r_[0:n + 1]
