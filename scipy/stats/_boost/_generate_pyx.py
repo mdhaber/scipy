@@ -35,7 +35,6 @@ if __name__ == '__main__':
     # generate the PXD and PYX wrappers
     from include.gen_func_defs_pxd import _gen_func_defs_pxd
     from include.code_gen import _ufunc_gen
-    # from include.orig_code_gen import _ufunc_gen
     _gen_func_defs_pxd(f'{src_dir}/func_defs.pxd', x_funcs=_x_funcs, no_x_funcs=_no_x_funcs)
     for b, s in _klass_mapper.items():
         _ufunc_gen(
@@ -47,10 +46,3 @@ if __name__ == '__main__':
             x_funcs=_x_funcs,
             no_x_funcs=_no_x_funcs,
         )
-        # _ufunc_gen(
-        #     wrapper_prefix=s.scipy_name,
-        #     types=['NPY_FLOAT', 'NPY_DOUBLE', 'NPY_LONGDOUBLE'],
-        #     num_ctor_args=len(s.ctor_args),
-        #     filename=f'{src_dir}/{s.scipy_name}_ufunc.pyx',
-        #     boost_dist=f'{b}_distribution',
-        # )
