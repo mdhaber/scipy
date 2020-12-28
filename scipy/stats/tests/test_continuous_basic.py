@@ -103,7 +103,7 @@ def test_cont_basic(distname, arg):
         pytest.xfail(reason=distname)
 
     try:
-        getattr(stats, distname)
+        distfn = getattr(stats, distname)
     except TypeError:
         distfn = distname
         distname = 'rv_histogram_instance'
