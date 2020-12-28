@@ -94,8 +94,6 @@ def cases_test_cont_basic():
         else:
             yield distname, arg
 
-def get_distfn(distname: str):
-    return getattr(stats, distname)
 
 @pytest.mark.parametrize('distname,arg', cases_test_cont_basic())
 def test_cont_basic(distname, arg):
@@ -105,7 +103,7 @@ def test_cont_basic(distname, arg):
         pytest.xfail(reason=distname)
 
     try:
-        distfn = get_distfn(distname)
+        getattr(stats, distname)
     except TypeError:
         distfn = distname
         distname = 'rv_histogram_instance'
@@ -192,7 +190,7 @@ def test_cont_basic(distname, arg):
 def test_rvs_scalar(distname, arg):
     # rvs should return a scalar when given scalar arguments (gh-12428)
     try:
-        distfn = get_distfn(distname)
+        distfn = getattr(stats, distname)
     except TypeError:
         distfn = distname
         distname = 'rv_histogram_instance'
@@ -234,7 +232,7 @@ def cases_test_moments():
                          cases_test_moments())
 def test_moments(distname, arg, normalization_ok, higher_ok, is_xfailing):
     try:
-        distfn = get_distfn(distname)
+        distfn = getattr(stats, distname)
     except TypeError:
         distfn = distname
         distname = 'rv_histogram_instance'
@@ -279,7 +277,7 @@ def test_rvs_broadcast(dist, shape_args):
                           'exponnorm', 'geninvgauss', 'levy_stable', 'nct',
                           'norminvgauss', 'rice', 'skewnorm', 'semicircular']
 
-    distfunc = get_distfn(dist)
+    distfunc = getattr(stats, dist)
     loc = np.zeros(2)
     scale = np.ones((3, 1))
     nargs = distfunc.numargs
@@ -642,7 +640,7 @@ def check_fit_args_fix(distfn, arg, rvs):
 def test_methods_with_lists(method, distname, args):
     # Test that the continuous distributions can accept Python lists
     # as arguments.
-    dist = get_distfn(distname)
+    dist = getattr(stats, distname)
     f = getattr(dist, method)
     if distname == 'invweibull' and method.startswith('log'):
         x = [1.5, 2]
