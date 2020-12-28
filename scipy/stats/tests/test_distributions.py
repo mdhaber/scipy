@@ -2451,6 +2451,11 @@ class TestBeta(object):
         res = stats.beta.cdf(inv, a, b)
         assert_allclose(res, 1 - alpha_2)
 
+    def test_endpoint_returns_inf(self):
+        # Confirm that boost's beta distribution returns inf at x=1 when b<1
+        a, b = 1, 0.5
+        assert_equal(stats.beta.pdf(1, a, b), np.inf)
+
 
 class TestBetaPrime(object):
     def test_logpdf(self):

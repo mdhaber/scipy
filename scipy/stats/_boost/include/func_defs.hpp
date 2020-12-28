@@ -22,7 +22,7 @@ template<template <typename, typename> class Dist, class RealType, class ... Arg
 RealType boost_pdf_beta(const RealType x, const RealType a, const RealType b) {
   if (std::isfinite(x)) {
     if (x >= 1) {
-      return 0;
+      return INFINITY;
     }
     return boost::math::pdf(boost::math::beta_distribution<RealType, Policy>(a, b), x);
   }
