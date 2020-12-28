@@ -1,154 +1,126 @@
-'''First stab at generating PYX files.'''
+'''Generate Cython PYX wrappers for Boost stats distributions.'''
 
 from typing import NamedTuple
+from warnings import warn
 
-class WrapperDef(NamedTuple):
+class _MethodDef(NamedTuple):
     ufunc_name: str
     num_inputs: int
-    func_name: str
+    boost_func_name: str
 
-_front_matter = '''# distutils: language = c++
-# cython: language_level=3
 
-from numpy cimport (
-    import_array,
-    import_ufunc,
-    PyUFunc_FromFuncAndData,
-    PyUFuncGenericFunction,
-    PyUFunc_None,
-    {NUMPY_CIMPORTS}
-)
-from templated_pyufunc cimport PyUFunc_T
-from func_defs cimport (
-    {FUNC_DEFS_CIMPORTS},
-)
-cdef extern from "boost/math/distributions/{short_boost_name}.hpp" namespace "boost::math" nogil:
-    cdef cppclass {boost_name} nogil:
-        pass
+def _ufunc_gen(scipy_dist: str, types: list, ctor_args: tuple,
+              filename: str, boost_dist: str, x_funcs: list, no_x_funcs: list):
 
-# Workaround for Cython's lack of non-type template parameter support
-cdef extern from * nogil:
-    {NINPUT_CTYPEDEFS}
+    # We need methods defined for each rv_continuous/_discrete internal method:
+    #     i.e.: _pdf, _cdf, etc.
+    # Some of these methods take constructor arguments and 1 extra argument,
+    #     e.g.: _pdf(x, *ctor_args), _ppf(q, *ctor_args)
+    # while some of the methods take only constructor arguments:
+    #     e.g.: _stats(*ctor_args)
+    num_ctor_args = len(ctor_args)
+    methods = [_MethodDef(
+        ufunc_name=f'_{scipy_dist}_{x_func}',
+        num_inputs=num_ctor_args+1,  # +1 for the x argument
+        boost_func_name=x_func if boost_dist != 'beta_distribution' else 'pdf_beta' if x_func == 'pdf' else x_func,
+    ) for x_func in x_funcs]
+    methods += [_MethodDef(
+        ufunc_name=f'_{scipy_dist}_{func}',
+        num_inputs=num_ctor_args,
+        boost_func_name=func,
+    ) for func in no_x_funcs]
 
-_DUMMY = ""
-import_array()
-import_ufunc()
-'''
+    # Identify potential ufunc issues:
+    no_input_methods = [m for m in methods if m.num_inputs == 0]
+    if no_input_methods:
+        raise ValueError("ufuncs must have >0 arguments! "
+                         f"Cannot construct these ufuncs: {no_input_methods}")
 
-_ufunc_front_matter = '''
-cdef PyUFuncGenericFunction loop_func{wrapper_idx}[{num_types}]
-cdef void* func{wrapper_idx}[1*{num_types}]
-cdef char types{wrapper_idx}[{num_arg_types}*{num_types}]
-'''
-
-_ufunc_type = 'types{wrapper_idx}[{idx}+{ufunc_idx}*{num_arg_types}] = {NPY_TYPE}'
-
-_ufunc_type_guts = '''
-loop_func{wrapper_idx}[{type_idx}] = <PyUFuncGenericFunction>{loop_fun}[{ctype}, NINPUTS{num_inputs}]
-func{wrapper_idx}[{type_idx}] = <void*>boost_{func_name}{num_ctor_args}[{boost_name}, {argtypes}]
-{TYPES}
-'''
-
-_ufunc_template = '''
-{ufunc_name} = PyUFunc_FromFuncAndData(
-    loop_func{wrapper_idx},
-    func{wrapper_idx},
-    types{wrapper_idx},
-    {num_types}, # number of supported input types
-    {num_inputs}, # number of input args
-    1, # number of output args
-    PyUFunc_None, # `identity` element, never mind this
-    "{ufunc_name}", # function name
-    "{ufunc_name}(x) -> computes ... of ... distribution", # docstring
-    0 # unused
-)
-'''
-
-def ufunc_gen(wrapper_prefix: str, types: list, num_ctor_args: int, filename: str, boost_dist: str):
-
-    wrappers = [
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_pdf',
-                   num_inputs=1+num_ctor_args,
-                   func_name='pdf' if boost_dist != 'beta_distribution' else f'pdf_beta'),
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_cdf',
-                   num_inputs=1+num_ctor_args,
-                   func_name='cdf'),
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_icdf',
-                   num_inputs=1+num_ctor_args,
-                   func_name='icdf'),
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_quantile',
-                   num_inputs=1+num_ctor_args,
-                   func_name='quantile'),
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_iquantile',
-                   num_inputs=1+num_ctor_args,
-                   func_name='iquantile'),
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_mean',
-                   num_inputs=num_ctor_args,
-                   func_name='mean'),
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_variance',
-                   num_inputs=num_ctor_args,
-                   func_name='variance'),
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_skewness',
-                   num_inputs=num_ctor_args,
-                   func_name='skewness'),
-        WrapperDef(ufunc_name=f'_{wrapper_prefix}_kurtosis_excess',
-                   num_inputs=num_ctor_args,
-                   func_name='kurtosis_excess'),
-    ]
+    boost_hdr_name = boost_dist.split('_distribution')[0]
+    unique_num_inputs = set({m.num_inputs for m in methods})
+    has_NPY_FLOAT16 = 'NPY_FLOAT16' in types
+    has_NPY_LONGDOUBLE = 'NPY_LONGDOUBLE' in types
+    line_joiner = ',\n    '
+    line_joiner_nc = '\n    '
+    Q = '"'
+    num_types = len(types)
+    loop_fun = 'PyUFunc_T'
 
     with open(filename, 'w') as fp:
-        short_boost_name = boost_dist.split('_distribution')[0]
-        unique_num_inputs = set({w.num_inputs for w in wrappers})
-        fp.write(_front_matter.format(
-            NUMPY_CIMPORTS=',\n    '.join(types),
-            FUNC_DEFS_CIMPORTS=',\n    '.join(f'boost_{w.func_name}{num_ctor_args}' for w in wrappers),
-            NINPUT_CTYPEDEFS='\n    '.join(f'ctypedef int NINPUTS{num_inputs} "{num_inputs}"' for num_inputs in unique_num_inputs),
-            short_boost_name=short_boost_name,
-            boost_name=boost_dist,
-        ))
-        if 'NPY_LONGDOUBLE' in types:
-            fp.write('ctypedef long double longdouble\n')
-        for ii, w in enumerate(wrappers):
-            if w.num_inputs == 0:
-                print(f'skipping {w.ufunc_name} ufunc because it has 0 inputs')
-                continue
-            fp.write(_ufunc_front_matter.format(
-                num_arg_types=w.num_inputs+1,
-                num_types=len(types),
-                wrapper_idx=ii,
-                num_inputs=w.num_inputs,
-            ))
-            for jj, t in enumerate(types):
+        fp.write('\n'.join([
+            f'# distutils: language = c++',
+            f'# cython: language_level=3',
+            f'',
+            f'from numpy cimport (',
+            f'    import_array,',
+            f'    import_ufunc,',
+            f'    PyUFunc_FromFuncAndData,',
+            f'    PyUFuncGenericFunction,',
+            f'    PyUFunc_None,',
+            f'    {line_joiner.join(types)}',
+            f')',
+            f'from templated_pyufunc cimport PyUFunc_T',
+            f'from func_defs cimport (',
+            f'    {line_joiner.join(f"boost_{m.boost_func_name}{num_ctor_args}" for m in methods)},',
+            f')',
+            f'cdef extern from "boost/math/distributions/{boost_hdr_name}.hpp" namespace "boost::math" nogil:',
+            f'    cdef cppclass {boost_dist} nogil:',
+            f'        pass',
+            f'',
+            f'# Workaround for Cython\'s lack of non-type template parameter support',
+            f'cdef extern from * nogil:',
+            f'    {line_joiner_nc.join(f"ctypedef int NINPUTS{n} {Q}{n}{Q}" for n in unique_num_inputs)}',
+            f'',
+            f'_DUMMY = ""',
+            f'import_array()',
+            f'import_ufunc()',
+        ]) + '\n')
+
+        if has_NPY_LONGDOUBLE:
+            fp.write('ctypedef long double longdouble\n\n')
+        if has_NPY_FLOAT16:
+            warn('Boost stats NPY_FLOAT16 ufunc generation not currently not supported!')
+
+        # Generate ufuncs for each method
+        for ii, m in enumerate(methods):
+            fp.write('\n'.join([
+                f'cdef PyUFuncGenericFunction loop_func{ii}[{num_types}]',
+                f'cdef void* func{ii}[1*{num_types}]',
+                f'cdef char types{ii}[{m.num_inputs+1}*{num_types}]',  # +1 for output arg
+            ]) + '\n')
+
+            for jj, T in enumerate(types):
                 ctype = {
                     'NPY_LONGDOUBLE': 'longdouble',
                     'NPY_DOUBLE': 'double',
                     'NPY_FLOAT': 'float',
-                    'NPY_FLOAT16': 'float16_t',
-                }[t]
-                ufunc_types = '\n'.join([_ufunc_type.format(
-                    wrapper_idx=ii,
-                    idx=tidx,
-                    ufunc_idx=jj,
-                    num_arg_types=w.num_inputs+1,
-                    NPY_TYPE=t,
-                ) for tidx in range(w.num_inputs+1)])
-                fp.write(_ufunc_type_guts.format(
-                    type_idx=jj,
-                    NPY_TYPE=t,
-                    ctype=ctype,
-                    wrapper_idx=ii,
-                    loop_fun='PyUFunc_T',
-                    num_inputs=w.num_inputs,
-                    func_name=w.func_name,
-                    argtypes=', '.join([ctype]*(num_ctor_args+1)),
-                    boost_name=boost_dist,
-                    num_ctor_args=num_ctor_args,
-                    TYPES=ufunc_types,
-                ))
-
-            fp.write(_ufunc_template.format(
-                ufunc_name=w.ufunc_name,
-                num_types=len(types),
-                wrapper_idx=ii,
-                num_inputs=w.num_inputs,
-            ))
+                    'NPY_FLOAT16': 'npy_half',
+                }[T]
+                boost_fun = f'boost_{m.boost_func_name}{num_ctor_args}'
+                boost_tmpl = f'{boost_dist}, {", ".join([ctype]*(1+num_ctor_args))}'
+                fp.write('\n'.join([
+                    f'loop_func{ii}[{jj}] = <PyUFuncGenericFunction>{loop_fun}[{ctype}, NINPUTS{m.num_inputs}]',
+                    f'func{ii}[{jj}] = <void*>{boost_fun}[{boost_tmpl}]',
+                ]) + '\n')
+                fp.write('\n'.join([
+                    f'types{ii}[{tidx}+{jj}*{m.num_inputs+1}] = {T}'
+                    for tidx in range(m.num_inputs+1)
+                ]) + '\n')
+            arg_list_str = ', '.join(ctor_args)
+            if m.boost_func_name in x_funcs:
+                arg_list_str = 'x, ' + arg_list_str
+            fp.write('\n'.join([
+                f'{m.ufunc_name} = PyUFunc_FromFuncAndData(',
+                f'    loop_func{ii},',
+                f'    func{ii},',
+                f'    types{ii},',
+                f'    {num_types},  # number of supported input types',
+                f'    {m.num_inputs},  # number of input args',
+                f'    1,  # number of output args',
+                f'    PyUFunc_None,  # `identity` element, never mind this',
+                f'    "{m.ufunc_name}",  # function name',
+                f'    "{m.ufunc_name}({arg_list_str}) -> computes {m.boost_func_name} of {scipy_dist} distribution",',
+                f'    0 # unused',
+                f')',
+                f'',
+            ]) + '\n')

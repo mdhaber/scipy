@@ -3,7 +3,7 @@
 import pathlib
 
 
-def gen_func_defs_pxd(outfile, max_num_inputs=4):
+def _gen_func_defs_pxd(outfile, x_funcs, no_x_funcs, max_num_inputs=4):
     '''
     Cython does not support template parameter packs, so to keep it
     from freaking out, we'll manually produce all the different template
@@ -14,8 +14,6 @@ def gen_func_defs_pxd(outfile, max_num_inputs=4):
     hdr = str((pathlib.Path(__file__).parent / "func_defs.hpp").as_posix())
     contents += f'cdef extern from "{hdr}" namespace "" nogil:\n'
 
-    x_funcs = ('pdf', 'cdf', 'icdf', 'quantile', 'iquantile')  # functions that take ctor params and parameter "x"
-    no_x_funcs = ('mean', 'variance', 'skewness', 'kurtosis_excess')  # functions that take only ctor params
     for ii in range(1, max_num_inputs+1):
         template_args = ', '.join(f'T{jj} arg{jj}' for jj in range(1, ii+1))
         template_types = ', '.join(f'T{jj}' for jj in range(1, ii+1))

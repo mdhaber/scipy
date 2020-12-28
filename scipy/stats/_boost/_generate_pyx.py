@@ -14,6 +14,12 @@ _klass_mapper = {
     'negative_binomial': _KlassMap('nbinom', ('n', 'p')),
 }
 
+# functions that take ctor params and parameter "x"
+_x_funcs = ('pdf', 'cdf', 'icdf', 'quantile', 'iquantile')
+
+# functions that take only ctor params
+_no_x_funcs = ('mean', 'variance', 'skewness', 'kurtosis_excess')
+
 
 if __name__ == '__main__':
     # create target directory
@@ -27,14 +33,24 @@ if __name__ == '__main__':
     copyfile(inc_dir / src, src_dir / src)
 
     # generate the PXD and PYX wrappers
-    from include.gen_func_defs_pxd import gen_func_defs_pxd
-    from include.code_gen import ufunc_gen
-    gen_func_defs_pxd(f'{src_dir}/func_defs.pxd')
+    from include.gen_func_defs_pxd import _gen_func_defs_pxd
+    from include.code_gen import _ufunc_gen
+    # from include.orig_code_gen import _ufunc_gen
+    _gen_func_defs_pxd(f'{src_dir}/func_defs.pxd', x_funcs=_x_funcs, no_x_funcs=_no_x_funcs)
     for b, s in _klass_mapper.items():
-        ufunc_gen(
-            wrapper_prefix=s.scipy_name,
+        _ufunc_gen(
+            scipy_dist=s.scipy_name,
             types=['NPY_FLOAT', 'NPY_DOUBLE', 'NPY_LONGDOUBLE'],
-            num_ctor_args=len(s.ctor_args),
+            ctor_args=s.ctor_args,
             filename=f'{src_dir}/{s.scipy_name}_ufunc.pyx',
             boost_dist=f'{b}_distribution',
+            x_funcs=_x_funcs,
+            no_x_funcs=_no_x_funcs,
         )
+        # _ufunc_gen(
+        #     wrapper_prefix=s.scipy_name,
+        #     types=['NPY_FLOAT', 'NPY_DOUBLE', 'NPY_LONGDOUBLE'],
+        #     num_ctor_args=len(s.ctor_args),
+        #     filename=f'{src_dir}/{s.scipy_name}_ufunc.pyx',
+        #     boost_dist=f'{b}_distribution',
+        # )
