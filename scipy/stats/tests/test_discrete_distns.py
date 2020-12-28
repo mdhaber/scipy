@@ -168,6 +168,13 @@ def test_issue_5503pt3():
     assert_allclose(binom.cdf(2, 10**12, 10**-12), 0.91969860292869777384)
 
 
+def test_issue_6682():
+    # Reference value from R:
+    # options(digits=16)
+    # print(pnbinom(250, 50, 32/63, lower.tail=FALSE))
+    assert_allclose(scipy.stats.nbinom.sf(250, 50, 32./63.), 1.460458510976452e-35)
+    
+    
 def test_skellam_gh11474():
     # test issue reported in gh-11474 caused by `cdfchn`
     mu = [1, 10, 100, 1000, 5000, 5050, 5100, 5250, 6000]
