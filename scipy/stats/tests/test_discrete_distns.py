@@ -115,8 +115,7 @@ def test_issue_7406():
     np.random.seed(0)
     assert_equal(binom.ppf(np.random.rand(10), 0, 0.5), 0)
 
-
-def test_binom_ppf_endpoints():
+    # Also check that endpoints (q=0, q=1) are correct
     assert_equal(binom.ppf(0, 0, 0.5), -1)
     assert_equal(binom.ppf(1, 0, 0.5), 0)
 
