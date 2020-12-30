@@ -27,7 +27,7 @@ RealType boost_pdf_beta(const RealType x, const RealType a, const RealType b) {
       return INFINITY;
     }
     else if ((x <= 0) && (a < 1)) {
-      return 0;
+      return INFINITY;
     }
     return boost::math::pdf(boost::math::beta_distribution<RealType, Policy>(a, b), x);
   }

@@ -2455,13 +2455,15 @@ class TestBeta(object):
         assert_allclose(res, 1 - alpha_2)
 
     def test_endpoints(self):
-        # Confirm that boost's beta distribution returns inf at x=1 when b<1
+        # Confirm that boost's beta distribution returns inf at x=1
+        # when b<1
         a, b = 1, 0.5
         assert_equal(stats.beta.pdf(1, a, b), np.inf)
 
-        # Confirm that boost's beta distiribution returns 0 at x=0
+        # Confirm that boost's beta distiribution returns inf at x=0
+        # when a<1
         a, b = 0.2, 3
-        assert_equal(stats.beta.pdf(0, a, b), 0)
+        assert_equal(stats.beta.pdf(0, a, b), np.inf)
 
 
 class TestBetaPrime(object):
