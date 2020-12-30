@@ -22,7 +22,8 @@ def _ufunc_gen(scipy_dist: str, types: list, ctor_args: tuple,
     methods = [_MethodDef(
         ufunc_name=f'_{scipy_dist}_{x_func}',
         num_inputs=num_ctor_args+1,  # +1 for the x argument
-        boost_func_name=x_func if boost_dist != 'beta_distribution' else 'pdf_beta' if x_func == 'pdf' else x_func,
+        boost_func_name=x_func if boost_dist != 'beta_distribution'
+        else 'pdf_beta' if x_func == 'pdf' else x_func,
     ) for x_func in x_funcs]
     methods += [_MethodDef(
         ufunc_name=f'_{scipy_dist}_{func}',
@@ -41,10 +42,13 @@ def _ufunc_gen(scipy_dist: str, types: list, ctor_args: tuple,
     has_NPY_FLOAT16 = 'NPY_FLOAT16' in types
     has_NPY_LONGDOUBLE = 'NPY_LONGDOUBLE' in types
     line_joiner = ',\n    '
-    line_joiner_nc = '\n    '
     Q = '"'
     num_types = len(types)
     loop_fun = 'PyUFunc_T'
+    func_defs_cimports = line_joiner.join(
+        f"boost_{m.boost_func_name}{num_ctor_args}" for m in methods)
+    nontype_params = '\n    '.join(
+        f'ctypedef int NINPUTS{n} "{n}"' for n in unique_num_inputs)
 
     with open(filename, 'w') as fp:
         fp.write('\n'.join([
@@ -61,15 +65,17 @@ def _ufunc_gen(scipy_dist: str, types: list, ctor_args: tuple,
             f')',
             f'from templated_pyufunc cimport PyUFunc_T',
             f'from func_defs cimport (',
-            f'    {line_joiner.join(f"boost_{m.boost_func_name}{num_ctor_args}" for m in methods)},',
+            f'    {func_defs_cimports},',
             f')',
-            f'cdef extern from "boost/math/distributions/{boost_hdr_name}.hpp" namespace "boost::math" nogil:',
+            f'cdef extern from "boost/math/distributions/{boost_hdr_name}.hpp"'
+            ' namespace "boost::math" nogil:',
             f'    cdef cppclass {boost_dist} nogil:',
             f'        pass',
             f'',
-            f'# Workaround for Cython\'s lack of non-type template parameter support',
+            f'# Workaround for Cython\'s lack of non-type template parameter',
+            f'# support',
             f'cdef extern from * nogil:',
-            f'    {line_joiner_nc.join(f"ctypedef int NINPUTS{n} {Q}{n}{Q}" for n in unique_num_inputs)}',
+            f'    {nontype_params}',
             f'',
             f'_DUMMY = ""',
             f'import_array()',
@@ -79,14 +85,16 @@ def _ufunc_gen(scipy_dist: str, types: list, ctor_args: tuple,
         if has_NPY_LONGDOUBLE:
             fp.write('ctypedef long double longdouble\n\n')
         if has_NPY_FLOAT16:
-            warn('Boost stats NPY_FLOAT16 ufunc generation not currently not supported!')
+            warn('Boost stats NPY_FLOAT16 ufunc generation not '
+                 'currently not supported!')
 
         # Generate ufuncs for each method
         for ii, m in enumerate(methods):
             fp.write('\n'.join([
                 f'cdef PyUFuncGenericFunction loop_func{ii}[{num_types}]',
                 f'cdef void* func{ii}[1*{num_types}]',
-                f'cdef char types{ii}[{m.num_inputs+1}*{num_types}]',  # +1 for output arg
+                #                                  +1 for output arg
+                f'cdef char types{ii}[{m.num_inputs+1}*{num_types}]',
             ]) + '\n')
 
             for jj, T in enumerate(types):
@@ -97,9 +105,12 @@ def _ufunc_gen(scipy_dist: str, types: list, ctor_args: tuple,
                     'NPY_FLOAT16': 'npy_half',
                 }[T]
                 boost_fun = f'boost_{m.boost_func_name}{num_ctor_args}'
-                boost_tmpl = f'{boost_dist}, {", ".join([ctype]*(1+num_ctor_args))}'
+                boost_tmpl = (f'{boost_dist}, '
+                              f'{", ".join([ctype]*(1+num_ctor_args))}')
                 fp.write('\n'.join([
-                    f'loop_func{ii}[{jj}] = <PyUFuncGenericFunction>{loop_fun}[{ctype}, NINPUTS{m.num_inputs}]',
+                    (f'loop_func{ii}[{jj}] = '
+                     f'<PyUFuncGenericFunction>{loop_fun}[{ctype}, '
+                     f'NINPUTS{m.num_inputs}]'),
                     f'func{ii}[{jj}] = <void*>{boost_fun}[{boost_tmpl}]',
                 ]) + '\n')
                 fp.write('\n'.join([
@@ -119,7 +130,8 @@ def _ufunc_gen(scipy_dist: str, types: list, ctor_args: tuple,
                 f'    1,  # number of output args',
                 f'    PyUFunc_None,  # `identity` element, never mind this',
                 f'    "{m.ufunc_name}",  # function name',
-                f'    "{m.ufunc_name}({arg_list_str}) -> computes {m.boost_func_name} of {scipy_dist} distribution",',
+                f'    ("{m.ufunc_name}({arg_list_str}) -> computes "',
+                f'     "{m.boost_func_name} of {scipy_dist} distribution"),',
                 f'    0 # unused',
                 f')',
                 f'',

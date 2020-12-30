@@ -6,6 +6,7 @@ class _KlassMap(NamedTuple):
     scipy_name: str
     ctor_args: tuple
 
+
 # map boost stats classes to scipy class names and
 # constructor arguments; b -> (s, ('ctor', 'args', ...))
 _klass_mapper = {
@@ -35,7 +36,10 @@ if __name__ == '__main__':
     # generate the PXD and PYX wrappers
     from include.gen_func_defs_pxd import _gen_func_defs_pxd
     from include.code_gen import _ufunc_gen
-    _gen_func_defs_pxd(f'{src_dir}/func_defs.pxd', x_funcs=_x_funcs, no_x_funcs=_no_x_funcs)
+    _gen_func_defs_pxd(
+        f'{src_dir}/func_defs.pxd',
+        x_funcs=_x_funcs,
+        no_x_funcs=_no_x_funcs)
     for b, s in _klass_mapper.items():
         _ufunc_gen(
             scipy_dist=s.scipy_name,
