@@ -2416,7 +2416,8 @@ class TestBeta(object):
         assert_raises(ValueError, stats.beta.fit, x, fa=0.5, fix_a=0.5)
 
     def test_issue_12635(self):
-        # Confirm that Boost's beta distribution resolves gh-12635. Check against R:
+        # Confirm that Boost's beta distribution resolves gh-12635.
+        # Check against R:
         # options(digits=16)
         # p = 0.9999999999997369
         # a = 75.0
@@ -2426,7 +2427,8 @@ class TestBeta(object):
         assert_allclose(stats.beta.ppf(p, a, b), 2.343620802982393e-06)
 
     def test_issue_12794(self):
-        # Confirm that Boost's beta distribution resolves gh-12794. Check against R.
+        # Confirm that Boost's beta distribution resolves gh-12794.
+        # Check against R.
         # options(digits=16)
         # p = 1e-11
         # count_list = c(10,100,1000)
@@ -2442,7 +2444,8 @@ class TestBeta(object):
         assert_allclose(res, p)
 
     def test_issue_12796(self):
-        #Confirm that Boost's beta distribution succeeds in the case of gh-12796
+        # Confirm that Boost's beta distribution succeeds in the case
+        # of gh-12796
         alpha_2 = 5e-6
         count_ = np.arange(1, 20)
         nobs = 100000
@@ -2451,10 +2454,14 @@ class TestBeta(object):
         res = stats.beta.cdf(inv, a, b)
         assert_allclose(res, 1 - alpha_2)
 
-    def test_endpoint_returns_inf(self):
+    def test_endpoints(self):
         # Confirm that boost's beta distribution returns inf at x=1 when b<1
         a, b = 1, 0.5
         assert_equal(stats.beta.pdf(1, a, b), np.inf)
+
+        # Confirm that boost's beta distiribution returns 0 at x=0
+        a, b = 0.2, 3
+        assert_equal(stats.beta.pdf(0, a, b), 0)
 
 
 class TestBetaPrime(object):

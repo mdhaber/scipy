@@ -15,7 +15,7 @@ _klass_mapper = {
 }
 
 # functions that take ctor params and parameter "x"
-_x_funcs = ('pdf', 'cdf', 'icdf', 'quantile', 'iquantile')
+_x_funcs = ('pdf', 'cdf', 'sf', 'ppf', 'isf')
 
 # functions that take only ctor params
 _no_x_funcs = ('mean', 'variance', 'skewness', 'kurtosis_excess')

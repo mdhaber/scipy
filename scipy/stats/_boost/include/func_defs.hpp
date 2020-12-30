@@ -18,11 +18,16 @@ RealType boost_pdf(const RealType x, const Args ... args) {
 }
 
 // patch for boost::math::beta_distribution throwing exception for x = 1, beta < 1
+// as well as x = 0, alpha < 1
 template<template <typename, typename> class Dist, class RealType, class ... Args>
 RealType boost_pdf_beta(const RealType x, const RealType a, const RealType b) {
   if (std::isfinite(x)) {
-    if (x >= 1) {
+    if ((x >= 1) && (b < 1)) {
+      // x>1 should really be 0, but rv_continuous will do that for us
       return INFINITY;
+    }
+    else if ((x <= 0) && (a < 1)) {
+      return 0;
     }
     return boost::math::pdf(boost::math::beta_distribution<RealType, Policy>(a, b), x);
   }
@@ -43,17 +48,17 @@ RealType boost_cdf(const RealType x, const Args ... args) {
 }
 
 template<template <typename, typename> class Dist, class RealType, class ... Args>
-RealType boost_icdf(const RealType x, const Args ... args) {
+RealType boost_sf(const RealType x, const Args ... args) {
   return boost::math::cdf(boost::math::complement(Dist<RealType, Policy>(args...), x));
 }
 
 template<template <typename, typename> class Dist, class RealType, class ... Args>
-RealType boost_quantile(const RealType q, const Args ... args) {
+RealType boost_ppf(const RealType q, const Args ... args) {
   return boost::math::quantile(Dist<RealType, Policy>(args...), q);
 }
 
 template<template <typename, typename> class Dist, class RealType, class ... Args >
-RealType boost_iquantile(const RealType q, const Args ... args) {
+RealType boost_isf(const RealType q, const Args ... args) {
   return boost::math::quantile(boost::math::complement(Dist<RealType, Policy>(args...), q));
 }
 

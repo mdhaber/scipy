@@ -15,7 +15,8 @@ def configuration(parent_package='', top_path=None):
     config = Configuration('_boost', parent_package, top_path)
 
     DEFINES = [
-        ('BOOST_MATH_DOMAIN_ERROR_POLICY', 'ignore_error'),  # return nan instead of throwing
+        # return nan instead of throwing
+        ('BOOST_MATH_DOMAIN_ERROR_POLICY', 'ignore_error'),
         ('BOOST_MATH_PROMOTE_DOUBLE_POLICY', 'false'),
     ]
     INCLUDES = [

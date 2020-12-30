@@ -65,13 +65,13 @@ class binom_gen(rv_discrete):
         return _boost._binom_cdf(x, n, p)
 
     def _sf(self, x, n, p):
-        return _boost._binom_icdf(x, n, p)
+        return _boost._binom_sf(x, n, p)
 
     def _isf(self, x, n, p):
-        return _boost._binom_iquantile(x, n, p)
+        return _boost._binom_isf(x, n, p)
     
     def _ppf(self, q, n, p):
-        return _boost._binom_quantile(q, n, p)
+        return _boost._binom_ppf(q, n, p)
 
     def _stats(self, n, p, moments='mv'):
         mu = _boost._binom_mean(n, p)
@@ -287,13 +287,13 @@ class nbinom_gen(rv_discrete):
         return _boost._nbinom_cdf(x, n, p)
     
     def _sf(self, x, n, p):
-        return _boost._nbinom_icdf(x, n, p)
+        return _boost._nbinom_sf(x, n, p)
 
     def _isf(self, x, n, p):
-        return _boost._nbinom_iquantile(x, n, p)
+        return _boost._nbinom_isf(x, n, p)
     
     def _ppf(self, q, n, p):
-        return _boost._nbinom_quantile(q, n, p)
+        return _boost._nbinom_ppf(q, n, p)
 
     def _stats(self, n, p):
         return(
