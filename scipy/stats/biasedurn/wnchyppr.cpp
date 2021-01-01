@@ -1,7 +1,7 @@
 /*************************** wnchyppr.cpp **********************************
 * Author:        Agner Fog
 * Date created:  2002-10-20
-* Last modified: 2013-12-20
+* Last modified: 2013-11-06
 * Project:       stocc.zip
 * Source URL:    www.agner.org/random
 *
@@ -20,13 +20,13 @@
 * The file ran-instructions.pdf contains further documentation and 
 * instructions.
 *
-* Copyright 2002-2008 by Agner Fog. 
+* Copyright 2002-2013 by Agner Fog. 
 * GNU General Public License http://www.gnu.org/licenses/gpl.html
 *****************************************************************************/
 
 #include <string.h>                    // memcpy function
 #include "stocc.h"                     // class definition
-#include "erfres.cpp"                  // table of error function residues (Don't precompile this as a header file)
+#include "erfres.h"                    // table of error function residues (Don't precompile this header)
 
 /***********************************************************************
 constants
@@ -44,9 +44,15 @@ Log and Exp functions with special care for small x
 // (2) Use library functions log1p and expm1 if available
 // (3) Use Taylor expansion if none of the above are available
 
-#if defined(__GNUC__) || defined (__INTEL_COMPILER) || defined(HAVE_EXPM1)
+#ifdef RANDOMA_H  
+// (1)
+// Assembly library randomaXX.lib is used.
+// Nothing to include here.
+
+#elif defined(__GNUC__) || defined (__INTEL_COMPILER) || defined(HAVE_EXPM1)
+// (2) 
 // Functions log1p(x) = log(1+x) and expm1(x) = exp(x)-1 are available
-// in the math libraries of Gnu and Intel compilers
+// in the math libraries of Gnu and Intel compilers 
 // and in R.DLL (www.r-project.org).
 
 double pow2_1(double q, double * y0 = 0) {
@@ -189,7 +195,7 @@ Other shared functions
 
 double LnFacr(double x) {
    // log factorial of non-integer x
-   int32_t ix = (int32_t)(x);
+   int32 ix = (int32)(x);
    if (x == ix) return LnFac(ix);      // x is integer
    double r, r2, D = 1., f;
    static const double             
@@ -279,33 +285,33 @@ double Erf (double x) {
 }
 
 
-int32_t FloorLog2(float x) {
+int32 FloorLog2(float x) {
    // This function calculates floor(log2(x)) for positive x.
    // The return value is <= -127 for x <= 0.
 
    union UfloatInt {  // Union for extracting bits from a float
-      float   f;
-      int32_t i;
+      float f;
+      int32 i;
       UfloatInt(float ff) {f = ff;}  // constructor
    };
 
 #if defined(_M_IX86) || defined(__INTEL__) || defined(_M_X64) || defined(__IA64__) || defined(__POWERPC__)
    // Running on a platform known to use IEEE-754 floating point format
-   //int32_t n = *(int32_t*)&x;
-   int32_t n = UfloatInt(x).i;
+   //int32 n = *(int32*)&x;
+   int32 n = UfloatInt(x).i;
    return (n >> 23) - 0x7F;
 #else
    // Check if floating point format is IEEE-754
    static const UfloatInt check(1.0f);
    if (check.i == 0x3F800000) {
       // We have the standard IEEE floating point format
-      int32_t n = UfloatInt(x).i;
+      int32 n = UfloatInt(x).i;
       return (n >> 23) - 0x7F;
    }
    else {
       // Unknown floating point format
       if (x <= 0.f) return -127;
-      return (int32_t)floor(log(x)*(1./LN2));
+      return (int32)floor(log(x)*(1./LN2));
    }
 #endif
 }
@@ -318,8 +324,7 @@ int NumSD (double accuracy) {
    // Returns an integer approximation to 2*NormalDistrFractile(accuracy/2)
    static const double fract[] = {
       2.699796e-03, 4.652582e-04, 6.334248e-05, 6.795346e-06, 5.733031e-07,
-      3.797912e-08, 1.973175e-09, 8.032001e-11, 2.559625e-12, 6.381783e-14
-   };
+      3.797912e-08, 1.973175e-09, 8.032001e-11, 2.559625e-12, 6.381783e-14};
    int i;
    for (i = 0; i < (int)(sizeof(fract)/sizeof(*fract)); i++) {
       if (accuracy >= fract[i]) break;
@@ -332,14 +337,13 @@ int NumSD (double accuracy) {
 Methods for class CWalleniusNCHypergeometric
 ***********************************************************************/
 
-CWalleniusNCHypergeometric::CWalleniusNCHypergeometric(int32_t n_, int32_t m_, int32_t N_, double odds_, double accuracy_) {
+CWalleniusNCHypergeometric::CWalleniusNCHypergeometric(int32 n_, int32 m_, int32 N_, double odds_, double accuracy_) {
    // constructor
    accuracy = accuracy_;
-   SetParameters(n_, m_, N_, odds_);
-}
+   SetParameters(n_, m_, N_, odds_);}
 
 
-void CWalleniusNCHypergeometric::SetParameters(int32_t n_, int32_t m_, int32_t N_, double odds) {
+void CWalleniusNCHypergeometric::SetParameters(int32 n_, int32 m_, int32 N_, double odds) {
    // change parameters
    if (n_ < 0 || n_ > N_ || m_ < 0 || m_ > N_ || odds < 0) FatalError("Parameter out of range in CWalleniusNCHypergeometric");
    n = n_; m = m_; N = N_; omega = odds;          // set parameters
@@ -362,7 +366,7 @@ double CWalleniusNCHypergeometric::mean(void) {
    double omegar;                       // 1/omega
 
    if (omega == 1.) { // simple hypergeometric
-      return (double)(m)*n/N;
+      return double(m)*n/N;
    }
 
    if (omega == 0.) {
@@ -446,22 +450,21 @@ double CWalleniusNCHypergeometric::moments(double * mean_, double * var_) {
    // calculate exact mean and variance
    // return value = sum of f(x), expected = 1.
    double y, sy=0, sxy=0, sxxy=0, me1;
-   int32_t x, xm, x1;
-   const double accuracy = 1E-10f;  // accuracy of calculation
-   xm = (int32_t)mean();  // approximation to mean
+   int32 x, xm, x1;
+   const double accur = 0.1 * accuracy;     // accuracy of calculation
+   xm = (int32)mean();  // approximation to mean
    for (x = xm; x <= xmax; x++) {
       y = probability(x);
       x1 = x - xm;  // subtract approximate mean to avoid loss of precision in sums
       sy += y; sxy += x1 * y; sxxy += x1 * x1 * y;
-      if (y < accuracy && x != xm) break;
+      if (y < accur && x != xm) break;
    }
    for (x = xm-1; x >= xmin; x--) {
       y = probability(x);
       x1 = x - xm;  // subtract approximate mean to avoid loss of precision in sums
       sy += y; sxy += x1 * y; sxxy += x1 * x1 * y;
-      if (y < accuracy) break;
+      if (y < accur) break;
    }
-
    me1 = sxy / sy;
    *mean_ = me1 + xm;
    y = sxxy / sy - me1 * me1;
@@ -471,24 +474,24 @@ double CWalleniusNCHypergeometric::moments(double * mean_, double * var_) {
 }
 
 
-int32_t CWalleniusNCHypergeometric::mode(void) {
+int32 CWalleniusNCHypergeometric::mode(void) {
    // find mode
-   int32_t Mode;                       // mode
+   int32 Mode;                           // mode
 
    if (omega == 1.) { 
       // simple hypergeometric
-      int32_t L  = m + n - N;
-      int32_t m1 = m + 1, n1 = n + 1;
-      Mode = int32_t((double)m1*n1*omega/((m1+n1)*omega-L));
+      int32 L  = m + n - N;
+      int32 m1 = m + 1, n1 = n + 1;
+      Mode = int32((double)m1*n1*omega/((m1+n1)*omega-L));
    }
    else {
       // find mode
-      double f, f2 = 0.; // f2 = -1.; 
-      int32_t xi, x2;
-      int32_t xmin = m + n - N;  if (xmin < 0) xmin = 0;  // calculate xmin
-      int32_t xmax = n;  if (xmax > m) xmax = m;          // calculate xmax
+      double f, f2 = -1.; // f2 = 0.; 
+      int32 xi, x2;
+      int32 xmin = m + n - N;  if (xmin < 0) xmin = 0;  // calculate xmin
+      int32 xmax = n;  if (xmax > m) xmax = m;          // calculate xmax
 
-      Mode = (int32_t)mean();                             // floor(mean)
+      Mode = (int32)mean();                             // floor(mean)
       if (omega < 1.) {
         if (Mode < xmax) Mode++;                        // ceil(mean)
         x2 = xmin;                                      // lower limit
@@ -508,7 +511,7 @@ int32_t CWalleniusNCHypergeometric::mode(void) {
         for (xi = Mode; xi <= x2; xi++) {
           f = probability(xi);
           if (f <= f2) break;
-          Mode = xi; f2 = f;
+          Mode = xi;  f2 = f;
         }
       }
    }
@@ -519,7 +522,7 @@ int32_t CWalleniusNCHypergeometric::mode(void) {
 double CWalleniusNCHypergeometric::lnbico() {
    // natural log of binomial coefficients.
    // returns lambda = log(m!*x!/(m-x)!*m2!*x2!/(m2-x2)!)
-   int32_t x2 = n-x, m2 = N-m;
+   int32 x2 = n-x, m2 = N-m;
    if (xLastBico < 0) { // m, n, N have changed
       mFac = LnFac(m) + LnFac(m2);
    }
@@ -550,7 +553,7 @@ void CWalleniusNCHypergeometric::findpars() {
    // find r to center peak of integrand at 0.5
    double dd, d1, z, zd, rr, lastr, rrc, rt, r2, r21, a, b, dummy;
    double oo[2];
-   double xx[2] = {x, n-x};
+   double xx[2] = {double(x), double(n-x)};
    int i, j = 0;
    if (omega > 1.) { // make both omegas <= 1 to avoid overflow
       oo[0] = 1.;  oo[1] = 1./omega;
@@ -617,7 +620,7 @@ void CWalleniusNCHypergeometric::findpars() {
 }
 
 
-int CWalleniusNCHypergeometric::BernouilliH(int32_t x_, double h, double rh, StochasticLib1 *sto) {
+int CWalleniusNCHypergeometric::BernouilliH(int32 x_, double h, double rh, StochasticLib1 *sto) {
    // This function generates a Bernouilli variate with probability proportional
    // to the univariate Wallenius' noncentral hypergeometric distribution.
    // The return value will be 1 with probability f(x_)/h and 0 with probability
@@ -636,7 +639,7 @@ int CWalleniusNCHypergeometric::BernouilliH(int32_t x_, double h, double rh, Sto
    double qi1;                     // 1-qi
    double omegai[2] = {omega,1.};  // weights for each color
    double romegi;                  // r*omega[i]
-   double xi[2] = {x_, n-x_};      // number of each color sampled
+   double xi[2] = {double(x_), double(n-x_)}; // number of each color sampled
    double k;                       // adjusted width for majorizing function Ypsilon(t)
    double erfk;                    // erf correction
    double rdm1;                    // rd - 1
@@ -655,7 +658,7 @@ int CWalleniusNCHypergeometric::BernouilliH(int32_t x_, double h, double rh, Sto
    lnbico();                       // calculate bico = log(Lambda)
    findpars();                     // calculate r, d, rd, w, E
    if (E > 0.) {
-      k = log(E);                  // correction for majorizing function
+      k = log(E);                   // correction for majorizing function
       k = 1. + 0.0271 * (k * sqrt(k));
    }
    else k = 1.;
@@ -720,8 +723,8 @@ double CWalleniusNCHypergeometric::recursive() {
    double y, y1;                       // save old p[x] before it is overwritten
    double d1, d2, dcom;                // divisors in probability formula
    double accuracya;                   // absolute accuracy
-   int32_t xi, nu;                     // xi, nu = recursion values of x, n
-   int32_t x1, x2;                     // xi_min, xi_max
+   int32 xi, nu;                       // xi, nu = recursion values of x, n
+   int32 x1, x2;                       // xi_min, xi_max
 
    accuracya = 0.005f * accuracy;      // absolute accuracy
    p1 = p2 = p + 1;                    // make space for p1[-1]
@@ -729,11 +732,11 @@ double CWalleniusNCHypergeometric::recursive() {
    x1 = x2 = 0;
    for (nu=1; nu<=n; nu++) {
       if (n - nu < x - x1 || p1[x1] < accuracya) {
-         x1++;                        // increase lower limit when breakpoint passed or probability negligible
-         p2--;                        // compensate buffer offset in order to reduce storage space
+         x1++;               // increase lower limit when breakpoint passed or probability negligible
+         p2--;               // compensate buffer offset in order to reduce storage space
       }
       if (x2 < x && p1[x2] >= accuracya) {
-         x2++;  y1 = 0.;               // increase upper limit until x has been reached
+         x2++;  y1 = 0.;     // increase upper limit until x has been reached
       }
       else {
          y1 = p1[x2];
@@ -743,13 +746,13 @@ double CWalleniusNCHypergeometric::recursive() {
 
       mxo = (m-x2)*omega;
       Nmnx = N-m-nu+x2+1;
-      for (xi = x2; xi >= x1; xi--) {  // backwards loop
+      for (xi = x2; xi >= x1; xi--) {    // backwards loop
          d2 = mxo + Nmnx;
          mxo += omega; Nmnx--;
          d1 = mxo + Nmnx;
-         dcom = 1. / (d1 * d2);        // save a division by making common divisor
+         dcom = 1. / (d1 * d2);           // save a division by making common divisor
          y  = p1[xi-1]*mxo*d2*dcom + y1*(Nmnx+1)*d1*dcom;
-         y1 = p1[xi-1];                // (warning: pointer alias, can't swap instruction order)
+         y1 = p1[xi-1];                   // (warning: pointer alias, can't swap instruction order)
          p2[xi] = y;
       }
       p1 = p2;
@@ -763,7 +766,7 @@ double CWalleniusNCHypergeometric::recursive() {
 double CWalleniusNCHypergeometric::binoexpand() {
    // calculate by binomial expansion of integrand
    // only for x < 2 or n-x < 2 (not implemented for higher x because of loss of precision)
-   int32_t x1, m1, m2;
+   int32 x1, m1, m2;
    double o;
    if (x > n/2) { // invert
       x1 = n-x; m1 = N-m; m2 = m; o = 1./omega;
@@ -801,7 +804,7 @@ double CWalleniusNCHypergeometric::laplace() {
    int degree;                   // max expansion degree
    double accur;                 // stop expansion when terms below this threshold
    double omegai[COLORS] = {omega, 1.}; // weights for each color
-   double xi[COLORS] = {x, n-x}; // number of each color sampled
+   double xi[COLORS] = {double(x), double(n-x)}; // number of each color sampled
    double f0;                    // factor outside integral
    double rho[COLORS];           // r*omegai
    double qi;                    // 2^(-rho)
@@ -837,10 +840,10 @@ double CWalleniusNCHypergeometric::laplace() {
    for (i = 0; i < COLORS; i++) {
       rho[i] = r * omegai[i];
       if (rho[i] > 40.) {
-         qi=0.;  qi1 = 1.;}                 // avoid underflow
+         qi=0.;  qi1 = 1.;}               // avoid underflow
       else {
-         qi1 = pow2_1(-rho[i], &qi);}       // qi=2^(-rho), qi1=1.-2^(-rho)
-      qq[i] = qi / qi1;                     // 2^(-r*omegai)/(1.-2^(-r*omegai))
+         qi1 = pow2_1(-rho[i], &qi);}     // qi=2^(-rho), qi1=1.-2^(-rho)
+      qq[i] = qi / qi1;                  // 2^(-r*omegai)/(1.-2^(-r*omegai))
       // peak = zero'th derivative
       phideri[0] += xi[i] * log1mx(qi, qi1);
       // eta coefficients
@@ -866,15 +869,15 @@ double CWalleniusNCHypergeometric::laplace() {
       if (PrecisionIndex == 0) {
          FatalError("Laplace method failed. Peak width too high in function CWalleniusNCHypergeometric::laplace");
          break;}
-      PrecisionIndex--;                     // reduce precision to keep integration interval narrow
+      PrecisionIndex--;                  // reduce precision to keep integration interval narrow
    }
-   erfresp = ErfRes[PrecisionIndex];        // choose desired table
+   erfresp = ErfRes[PrecisionIndex];    // choose desired table
 
-   degree = MAXDEG;                         // max expansion degree
+   degree = MAXDEG;                     // max expansion degree
    if (degree >= ERFRES_L*2) degree = ERFRES_L*2-2;
 
    // set up for starting loop at k=3
-   v2m2 = 0.25 * vr * vr;                   // (2*v)^(-2)
+   v2m2 = 0.25 * vr * vr;               // (2*v)^(-2)
    PSIderi[0] = 1.;
    pow2k = 8.;
    sum = 0.5 * vr * erfresp[0];
@@ -896,7 +899,7 @@ double CWalleniusNCHypergeometric::laplace() {
          qqpow = 1.;
          // forward loop for all powers
          for (j=1; j<=k; j++) {
-            qqpow *= qq[i];                 // qq^j
+            qqpow *= qq[i];                // qq^j
             // contribution to derivative
             phideri[k] += xi[i] * eta[i][j] * qqpow;
          }
@@ -911,13 +914,13 @@ double CWalleniusNCHypergeometric::laplace() {
       // terms # 0, 1, 2, k-2, and k-1 are zero and not included in loop.
       // The j'th derivatives of psi are identical to the derivatives of phi for j>2, and
       // zero for j=1,2. Hence we are using phideri[j] for j>2 here.
-      PSIderi[k] = phideri[k];              // this is term # k
-      bino = 0.5 * (k-1) * (k-2);           // binomial coefficient for term # 3
-      for (j = 3; j < k-2; j++) {           // loop for remaining nonzero terms (if k>5)
+      PSIderi[k] = phideri[k];           // this is term # k
+      bino = 0.5 * (k-1) * (k-2);        // binomial coefficient for term # 3
+      for (j = 3; j < k-2; j++) {        // loop for remaining nonzero terms (if k>5)
          PSIderi[k] += PSIderi[k-j] * phideri[j] * bino;
          bino *= double(k-j)/double(j);
       }
-      if ((k & 1) == 0) {                   // only for even k
+      if ((k & 1) == 0) {                // only for even k
          ll = k/2;
          s = PSIderi[k] * v2mk1 * erfresp[ll];
          sum += s;
@@ -939,29 +942,29 @@ double CWalleniusNCHypergeometric::integrate() {
    // Wallenius non-central hypergeometric distribution function
    // calculation by numerical integration with variable-length steps
    // NOTE: findpars() must be called before this function.
-   double s;                           // result of integration step
-   double sum;                         // integral
-   double ta, tb;                      // subinterval for integration step
+   double s;                            // result of integration step
+   double sum;                          // integral
+   double ta, tb;                       // subinterval for integration step
 
-   lnbico();                           // compute log of binomial coefficients
+   lnbico();                            // compute log of binomial coefficients
 
    // choose method:
    if (w < 0.02 || (w < 0.1 && (x==m || n-x==N-m) && accuracy > 1E-6)) {
       // normal method. Step length determined by peak width w
       double delta, s1;
       s1 = accuracy < 1E-9 ? 0.5 : 1.;
-      delta = s1 * w;                       // integration steplength
+      delta = s1 * w;                    // integration steplength
       ta = 0.5 + 0.5 * delta;
-      sum = integrate_step(1.-ta, ta);      // first integration step around center peak
+      sum = integrate_step(1.-ta, ta);   // first integration step around center peak
       do {
          tb = ta + delta;
          if (tb > 1.) tb = 1.;
-         s  = integrate_step(ta, tb);       // integration step to the right of peak
-         s += integrate_step(1.-tb,1.-ta);  // integration step to the left of peak
+         s  = integrate_step(ta, tb);     // integration step to the right of peak
+         s += integrate_step(1.-tb,1.-ta);// integration step to the left of peak
          sum += s;
-         if (s < accuracy * sum) break;     // stop before interval finished if accuracy reached
+         if (s < accuracy * sum) break;   // stop before interval finished if accuracy reached
          ta = tb;
-         if (tb > 0.5 + w) delta *= 2.;     // increase step length far from peak
+         if (tb > 0.5 + w) delta *= 2.;   // increase step length far from peak
       }
       while (tb < 1.);
    }
@@ -972,9 +975,9 @@ double CWalleniusNCHypergeometric::integrate() {
       // do left and right half of integration interval separately:
       for (t1=0., t2=0.5; t1 < 1.; t1+=0.5, t2+=0.5) { 
          // integrate from 0 to 0.5 or from 0.5 to 1
-         tinf = search_inflect(t1, t2);     // find inflection point
+         tinf = search_inflect(t1, t2);   // find inflection point
          delta = tinf - t1; if (delta > t2 - tinf) delta = t2 - tinf; // distance to nearest endpoint
-         delta *= 1./7.;                    // 1/7 will give 3 steps to nearest endpoint
+         delta *= 1./7.;                  // 1/7 will give 3 steps to nearest endpoint
          if (delta < 1E-4) delta = 1E-4;
          delta1 = delta;
          // integrate from tinf forwards to t2
@@ -1081,7 +1084,7 @@ double CWalleniusNCHypergeometric::search_inflect(double t_from, double t_to) {
    int iter;                            // count iterations
 
    rdm1 = rd - 1.;
-   if (t_from == 0 && rdm1 <= 1.) return 0.;//no inflection point
+   if (t_from == 0 && rdm1 <= 1.) return 0.; //no inflection point
    rho[0] = r*omega;  rho[1] = r;
    xx[0] = x;  xx[1] = n - x;
    t = 0.5 * (t_from + t_to);
@@ -1100,7 +1103,7 @@ double CWalleniusNCHypergeometric::search_inflect(double t_from, double t_to) {
       tr = 1. / t;
       log2t = log(t)*(1./LN2);
       phi[1] = phi[2] = phi[3] = 0.;
-      for (i=0; i<COLORS; i++) {            // calculate first 3 derivatives of phi(t)
+      for (i=0; i<COLORS; i++) {         // calculate first 3 derivatives of phi(t)
          q1 = pow2_1(rho[i]*log2t,&q);
          q /= q1;
          phi[1] -= xx[i] * zeta[i][1][1] * q;
@@ -1158,7 +1161,7 @@ double CWalleniusNCHypergeometric::search_inflect(double t_from, double t_to) {
 }
 
 
-double CWalleniusNCHypergeometric::probability(int32_t x_) {
+double CWalleniusNCHypergeometric::probability(int32 x_) {
    // calculate probability function. choosing best method
    x = x_;
    if (x < xmin || x > xmax) return 0.;
@@ -1167,14 +1170,13 @@ double CWalleniusNCHypergeometric::probability(int32_t x_) {
    if (omega == 1.) { // hypergeometric
       return exp(lnbico() + LnFac(n) + LnFac(N-n) - LnFac(N));
    }
-
    if (omega == 0.) {
       if (n > N-m) FatalError("Not enough items with nonzero weight in CWalleniusNCHypergeometric::probability");
       return x == 0;
    }
 
-   int32_t x2 = n - x;
-   int32_t x0 = x < x2 ? x : x2;
+   int32 x2 = n - x;
+   int32 x0 = x < x2 ? x : x2;
    int em = (x == m || x2 == N-m);
 
    if (x0 == 0 && n > 500) {
@@ -1199,7 +1201,7 @@ double CWalleniusNCHypergeometric::probability(int32_t x_) {
 }
 
 
-int32_t CWalleniusNCHypergeometric::MakeTable(double * table, int32_t MaxLength, int32_t * xfirst, int32_t * xlast, double cutoff) {
+int32 CWalleniusNCHypergeometric::MakeTable(double * table, int32 MaxLength, int32 * xfirst, int32 * xlast, double cutoff) {
    // Makes a table of Wallenius noncentral hypergeometric probabilities 
    // table must point to an array of length MaxLength. 
    // The function returns 1 if table is long enough. Otherwise it fills
@@ -1224,11 +1226,11 @@ int32_t CWalleniusNCHypergeometric::MakeTable(double * table, int32_t MaxLength,
    double y, y1;                       // probability. Save old p[x] before it is overwritten
    double d1, d2, dcom;                // divisors in probability formula
    double area;                        // estimate of area needed for recursion method
-   int32_t xi, nu;                     // xi, nu = recursion values of x, n
-   int32_t x1, x2;                     // lowest and highest x or xi
-   int32_t i1, i2;                     // index into table
-   int32_t UseTable;                   // 1 if table method used
-   int32_t LengthNeeded;               // Necessary table length
+   int32 xi, nu;                       // xi, nu = recursion values of x, n
+   int32 x1, x2;                       // lowest and highest x or xi
+   int32 i1, i2;                       // index into table
+   int32 UseTable;                     // 1 if table method used
+   int32 LengthNeeded;                 // Necessary table length
 
    // special cases
    if (n == 0 || m == 0) {x1 = 0; goto DETERMINISTIC;}
@@ -1263,7 +1265,7 @@ int32_t CWalleniusNCHypergeometric::MakeTable(double * table, int32_t MaxLength,
          // Calculate necessary table length from standard deviation
          double sd = sqrt(variance()); // calculate approximate standard deviation
          // estimate number of standard deviations to include from normal distribution
-         i2 = (int32_t)(NumSD(accuracy) * sd + 0.5);
+         i2 = (int32)(NumSD(accuracy) * sd + 0.5);
          if (i1 > i2) i1 = i2;
       }
       return i1;
@@ -1317,7 +1319,7 @@ int32_t CWalleniusNCHypergeometric::MakeTable(double * table, int32_t MaxLength,
       ONE_BY_ONE:
 
       // Start to fill table from the end and down. start with x = floor(mean)
-      x2 = (int32_t)mean();
+      x2 = (int32)mean();
       x1 = x2 + 1;  i1 = MaxLength;
       while (x1 > xmin) {              // loop for left tail
          x1--;  i1--;
@@ -1352,16 +1354,16 @@ int32_t CWalleniusNCHypergeometric::MakeTable(double * table, int32_t MaxLength,
 calculation methods in class CMultiWalleniusNCHypergeometric
 ***********************************************************************/
 
-CMultiWalleniusNCHypergeometric::CMultiWalleniusNCHypergeometric(int32_t n_, int32_t * m_, double * odds_, int colors_, double accuracy_) {
+CMultiWalleniusNCHypergeometric::CMultiWalleniusNCHypergeometric(int32 n_, int32 * m_, double * odds_, int colors_, double accuracy_) {
    // constructor
    accuracy = accuracy_;
    SetParameters(n_, m_, odds_, colors_);
 }
 
 
-void CMultiWalleniusNCHypergeometric::SetParameters(int32_t n_, int32_t * m_, double * odds_, int colors_) {
+void CMultiWalleniusNCHypergeometric::SetParameters(int32 n_, int32 * m_, double * odds_, int colors_) {
    // change parameters
-   int32_t N1;
+   int32 N1;
    int i;
    n = n_;  m = m_;  omega = odds_;  colors = colors_;
    r = 1.;
@@ -1370,8 +1372,8 @@ void CMultiWalleniusNCHypergeometric::SetParameters(int32_t n_, int32_t * m_, do
       N += m[i];
       if (omega[i]) N1 += m[i];
    }
-   if (N < n) FatalError("Not enough items in constructor for CMultiWalleniusNCHypergeometric");
-   if (N1< n) FatalError("Not enough items with nonzero weight in constructor for CMultiWalleniusNCHypergeometric");
+   if (N < n) FatalError("Taking more items than there are in CMultiWalleniusNCHypergeometric");
+   if (N1< n) FatalError("Not enough items with nonzero weight in CMultiWalleniusNCHypergeometric");
 }
 
 
@@ -1399,8 +1401,10 @@ void CMultiWalleniusNCHypergeometric::mean(double * mu) {
    // calculate mean weight
    for (omr=0., i=0; i < colors; i++) omr += omega[i] * m[i];
    omr = N / omr;
+
    // scale weights to make mean = 1
    for (i = 0; i < colors; i++) omeg[i] = omega[i] * omr;
+
    // Newton Raphson iteration
    iter = 0;  t = -1.;                  // first guess
    do {
@@ -1415,12 +1419,15 @@ void CMultiWalleniusNCHypergeometric::mean(double * mu) {
          }
       }
       t -= (H-n) / HD;
-      if (t >= 0) t = 0.5 * t1;
-      if (++iter > 20) {
+      if (t >= 0) {
+         t = 0.5 * t1;
+      }
+      if (++iter > 20) { 
          FatalError("Search for mean failed in function CMultiWalleniusNCHypergeometric::mean");
       }
    }
-   while (fabs(H - n) > 1E-3);
+   while (fabs(H - n) > 1E-5);
+
    // finished iteration. Get all mu[i]
    for (i = 0; i < colors; i++) {
       if (omeg[i] != 0.) {
@@ -1432,7 +1439,8 @@ void CMultiWalleniusNCHypergeometric::mean(double * mu) {
       }
    }
 }
-/*
+
+
 void CMultiWalleniusNCHypergeometric::variance(double * var, double * mean_) {
    // calculates approximate variance and mean of multivariate 
    // Wallenius' noncentral hypergeometric distribution 
@@ -1462,7 +1470,7 @@ void CMultiWalleniusNCHypergeometric::variance(double * var, double * mean_) {
       }
    }
 }
-*/
+
 
 // implementations of different calculation methods
 double CMultiWalleniusNCHypergeometric::binoexpand(void) {
@@ -1473,7 +1481,7 @@ double CMultiWalleniusNCHypergeometric::binoexpand(void) {
    for (i=j=k=0; i<colors; i++) {
       W += omega[i] * m[i];
       if (x[i]) {
-         j=i; k++;                      // find the nonzero x[i]
+         j=i; k++;                        // find the nonzero x[i]
       }
    }
    if (k > 1) FatalError("More than one x[i] nonzero in CMultiWalleniusNCHypergeometric::binoexpand");
@@ -1529,20 +1537,20 @@ void CMultiWalleniusNCHypergeometric::findpars(void) {
    do {
       lastr = rr;
       rrc = 1. / rr;
-      z = dd - rrc;                    // z(r)
-      zd = rrc * rrc;                  // z'(r)
+      z = dd - rrc;                      // z(r)
+      zd = rrc * rrc;                    // z'(r)
       for (i=0; i<colors; i++) {
          rt = rr * omeg[i];
-         if (rt < 100. && rt > 0.) {   // avoid overflow and division by 0
-            r21 = pow2_1(rt, &r2);     // r2=2^r, r21=1.-2^r
-            a = omeg[i] / r21;         // omegai/(1.-2^r)
-            b = x[i] * a;              // x*omegai/(1.-2^r)
+         if (rt < 100. && rt > 0.) {      // avoid overflow and division by 0
+            r21 = pow2_1(rt, &r2);         // r2=2^r, r21=1.-2^r
+            a = omeg[i] / r21;             // omegai/(1.-2^r)
+            b = x[i] * a;                  // x*omegai/(1.-2^r)
             z  += b;
             zd += b * a * r2 * LN2;
          }
       }
       if (zd == 0) FatalError("can't find r in function CMultiWalleniusNCHypergeometric::findpars");
-      rr -= z / zd;                    // next r
+      rr -= z / zd;                      // next r
       if (rr <= dr) rr = lastr * 0.125 + dr * 0.875;
       if (++j == 70) FatalError("convergence problem searching for r in function CMultiWalleniusNCHypergeometric::findpars");
    }
@@ -1554,7 +1562,7 @@ void CMultiWalleniusNCHypergeometric::findpars(void) {
    phi2d = 0.;
    for (i=0; i<colors; i++) {
       ro = rr * omeg[i];
-      if (ro < 300 && ro > 0.) {       // avoid overflow and division by 0
+      if (ro < 300 && ro > 0.) {         // avoid overflow and division by 0
          k1 = pow2_1(ro, &dummy);
          k1 = -1. / k1;
          k1 = omeg[i] * omeg[i] * (k1 + k1*k1);
@@ -1574,36 +1582,36 @@ double CMultiWalleniusNCHypergeometric::laplace(void) {
    // Note that this function can only be used when the integrand peak is narrow.
    // findpars() must be called before this function.
 
-   const int MAXDEG = 40;              // arraysize
-   int degree;                         // max expansion degree
-   double accur;                       // stop expansion when terms below this threshold
-   double f0;                          // factor outside integral
-   double rho[MAXCOLORS];              // r*omegai
-   double qi;                          // 2^(-rho)
-   double qi1;                         // 1-qi
-   double qq[MAXCOLORS];               // qi / qi1
-   double eta[MAXCOLORS+1][MAXDEG+1];  // eta coefficients
-   double phideri[MAXDEG+1];           // derivatives of phi
-   double PSIderi[MAXDEG+1];           // derivatives of PSI
-   double * erfresp;                   // pointer to table of error function residues
+   const int MAXDEG = 40;        // arraysize
+   int degree;                   // max expansion degree
+   double accur;                 // stop expansion when terms below this threshold
+   double f0;                    // factor outside integral
+   double rho[MAXCOLORS];        // r*omegai
+   double qi;                    // 2^(-rho)
+   double qi1;                   // 1-qi
+   double qq[MAXCOLORS];         // qi / qi1
+   double eta[MAXCOLORS+1][MAXDEG+1]; // eta coefficients
+   double phideri[MAXDEG+1];     // derivatives of phi
+   double PSIderi[MAXDEG+1];     // derivatives of PSI
+   double * erfresp;             // pointer to table of error function residues
 
    // variables in asymptotic summation
    static const double sqrt8  = 2.828427124746190098; // sqrt(8)
-   double qqpow;                       // qq^j
-   double pow2k;                       // 2^k
-   double bino;                        // binomial coefficient  
-   double vr;                          // 1/v, v = integration interval
-   double v2m2;                        // (2*v)^(-2)
-   double v2mk1;                       // (2*v)^(-k-1)
-   double s;                           // summation term
-   double sum;                         // Taylor sum
+   double qqpow;                 // qq^j
+   double pow2k;                 // 2^k
+   double bino;                  // binomial coefficient  
+   double vr;                    // 1/v, v = integration interval
+   double v2m2;                  // (2*v)^(-2)
+   double v2mk1;                 // (2*v)^(-k-1)
+   double s;                     // summation term
+   double sum;                   // Taylor sum
 
-   int i;                              // loop counter for color
-   int j;                              // loop counter for derivative
-   int k;                              // loop counter for expansion degree
-   int ll;                             // k/2
-   int converg = 0;                    // number of consequtive terms below accuracy
-   int PrecisionIndex;                 // index into ErfRes table according to desired precision
+   int i;                        // loop counter for color
+   int j;                        // loop counter for derivative
+   int k;                        // loop counter for expansion degree
+   int ll;                       // k/2
+   int converg = 0;              // number of consequtive terms below accuracy
+   int PrecisionIndex;           // index into ErfRes table according to desired precision
 
    // initialize
    for (k = 0; k <= 2; k++)  phideri[k] = PSIderi[k] = 0;
@@ -1613,12 +1621,12 @@ double CMultiWalleniusNCHypergeometric::laplace(void) {
       rho[i] = r * omega[i];
       if (rho[i] == 0.) continue;
       if (rho[i] > 40.) {
-         qi=0.;  qi1 = 1.;             // avoid underflow
+         qi=0.;  qi1 = 1.;   // avoid underflow
       }
       else {
          qi1 = pow2_1(-rho[i], &qi);   // qi=2^(-rho), qi1=1.-2^(-rho)
       }
-      qq[i] = qi / qi1;                // 2^(-r*omegai)/(1.-2^(-r*omegai))
+      qq[i] = qi / qi1;    // 2^(-r*omegai)/(1.-2^(-r*omegai))
       // peak = zero'th derivative
       phideri[0] += x[i] * log1mx(qi, qi1);
       // eta coefficients
@@ -1645,15 +1653,15 @@ double CMultiWalleniusNCHypergeometric::laplace(void) {
          FatalError("Laplace method failed. Peak width too high in function CWalleniusNCHypergeometric::laplace");
          break;
       }
-      PrecisionIndex--;                // reduce precision to keep integration interval narrow
+      PrecisionIndex--;                  // reduce precision to keep integration interval narrow
    }
-   erfresp = ErfRes[PrecisionIndex];   // choose desired table
+   erfresp = ErfRes[PrecisionIndex];    // choose desired table
 
-   degree = MAXDEG;                    // max expansion degree
+   degree = MAXDEG;                     // max expansion degree
    if (degree >= ERFRES_L*2) degree = ERFRES_L*2-2;
 
    // set up for starting loop at k=3
-   v2m2 = 0.25 * vr * vr;              // (2*v)^(-2)
+   v2m2 = 0.25 * vr * vr;               // (2*v)^(-2)
    PSIderi[0] = 1.;
    pow2k = 8.;
    sum = 0.5 * vr * erfresp[0];
@@ -1685,14 +1693,14 @@ double CMultiWalleniusNCHypergeometric::laplace(void) {
       // finish calculation of derivatives
       phideri[k] = -pow2k * phideri[k] + 2*(1-k)*phideri[k-1];
 
-      pow2k *= 2.;                     // 2^k
+      pow2k *= 2.;    // 2^k
 
       // loop to calculate derivatives of PSI from derivatives of psi.
       // terms # 0, 1, 2, k-2, and k-1 are zero and not included in loop.
       // The j'th derivatives of psi are identical to the derivatives of phi for j>2, and
       // zero for j=1,2. Hence we are using phideri[j] for j>2 here.
-      PSIderi[k] = phideri[k];         // this is term # k
-      bino = 0.5 * (k-1) * (k-2);      // binomial coefficient for term # 3
+      PSIderi[k] = phideri[k];           // this is term # k
+      bino = 0.5 * (k-1) * (k-2);        // binomial coefficient for term # 3
       for (j=3; j < k-2; j++) { // loop for remaining nonzero terms (if k>5)
          PSIderi[k] += PSIderi[k-j] * phideri[j] * bino;
          bino *= double(k-j)/double(j);
@@ -1721,29 +1729,29 @@ double CMultiWalleniusNCHypergeometric::integrate(void) {
    // Wallenius non-central hypergeometric distribution function
    // calculation by numerical integration with variable-length steps
    // NOTE: findpars() must be called before this function.
-   double s;                           // result of integration step
-   double sum;                         // integral
-   double ta, tb;                      // subinterval for integration step
+   double s;                            // result of integration step
+   double sum;                          // integral
+   double ta, tb;                       // subinterval for integration step
 
-   lnbico();                           // compute log of binomial coefficients
+   lnbico();                            // compute log of binomial coefficients
 
    // choose method:
    if (w < 0.02) {
       // normal method. Step length determined by peak width w
       double delta, s1;
       s1 = accuracy < 1E-9 ? 0.5 : 1.;
-      delta = s1 * w;                            // integration steplength
+      delta = s1 * w;                    // integration steplength
       ta = 0.5 + 0.5 * delta;
-      sum = integrate_step(1.-ta, ta);           // first integration step around center peak
+      sum = integrate_step(1.-ta, ta);   // first integration step around center peak
       do {
          tb = ta + delta;
          if (tb > 1.) tb = 1.;
-         s  = integrate_step(ta, tb);            // integration step to the right of peak
-         s += integrate_step(1.-tb,1.-ta);       // integration step to the left of peak
+         s  = integrate_step(ta, tb);     // integration step to the right of peak
+         s += integrate_step(1.-tb,1.-ta);// integration step to the left of peak
          sum += s;
-         if (s < accuracy * sum) break;          // stop before interval finished if accuracy reached
+         if (s < accuracy * sum) break;   // stop before interval finished if accuracy reached
          ta = tb;
-         if (tb > 0.5 + w) delta *= 2.;          // increase step length far from peak
+         if (tb > 0.5 + w) delta *= 2.;   // increase step length far from peak
       }
       while (tb < 1.);
    }
@@ -1755,20 +1763,20 @@ double CMultiWalleniusNCHypergeometric::integrate(void) {
       // do left and right half of integration interval separately:
       for (t1=0., t2=0.5; t1 < 1.; t1+=0.5, t2+=0.5) { 
          // integrate from 0 to 0.5 or from 0.5 to 1
-         tinf = search_inflect(t1, t2);          // find inflection point
+         tinf = search_inflect(t1, t2);   // find inflection point
          delta = tinf - t1; if (delta > t2 - tinf) delta = t2 - tinf; // distance to nearest endpoint
-         delta *= 1./7.;                         // 1/7 will give 3 steps to nearest endpoint
+         delta *= 1./7.;                  // 1/7 will give 3 steps to nearest endpoint
          if (delta < 1E-4) delta = 1E-4;
          delta1 = delta;
          // integrate from tinf forwards to t2
          ta = tinf;
          do {
             tb = ta + delta1;
-            if (tb > t2 - 0.25*delta1) tb = t2;  // last step of this subinterval
-            s = integrate_step(ta, tb);          // integration step
+            if (tb > t2 - 0.25*delta1) tb = t2; // last step of this subinterval
+            s = integrate_step(ta, tb);         // integration step
             sum += s;
-            delta1 *= 2;                         // double steplength
-            if (s < sum * 1E-4) delta1 *= 8.;    // large step when s small
+            delta1 *= 2;                        // double steplength
+            if (s < sum * 1E-4) delta1 *= 8.;   // large step when s small
             ta = tb;
          }
          while (tb < t2);
@@ -1780,8 +1788,8 @@ double CMultiWalleniusNCHypergeometric::integrate(void) {
                if (ta < t1 + 0.25*delta) ta = t1; // last step of this subinterval
                s = integrate_step(ta, tb);        // integration step
                sum += s;
-               delta *= 2;                       // double steplength
-               if (s < sum * 1E-4) delta *= 8.;  // large step when s small
+               delta *= 2;                        // double steplength
+               if (s < sum * 1E-4) delta *= 8.;   // large step when s small
                tb = ta;
             }
             while (ta > t1);
@@ -1853,25 +1861,25 @@ double CMultiWalleniusNCHypergeometric::integrate_step(double ta, double tb) {
 double CMultiWalleniusNCHypergeometric::search_inflect(double t_from, double t_to) {
    // search for an inflection point of the integrand PHI(t) in the interval
    // t_from < t < t_to
-   double t, t1;                       // independent variable
-   double rho[MAXCOLORS];              // r*omega[i]
-   double q;                           // t^rho[i] / (1-t^rho[i])
-   double q1;                          // 1-t^rho[i]
-   double zeta[MAXCOLORS][4][4];       // zeta[i,j,k] coefficients
-   double phi[4];                      // derivatives of phi(t) = log PHI(t)
-   double Z2;                          // PHI''(t)/PHI(t)
-   double Zd;                          // derivative in Newton Raphson iteration
-   double rdm1;                        // r * d - 1
-   double tr;                          // 1/t
-   double log2t;                       // log2(t)
-   double method;                      // 0 for z2'(t) method, 1 for z3(t) method
-   int i;                              // color
-   int iter;                           // count iterations
+   double t, t1;                        // independent variable
+   double rho[MAXCOLORS];               // r*omega[i]
+   double q;                            // t^rho[i] / (1-t^rho[i])
+   double q1;                           // 1-t^rho[i]
+   double zeta[MAXCOLORS][4][4];        // zeta[i,j,k] coefficients
+   double phi[4];                       // derivatives of phi(t) = log PHI(t)
+   double Z2;                           // PHI''(t)/PHI(t)
+   double Zd;                           // derivative in Newton Raphson iteration
+   double rdm1;                         // r * d - 1
+   double tr;                           // 1/t
+   double log2t;                        // log2(t)
+   double method;                       // 0 for z2'(t) method, 1 for z3(t) method
+   int i;                               // color
+   int iter;                            // count iterations
 
    rdm1 = rd - 1.;
-   if (t_from == 0 && rdm1 <= 1.) return 0.;     //no inflection point
+   if (t_from == 0 && rdm1 <= 1.) return 0.; //no inflection point
    t = 0.5 * (t_from + t_to);
-   for (i = 0; i < colors; i++) {                // calculate zeta coefficients
+   for (i = 0; i < colors; i++) {            // calculate zeta coefficients
       rho[i] = r * omega[i];
       zeta[i][1][1] = rho[i];
       zeta[i][1][2] = rho[i] * (rho[i] - 1.);
@@ -1887,7 +1895,7 @@ double CMultiWalleniusNCHypergeometric::search_inflect(double t_from, double t_t
       tr = 1. / t;
       log2t = log(t)*(1./LN2);
       phi[1] = phi[2] = phi[3] = 0.;
-      for (i=0; i<colors; i++) {                 // calculate first 3 derivatives of phi(t)
+      for (i=0; i<colors; i++) {         // calculate first 3 derivatives of phi(t)
          if (rho[i] == 0.) continue;
          q1 = pow2_1(rho[i]*log2t,&q);
          q /= q1;
@@ -1901,7 +1909,7 @@ double CMultiWalleniusNCHypergeometric::search_inflect(double t_from, double t_t
       phi[1] *= tr;
       phi[2] *= tr * tr;
       phi[3] *= tr * tr * tr;
-      method = (iter & 2) >> 1;                  // alternate between the two methods
+      method = (iter & 2) >> 1;          // alternate between the two methods
       Z2 = phi[1]*phi[1] + phi[2];
       Zd = method*phi[1]*phi[1]*phi[1] + (2.+method)*phi[1]*phi[2] + phi[3];
 
@@ -1946,11 +1954,11 @@ double CMultiWalleniusNCHypergeometric::search_inflect(double t_from, double t_t
 }
 
 
-double CMultiWalleniusNCHypergeometric::probability(int32_t * x_) {
+double CMultiWalleniusNCHypergeometric::probability(int32 * x_) {
    // calculate probability function. choosing best method
    int i, j, em;
    int central;
-   int32_t xsum;
+   int32 xsum;
    x = x_;
 
    for (xsum = i = 0; i < colors; i++)  xsum += x[i];
@@ -1980,7 +1988,7 @@ double CMultiWalleniusNCHypergeometric::probability(int32_t * x_) {
    if (central) {
       // All omega's are equal. 
       // This is multivariate central hypergeometric distribution
-      int32_t sx = n,  sm = N;
+      int32 sx = n,  sm = N;
       double p = 1.;
       for (i = 0; i < colors - 1; i++) {
          // Use univariate hypergeometric (usedcolors-1) times
@@ -2008,22 +2016,22 @@ double CMultiWalleniusNCHypergeometric::probability(int32_t * x_) {
 Methods for CMultiWalleniusNCHypergeometricMoments
 ***********************************************************************/
 
-double CMultiWalleniusNCHypergeometricMoments::moments(double * mu, double * variance, int32_t * combinations) {
+double CMultiWalleniusNCHypergeometricMoments::moments(double * mu, double * variance, int32 * combinations) {
    // calculates mean and variance of multivariate Wallenius noncentral 
    // hypergeometric distribution by calculating all combinations of x-values.
    // Return value = sum of all probabilities. The deviation of this value 
    // from 1 is a measure of the accuracy.
    // Returns the mean to mean[0...colors-1]
    // Returns the variance to variance[0...colors-1]
-   double sumf;                        // sum of all f(x) values
-   int32_t msum;                       // temporary sum
-   int i;                              // loop counter
+   double sumf;               // sum of all f(x) values
+   int32 msum;                // temporary sum
+   int i;                     // loop counter
 
    // get approximate mean
    mean(sx);
    // round mean to integers
    for (i=0; i < colors; i++) {
-      xm[i] = (int32_t)(sx[i]+0.4999999);
+      xm[i] = (int32)(sx[i]+0.4999999);
    }
 
    // set up for recursive loops
@@ -2048,13 +2056,13 @@ double CMultiWalleniusNCHypergeometricMoments::moments(double * mu, double * var
 }
 
 
-double CMultiWalleniusNCHypergeometricMoments::loop(int32_t n, int c) {
+double CMultiWalleniusNCHypergeometricMoments::loop(int32 n, int c) {
    // recursive function to loop through all combinations of x-values.
    // used by moments()
-   int32_t x, x0;                      // x of color c
-   int32_t xmin, xmax;                 // min and max of x[c]
-   double s1, s2, sum = 0.;            // sum of f(x) values
-   int i;                              // loop counter
+   int32 x, x0;                         // x of color c
+   int32 xmin, xmax;                    // min and max of x[c]
+   double s1, s2, sum = 0.;             // sum of f(x) values
+   int i;                               // loop counter
 
    if (c < colors-1) {
       // not the last color
@@ -2065,15 +2073,15 @@ double CMultiWalleniusNCHypergeometricMoments::loop(int32_t n, int c) {
       // loop for all x[c] from mean and up
       for (x = x0, s2 = 0.; x <= xmax; x++) {
          xi[c] = x;
-         sum += s1 = loop(n-x, c+1);             // recursive loop for remaining colors
-         if (s1 < accuracy && s1 < s2) break;    // stop when values become negligible
+         sum += s1 = loop(n-x, c+1); // recursive loop for remaining colors
+         if (s1 < accuracy && s1 < s2) break; // stop when values become negligible
          s2 = s1;
       }
       // loop for all x[c] from mean and down
       for (x = x0-1; x >= xmin; x--) {
          xi[c] = x;
-         sum += s1 = loop(n-x, c+1);             // recursive loop for remaining colors
-         if (s1 < accuracy && s1 < s2) break;    // stop when values become negligible
+         sum += s1 = loop(n-x, c+1); // recursive loop for remaining colors
+         if (s1 < accuracy && s1 < s2) break; // stop when values become negligible
          s2 = s1;
       }
    }

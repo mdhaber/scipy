@@ -13,11 +13,7 @@
 * Documentation:
 * ==============
 * The file stocc.h contains class definitions.
-* The file stocc.htm contains further instructions.
-* The file distrib.pdf contains definitions of the statistic distributions.
-* The file sampmet.pdf contains theoretical descriptions of the methods used
-* for sampling from these distributions.
-* The file ran-instructions.pdf contains general instructions.
+* Further documentation at www.agner.org/random
 *
 * Copyright 2002-2008 by Agner Fog. 
 * GNU General Public License http://www.gnu.org/licenses/gpl.html
@@ -36,7 +32,7 @@ const double SHAT2 = 0.8989161620588987408;   // 3-sqrt(12/e)
 /***********************************************************************
 Log factorial function
 ***********************************************************************/
-double LnFac(int32_t n) {
+double LnFac(int32 n) {
    // log factorial function. gives natural logarithm of n!
 
    // define constants
@@ -78,18 +74,14 @@ Constructor
 ***********************************************************************/
 StochasticLib1::StochasticLib1 (int seed)
 : STOC_BASE(seed) {
-   // Initialize variables for various distributions
    normal_x2_valid = 0;
-   hyp_n_last = hyp_m_last = hyp_N_last = -1; // Last values of hypergeometric parameters
-   pois_L_last = -1.;                         // Last values of Poisson parameters
-   bino_n_last = -1;  bino_p_last = -1.;      // Last values of binomial parameters
 }
 
 
 /***********************************************************************
 Hypergeometric distribution
 ***********************************************************************/
-int32_t StochasticLib1::Hypergeometric (int32_t n, int32_t m, int32_t N) {
+int32 StochasticLib1::Hypergeometric (int32 n, int32 m, int32 N) {
    /*
    This function generates a random variate with the hypergeometric
    distribution. This is the distribution you get when drawing balls without 
@@ -102,8 +94,8 @@ int32_t StochasticLib1::Hypergeometric (int32_t n, int32_t m, int32_t N) {
    method would be too slow or would give overflow.
    */   
 
-   int32_t fak, addd;                    // used for undoing transformations
-   int32_t x;                            // result
+   int32 fak, addd;                    // used for undoing transformations
+   int32 x;                            // result
 
    // check if parameters are valid
    if (n > N || m > N || n < 0 || m < 0) {
@@ -148,7 +140,7 @@ int32_t StochasticLib1::Hypergeometric (int32_t n, int32_t m, int32_t N) {
 Subfunctions used by hypergeometric
 ***********************************************************************/
 
-int32_t StochasticLib1::HypInversionMod (int32_t n, int32_t m, int32_t N) {
+int32 StochasticLib1::HypInversionMod (int32 n, int32 m, int32 N) {
    /* 
    Subfunction for Hypergeometric distribution. Assumes 0 <= n <= m <= N/2.
    Overflow protection is needed when N > 680 or n > 75.
@@ -159,9 +151,14 @@ int32_t StochasticLib1::HypInversionMod (int32_t n, int32_t m, int32_t N) {
    This method is faster than the rejection method when the variance is low.
    */
 
+   // Setup 
+   static int32  h_n_last = -1, h_m_last = -1, h_N_last = -1; // Last values
+   static int32  h_mode, h_mp;         // Mode, mode+1
+   static int32  h_bound;              // Safety bound
+   static double h_fm;                 // Value at mode
    // Sampling 
-   int32_t       I;                    // Loop counter
-   int32_t       L = N - m - n;        // Parameter
+   int32         I;                    // Loop counter
+   int32         L = N - m - n;        // Parameter
    double        modef;                // mode, float
    double        Mp, np;               // m + 1, n + 1
    double        p;                    // temporary
@@ -174,29 +171,29 @@ int32_t StochasticLib1::HypInversionMod (int32_t n, int32_t m, int32_t N) {
    Mp = (double)(m + 1);
    np = (double)(n + 1);
 
-   if (N != hyp_N_last || m != hyp_m_last || n != hyp_n_last) {
+   if (N != h_N_last || m != h_m_last || n != h_n_last) {
       // set-up when parameters have changed
-      hyp_N_last = N;  hyp_m_last = m;  hyp_n_last = n;
+      h_N_last = N;  h_m_last = m;  h_n_last = n;
 
       p  = Mp / (N + 2.);
       modef = np * p;                       // mode, real
-      hyp_mode = (int32_t)modef;            // mode, integer
-      if (hyp_mode == modef && p == 0.5) {   
-         hyp_mp = hyp_mode--;
+      h_mode = (int32)modef;                // mode, integer
+      if (h_mode == modef && p == 0.5) {   
+         h_mp = h_mode--;
       }
       else {
-         hyp_mp = hyp_mode + 1;
+         h_mp = h_mode + 1;
       }
       // mode probability, using log factorial function
       // (may read directly from fac_table if N < FAK_LEN)
-      hyp_fm = exp(LnFac(N-m) - LnFac(L+hyp_mode) - LnFac(n-hyp_mode)
-         + LnFac(m)   - LnFac(m-hyp_mode) - LnFac(hyp_mode)
+      h_fm = exp(LnFac(N-m) - LnFac(L+h_mode) - LnFac(n-h_mode)
+         + LnFac(m)   - LnFac(m-h_mode) - LnFac(h_mode)
          - LnFac(N)   + LnFac(N-n)      + LnFac(n)        );
 
       // safety bound - guarantees at least 17 significant decimal digits
-      // bound = min(n, (int32_t)(modef + k*c'))
-      hyp_bound = (int32_t)(modef + 11. * sqrt(modef * (1.-p) * (1.-n/(double)N)+1.));
-      if (hyp_bound > n) hyp_bound = n;
+      // bound = min(n, (int32)(modef + k*c'))
+      h_bound = (int32)(modef + 11. * sqrt(modef * (1.-p) * (1.-n/(double)N)+1.));
+      if (h_bound > n) h_bound = n;
    }
 
    // loop until accepted
@@ -204,33 +201,33 @@ int32_t StochasticLib1::HypInversionMod (int32_t n, int32_t m, int32_t N) {
       U = Random();                    // uniform random number to be converted
 
       // start chop-down search at mode
-      if ((U -= hyp_fm) <= 0.) return(hyp_mode);
-      c = d = hyp_fm;
+      if ((U -= h_fm) <= 0.) return(h_mode);
+      c = d = h_fm;
 
       // alternating down- and upward search from the mode
-      k1 = hyp_mp - 1;  k2 = hyp_mode + 1;
-      for (I = 1; I <= hyp_mode; I++, k1--, k2++) {
-         // Downward search from k1 = hyp_mp - 1
+      k1 = h_mp - 1;  k2 = h_mode + 1;
+      for (I = 1; I <= h_mode; I++, k1--, k2++) {
+         // Downward search from k1 = h_mp - 1
          divisor = (np - k1)*(Mp - k1);
          // Instead of dividing c with divisor, we multiply U and d because 
          // multiplication is faster. This will give overflow if N > 800
          U *= divisor;  d *= divisor;
          c *= k1 * (L1 + k1);
-         if ((U -= c) <= 0.)  return(hyp_mp - I - 1); // = k1 - 1
+         if ((U -= c) <= 0.)  return(h_mp - I - 1); // = k1 - 1
 
-         // Upward search from k2 = hyp_mode + 1
+         // Upward search from k2 = h_mode + 1
          divisor = k2 * (L1 + k2);
          // re-scale parameters to avoid time-consuming division
          U *= divisor;  c *= divisor; 
          d *= (np - k2) * (Mp - k2);
-         if ((U -= d) <= 0.)  return(hyp_mode + I);  // = k2
+         if ((U -= d) <= 0.)  return(h_mode + I);  // = k2
          // Values of n > 75 or N > 680 may give overflow if you leave out this..
          // overflow protection
          // if (U > 1.E100) {U *= 1.E-100; c *= 1.E-100; d *= 1.E-100;}
       }
 
       // Upward search from k2 = 2*mode + 1 to bound
-      for (k2 = I = hyp_mp + hyp_mode; I <= hyp_bound; I++, k2++) {
+      for (k2 = I = h_mp + h_mode; I <= h_bound; I++, k2++) {
          divisor = k2 * (L1 + k2);
          U *= divisor;
          d *= (np - k2) * (Mp - k2);
@@ -242,7 +239,7 @@ int32_t StochasticLib1::HypInversionMod (int32_t n, int32_t m, int32_t N) {
 }
 
 
-int32_t StochasticLib1::HypRatioOfUnifoms (int32_t n, int32_t m, int32_t N) {
+int32 StochasticLib1::HypRatioOfUnifoms (int32 n, int32 m, int32 N) {
    /*
    Subfunction for Hypergeometric distribution using the ratio-of-uniforms
    rejection method.
@@ -257,9 +254,16 @@ int32_t StochasticLib1::HypRatioOfUnifoms (int32_t n, int32_t m, int32_t N) {
    discrete random variates". Journal of Computational and Applied Mathematics,
    vol. 31, no. 1, 1990, pp. 181-189.
    */
-   int32_t L;                          // N-m-n
-   int32_t mode;                       // mode
-   int32_t k;                          // integer sample
+   static int32 h_N_last = -1;         // previous parameter
+   static int32 h_m_last = -1;         // previous parameter
+   static int32 h_n_last = -1;         // previous parameter
+   static int32 h_bound;               // upper bound
+   static double h_a;                  // hat center
+   static double h_h;                  // hat width
+   static double h_g;                  // value at mode
+   int32 L;                            // N-m-n
+   int32 mode;                         // mode
+   int32 k;                            // integer sample
    double x;                           // real sample
    double rNN;                         // 1/(N*(N+2))
    double my;                          // mean
@@ -268,35 +272,35 @@ int32_t StochasticLib1::HypRatioOfUnifoms (int32_t n, int32_t m, int32_t N) {
    double lf;                          // ln(f(x))
 
    L = N - m - n;
-   if (hyp_N_last != N || hyp_m_last != m || hyp_n_last != n) {
-      hyp_N_last = N;  hyp_m_last = m;  hyp_n_last = n;         // Set-up
-      rNN = 1. / ((double)N*(N+2));                             // make two divisions in one
-      my = (double)n * m * rNN * (N+2);                         // mean = n*m/N
-      mode = (int32_t)(double(n+1) * double(m+1) * rNN * N);    // mode = floor((n+1)*(m+1)/(N+2))
-      var = (double)n * m * (N-m) * (N-n) / ((double)N*N*(N-1));// variance
-      hyp_h = sqrt(SHAT1 * (var+0.5)) + SHAT2;                  // hat width
-      hyp_a = my + 0.5;                                         // hat center
-      hyp_fm = fc_lnpk(mode, L, m, n);                          // maximum
-      hyp_bound = (int32_t)(hyp_a + 4.0 * hyp_h);               // safety-bound
-      if (hyp_bound > n) hyp_bound = n;
+   if (h_N_last != N || h_m_last != m || h_n_last != n) {
+      h_N_last = N;  h_m_last = m;  h_n_last = n;            // Set-up
+      rNN = 1. / ((double)N*(N+2));                          // make two divisions in one
+      my = (double)n * m * rNN * (N+2);                      // mean = n*m/N
+      mode = (int32)(double(n+1) * double(m+1) * rNN * N);   // mode = floor((n+1)*(m+1)/(N+2))
+      var = (double)n * m * (N-m) * (N-n) / ((double)N*N*(N-1)); // variance
+      h_h = sqrt(SHAT1 * (var+0.5)) + SHAT2;                 // hat width
+      h_a = my + 0.5;                                        // hat center
+      h_g = fc_lnpk(mode, L, m, n);                          // maximum
+      h_bound = (int32)(h_a + 4.0 * h_h);                    // safety-bound
+      if (h_bound > n) h_bound = n;
    }    
    while(1) {
-      u = Random();                              // uniform random number
-      if (u == 0) continue;                      // avoid division by 0
-      x = hyp_a + hyp_h * (Random()-0.5) / u;    // generate hat distribution
-      if (x < 0. || x > 2E9) continue;           // reject, avoid overflow
-      k = (int32_t)x;
-      if (k > hyp_bound) continue;               // reject if outside range
-      lf = hyp_fm - fc_lnpk(k,L,m,n);            // ln(f(k))
-      if (u * (4.0 - u) - 3.0 <= lf) break;      // lower squeeze accept
-      if (u * (u-lf) > 1.0) continue;            // upper squeeze reject
-      if (2.0 * log(u) <= lf) break;             // final acceptance
+      u = Random();                                          // uniform random number
+      if (u == 0) continue;                                  // avoid division by 0
+      x = h_a + h_h * (Random()-0.5) / u;                    // generate hat distribution
+      if (x < 0. || x > 2E9) continue;                       // reject, avoid overflow
+      k = (int32)x;
+      if (k > h_bound) continue;                             // reject if outside range
+      lf = h_g - fc_lnpk(k,L,m,n);                           // ln(f(k))
+      if (u * (4.0 - u) - 3.0 <= lf) break;                  // lower squeeze accept
+      if (u * (u-lf) > 1.0) continue;                        // upper squeeze reject
+      if (2.0 * log(u) <= lf) break;                         // final acceptance
    }
    return k;
 }
 
 
-double StochasticLib1::fc_lnpk(int32_t k, int32_t L, int32_t m, int32_t n) {
+double StochasticLib1::fc_lnpk(int32 k, int32 L, int32 m, int32 n) {
    // subfunction used by hypergeometric and Fisher's noncentral hypergeometric distribution
    return(LnFac(k) + LnFac(m - k) + LnFac(n - k) + LnFac(L + k));
 }
@@ -307,7 +311,7 @@ double StochasticLib1::fc_lnpk(int32_t k, int32_t L, int32_t m, int32_t n) {
 /***********************************************************************
 Multivariate hypergeometric distribution
 ***********************************************************************/
-void StochasticLib1::MultiHypergeometric (int32_t * destination, int32_t * source, int32_t n, int colors) {
+void StochasticLib1::MultiHypergeometric (int32 * destination, int32 * source, int32 n, int colors) {
    /*
    This function generates a vector of random variates, each with the
    hypergeometric distribution.
@@ -326,20 +330,20 @@ void StochasticLib1::MultiHypergeometric (int32_t * destination, int32_t * sourc
    Can't exceed the total number of balls in the urn.
    colors:         The number of possible colors. 
    */
-   int32_t sum, x, y;
+   int32 sum, x, y;
    int i;
    if (n < 0 || colors < 0) FatalError("Parameter negative in multihypergeo function");
    if (colors == 0) return;
 
    // compute total number of balls
-   for (i=0, sum=0; i<colors; i++) { 
+   for (i = 0, sum = 0; i < colors; i++) { 
       y = source[i];
       if (y < 0) FatalError("Parameter negative in multihypergeo function");
       sum += y;
    }
    if (n > sum) FatalError("n > sum in multihypergeo function");
 
-   for (i=0; i<colors-1; i++) { 
+   for (i = 0; i < colors-1; i++) { 
       // generate output by calling hypergeometric colors-1 times
       y = source[i];
       x = Hypergeometric(n, y, sum);
@@ -354,7 +358,7 @@ void StochasticLib1::MultiHypergeometric (int32_t * destination, int32_t * sourc
 /***********************************************************************
 Poisson distribution
 ***********************************************************************/
-int32_t StochasticLib1::Poisson (double L) {
+int32 StochasticLib1::Poisson (double L) {
    /*
    This function generates a random variate with the poisson distribution.
 
@@ -408,7 +412,7 @@ int32_t StochasticLib1::Poisson (double L) {
 /***********************************************************************
 Subfunctions used by poisson
 ***********************************************************************/
-int32_t StochasticLib1::PoissonLow(double L) {
+int32 StochasticLib1::PoissonLow(double L) {
    /*
    This subfunction generates a random variate with the poisson 
    distribution for extremely low values of L.
@@ -429,7 +433,7 @@ int32_t StochasticLib1::PoissonLow(double L) {
 }
 
 
-int32_t StochasticLib1::PoissonInver(double L) {
+int32 StochasticLib1::PoissonInver(double L) {
    /*
    This subfunction generates a random variate with the poisson 
    distribution using inversion by the chop down method (PIN).
@@ -439,16 +443,18 @@ int32_t StochasticLib1::PoissonInver(double L) {
    The value of bound must be adjusted to the maximal value of L.
    */   
    const int bound = 130;              // safety bound. Must be > L + 8*sqrt(L).
+   static double p_L_last = -1.;       // previous value of L
+   static double p_f0;                 // value at x=0
    double r;                           // uniform random number
    double f;                           // function value
-   int32_t x;                          // return value
+   int32 x;                            // return value
 
-   if (L != pois_L_last) {             // set up
-      pois_L_last = L;
-      pois_f0 = exp(-L);               // f(0) = probability of x=0
+   if (L != p_L_last) {                // set up
+      p_L_last = L;
+      p_f0 = exp(-L);                  // f(0) = probability of x=0
    }
    while (1) {  
-      r = Random();  x = 0;  f = pois_f0;
+      r = Random();  x = 0;  f = p_f0;
       do {                             // recursive calculation: f(x) = f(x-1) * L / x
          r -= f;
          if (r <= 0) return x;
@@ -461,7 +467,7 @@ int32_t StochasticLib1::PoissonInver(double L) {
 }  
 
 
-int32_t StochasticLib1::PoissonRatioUniforms(double L) {
+int32 StochasticLib1::PoissonRatioUniforms(double L) {
    /*
    This subfunction generates a random variate with the poisson 
    distribution using the ratio-of-uniforms rejection method (PRUAt).
@@ -473,39 +479,46 @@ int32_t StochasticLib1::PoissonRatioUniforms(double L) {
    discrete random variates". Journal of Computational and Applied Mathematics,
    vol. 31, no. 1, 1990, pp. 181-189.
    */
-   double u;                                          // uniform random
-   double lf;                                         // ln(f(x))
-   double x;                                          // real sample
-   int32_t k;                                         // integer sample
+   static double p_L_last = -1.0;      // previous L
+   static double p_a;                  // hat center
+   static double p_h;                  // hat width
+   static double p_g;                  // ln(L)
+   static double p_q;                  // value at mode
+   static int32 p_bound;               // upper bound
+   int32 mode;                         // mode
+   double u;                           // uniform random
+   double lf;                          // ln(f(x))
+   double x;                           // real sample
+   int32 k;                            // integer sample
 
-   if (pois_L_last != L) {
-      pois_L_last = L;                                // Set-up
-      pois_a = L + 0.5;                               // hat center
-      int32_t mode = (int32_t)L;                      // mode
-      pois_g  = log(L);
-      pois_f0 = mode * pois_g - LnFac(mode);          // value at mode
-      pois_h = sqrt(SHAT1 * (L+0.5)) + SHAT2;         // hat width
-      pois_bound = (int32_t)(pois_a + 6.0 * pois_h);  // safety-bound
+   if (p_L_last != L) {
+      p_L_last = L;                    // Set-up
+      p_a = L + 0.5;                   // hat center
+      mode = (int32)L;                 // mode
+      p_g  = log(L);
+      p_q = mode * p_g - LnFac(mode);       // value at mode
+      p_h = sqrt(SHAT1 * (L+0.5)) + SHAT2;  // hat width
+      p_bound = (int32)(p_a + 6.0 * p_h);   // safety-bound
    }
    while(1) {
       u = Random();
-      if (u == 0) continue;                           // avoid division by 0
-      x = pois_a + pois_h * (Random() - 0.5) / u;
-      if (x < 0 || x >= pois_bound) continue;         // reject if outside valid range
-      k = (int32_t)(x);
-      lf = k * pois_g - LnFac(k) - pois_f0;
-      if (lf >= u * (4.0 - u) - 3.0) break;           // quick acceptance
-      if (u * (u - lf) > 1.0) continue;               // quick rejection
-      if (2.0 * log(u) <= lf) break;                  // final acceptance
+      if (u == 0) continue;                 // avoid division by 0
+      x = p_a + p_h * (Random() - 0.5) / u;
+      if (x < 0 || x >= p_bound) continue;  // reject if outside valid range
+      k = (int32)(x);
+      lf = k * p_g - LnFac(k) - p_q;
+      if (lf >= u * (4.0 - u) - 3.0) break; // quick acceptance
+      if (u * (u - lf) > 1.0) continue;     // quick rejection
+      if (2.0 * log(u) <= lf) break;        // final acceptance
    }
-   return k;
+   return(k);
 }
 
 
 /***********************************************************************
 Binomial distribution
 ***********************************************************************/
-int32_t StochasticLib1::Binomial (int32_t n, double p) {
+int32 StochasticLib1::Binomial (int32 n, double p) {
    /*
    This function generates a random variate with the binomial distribution.
 
@@ -515,18 +528,15 @@ int32_t StochasticLib1::Binomial (int32_t n, double p) {
    For n*p < 1.E-6 numerical inaccuracy is avoided by poisson approximation.
    */
    int inv = 0;                        // invert
-   int32_t x;                          // result
+   int32 x;                            // result
    double np = n * p;
 
    if (p > 0.5) {                      // faster calculation by inversion
       p = 1. - p;  inv = 1;
    }
    if (n <= 0 || p <= 0) {
-      if (n == 0 || p == 0) {
-         return inv * n;  // only one possible result
-      }
-      // error exit
-      FatalError("Parameter out of range in binomial function"); 
+      if (n == 0 || p == 0) return inv * n;  // only one possible result
+      FatalError("Parameter out of range in binomial function"); // error exit
    }
 
    //------------------------------------------------------------------
@@ -557,7 +567,7 @@ int32_t StochasticLib1::Binomial (int32_t n, double p) {
 Subfunctions used by binomial
 ***********************************************************************/
 
-int32_t StochasticLib1::BinomialInver (int32_t n, double p) {
+int32 StochasticLib1::BinomialInver (int32 n, double p) {
    /* 
    Subfunction for Binomial distribution. Assumes p < 0.5.
 
@@ -568,9 +578,9 @@ int32_t StochasticLib1::BinomialInver (int32_t n, double p) {
    This method is fast when n*p is low. 
    */   
    double f0, f, q; 
-   int32_t bound;
+   int32 bound;
    double pn, r, rc; 
-   int32_t x, n1, i;
+   int32 x, n1, i;
 
    // f(0) = probability of x=0 is (1-p)^n
    // fast calculation of (1-p)^n
@@ -581,7 +591,7 @@ int32_t StochasticLib1::BinomialInver (int32_t n, double p) {
    }
    // calculate safety bound
    rc = (n + 1) * p;
-   bound = (int32_t)(rc + 11.0*(sqrt(rc) + 1.0));
+   bound = (int32)(rc + 11.0*(sqrt(rc) + 1.0));
    if (bound > n) bound = n; 
    q = p / (1. - p);
 
@@ -602,7 +612,7 @@ int32_t StochasticLib1::BinomialInver (int32_t n, double p) {
 }
 
 
-int32_t StochasticLib1::BinomialRatioOfUniforms (int32_t n, double p) {
+int32 StochasticLib1::BinomialRatioOfUniforms (int32 n, double p) {
    /* 
    Subfunction for Binomial distribution. Assumes p < 0.5.
 
@@ -616,39 +626,47 @@ int32_t StochasticLib1::BinomialRatioOfUniforms (int32_t n, double p) {
    discrete random variates". Journal of Computational and Applied Mathematics,
    vol. 31, no. 1, 1990, pp. 181-189.
    */   
+   static int32 b_n_last = -1;         // last n
+   static double b_p_last = -1.;       // last p
+   static int32 b_mode;                // mode
+   static int32 b_bound;               // upper bound
+   static double b_a;                  // hat center
+   static double b_h;                  // hat width
+   static double b_g;                  // value at mode
+   static double b_r1;                 // ln(p/(1-p))
    double u;                           // uniform random
    double q1;                          // 1-p
    double np;                          // n*p
    double var;                         // variance
    double lf;                          // ln(f(x))
    double x;                           // real sample
-   int32_t k;                          // integer sample
+   int32 k;                            // integer sample
 
-   if(bino_n_last != n || bino_p_last != p) {    // Set_up
-      bino_n_last = n;
-      bino_p_last = p;
+   if(b_n_last != n || b_p_last != p) {      // Set_up
+      b_n_last = n;
+      b_p_last = p;
       q1 = 1.0 - p;
       np = n * p;
-      bino_mode = (int32_t)(np + p);             // mode
-      bino_a = np + 0.5;                         // hat center
-      bino_r1 = log(p / q1);
-      bino_g = LnFac(bino_mode) + LnFac(n-bino_mode);
-      var = np * q1;                             // variance
-      bino_h = sqrt(SHAT1 * (var+0.5)) + SHAT2;  // hat width
-      bino_bound = (int32_t)(bino_a + 6.0 * bino_h);// safety-bound
-      if (bino_bound > n) bino_bound = n;        // safety-bound
+      b_mode = (int32)(np + p);              // mode
+      b_a = np + 0.5;                        // hat center
+      b_r1 = log(p / q1);
+      b_g = LnFac(b_mode) + LnFac(n-b_mode);
+      var = np * q1;                         // variance
+      b_h = sqrt(SHAT1 * (var+0.5)) + SHAT2; // hat width
+      b_bound = (int32)(b_a + 6.0 * b_h);    // safety-bound
+      if (b_bound > n) b_bound = n;          // safety-bound
    }
 
-   while (1) {                                   // rejection loop
+   while (1) {                               // rejection loop
       u = Random();
-      if (u == 0) continue;                      // avoid division by 0
-      x = bino_a + bino_h * (Random() - 0.5) / u;
-      if (x < 0. || x > bino_bound) continue;    // reject, avoid overflow
-      k = (int32_t)x;                            // truncate
-      lf = (k-bino_mode)*bino_r1+bino_g-LnFac(k)-LnFac(n-k);// ln(f(k))
-      if (u * (4.0 - u) - 3.0 <= lf) break;      // lower squeeze accept
-      if (u * (u - lf) > 1.0) continue;          // upper squeeze reject
-      if (2.0 * log(u) <= lf) break;             // final acceptance
+      if (u == 0) continue;                  // avoid division by 0
+      x = b_a + b_h * (Random() - 0.5) / u;
+      if (x < 0. || x > b_bound) continue;   // reject, avoid overflow
+      k = (int32)x;                          // truncate
+      lf = (k-b_mode)*b_r1+b_g-LnFac(k)-LnFac(n-k);// ln(f(k))
+      if (u * (4.0 - u) - 3.0 <= lf) break;  // lower squeeze accept
+      if (u * (u - lf) > 1.0) continue;      // upper squeeze reject
+      if (2.0 * log(u) <= lf) break;         // final acceptance
    }
    return k;
 }
@@ -657,7 +675,7 @@ int32_t StochasticLib1::BinomialRatioOfUniforms (int32_t n, double p) {
 /***********************************************************************
 Multinomial distribution
 ***********************************************************************/
-void StochasticLib1::Multinomial (int32_t * destination, double * source, int32_t n, int colors) {
+void StochasticLib1::Multinomial (int32 * destination, double * source, int32 n, int colors) {
    /*
    This function generates a vector of random variates, each with the
    binomial distribution.
@@ -676,7 +694,7 @@ void StochasticLib1::Multinomial (int32_t * destination, double * source, int32_
    colors:         The number of possible colors. 
    */
    double s, sum;
-   int32_t x;
+   int32 x;
    int i;
    if (n < 0 || colors < 0) FatalError("Parameter negative in multinomial function");
    if (colors == 0) return;
@@ -709,9 +727,9 @@ void StochasticLib1::Multinomial (int32_t * destination, double * source, int32_
 }
 
 
-void StochasticLib1::Multinomial (int32_t * destination, int32_t * source, int32_t n, int colors) {
+void StochasticLib1::Multinomial (int32 * destination, int32 * source, int32 n, int colors) {
    // same as above, with integer source
-   int32_t x, p, sum;
+   int32 x, p, sum;
    int i;
    if (n < 0 || colors < 0) FatalError("Parameter negative in multinomial function");
    if (colors == 0) return;
@@ -764,18 +782,6 @@ double StochasticLib1::Normal(double m, double s) {
    return normal_x1 * s + m;
 }
 
-double StochasticLib1::NormalTrunc(double m, double s, double limit) {
-   // Truncated normal distribution
-   // The tails are cut off so that the output
-   // is in the interval from (m-limit) to (m+limit)
-   if (limit < s) FatalError("limit out of range in NormalTrunc function");
-   double x;
-   do {
-      x = Normal(0., s);
-   } while (fabs(x) > limit); // reject if beyond limit
-   return x + m;
-}
-
 
 /***********************************************************************
 Bernoulli distribution
@@ -814,5 +820,6 @@ void StochasticLib1::Shuffle(int * list, int min, int n) {
       swap = list[j];  list[j] = list[i];  list[i] = swap;
    }
 }
+
 
 #endif  // ifndef R_BUILD

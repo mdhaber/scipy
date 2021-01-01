@@ -1,7 +1,7 @@
 /*************************** fnchyppr.cpp **********************************
 * Author:        Agner Fog
 * Date created:  2002-10-20
-* Last modified: 2014-06-14
+* Last modified: 2015-12-27
 * Project:       stocc.zip
 * Source URL:    www.agner.org/random
 *
@@ -15,14 +15,13 @@
 * Documentation:
 * ==============
 * The file stocc.h contains class definitions.
-* The file ran-instructions.pdf contains further documentation and 
-* instructions.
+* Further documentation on www.agner.org/random
 *
-* Copyright 2002-2014 by Agner Fog. 
+* Copyright 2002-2015 by Agner Fog. 
 * GNU General Public License http://www.gnu.org/licenses/gpl.html
 *****************************************************************************/
 
-#include <string.h>                    // memcpy function
+#include <string.h>                    // memmove function
 #include "stocc.h"                     // class definition
 
 
@@ -30,7 +29,7 @@
 Methods for class CFishersNCHypergeometric
 ***********************************************************************/
 
-CFishersNCHypergeometric::CFishersNCHypergeometric(int32_t n, int32_t m, int32_t N, double odds, double accuracy) {
+CFishersNCHypergeometric::CFishersNCHypergeometric(int32 n, int32 m, int32 N, double odds, double accuracy) {
    // constructor
    // set parameters
    this->n = n;  this->m = m;  this->N = N;
@@ -51,7 +50,7 @@ CFishersNCHypergeometric::CFishersNCHypergeometric(int32_t n, int32_t m, int32_t
 }
 
 
-int32_t CFishersNCHypergeometric::mode(void) {
+int32 CFishersNCHypergeometric::mode(void) {
    // Find mode (exact)
    // Uses the method of Liao and Rosen, The American Statistician, vol 55,
    // no 4, 2001, p. 366-369.
@@ -60,8 +59,8 @@ int32_t CFishersNCHypergeometric::mode(void) {
 
    double A, B, C, D;                  // coefficients for quadratic equation
    double x;                           // mode
-   int32_t L = m + n - N;
-   int32_t m1 = m+1, n1 = n+1;
+   int32 L = m + n - N;
+   int32 m1 = m+1, n1 = n+1;
 
    if (odds == 1.) { 
       // simple hypergeometric
@@ -76,7 +75,7 @@ int32_t CFishersNCHypergeometric::mode(void) {
       D = D > 0. ? sqrt(D) : 0.;
       x = (D - B)/(A+A);
    }
-   return (int32_t)x;
+   return int32(x);
 }
 
 
@@ -97,7 +96,6 @@ double CFishersNCHypergeometric::mean(void) {
    return mean;
 }
 
-
 double CFishersNCHypergeometric::variance(void) {
    // find approximate variance (poor approximation)    
    double my = mean(); // approximate mean
@@ -109,20 +107,21 @@ double CFishersNCHypergeometric::variance(void) {
    return var;
 }
 
+
 double CFishersNCHypergeometric::moments(double * mean_, double * var_) {
    // calculate exact mean and variance
    // return value = sum of f(x), expected = 1.
    double y, sy=0, sxy=0, sxxy=0, me1;
-   int32_t x, xm, x1;
+   int32 x, xm, x1;
    const double accur = 0.1 * accuracy;     // accuracy of calculation
-   xm = (int32_t)mean();                      // approximation to mean
-   for (x=xm; x<=xmax; x++) {
+   xm = (int32)mean();                      // approximation to mean
+   for (x = xm; x <= xmax; x++) {
       y = probability(x);
       x1 = x - xm;  // subtract approximate mean to avoid loss of precision in sums
       sy += y; sxy += x1 * y; sxxy += x1 * x1 * y;
       if (y < accur && x != xm) break;
    }
-   for (x=xm-1; x>=xmin; x--) {
+   for (x = xm-1; x >= xmin; x--) {
       y = probability(x);
       x1 = x - xm;  // subtract approximate mean to avoid loss of precision in sums
       sy += y; sxy += x1 * y; sxxy += x1 * x1 * y;
@@ -137,12 +136,11 @@ double CFishersNCHypergeometric::moments(double * mean_, double * var_) {
 }
 
 
-double CFishersNCHypergeometric::probability(int32_t x) {
+double CFishersNCHypergeometric::probability(int32 x) {
    // calculate probability function
    const double accur = accuracy * 0.1;// accuracy of calculation
 
    if (x < xmin || x > xmax) return 0;
-
    if (n == 0) return 1.;
 
    if (odds == 1.) {
@@ -157,13 +155,13 @@ double CFishersNCHypergeometric::probability(int32_t x) {
       if (n > N-m) FatalError("Not enough items with nonzero weight in CFishersNCHypergeometric::probability");
       return x == 0;
    }
-
+      
    if (!rsum) {
       // first time. calculate rsum = reciprocal of sum of proportional 
       // function over all probable x values
-      int32_t x1, x2;                    // x loop
+      int32 x1, x2;                    // x loop
       double y;                        // value of proportional function
-      x1 = (int32_t)mean();              // start at mean
+      x1 = (int32)mean();              // start at mean
       if (x1 < xmin) x1 = xmin;
       x2 = x1 + 1;
       scale = 0.; scale = lng(x1);     // calculate scale to avoid overflow
@@ -181,12 +179,13 @@ double CFishersNCHypergeometric::probability(int32_t x) {
    return exp(lng(x)) * rsum;          // function value
 }
 
-double CFishersNCHypergeometric::probabilityRatio(int32_t x, int32_t x0) {
+
+double CFishersNCHypergeometric::probabilityRatio(int32 x, int32 x0) {
    // Calculate probability ratio f(x)/f(x0)
    // This is much faster than calculating a single probability because
    // rsum is not needed
    double a1, a2, a3, a4, f1, f2, f3, f4;
-   int32_t y, dx = x - x0;
+   int32 y, dx = x - x0;
    int invert = 0;
 
    if (x < xmin || x > xmax) return 0.;
@@ -232,7 +231,8 @@ double CFishersNCHypergeometric::probabilityRatio(int32_t x, int32_t x0) {
    return f1;
 }
 
-double CFishersNCHypergeometric::MakeTable(double * table, int32_t MaxLength, int32_t * xfirst, int32_t * xlast, double cutoff) {
+
+double CFishersNCHypergeometric::MakeTable(double * table, int32 MaxLength, int32 * xfirst, int32 * xlast, double cutoff) {
    // Makes a table of Fisher's noncentral hypergeometric probabilities.
    // Results are returned in the array table of size MaxLength.
    // The values are scaled so that the highest value is 1. The return value
@@ -253,12 +253,12 @@ double CFishersNCHypergeometric::MakeTable(double * table, int32_t MaxLength, in
    double f;                           // probability function value
    double sum;                         // sum of table values
    double a1, a2, b1, b2;              // factors in recursive calculation of f(x)
-   int32_t x;                          // x value
-   int32_t x1, x2;                     // lowest and highest x
-   int32_t i, i0, i1, i2;              // table index
-   int32_t mode = this->mode();        // mode
-   int32_t L = n + m - N;              // parameter
-   int32_t DesiredLength;              // desired length of table
+   int32 x;                            // x value
+   int32 x1, x2;                       // lowest and highest x
+   int32 i, i0, i1, i2;                // table index
+   int32 mode = this->mode();          // mode
+   int32 L = n + m - N;                // parameter
+   int32 DesiredLength;                // desired length of table
 
    // limits for x
    x1 = (L > 0) ? L : 0;               // xmin
@@ -285,7 +285,7 @@ double CFishersNCHypergeometric::MakeTable(double * table, int32_t MaxLength, in
       if (DesiredLength > 200) {
          double sd = sqrt(variance()); // calculate approximate standard deviation
          // estimate number of standard deviations to include from normal distribution
-         i = (int32_t)(NumSD(accuracy) * sd + 0.5);
+         i = (int32)(NumSD(accuracy) * sd + 0.5);
          if (DesiredLength > i) DesiredLength = i;
       }
       if (xfirst) *xfirst = 1;         // for analogy with CWalleniusNCHypergeometric::MakeTable
@@ -329,7 +329,7 @@ double CFishersNCHypergeometric::MakeTable(double * table, int32_t MaxLength, in
    }
    if (i1 > 0) {
       // move table down for cut-off left tail
-      memcpy(table, table+i1, (i0-i1+1)*sizeof(*table));
+      memmove(table, table+i1, (i0-i1+1)*sizeof(*table));
       // adjust indices
       i0 -= i1;  i2 -= i1;  i1 = 0;
    }
@@ -354,10 +354,10 @@ double CFishersNCHypergeometric::MakeTable(double * table, int32_t MaxLength, in
 }
 
 
-double CFishersNCHypergeometric::lng(int32_t x) {
+double CFishersNCHypergeometric::lng(int32 x) {
    // natural log of proportional function
    // returns lambda = log(m!*x!/(m-x)!*m2!*x2!/(m2-x2)!*odds^x)
-   int32_t x2 = n - x,  m2 = N - m;
+   int32 x2 = n - x,  m2 = N - m;
    if (ParametersChanged) {
       mFac = LnFac(m) + LnFac(m2);
       xLast = -99; ParametersChanged = 0;
@@ -384,24 +384,43 @@ double CFishersNCHypergeometric::lng(int32_t x) {
 calculation methods in class CMultiFishersNCHypergeometric
 ***********************************************************************/
 
-CMultiFishersNCHypergeometric::CMultiFishersNCHypergeometric(int32_t n_, int32_t * m_, double * odds_, int colors_, double accuracy_) {
+CMultiFishersNCHypergeometric::CMultiFishersNCHypergeometric(int32 n_, int32 * m_, double * odds_, int colors_, double accuracy_) {
    // constructor
-   int32_t N1;
-   int i;
+   int i;                              // loop counter
+
    // copy parameters
-   n = n_;  m = m_;  odds = odds_;  colors = colors_;  accuracy = accuracy_;
-   // check if parameters are valid 
-   // (Note: there is a more thorough test for validity in the BiasedUrn package)
-   for (N = N1 = 0, i = 0; i < colors; i++) {
-      if (m[i] < 0 || odds[i] < 0) FatalError("Parameter negative in constructor for CMultiFishersNCHypergeometric");
-      N += m[i];
-      if (odds[i]) N1 += m[i];
+   n = n_;  Colors = colors_;  accuracy = accuracy_;
+
+   // check if parameters are valid
+   reduced = 2;  N = Nu = 0;  usedcolors = 0;
+   for (i = 0; i < Colors; i++) {
+      nonzero[i] = 1;                  // remember if color i has m > 0 and odds > 0
+      m[usedcolors] = m_[i];           // copy m
+      N += m_[i];                      // sum of m
+      if (m_[i] <= 0) {
+         nonzero[i] = 0;               // color i unused
+         reduced |= 1;
+         if (m_[i] < 0) FatalError("Parameter m negative in constructor for CMultiFishersNCHypergeometric");
+      }
+      odds[usedcolors] = odds_[i];     // copy odds
+      if (odds_[i] <= 0) {
+         nonzero[i] = 0;               // color i unused
+         reduced |= 1;
+         if (odds_[i] < 0) FatalError("Parameter odds negative in constructor for CMultiFishersNCHypergeometric");
+      }
+      if (usedcolors > 0 && nonzero[i] && odds[usedcolors] != odds[usedcolors-1]) {
+         reduced &= ~2;                // odds are not all equal
+      }
+      if (nonzero[i]) {
+         Nu += m[usedcolors];          // sum of m for used colors
+         usedcolors++;                 // skip color i if zero
+      }
    }
-   if (N < n) FatalError("Not enough items in constructor for CMultiFishersNCHypergeometric");
-   if (N1< n) FatalError("Not enough items with nonzero weight in constructor for CMultiFishersNCHypergeometric");
+   if (N < n) FatalError("Taking more items than there are in constructor for CMultiFishersNCHypergeometric");
+   if (Nu< n) FatalError("Not enough items with nonzero weight in constructor for CMultiFishersNCHypergeometric");
 
    // calculate mFac and logodds
-   for (i=0, mFac=0.; i < colors; i++) {
+   for (i=0, mFac=0.; i < usedcolors; i++) {
       mFac += LnFac(m[i]);
       logodds[i] = log(odds[i]);
    }
@@ -414,118 +433,197 @@ void CMultiFishersNCHypergeometric::mean(double * mu) {
    // calculates approximate mean of multivariate Fisher's noncentral
    // hypergeometric distribution. Result is returned in mu[0..colors-1].
    // The calculation is reasonably fast.
-   // Note: The version in BiasedUrn package deals with unused colors
+   int i, j;                           // color index
+   double mur[MAXCOLORS];              // mean for used colors
+
+   // get mean of used colors
+   mean1(mur);
+
+   // resolve unused colors
+   for (i = j = 0; i < Colors; i++) {
+      if (nonzero[i]) {
+         mu[i] = mur[j++];
+      }
+      else {
+         mu[i] = 0.;
+      }
+   }
+}
+
+
+void CMultiFishersNCHypergeometric::mean1(double * mu) {
+   // calculates approximate mean of multivariate Fisher's noncentral
+   // hypergeometric distribution, except for unused colors
    double r, r1;                       // iteration variable
    double q;                           // mean of color i
    double W;                           // total weight
    int i;                              // color index
    int iter = 0;                       // iteration counter
 
-   if (colors < 3) {
+   if (usedcolors < 3) {
       // simple cases
-      if (colors == 1) mu[0] = n;
-      if (colors == 2) {
-         mu[0] = CFishersNCHypergeometric(n,m[0],m[0]+m[1],odds[0]/odds[1]).mean();
+      if (usedcolors == 1) mu[0] = n;
+      if (usedcolors == 2) {
+         mu[0] = CFishersNCHypergeometric(n,m[0],Nu,odds[0]/odds[1]).mean();
          mu[1] = n - mu[0];
       }
-      return;
    }
-   if (n == N) {
+   else if (n == Nu) {
       // Taking all balls
-      for (i = 0; i < colors; i++) mu[i] = m[i];
-      return;
+      for (i = 0; i < usedcolors; i++) mu[i] = m[i];
    }
+   else {
+      // not a special case
 
-   // initial guess for r
-   for (i=0, W=0.; i < colors; i++) W += m[i] * odds[i];
-   r = (double)n * N / ((N-n)*W);
+      // initial guess for r
+      for (i=0, W=0.; i < usedcolors; i++) W += m[i] * odds[i];
+      r = (double)n * Nu / ((Nu-n)*W);
 
-   // iteration loop to find r
-   do {
-      r1 = r;
-      for (i=0, q=0.; i < colors; i++) {
-         q += m[i] * r * odds[i] / (r * odds[i] + 1.);
+      if (r > 0.) {
+         // iteration loop to find r
+         do {
+            r1 = r;
+            for (i=0, q=0.; i < usedcolors; i++) {
+               q += m[i] * r * odds[i] / (r * odds[i] + 1.);
+            }
+            r *= n * (Nu-q) / (q * (Nu-n));
+            if (++iter > 100) FatalError("convergence problem in function CMultiFishersNCHypergeometric::mean");
+         }
+         while (fabs(r-r1) > 1E-5);
       }
-      r *= n * (N-q) / (q * (N-n));
-      if (++iter > 100) FatalError("convergence problem in function CMultiFishersNCHypergeometric::mean");
-   }
-   while (fabs(r-r1) > 1E-5);
 
-   // store result
-   for (i=0; i < colors; i++) {
-      mu[i] = m[i] * r * odds[i] / (r * odds[i] + 1.);
+      // get result
+      for (i=0; i < usedcolors; i++) {
+         mu[i] = m[i] * r * odds[i] / (r * odds[i] + 1.);
+      }
    }
 }
 
 
-void CMultiFishersNCHypergeometric::variance(double * var) {
+void CMultiFishersNCHypergeometric::variance(double * var, double * mean_) {
    // calculates approximate variance of multivariate Fisher's noncentral
    // hypergeometric distribution (accuracy is not too good).
-   // Result is returned in variance[0..colors-1].
+   // Variance is returned in variance[0..colors-1].
+   // Mean is returned in mean_[0..colors-1] if not NULL.
    // The calculation is reasonably fast.
-   // Note: The version in BiasedUrn package deals with unused colors
    double r1, r2;
    double mu[MAXCOLORS];
-   int i;
-   mean(mu);
-   for (i=0; i<colors; i++) {
-      r1 = mu[i] * (m[i]-mu[i]);
-      r2 = (n-mu[i])*(mu[i]+N-n-m[i]);
-      if (r1 <= 0. || r2 <= 0.) {
+   int i, j;
+
+   mean1(mu);         // Mean of used colors
+
+   for (i = j = 0; i < Colors; i++) {
+      if (nonzero[i]) {
+         r1 = mu[j] * (m[j]-mu[j]);
+         r2 = (n-mu[j])*(mu[j]+Nu-n-m[j]);
+         if (r1 <= 0. || r2 <= 0.) {
+            var[i] = 0.;
+         }
+         else {
+            var[i] = Nu*r1*r2/((Nu-1)*(m[j]*r2+(Nu-m[j])*r1));
+         }
+         j++;
+      }
+      else {  // unused color
          var[i] = 0.;
       }
-      else {
-         var[i] = N*r1*r2/((N-1)*(m[i]*r2+(N-m[i])*r1));
+   }
+
+   // Store mean if mean_ is not NULL
+   if (mean_) {
+      // resolve unused colors
+      for (i = j = 0; i < Colors; i++) {
+         if (nonzero[i]) {
+            mean_[i] = mu[j++];
+         }
+         else {
+            mean_[i] = 0.;
+         }
       }
    }
 }
 
 
-double CMultiFishersNCHypergeometric::probability(int32_t * x) {
+double CMultiFishersNCHypergeometric::probability(int32 * x) {
    // Calculate probability function.
    // Note: The first-time call takes very long time because it requires
    // a calculation of all possible x combinations with probability >
    // accuracy, which may be extreme.
    // The calculation uses logarithms to avoid overflow. 
    // (Recursive calculation may be faster, but this has not been implemented)
-   // Note: The version in BiasedUrn package deals with unused colors
-   int32_t xsum;  int i, em;
-   for (xsum = i = 0; i < colors; i++)  xsum += x[i];
+   int i, j;                           // color index
+   int32 xsum = 0;                     // sum of x
+   int32 Xu[MAXCOLORS];                // x for used colors
+
+   // resolve unused colors
+   for (i = j = 0; i < Colors; i++) {
+      if (nonzero[i]) {
+         Xu[j++] = x[i];               // copy x to array of used colors
+         xsum += x[i];                 // sum of x
+      }
+      else {
+         if (x[i]) return 0.;          // taking balls with zero weight
+      }
+   }
+
    if (xsum != n) {
       FatalError("sum of x values not equal to n in function CMultiFishersNCHypergeometric::probability");
    }
 
-   for (i = em = 0; i < colors; i++) {
-      if (x[i] > m[i] || x[i] < 0 || x[i] < n - N + m[i]) return 0.;
-      if (odds[i] == 0. && x[i]) return 0.;
-      if (x[i] == m[i] || odds[i] == 0.) em++;
+   for (i = 0; i < usedcolors; i++) {
+      if (Xu[i] > m[i] || Xu[i] < 0 || Xu[i] < n - Nu + m[i]) return 0.;  // Outside bounds for x
    }
 
-   if (n == 0 || em == colors) return 1.;
+   if (n == 0 || n == Nu) return 1.;   // deterministic cases
 
+   if (usedcolors < 3) {               // cases with < 3 colors
+      if (usedcolors < 2) return 1.;
+      // Univariate probability
+      return CFishersNCHypergeometric(n, m[0], Nu, odds[0]/odds[1], accuracy).probability(Xu[0]);
+   }
+
+   if (reduced & 2) {
+      // All odds are equal. This is multivariate central hypergeometric distribution
+      int32 sx = n,  sm = N;
+      double p = 1.;
+      for (i = 0; i < usedcolors - 1; i++) {
+         // Use univariate hypergeometric (usedcolors-1) times
+         p *= CFishersNCHypergeometric(sx, m[i], sm, 1.).probability(x[i]);
+         sx -= x[i];  sm -= m[i];
+      }
+      return p;
+   }
+
+   // all special cases eliminated. Calculate sum of all function values
    if (sn == 0) SumOfAll();            // first time initialize
-   return exp(lng(x)) * rsum;          // function value
+
+   return exp(lng(Xu)) * rsum;         // function value
 }
 
 
-double CMultiFishersNCHypergeometric::moments(double * mean, double * variance, int32_t * combinations) {
+double CMultiFishersNCHypergeometric::moments(double * mean, double * variance, int32 * combinations) {
    // calculates mean and variance of the Fisher's noncentral hypergeometric 
    // distribution by calculating all combinations of x-values with
    // probability > accuracy.
    // Return value = 1.
    // Returns the mean in mean[0...colors-1]
    // Returns the variance in variance[0...colors-1]
-   // Note: The version in BiasedUrn package deals with unused colors
 
-   int i;                              // color index
+   int i, j;                           // color index
    if (sn == 0) {
       // first time initialization includes calculation of mean and variance
       SumOfAll();
    }
-   // just copy results
-   for (i=0; i < colors; i++) {
-      mean[i] = sx[i];
-      variance[i] = sxx[i];
+   // copy results and resolve unused colors
+   for (i = j = 0; i < Colors; i++) {
+      if (nonzero[i]) {
+         mean[i] = sx[j];
+         variance[i] = sxx[j];
+         j++;
+      }
+      else {
+         mean[i] = variance[i] = 0.;
+      }
    }
    if (combinations) *combinations = sn;
    return 1.;
@@ -540,13 +638,14 @@ void CMultiFishersNCHypergeometric::SumOfAll() {
    // The mean and variance are generated as by-products.
 
    int i;                              // color index
-   int32_t msum;                         // sum of m[i]
+   int32 msum;                         // sum of m[i]
 
    // get approximate mean
-   mean(sx);
+   mean1(sx);
+
    // round mean to integers
-   for (i=0, msum=0; i < colors; i++) {
-      msum += xm[i] = (int32_t)(sx[i]+0.4999999);}
+   for (i=0, msum=0; i < usedcolors; i++) {
+      msum += xm[i] = (int32)(sx[i]+0.4999999);}
    // adjust truncated x values to make the sum = n
    msum -= n;
    for (i = 0; msum < 0; i++) {
@@ -565,10 +664,10 @@ void CMultiFishersNCHypergeometric::SumOfAll() {
 
    // initialize for recursive loops
    sn = 0;
-   for (i = colors-1, msum = 0; i >= 0; i--) {
+   for (i = usedcolors-1, msum = 0; i >= 0; i--) {
       remaining[i] = msum;  msum += m[i];
    }
-   for (i = 0; i < colors; i++) {
+   for (i = 0; i < usedcolors; i++) {
       sx[i] = 0;  sxx[i] = 0;
    }
 
@@ -576,26 +675,26 @@ void CMultiFishersNCHypergeometric::SumOfAll() {
    rsum = 1. / loop(n, 0);
 
    // calculate mean and variance
-   for (i = 0; i < colors; i++) {
+   for (i = 0; i < usedcolors; i++) {
       sxx[i] = sxx[i]*rsum - sx[i]*sx[i]*rsum*rsum;
       sx[i] = sx[i]*rsum;
    }
 }
 
 
-double CMultiFishersNCHypergeometric::loop(int32_t n, int c) {
+double CMultiFishersNCHypergeometric::loop(int32 n, int c) {
    // recursive function to loop through all combinations of x-values.
    // used by SumOfAll
-   int32_t x, x0;                        // x of color c
-   int32_t xmin, xmax;                   // min and max of x[c]
+   int32 x, x0;                        // x of color c
+   int32 xmin, xmax;                   // min and max of x[c]
    double s1, s2, sum = 0.;            // sum of g(x) values
    int i;                              // loop counter
 
-   if (c < colors-1) {
+   if (c < usedcolors-1) {
       // not the last color
       // calculate min and max of x[c] for given x[0]..x[c-1]
       xmin = n - remaining[c];  if (xmin < 0) xmin = 0;
-      xmax = m[c];  if (xmax > n) xmax = n;
+      xmax = m[c]; if (xmax > n) xmax = n;
       x0 = xm[c];  if (x0 < xmin) x0 = xmin;  if (x0 > xmax) x0 = xmax;
       // loop for all x[c] from mean and up
       for (x = x0, s2 = 0.; x <= xmax; x++) {
@@ -616,8 +715,8 @@ double CMultiFishersNCHypergeometric::loop(int32_t n, int c) {
       // last color
       xi[c] = n;
       // sums and squaresums    
-      s1 = exp(lng(xi));               // proportional function g(x)
-      for (i = 0; i < colors; i++) {   // update sums
+      s1 = exp(lng(xi));                 // proportional function g(x)
+      for (i = 0; i < usedcolors; i++) { // update sums
          sx[i]  += s1 * xi[i];
          sxx[i] += s1 * xi[i] * xi[i];
       }
@@ -628,11 +727,11 @@ double CMultiFishersNCHypergeometric::loop(int32_t n, int c) {
 }
 
 
-double CMultiFishersNCHypergeometric::lng(int32_t * x) {
+double CMultiFishersNCHypergeometric::lng(int32 * x) {
    // natural log of proportional function g(x)
    double y = 0.;
    int i;
-   for (i = 0; i < colors; i++) {
+   for (i = 0; i < usedcolors; i++) {
       y += x[i]*logodds[i] - LnFac(x[i]) - LnFac(m[i]-x[i]);
    }
    return mFac + y - scale;
