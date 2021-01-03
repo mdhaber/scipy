@@ -30,6 +30,7 @@ from HighsStatus cimport (
 from HighsLp cimport (
     HighsLp,
     HighsSolution,
+    HighsBasis,
     HighsModelStatus,
     HighsModelStatusNOTSET,
     HighsModelStatusLOAD_ERROR,
@@ -646,6 +647,7 @@ def highs_wrapper(
     # We might need an info object if we can look up the solution and a place to put solution
     cdef HighsInfo info = highs.getHighsInfo() # it should always be safe to get the info object
     cdef HighsSolution solution
+    cdef HighsBasis basis
 
     # If the status is bad, don't look up the solution
     if info.primal_status != PrimalDualStatusSTATUS_FEASIBLE_POINT:
@@ -662,6 +664,7 @@ def highs_wrapper(
     else:
         # Should be safe to read the solution:
         solution = highs.getSolution()
+        basis = highs.getBasis()
         return {
             'status': <int> model_status,
             'message': highs.highsModelStatusToString(model_status).decode(),
@@ -673,12 +676,16 @@ def highs_wrapper(
             # Note: this is for all constraints (A_ub and A_eq)
             'slack': [rhs[ii] - solution.row_value[ii] for ii in range(numrow)],
 
+            # We'll need the basis statuses to know if lagrangians for bounds
+            # are upper or lower
+            'basis_statuses': [<int> basis.col_status[ii] for ii in range(numcol)],
+
             # slacks in HiGHS appear as Ax - s, not Ax + s, so lambda is negated;
             # lambda are the lagrange multipliers associated with Ax=b
             'lambda': [-1*solution.row_dual[ii] for ii in range(numrow)],
 
             # s are the lagrange multipliers associated with bound conditions
-            's': [solution.col_dual[ii] for ii in range(numcol) if solution.col_dual[ii]],
+            's': [solution.col_dual[ii] for ii in range(numcol)],
 
             'fun': info.objective_function_value,
             'simplex_nit': info.simplex_iteration_count,

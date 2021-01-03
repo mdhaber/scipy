@@ -48,6 +48,9 @@ from ._highs.constants import (
     HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_STEEPEST_EDGE_TO_DEVEX_SWITCH
     as HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STEEP2DVX,
     HIGHS_SIMPLEX_DUAL_EDGE_WEIGHT_STRATEGY_STEEPEST_EDGE,
+
+    HIGHS_BASIS_STATUS_LOWER,
+    HIGHS_BASIS_STATUS_UPPER,
 )
 from scipy.sparse import csc_matrix, vstack, issparse
 
@@ -326,21 +329,45 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
     else:
         slack, con = None, None
 
+    if 'lambda' in res:
+        # lagrange multipliers for equalities/inequalities
+        lamda = res['lambda']
+        ineqlin = np.array(lamda[:len(b_ub)])
+        eqlin = np.array(lamda[len(b_ub):])
+
+        # now get lagrange multipliers corresponding to bounds
+        upper = np.zeros(len(c))
+        lower = np.zeros(len(c))
+        bound_duals = res['s']
+        basis_statuses = res['basis_statuses']
+        for ii, (bnd, status) in enumerate(zip(bound_duals, basis_statuses)):
+            if status == HIGHS_BASIS_STATUS_LOWER:
+                lower[ii] = bnd
+            elif status == HIGHS_BASIS_STATUS_UPPER:
+                upper[ii] = bnd
+    else:
+        ineqlin, eqlin = None, None
+        upper, lower = None, None
+
     # this needs to be updated if we start choosing the solver intelligently
     solvers = {"ipm": "highs-ipm", "simplex": "highs-ds", None: "highs-ds"}
 
-    sol = {'x': np.array(res['x']) if 'x' in res else None,
-           'slack': slack,
-           # TODO: Add/test dual info like:
-           # 'lambda': res.get('lambda'),
-           # 's': res.get('s'),
-           'fun': res.get('fun'),
-           'con': con,
-           'status': statuses[res['status']][0],
-           'success': res['status'] == MODEL_STATUS_OPTIMAL,
-           'message': statuses[res['status']][1],
-           'nit': res.get('simplex_nit', 0) or res.get('ipm_nit', 0),
-           'crossover_nit': res.get('crossover_nit'),
-           }
+    sol = {
+        'x': np.array(res['x']) if 'x' in res else None,
+        'slack': slack,
+        'lambda': {
+            'ineqlin': ineqlin,
+            'eqlin': eqlin,
+            'upper': upper,
+            'lower': lower,
+        },
+        'fun': res.get('fun'),
+        'con': con,
+        'status': statuses[res['status']][0],
+        'success': res['status'] == MODEL_STATUS_OPTIMAL,
+        'message': statuses[res['status']][1],
+        'nit': res.get('simplex_nit', 0) or res.get('ipm_nit', 0),
+        'crossover_nit': res.get('crossover_nit'),
+    }
 
     return sol

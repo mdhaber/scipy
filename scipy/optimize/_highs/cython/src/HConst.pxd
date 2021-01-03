@@ -10,12 +10,12 @@ cdef extern from "HConst.h" nogil:
     const int HIGHS_THREAD_LIMIT
 
     cdef enum HighsBasisStatus:
-        LOWER "HighsBasisStatus::LOWER" = 0, # (slack) variable is at its lower bound [including fixed variables]
-        BASIC "HighsBasisStatus::BASIC" # (slack) variable is basic
-        UPPER "HighsBasisStatus::UPPER" # (slack) variable is at its upper bound
-        ZERO "HighsBasisStatus::ZERO" # free variable is non-basic and set to zero
-        NONBASIC "HighsBasisStatus::NONBASIC" # nonbasic with no specific bound information - useful for users and postsolve
-        SUPER "HighsBasisStatus::SUPER"
+        HighsBasisStatusLOWER "HighsBasisStatus::LOWER" = 0, # (slack) variable is at its lower bound [including fixed variables]
+        HighsBasisStatusBASIC "HighsBasisStatus::BASIC" # (slack) variable is basic
+        HighsBasisStatusUPPER "HighsBasisStatus::UPPER" # (slack) variable is at its upper bound
+        HighsBasisStatusZERO "HighsBasisStatus::ZERO" # free variable is non-basic and set to zero
+        HighsBasisStatusNONBASIC "HighsBasisStatus::NONBASIC" # nonbasic with no specific bound information - useful for users and postsolve
+        HighsBasisStatusSUPER "HighsBasisStatus::SUPER"
 
     cdef enum SolverOption:
         SOLVER_OPTION_SIMPLEX "SolverOption::SOLVER_OPTION_SIMPLEX" = -1
