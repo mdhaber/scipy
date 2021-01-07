@@ -256,3 +256,13 @@ class TestNCH():
             # the naive implementation is very wrong in these cases
             assert pmf(x, N, m1, n, w).sum() < .5
             assert_allclose(wnch.pmf(x, N, m1, n, w).sum(), 1)
+
+    @pytest.mark.parametrize('dist_name', ['fnch', 'wnch'])
+    def test_rvs_shape(self, dist_name):
+        # Check that when given a size with more dimensions than the
+        # dimensions of the broadcast parameters, rvs returns an array
+        # with the correct shape.
+        dists = {'fnch': fnch, 'wnch': wnch}
+        dist = dists[dist_name]
+        x = dist.rvs(50, 30, [[10], [20]], [0.5, 1.0, 2.0], size=(5, 1, 2, 3))
+        assert x.shape == (5, 1, 2, 3)

@@ -12,7 +12,8 @@ from numpy import floor, ceil, log, exp, sqrt, log1p, expm1, tanh, cosh, sinh
 import numpy as np
 
 from ._distn_infrastructure import (
-        rv_discrete, _ncx2_pdf, _ncx2_cdf, get_distribution_names)
+        rv_discrete, _ncx2_pdf, _ncx2_cdf, get_distribution_names,
+        _check_shape)
 from .biasedurn import (_PyFishersNCHypergeometric,
                         _PyWalleniusNCHypergeometric,
                         _PyStochasticLib3)
@@ -1297,22 +1298,44 @@ class _nch_gen(rv_discrete):
     def _rvs(self, M, n, N, odds, size=None, random_state=None):
 
         def _rvs1(M, n, N, odds, length, random_state=None):
+            """
+            `M`, `n`, `N` and `odds` must be scalars (or arrays with size 1).
+            `length` must be an integer.
+
+            Returns a 1-d array of random variates.
+            """
             urn = _PyStochasticLib3()
             rv_gen = getattr(urn, self.rvs_name)
             rvs = rv_gen(N, n, M, odds, length, random_state)
             return rvs
 
         # If all the shapes are scalar, we can generate all the random numbers
-        # in one call to rvs_fisher and reshape to the desired result.
-        # Otherwise, we need to resort to np.vectorize.
+        # in one call to _rvs1 and reshape to the desired result.
         if (np.size(M) == 1 and np.size(n) == 1
                 and np.size(N) == 1 and np.size(odds) == 1):
-            rvs = _rvs1(M, n, N, odds,
-                        np.prod(size), random_state).reshape(size)
-        else:
-            fun = np.vectorize(_rvs1, excluded=['size', 'random_state'])
-            rvs = fun(M, n, N, odds, 1, random_state)
-        return rvs
+            return _rvs1(M, n, N, odds,
+                         np.prod(size), random_state).reshape(size)
+
+        # We need to broadcast the parameters and handle `size`, which might
+        # have more dimensions than the shape of the broadcast parameters.
+        # (See truncnorm._rvs and geninvgauss._rvs for details.)
+
+        M, n, N, odds = np.broadcast_arrays(M, n, N, odds)
+        shp, bc = _check_shape(M.shape, size)
+        numsamples = int(np.prod(shp))
+        out = np.empty(size, dtype=int)
+
+        it = np.nditer([M, n, N, odds],
+                       flags=['multi_index'],
+                       op_flags=[['readonly']]*4)
+        while not it.finished:
+            idx = tuple((it.multi_index[j] if not bc[j] else slice(None))
+                        for j in range(-len(size), 0))
+            out[idx] = _rvs1(it[0], it[1], it[2], it[3], numsamples,
+                             random_state).reshape(shp)
+            it.iternext()
+
+        return out
 
     def _pmf(self, x, M, n, N, odds):
 
