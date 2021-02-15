@@ -46,6 +46,7 @@ from .HighsStatus cimport (
 from .HighsLp cimport (
     HighsLp,
     HighsSolution,
+    HighsBasis,
 )
 from .HighsInfo cimport HighsInfo
 from .HighsOptions cimport (
