@@ -606,6 +606,7 @@ def linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None,
             _check_result(sol['x'], sol['fun'], sol['status'], sol['slack'],
                           sol['con'], lp.bounds, tol, sol['message']))
         sol['success'] = sol['status'] == 0
+        sol['sensitivity'] = OptimizeResult(sol['sensitivity'])
         return OptimizeResult(sol)
 
     iteration = 0

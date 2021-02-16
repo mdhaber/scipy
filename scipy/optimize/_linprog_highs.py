@@ -364,7 +364,7 @@ def _linprog_highs(lp, solver, time_limit=None, presolve=True,
     sol = {
         'x': np.array(res['x']) if 'x' in res else None,
         'slack': slack,
-        'lambda': {
+        'sensitivity': {
             'ineqlin': ineqlin,
             'eqlin': eqlin,
             'upper': upper,
