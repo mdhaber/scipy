@@ -8,6 +8,7 @@ from numpy.testing import (assert_, assert_allclose, assert_equal,
                            assert_array_less, assert_warns, suppress_warnings)
 from pytest import raises as assert_raises
 from scipy.optimize import linprog, OptimizeWarning
+from scipy.optimize._numdiff import approx_derivative
 from scipy.sparse.linalg import MatrixRankWarning
 from scipy.linalg import LinAlgWarning
 import scipy.sparse
@@ -1646,32 +1647,49 @@ class LinprogHiGHSTests(LinprogCommonTests):
         c, A_ub, b_ub, A_eq, b_eq, bounds = very_random_gen(seed=0)
         res = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
                       bounds=bounds, method=self.method, options=self.options)
+        lb, ub = bounds.T
 
-        _kwargs = {'b_ub': b_ub,
-                   'b_eq': b_eq,
-                   'lb': bounds[:, 0],
-                   'ub': bounds[:, 1]}
-        def _central_diff(prop: str, h: float = 1e-5) -> np.ndarray:
-            res = np.empty_like(_kwargs[prop])
-            for ii in range(len(_kwargs[prop])):
-                hi = _kwargs[prop].copy()
-                lo = _kwargs[prop].copy()
-                hi[ii] += h
-                lo[ii] -= h
-                hi_kwargs = {k: (v if k != prop else hi) for k, v in _kwargs.items()}
-                lo_kwargs = {k: (v if k != prop else lo) for k, v in _kwargs.items()}
-                hi_kwargs['bounds'] = np.vstack((hi_kwargs['lb'], hi_kwargs['ub'])).T
-                lo_kwargs['bounds'] = np.vstack((lo_kwargs['lb'], lo_kwargs['ub'])).T
-                del hi_kwargs['lb'], hi_kwargs['ub'], lo_kwargs['lb'], lo_kwargs['ub']
-                res_hi = linprog(c, A_ub=A_ub, A_eq=A_eq, **hi_kwargs, method=self.method)
-                res_lo = linprog(c, A_ub=A_ub, A_eq=A_eq, **lo_kwargs, method=self.method)
-                res[ii] = (res_hi.fun - res_lo.fun)/(2*h)
-            return res
+        # sensitivity w.r.t. b_ub
+        def f_bub(x):
+            return linprog(c, A_ub, x, A_eq, b_eq, bounds,
+                           method=self.method).fun
 
-        assert_allclose(_central_diff('b_ub'), res.sensitivity.ineqlin)
-        assert_allclose(_central_diff('b_eq'), res.sensitivity.eqlin)
-        assert_allclose(_central_diff('lb'), res.sensitivity.lower)
-        assert_allclose(_central_diff('ub'), res.sensitivity.upper)
+        dfdbub = approx_derivative(f_bub, b_ub, method='3-point', f0=res.fun)
+        assert_allclose(res.sensitivity.ineqlin, dfdbub)
+
+        # sensitivity w.r.t. b_eq
+        def f_beq(x):
+            return linprog(c, A_ub, b_ub, A_eq, x, bounds,
+                           method=self.method).fun
+
+        dfdbeq = approx_derivative(f_beq, b_eq, method='3-point', f0=res.fun)
+        np.testing.assert_allclose(res.sensitivity.eqlin, dfdbeq)
+
+        # sensitivity w.r.t. lb
+        def f_lb(x):
+            bounds = np.array([x, ub]).T
+            return linprog(c, A_ub, b_ub, A_eq, b_eq, bounds,
+                           method=self.method).fun
+
+        with np.errstate(invalid='ignore'):
+            # approx_derivative has trouble where lb is infinite
+            dfdlb = approx_derivative(f_lb, lb, method='3-point', f0=res.fun)
+            dfdlb[~np.isfinite(lb)] = 0
+
+        np.testing.assert_allclose(res.sensitivity.lower, dfdlb)
+
+        # sensitivity w.r.t. ub
+        def f_ub(x):
+            bounds = np.array([lb, x]).T
+            return linprog(c, A_ub, b_ub, A_eq, b_eq, bounds,
+                           method=self.method).fun
+
+        with np.errstate(invalid='ignore'):
+            dfdub = approx_derivative(f_ub, ub, method='3-point', f0=res.fun)
+            dfdub[~np.isfinite(ub)] = 0
+
+        np.testing.assert_allclose(res.sensitivity.upper, dfdub)
+
 
 ################################
 # Simplex Option-Specific Tests#
