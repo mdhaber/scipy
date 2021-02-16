@@ -1641,7 +1641,7 @@ class LinprogHiGHSTests(LinprogCommonTests):
     def test_sensitivies(self):
         '''
         Ensure lagrange multipliers are correct by comparing the derivative
-        w.r.t. b_ub/b_eq/ub/lb match the reported duals.
+        w.r.t. b_ub/b_eq/ub/lb to the reported duals.
         '''
         c, A_ub, b_ub, A_eq, b_eq, bounds = very_random_gen(seed=0)
         res = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
