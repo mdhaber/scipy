@@ -690,21 +690,24 @@ def _pval_cvm_2samp_exact(s, nx, ny):
     rangex = np.arange(nx)
     rangey = np.arange(ny)
 
-    us = []
-
-    # x and y are all possible partitions of ranks from 0 to nx + ny - 1
+    # The following is the fully vectorized version of
+    # > for x, y in _all_partitions(nx, ny):
+    # >     u = nx * np.sum((x - rangex)**2)
+    # >     u += ny * np.sum((y - rangey)**2)
+    # >     us.append(u)
+    # where x and y are all possible partitions of ranks from 0 to nx + ny - 1
     # into two sets of length nx and ny
     # Here, ranks are from 0 to nx + ny - 1 instead of 1 to nx + ny, but
     # this does not change the value of the statistic.
-    for x, y in _all_partitions(nx, ny):
-        # compute the statistic
-        u = nx * np.sum((x - rangex)**2)
-        u += ny * np.sum((y - rangey)**2)
-        us.append(u)
+    all_partitions = list(_all_partitions(nx, ny))
+    all_partitions_x = np.array([x for x, y in all_partitions])
+    all_partitions_y = np.array([y for x, y in all_partitions])
+    us = (
+        nx * ((all_partitions_x - rangex[None, :]) ** 2).sum(axis=1)
+        + ny * ((all_partitions_y - rangey[None, :]) ** 2).sum(axis=1)
+    )
 
-    # compute the values of u and the frequencies
-    u, cnt = np.unique(us, return_counts=True)
-    return np.sum(cnt[u >= s]) / np.sum(cnt)
+    return (us>=s).mean()
 
 
 def cramervonmises_2samp(x, y, method='auto'):
