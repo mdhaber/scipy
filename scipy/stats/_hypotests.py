@@ -3,12 +3,15 @@ from dataclasses import make_dataclass
 import numpy as np
 import warnings
 from itertools import combinations
-import scipy.stats
 from scipy.optimize import shgo
 from . import distributions
 from ._continuous_distns import chi2, norm
 from scipy.special import gamma, kv, gammaln
 from . import _wilcoxon_data
+from scipy import stats
+from scipy.stats import stats as statspy
+from scipy._lib._util import check_random_state
+
 
 Epps_Singleton_2sampResult = namedtuple('Epps_Singleton_2sampResult',
                                         ('statistic', 'pvalue'))
@@ -104,10 +107,8 @@ def epps_singleton_2samp(x, y, t=(0.4, 0.8)):
     if np.less_equal(t, 0).any():
         raise ValueError('t must contain positive elements only.')
 
-    # rescale t with semi-iqr as proposed in [1]; import iqr here to avoid
-    # circular import
-    from scipy.stats import iqr
-    sigma = iqr(np.hstack((x, y))) / 2
+    # rescale t with semi-iqr as proposed in [1]
+    sigma = stats.iqr(np.hstack((x, y))) / 2
     ts = np.reshape(t, (-1, 1)) / sigma
 
     # covariance estimation of ES test
@@ -649,7 +650,7 @@ def somersd(x, y=None):
     if x.ndim == 1:
         if x.size != y.size:
             raise ValueError("Rankings must be of equal length.")
-        table = scipy.stats.contingency.crosstab(x, y)[1]
+        table = stats.contingency.crosstab(x, y)[1]
     elif x.ndim == 2:
         if np.any(x < 0):
             raise ValueError("All elements of the contingency table must be "
@@ -1184,7 +1185,7 @@ def cramervonmises_2samp(x, y, method='auto'):
     # get ranks of x and y in the pooled sample
     z = np.concatenate([xa, ya])
     # in case of ties, use midrank (see [1])
-    r = scipy.stats.rankdata(z, method='average')
+    r = stats.rankdata(z, method='average')
     rx = r[:nx]
     ry = r[nx:]
 
@@ -1216,3 +1217,216 @@ def cramervonmises_2samp(x, y, method='auto'):
             p = max(0, 1. - _cdf_cvm_inf(tn))
 
     return CramerVonMisesResult(statistic=t, pvalue=p)
+
+
+def _vectorize_nanpolicy_fun(fun, *data, **kwargs):
+
+    nan_slice = kwargs.get('nan_slice')
+    nan_data = kwargs.get('nan_data')
+    nan_policy = kwargs.get('nan_policy')
+
+    # if there are no nans, just call fun
+    if not nan_data:
+        return fun(*data, **kwargs)
+
+    # otherwise, concatenate all samples along axis, remembering where each
+    # separate sample begins
+    lengths = np.array([sample.shape[-1] for sample in data])
+    split_indices = np.cumsum(lengths)
+    data_concatenated = np.concatenate(data + (nan_slice,), -1)
+
+    def fun_on_slice(data_concatenated):
+        data_and_nan = np.split(data_concatenated, split_indices)
+        contains_nan = data_and_nan[-1]
+        data = data_and_nan[:-1]
+
+        # if nan_policy is propagate, return nan in the right places
+        if contains_nan and nan_policy == "propagate":
+            return np.nan
+
+        if nan_policy == "propagate":
+            return fun(*data, **kwargs)
+
+        # if nan_policy is omit, remove nans
+        if nan_policy == "omit":
+            # assumes un-paired.
+            # could avoid unnecessary copying by remembering nan_sample
+            data = [sample[~np.isnan(sample)] for sample in data]
+            return fun(*data, **kwargs)
+
+    return np.apply_along_axis(fun_on_slice, axis=-1,
+                               arr=data_concatenated)
+
+
+class HypothesisTest:
+
+    def data_validation(self, *data, **kwargs):
+        axis = kwargs.get('axis', -1)
+        if self.n_samples and self.n_samples != len(data):
+            sample_str = "sample" if self.n_samples == 1 else "samples"
+            message = (f"{self.name}.statistic accepts exactly "
+                       f"{self.n_samples} {sample_str}; {len(data)} provided.")
+            raise ValueError(message)
+        kwargs['axis'] = axis
+
+        # standardization: statistic always calculated along last axis
+        data = [np.moveaxis(sample, axis, -1) for sample in data]
+
+        # determine final shape of all but the last axis
+        shape = np.broadcast(*[sample[..., 0] for sample in data]).shape
+
+        # broadcast along all but the last axis
+        data = [np.broadcast_to(sample, shape + (sample.shape[-1],))
+                for sample in data]
+
+        return data, kwargs
+
+    def nan_policy_validation(self, *data, **kwargs):
+
+        nan_policy = kwargs.get('nan_policy', 'propagate')
+        nan_policy = nan_policy.lower()
+        nan_policies = {'propagate', 'raise', 'omit'}
+        if nan_policy not in nan_policies:
+            message = f'`nan_policy` must be one of {nan_policies}'
+            raise ValueError(message)
+
+        # sample contains nan
+        nan_sample = [np.isnan(sample.sum(axis=-1, keepdims=True))
+                      for sample in data]
+        # slice contains nan
+        nan_slice = np.any(nan_sample, axis=0)
+        # data contains nan
+        nan_data = np.any(nan_slice)
+
+        if nan_policy == "raise" and nan_data:
+            message = "The input contains nan values"
+            raise ValueError(message)
+
+        kwargs['nan_slice'] = nan_slice
+        kwargs['nan_data'] = nan_data
+        kwargs['nan_policy'] = nan_policy
+        return data, kwargs
+
+    def alternative_validation(self, *data, **kwargs):
+        alternative = kwargs.get('alternative', 'two-sided')
+        alternative = alternative.lower()
+        alternatives = {'two-sided', 'less', 'greater'}
+        if alternative not in alternatives:
+            message = f'`alternative` must be one of {alternatives}'
+            raise ValueError(message)
+        kwargs['alternative'] = alternative
+        return data, kwargs
+
+    def random_state_validation(self, *data, **kwargs):
+        random_state = kwargs.get('random_state', None)
+        random_state = check_random_state(random_state)
+        kwargs['random_state'] = random_state
+        return data, kwargs
+
+    def input_validation(self, *data, **kwargs):
+
+        data, kwargs = self.data_validation(*data, **kwargs)
+        data, kwargs = self.alternative_validation(*data, **kwargs)
+        data, kwargs = self.nan_policy_validation(*data, **kwargs)
+        data, kwargs = self.random_state_validation(*data, **kwargs)
+
+        # call user's custom input validation
+        data, kwargs = self._input_validation(*data, **kwargs)
+
+        return data, kwargs
+
+    def _input_validation(self, *data, **kwargs):
+        # default implementation to be overridden with test-specific validation
+        return data, kwargs
+
+    def statistic(self, *data, **kwargs):
+        data, kwargs = self.input_validation(*data, **kwargs)
+        return _vectorize_nanpolicy_fun(self._statistic, *data, **kwargs)
+
+    def pvalue(self, *data, **kwargs):
+        data, kwargs = self.input_validation(*data, **kwargs)
+
+        statistic = _vectorize_nanpolicy_fun(self._statistic, *data, **kwargs)
+
+        n_permutations = kwargs.get('n_permutations', 0)
+        if n_permutations > 0:
+            shapes = None
+            dist = self.generate_permutation_distribution(*data, **kwargs)
+        else:
+            shapes = _vectorize_nanpolicy_fun(self._distribution_shapes,
+                                              *data, **kwargs)
+            dist = self._distribution(**kwargs)
+
+        alternative = kwargs.get('alternative', 'two-sided')
+        if alternative == 'less':
+            prob = dist.cdf(statistic, shapes)
+        elif alternative == 'greater':
+            prob = dist.sf(statistic, shapes)
+        elif alternative == 'two-sided':
+            prob = 2 * dist.sf(np.abs(statistic), shapes)
+        return prob[()]
+
+    def generate_permutation_distribution(self, *data, **kwargs):
+        data, kwargs = self.input_validation(*data, **kwargs)
+
+        n_permutations = kwargs['n_permutations']
+        random_state = kwargs['random_state']
+
+        # otherwise, concatenate all samples along axis, remembering where each
+        # separate sample begins
+        lengths = np.array([sample.shape[-1] for sample in data])
+        split_indices = np.cumsum(lengths)
+        data_concatenated = np.concatenate(data, -1)
+
+        data_cp, n_permutations = statspy._data_permutations(
+            data_concatenated, n_permutations, axis=-1,
+            random_state=random_state)
+
+        data_permuted = np.split(data_cp, split_indices, axis=-1)[:-1]
+
+        # this isn't working because nan_slice is not broadcast with data
+        # how can we vectorize this better?
+        statistic = _vectorize_nanpolicy_fun(self._statistic, *data_permuted,
+                                             **kwargs)
+        null_dist = PermutationDistribution(statistic)
+        return null_dist
+
+
+class PermutationDistribution:
+    '''Permutation distribution of statistic under the null hypothesis'''
+
+    def __init__(self, dist):
+        '''Minimal initializer'''
+        self.dist = dist
+        self.n = len(dist)
+
+    def cdf(self, q, *args):
+        '''Cumulative distribution function'''
+        return (self.dist <= q).sum(axis=0) / self.n
+
+    def sf(self, q, *args):
+        '''Survival function'''
+        return (self.dist >= q).sum(axis=0) / self.n
+
+
+class TTest(HypothesisTest):
+    n_samples = 2
+    name = "TTest"
+
+    def _statistic(self, a, b, **kwargs):
+        # # temporary
+        del kwargs['nan_slice']
+        del kwargs['nan_data']
+        if 'n_permutations' in kwargs:
+            del kwargs['n_permutations']
+        res = stats.ttest_ind(a, b, **kwargs)
+        return res.statistic
+
+    def _distribution_shapes(self, a, b, **kwargs):
+        n1 = a.shape[-1]
+        n2 = b.shape[-1]
+        df = n1 + n2 - 2.0
+        return df
+
+    def _distribution(self, **kwargs):
+        return stats.t

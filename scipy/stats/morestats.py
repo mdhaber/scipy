@@ -28,7 +28,7 @@ __all__ = ['mvsdist',
            'fligner', 'mood', 'wilcoxon', 'median_test',
            'circmean', 'circvar', 'circstd', 'anderson_ksamp',
            'yeojohnson_llf', 'yeojohnson', 'yeojohnson_normmax',
-           'yeojohnson_normplot', 'entropy', 'differential_entropy'
+           'yeojohnson_normplot', 'entropy', 'differential_entropy',
            ]
 
 
