@@ -26,7 +26,7 @@ __all__ = ['mvsdist',
            'fligner', 'mood', 'wilcoxon', 'median_test',
            'circmean', 'circvar', 'circstd', 'anderson_ksamp',
            'yeojohnson_llf', 'yeojohnson', 'yeojohnson_normmax',
-           'yeojohnson_normplot', 'quartile_coeff_dispersion'
+           'yeojohnson_normplot', 'quantile_coeff_dispersion'
            ]
 
 
@@ -3480,16 +3480,18 @@ def circstd(samples, high=2*pi, low=0, axis=None, nan_policy='propagate'):
     return ((high - low)/2.0/pi) * sqrt(-2*log(R))
 
 
-def quartile_coeff_dispersion(a, q=(0.25, 0.75), axis=0,
+def quantile_coeff_dispersion(a, q=(0.25, 0.75), axis=0,
                               interpolation='lower'):
     """
-    Compute the quartile coefficient of dispersion for a given sample array.
+    Compute the quantile coefficient of dispersion for a given sample array.
 
-    Given two quartiles Q_low, Q_high from array samples such that
-    Q_low < Q_high, the quartile coefficient of dispersion is calculated by
+    Given two quantiles Q_low, Q_high from array samples such that
+    Q_low < Q_high, the quantile coefficient of dispersion is calculated by
     (Q_high - Q_low)/(Q_high + Q_low).
+    This function is a generalization of the more common "quartile coefficient
+    of dispersion".
     By default, it is computed using the 1st and 3rd quartiles, that is,
-    the 0.25 and 0.75 _quantiles_ as calculated by `np.quantile`. 
+    the 0.25 and 0.75 quantiles as calculated by `np.quantile`.
 
     Parameters
     ----------
@@ -3506,13 +3508,13 @@ def quartile_coeff_dispersion(a, q=(0.25, 0.75), axis=0,
         use when the desired quantile lies between two data points
         ``i < j``:
 
-        * linear: ``i + (j - i) * fraction``, where ``fraction``
+        * `linear`: ``i + (j - i) * fraction``, where ``fraction``
           is the fractional part of the index surrounded by ``i``
           and ``j``.
-        * lower: ``i``.
-        * higher: ``j``.
-        * nearest: ``i`` or ``j``, whichever is nearest.
-        * midpoint: ``(i + j) / 2``.
+        * `lower`: ``i``.
+        * `higher`: ``j``.
+        * `nearest`: ``i`` or ``j``, whichever is nearest.
+        * `midpoint`: ``(i + j) / 2``.
 
         The default is 'lower'.
 
@@ -3520,19 +3522,34 @@ def quartile_coeff_dispersion(a, q=(0.25, 0.75), axis=0,
     ----------
     .. [1] "Quartile Coefficient of Dispersion", *Wikipedia*,
            https://en.wikipedia.org/wiki/Quartile_coefficient_of_dispersion.
+    .. [2] "Quartile", *Wikipedia*,
+           https://en.wikipedia.org/wiki/Quartile
 
     Returns
     -------
     dispersion : {float, array_like of float}
-        Dispersion for each axis slice.
+        Coefficient of dispersion for each axis slice.
 
     Examples
     --------
-    >>> from scipy.stats import quartile_coeff_dispersion
-    >>> quartile_coeff_dispersion(a=[2, 4, 6, 8, 10, 12, 14, 16])
-    0.5
+    Using the first example from [1], we have
 
-    >>> quartile_coeff_dispersion(a=[1.6, 2.1, 2.3, 2.4,
+    >>> from scipy.stats import quantile_coeff_dispersion
+    >>> quantile_coeff_dispersion(a=[2, 4, 6, 8, 10, 12, 14])
+    0.42857142857142855  # [1] reports 0.5
+
+    Note that this answer differs from that given in [1]. The discrepancy
+    is due to a difference of convention in the calculation of the quartiles.
+    [2] provides four different conventions; [1] follows "Method 1" whereas
+    `quantile_coeff_dispersion` uses the 0.25 and 0.75 quantiles as calculated
+    by `np.quantile`.
+
+    `np.quantile` itself provides several options for the interpolation
+    method to be used. The default here is `lower`, but a different value
+    can be passed using the `interpolation` parameter. Also, quantiles other
+    than `(0.25, 0.75)` can be passed using the `q` parameter.
+
+    >>> quantile_coeff_dispersion(a=[1.6, 2.1, 2.3, 2.4,
     ...                              2.6, 2.9, 2.98, 3],
     ...                           q=(0.25, 0.5),
     ...                           interpolation='midpoint')
