@@ -440,6 +440,10 @@ class rv_frozen:
         shapes, _, _ = self.dist._parse_args(*args, **kwds)
         self.a, self.b = self.dist._get_support(*shapes)
 
+        self.fni = stats.FastNumericalInverse(self)
+        self.rvs = lambda size: self.fni.rvs(size)
+        self.ppf = lambda q: self.fni.ppf(q)
+
     @property
     def random_state(self):
         return self.dist._random_state

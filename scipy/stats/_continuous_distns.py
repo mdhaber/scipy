@@ -28,6 +28,7 @@ from ._distn_infrastructure import (
 from ._ksstats import kolmogn, kolmognp, kolmogni
 from ._constants import (_XMIN, _EULER, _ZETA3,
                          _SQRT_2_OVER_PI, _LOG_SQRT_2_OVER_PI)
+from scipy import stats
 
 
 def _remove_optimizer_parameters(kwds):
