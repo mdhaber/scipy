@@ -682,7 +682,7 @@ def _all_partitions(nx, ny):
         y = z[mask]
         yield x, y
 
-        
+
 def _compute_log_combinations(n):
     """Compute all log combination of C(n, k)."""
     gammaln_arr = gammaln(np.arange(n + 1) + 1)
@@ -1028,8 +1028,8 @@ def boschloo_exact(table, alternative="two-sided", n=32):
     - :math:`H_0 : p_1 = p_2` versus :math:`H_1 : p_1 \neq p_2`,
       with `alternative` = "two-sided" (default one)
 
-    Boschloo's exact test uses the p-value of Fisher's exact test as a 
-    statistic, and Boschloo's p-value is the probability under the null 
+    Boschloo's exact test uses the p-value of Fisher's exact test as a
+    statistic, and Boschloo's p-value is the probability under the null
     hypothesis of observing such an extreme value of this statistic.
 
     Boschloo's and Barnard's are both more powerful than Fisher's exact
@@ -1109,7 +1109,7 @@ def boschloo_exact(table, alternative="two-sided", n=32):
     if 0 in table.sum(axis=0):
         # If both values in column are zero, the p-value is 1 and
         # the score's statistic is NaN.
-        return BoschlooExactResult(np.nan, np.nan)
+        return np.nan, np.nan
 
     total_col_1, total_col_2 = table.sum(axis=0)
     total = total_col_1 + total_col_2
@@ -1145,6 +1145,32 @@ def boschloo_exact(table, alternative="two-sided", n=32):
     fisher_stat = pvalues[table[0, 0], table[0, 1]]
     index_arr = pvalues <= fisher_stat
 
+    mask1 = np.logical_and(np.isclose(pvalues - fisher_stat, 0), pvalues > fisher_stat)
+    mask2 = np.logical_and(~np.isclose(pvalues - fisher_stat, 0), pvalues > fisher_stat)
+
+    false_diff, real_diff = None, None
+
+    false_diffs = np.abs(pvalues[mask1] - fisher_stat)
+    if false_diffs.size > 0:
+        false_diff = np.max(false_diffs)
+
+    real_diffs = np.abs(pvalues[mask2] - fisher_stat)
+    if real_diffs.size > 0:
+        real_diff = np.min(real_diffs)
+
+    if false_diff is not None and real_diff is not None:
+        if real_diff < 1e-6 or false_diff > 1e-14:
+            print(real_diff, false_diff, real_diff - false_diff)
+            print(table)
+        # if :
+        #     print(table)
+        # weird_diff = np.max(diffs[mask])
+        # print(weird_diff, real_diff)
+        # print(table)
+    # elif real_diff < 1e-7:
+    #     print(real_diff)
+    #     print(table)
+
     x1, x2, x1_sum_x2 = x1.T, x2.T, x1_sum_x2.T
     x1_log_comb = _compute_log_combinations(total_col_1)
     x2_log_comb = _compute_log_combinations(total_col_2)
@@ -1161,7 +1187,7 @@ def boschloo_exact(table, alternative="two-sided", n=32):
     # result.fun is the negative log pvalue and therefore needs to be
     # changed before return
     p_value = np.clip(np.exp(-result.fun), a_min=0, a_max=1)
-    return BoschlooExactResult(fisher_stat, p_value)
+    return fisher_stat, p_value
 
 
 def _get_binomial_log_p_value_with_nuisance_param(
