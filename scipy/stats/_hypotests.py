@@ -1502,9 +1502,8 @@ def _data_permutations_paired(data, n_permutations, random_state=None):
     return x, y, n_permutations
 
 
-def _permutation_test_iv(data, statistic, paired=False, vectorized=False,
-                         permutations=np.inf, alternative="two-sided", axis=0,
-                         random_state=None):
+def _permutation_test_iv(data, statistic, paired, vectorized, permutations,
+                         batch, alternative, axis, random_state):
     """Input validation for `permutation_test`."""
 
     axis_int = int(axis)
@@ -1540,6 +1539,13 @@ def _permutation_test_iv(data, statistic, paired=False, vectorized=False,
     if permutations != permutations_int or permutations_int <= 0:
         raise ValueError("`permutations` must be a positive integer.")
 
+    if batch is None:
+        batch_iv = batch
+    else:
+        batch_iv = int(batch)
+        if batch != batch_iv or batch_iv <= 0:
+            raise ValueError("`batch` must be a positive integer or None.")
+
     alternatives = {'two-sided', 'greater', 'less'}
     alternative = alternative.lower()
     if alternative not in alternatives:
@@ -1548,12 +1554,12 @@ def _permutation_test_iv(data, statistic, paired=False, vectorized=False,
     random_state = check_random_state(random_state)
 
     return (data_iv, statistic, paired, vectorized, permutations_int,
-            alternative, axis_int, random_state)
+            batch_iv, alternative, axis_int, random_state)
 
 
 def permutation_test(data, statistic, paired=False, vectorized=False,
-                     permutations=np.inf, alternative="two-sided", axis=0,
-                     random_state=None):
+                     permutations=np.inf, batch=None, alternative="two-sided",
+                     axis=0, random_state=None):
     """
     Performs a permutation test of a given statistic on provided data.
 
@@ -1586,14 +1592,19 @@ def permutation_test(data, statistic, paired=False, vectorized=False,
     permutations: int, optional (default: ``np.inf``)
         Number of permutations used to estimate the p-value. If greater than or
         equal to the number of distinct permutations, perform an exact test.
+    batch : int, optional
+        The number of resamples to process in each vectorized call to
+        `statistic`. Memory usage is O(`batch`*``n``), where ``n`` is the
+        sample size. Default is ``None``, in which case
+        ``batch = n_resamples``.
     alternative: str in {'two-sided', 'less', 'greater'} (default:'two-sided')
         The alternative hypothesis for which the p-value is calculated.
         For each alternative, the p-value is defined as follows.
 
         - ``'greater'`` : the percentage of the null distribution that is
-        greater than or equal to the observed value of the test statistic.
+          greater than or equal to the observed value of the test statistic.
         - ``'less'`` : the percentage of the null distribution that is
-        less than or equal to the observed value of the test statistic.
+          less than or equal to the observed value of the test statistic.
         - ``'two-sided'`` : twice the smaller of the p-values above.
 
     axis : int, optional (default: 0)
@@ -1727,9 +1738,10 @@ def permutation_test(data, statistic, paired=False, vectorized=False,
 
     """
     args = _permutation_test_iv(data, statistic, paired, vectorized,
-                                permutations, alternative, axis, random_state)
-    data, statistic, paired, vectorized = args[:4]
-    permutations, alternative, axis, random_state = args[4:]
+                                permutations, batch, alternative, axis,
+                                random_state)
+    data, statistic, paired, vectorized, permutations = args[:5]
+    batch, alternative, axis, random_state = args[5:]
 
     if not vectorized:
         statistic_vectorized = _bootstrap._vectorize_statistic(statistic)
@@ -1739,6 +1751,7 @@ def permutation_test(data, statistic, paired=False, vectorized=False,
     observed = statistic_vectorized(*data, axis=-1)
 
     # TODO: generalize to n-samples
+    # TODO: batch computations; waiting for gh-14206
     if paired:
         tmp = _data_permutations_paired(data, permutations,
                                         random_state=random_state)
