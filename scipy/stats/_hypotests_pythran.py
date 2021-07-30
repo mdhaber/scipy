@@ -1,3 +1,6 @@
+import math
+import numpy as np
+
 #pythran export _Aij(float[:,:], int, int)
 #pythran export _Aij(int[:,:], int, int)
 def _Aij(A, i, j):
@@ -47,3 +50,27 @@ def _a_ij_Aij_Dij2(A):
         for j in range(n):
             count += A[i, j]*(_Aij(A, i, j) - _Dij(A, i, j))**2
     return count
+
+#pythran export comb(int, int)
+def _comb(n, k):
+
+    m = int(factorial(n)/(factorial(n-k)*factorial(k)))
+    combs = np.empty((m, k))
+    j = 0
+
+    b = np.arange(k)
+    combs[0] = b
+    j += 1
+
+    maxs = b + n - k
+    i = k-1
+    while i >= 0:
+        if b[i] < maxs[i]:
+            b[i:] = np.arange(b[i] + 1, b[i] + k - i + 1)
+            i = k - 1
+            combs[j] = b
+            j += 1
+        else:
+            i -= 1
+
+    return combs
