@@ -14,10 +14,9 @@ with safe_import():
 with safe_import():
     from scipy.linalg import toeplitz
 
-methods = [("highs-ipm", {}),
-           ("highs-ds", {}),
+methods = [("interior-point", {"sparse": False}),
            ("interior-point", {"sparse": True}),
-           ("interior-point", {"sparse": False})]
+           ("interior-point", {"sparse": True, "permc_spec":"COLAMD"})]
 
 problems = ['25FV47', '80BAU3B', 'ADLITTLE', 'AFIRO', 'AGG', 'AGG2', 'AGG3',
             'BANDM', 'BEACONFD', 'BLEND', 'BNL1', 'BNL2', 'BORE3D', 'BRANDY',
