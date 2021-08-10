@@ -232,7 +232,6 @@ Summary statistics
    differential_entropy
    median_absolute_deviation
    median_abs_deviation
-   bootstrap
 
 Frequency statistics
 ====================
@@ -301,7 +300,6 @@ Statistical tests
    combine_pvalues
    jarque_bera
    page_trend_test
-   permutation_test
 
 .. autosummary::
    :toctree: generated/
@@ -330,6 +328,15 @@ Quasi-Monte Carlo
 
    stats.qmc
 
+Resampling Methods
+==================
+
+.. autosummary::
+   :toctree: generated/
+
+   bootstrap
+   permutation_test
+   monte_carlo_test
 
 Masked statistics functions
 ===========================
@@ -450,7 +457,7 @@ from . import qmc
 from ._multivariate import *
 from . import contingency
 from .contingency import chi2_contingency
-from ._bootstrap import bootstrap
+from ._bootstrap import bootstrap, monte_carlo_test
 from ._entropy import *
 from ._hypotests import *
 from ._rvs_sampling import rvs_ratio_uniforms, NumericalInverseHermite
