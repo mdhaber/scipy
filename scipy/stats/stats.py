@@ -293,6 +293,9 @@ def gmean(a, axis=0, dtype=None, weights=None):
     return np.exp(np.average(log_a, axis=axis, weights=weights))
 
 
+@_axis_nan_policy_factory(
+        lambda x: x, n_samples=1, n_outputs=1, too_small=0,
+        result_unpacker=lambda x: (x,))
 def hmean(a, axis=0, dtype=None):
     """Calculate the harmonic mean along the specified axis.
 
