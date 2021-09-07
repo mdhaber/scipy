@@ -47,7 +47,8 @@ def _bootstrap_resample(sample, n_resamples=None, random_state=None):
     n = sample.shape[-1]
 
     # bootstrap - each row is a random resample of original observations
-    i = random_state.randint(0, n, (n_resamples, n))
+    # i = random_state.randint(0, n, (n_resamples, n))
+    i = (random_state.rand(n_resamples, n)*n).astype(int)
 
     resamples = sample[..., i]
     return resamples
