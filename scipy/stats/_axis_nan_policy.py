@@ -88,6 +88,21 @@ def _remove_nans(samples, paired):
     return [sample[not_nans] for sample in samples]
 
 
+def _remove_sentinel(samples, paired, sentinel):
+    "Remove nans from paired or unpaired samples"
+    # potential optimization: don't copy arrays that don't contain nans
+    if not paired:
+        return [sample[sample != sentinel] for sample in samples]
+
+    # for paired samples, we need to remove the whole pair when any part
+    # has a nan
+    sentinels = (samples[0] == sentinel)
+    for sample in samples[1:]:
+        sentinels = sentinels | (sample == sentinel)
+    not_sentinels = ~sentinels
+    return [sample[not_sentinels] for sample in samples]
+
+
 def _check_empty_inputs(samples, axis):
     """
     Check for empty sample; return appropriate output for a vectorized hypotest
@@ -101,6 +116,22 @@ def _check_empty_inputs(samples, axis):
     output = np.ones(output_shape) * np.nan
     return output
 
+
+def _insert_sentinel(samples):
+
+    has_mask = False
+    sentinel = np.random.default_rng().random()
+
+    out_samples = []
+    for sample in samples:
+        mask = getattr(sample, 'mask', False)
+        has_mask = has_mask or np.any(mask)
+        mask = np.broadcast_to(mask, sample.shape)
+        sample = np.array(sample, copy=np.any(mask))
+        sample[mask] = sentinel
+        out_samples.append(sample)
+
+    return out_samples, (sentinel if has_mask else None)
 
 # Standard docstring / signature entries for `axis` and `nan_policy`
 _name = 'axis'
@@ -233,6 +264,7 @@ def _axis_nan_policy_factory(result_object, default_axis=0,
             # Extract the things we need here
             samples = [np.atleast_1d(kwds.pop(param))
                        for param in params[:n_samp]]
+            samples, sentinel = _insert_sentinel(samples)
             vectorized = True if 'axis' in params else False
             axis = kwds.pop('axis', default_axis)
             nan_policy = kwds.pop('nan_policy', 'propagate')
@@ -267,13 +299,17 @@ def _axis_nan_policy_factory(result_object, default_axis=0,
                 if any(contains_nans) and nan_policy == 'omit':
                     # consider passing in contains_nans
                     samples = _remove_nans(samples, paired)
+                    if sentinel:
+                        samples = _remove_sentinel(samples, paired, sentinel)
+
 
                 # ideally, this is what the behavior would be, but some
                 # existing functions raise exceptions, so overriding it
                 # would break backward compatibility.
                 # if is_too_small(samples):
                 #     return result_object(np.nan, np.nan)
-
+                if sentinel:
+                    samples = _remove_sentinel(samples, paired, sentinel)
                 return hypotest_fun_in(*samples, **kwds)
 
             # check for empty input
@@ -294,14 +330,17 @@ def _axis_nan_policy_factory(result_object, default_axis=0,
             contains_nan, _ = (
                 scipy.stats.stats._contains_nan(x, nan_policy))
 
-            if vectorized and not contains_nan:
+            if vectorized and not contains_nan and not sentinel:
                 return hypotest_fun_in(*samples, axis=axis, **kwds)
 
             # Addresses nan_policy == "omit"
             if contains_nan and nan_policy == 'omit':
+                pass
                 def hypotest_fun(x):
                     samples = np.split(x, split_indices)[:n_samp]
                     samples = _remove_nans(samples, paired)
+                    if sentinel:
+                        samples = _remove_sentinel(samples, paired, sentinel)
                     if is_too_small(samples):
                         res = np.ones(n_outputs) * np.nan
                         return result_object(*res)
@@ -314,11 +353,21 @@ def _axis_nan_policy_factory(result_object, default_axis=0,
                         res = np.ones(n_outputs) * np.nan
                         return result_object(*res)
                     samples = np.split(x, split_indices)[:n_samp]
+                    if sentinel:
+                        samples = _remove_sentinel(samples, paired, sentinel)
+                    if is_too_small(samples):
+                        res = np.ones(n_outputs) * np.nan
+                        return result_object(*res)
                     return hypotest_fun_in(*samples, **kwds)
 
             else:
                 def hypotest_fun(x):
                     samples = np.split(x, split_indices)[:n_samp]
+                    if sentinel:
+                        samples = _remove_sentinel(samples, paired, sentinel)
+                    if is_too_small(samples):
+                        res = np.ones(n_outputs) * np.nan
+                        return result_object(*res)
                     return hypotest_fun_in(*samples, **kwds)
 
             x = np.moveaxis(x, axis, -1)
