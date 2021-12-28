@@ -1,8 +1,69 @@
 import numpy as np
-from scipy.sparse import csc_array
+from scipy.sparse import csc_array, vstack
 from ._highs._highs_wrapper import _highs_wrapper
 from ._constraints import LinearConstraint, Bounds
 from ._optimize import OptimizeResult
+
+
+def _constraints_to_components(constraints):
+    # convert sequence of constraints to a single set of components A, b_l, b_u
+
+    # `constraints` could be
+    # 1. A LinearConstraint
+    # 2. A tuple representing a LinearConstraint
+    # 3. An invalid object
+    # 4. A sequence of composed entirely of objects of type 1/2
+    # 5. A sequence containing at least one object of type 3
+    # We want to accept 1, 2, and 4 and reject 3 and 5
+
+    message = ("`constraints` must be a sequence of "
+               "`scipy.optimize.LinearConstraint` objects.")
+    As = []
+    b_ls = []
+    b_us = []
+
+    # Accept case 1 by standardizing as case 4
+    if isinstance(constraints, LinearConstraint):
+        constraints = [constraints]
+    else:
+        # Reject case 3
+        try:
+            iter(constraints)
+        except TypeError:
+            raise ValueError(message)
+
+        # Accept case 2 by standardizing as case 4
+        if len(constraints) == 3:
+            # argument could be a single tuple representing a LinearConstraint
+            try:
+                constraints = [LinearConstraint(*constraints)]
+            except TypeError:
+                # argument was not a tuple representing a LinearConstraint
+                pass
+
+    # Address cases 4/5
+    for constraint in constraints:
+        # if it's not a LinearConstraint or something that represents a
+        # LinearConstraint at this point, it's invalid
+        if not isinstance(constraint, LinearConstraint):
+            try:
+                constraint = LinearConstraint(*constraint)
+            except TypeError:
+                raise ValueError(message)
+        As.append(csc_array(constraint.A))
+        b_ls.append(np.atleast_1d(constraint.lb).astype(np.double))
+        b_us.append(np.atleast_1d(constraint.ub).astype(np.double))
+
+    if len(As) > 1:
+        A = vstack(As)
+        b_l = np.concatenate(b_ls)
+        b_u = np.concatenate(b_us)
+    else:  # avoid unnecessary copying
+        A = As[0]
+        b_l = b_ls[0]
+        b_u = b_us[0]
+
+    return A, b_l, b_u
 
 
 def _milp_iv(c, integrality, bounds, constraints, options):
@@ -28,29 +89,18 @@ def _milp_iv(c, integrality, bounds, constraints, options):
     lb = np.broadcast_to(bounds.lb, c.shape).astype(np.double)
     ub = np.broadcast_to(bounds.ub, c.shape).astype(np.double)
 
-    if constraints is None:
-        constraints = LinearConstraint(np.empty((0, c.size)),
-                                       np.empty((0,)), np.empty((0,)))
-    elif not isinstance(constraints, LinearConstraint):
-        message = ("`constraints` must be an instance of "
-                   "`scipy.optimize.LinearConstraint`.")
-        try:
-            constraints = LinearConstraint(*constraints)
-        except TypeError:
-            raise ValueError(message)
-    A = csc_array(constraints.A)
-    b_l = np.atleast_1d(constraints.lb).astype(np.double)
-    b_u = np.atleast_1d(constraints.ub).astype(np.double)
-    if b_l.ndim > 1 or b_l.shape != b_u.shape:
-        message = "`b_l` and `b_u` must be one-dimensional of equal length."
-        raise ValueError(message)
+    if not constraints: # constraints is None, empty sequence, False, 0, etc.
+        constraints = [LinearConstraint(np.empty((0, c.size)),
+                                        np.empty((0,)), np.empty((0,)))]
+    A, b_l, b_u = _constraints_to_components(constraints)
+
     if A.shape != (b_l.size, c.size):
         message = "The shape of `A` must be (len(b_l), len(c))."
         raise ValueError(message)
     indptr, indices, data = A.indptr, A.indices, A.data.astype(np.double)
 
     # relying on options input validation in _highs_wrapper
-    options_iv = {}
+    options_iv = {'log_to_console': False}
     options_iv.update(options)
 
     return c, integrality, lb, ub, indptr, indices, data, b_l, b_u, options_iv
@@ -117,12 +167,19 @@ def milp(c, *, integrality=None, bounds=None, constraints=None, options={}):
         ``keep_feasible`` parameter of the `Bounds` object is ignored. If
         not specified, all decision variables are constrained to be
         non-negative.
-    constraints : scipy.optimize.LinearConstraint, optional
-        Linear constraints of the optimization problem. Before the
-        problem is solved, all values are converted to double precision, and
-        the matrix of constraint coefficients is converted to an instance
-        of `scipy.sparse.csc_matrix`. The ``keep_feasible``
-        parameter of the `LinearConstraint` object is ignored.
+    constraints : sequence of scipy.optimize.LinearConstraint, optional
+        Linear constraints of the optimization problem. Arguments may be
+        one of the following:
+
+        1. A single `LinearConstraint` object
+        2. A single tuple that can be converted to a `LinearConstraint` object
+           as ``LinearConstraint(*constraints)
+        3. A sequence composed entirely of objects of type 1. and 2.
+
+        Before the problem is solved, all values are converted to double
+        precision, and the matrices of constraint coefficients are converted to
+        instances of `scipy.sparse.csc_array`. The ``keep_feasible`` parameter
+        of `LinearConstraint` objects is ignored.
 
     Options
     -------
