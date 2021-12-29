@@ -47,25 +47,18 @@ SciPy 1.8.0.
 
 # Statement of need
 
-`Gala` is an Astropy-affiliated Python package for galactic dynamics. Python
-enables wrapping low-level languages (e.g., C) for speed without losing
-flexibility or ease-of-use in the user-interface. The API for `Gala` was
-designed to provide a class-based and user-friendly interface to fast (C or
-Cython-optimized) implementations of common operations such as gravitational
-potential and force evaluation, orbit integration, dynamical transformations,
-and chaos indicators for nonlinear dynamics. `Gala` also relies heavily on and
-interfaces well with the implementations of physical units and astronomical
-coordinate systems in the `Astropy` package [@astropy] (`astropy.units` and
-`astropy.coordinates`).
+After Analysis of Variance (ANOVA) indicates that there is a statistically
+significant difference between at least one pair of groups in an experiment,
+researchers are often interested in *which* of the differences is
+statistically significant. Researchers use post-hoc tests to study these
+pairwise differences while controlling the experiment-wise error rate. Until
+recently, no post-hoc tests were available in SciPy [@virtanen2020scipy], the
+de-facto standard library of fundamental algorithms for scientific computing
+in Python. To fill this gap, we contributed
+[@PRtukey_hsd], a function for performing Tukey's Honestly Significant
+Difference Test.
 
-`Gala` was designed to be used by both astronomical researchers and by
-students in courses on gravitational dynamics or astronomy. It has already been
-used in a number of scientific publications [@Pearson:2017] and has also been
-used in graduate courses on Galactic dynamics to, e.g., provide interactive
-visualizations of textbook material [@Binney:2008]. The combination of speed,
-design, and support for Astropy functionality in `Gala` will enable exciting
-scientific explorations of forthcoming data releases from the *Gaia* mission
-[@gaia] by students and experts alike.
+The most computationally-challenging part of implementing Tukey's HSD Test is the evaluation of the cumulative density function of the studentized range distribution, which is given by
 
 # Mathematics
 
