@@ -2,10 +2,10 @@
 title: 'tukey_hsd: An Accurate Implementation of the Tukey Honestly Significant Difference Test in Python'
 tags:
   - Python
-  - astronomy
-  - dynamics
-  - galactic dynamics
-  - milky way
+  - SciPy
+  - statistics
+  - hypothesis testing
+  - statistical distributions
 authors:
   - name: Adrian M. Price-Whelan^[co-first author] # note this makes a footnote saying 'co-first author'
     orcid: 0000-0003-0872-7098
