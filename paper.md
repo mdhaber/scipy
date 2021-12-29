@@ -28,30 +28,30 @@ bibliography: paper.bib
 In a world awash with data and computers, it is tempting to automate the
 process of scientific discovery by performing comparisons between many pairs
 of variables in hope of finding correlations. When frequentist hypothesis
-tests between pairs of variables are performed at a fixed confidence level,
+tests are performed at a fixed confidence level,
 increasing the number of tests increases the probability of observing a
 "statistically significant" result, even when the null hypothesis is actually
 true. Carefully designed tests, such as Tukey's HSD (Honestly Significant
 Difference) Test [@tukey1949comparing], protect against this practice of "data
-dredging", producing p-values and confidence intervals that correctly account
+dredging", producing p-values and confidence intervals that account
 for the number of comparisons performed. Several such tests rely on the
 studentized range distribution [@lund1983algorithm], which models the range
-(i.e. the difference between the maximum and minimum values) of the means of
+(i.e. difference between maximum and minimum values) of the means of
 samples from a normally distributed population. Although there are already
 implementations of these tests available in the scientific Python ecosystem,
 all of them rely on approximations of the studentized range distribution,
-which are not be accurate outside the range of inputs for which they are
+which are not accurate outside the range of inputs for which they are
 designed. Here we present the implementation of a very accurate and
 sufficiently fast implementation of the studentized range distribution and a
-function for performing Tukey's HSD test. Both of these are available in
-SciPy 1.8.0.
+function for performing Tukey's HSD test. Both of these features are available
+in SciPy 1.8.0.
 
 # Statement of need
 
-After Analysis of Variance (ANOVA) indicates that there is a statistically
+After analysis of variance (ANOVA) indicates that there is a statistically
 significant difference between at least one pair of groups in an experiment,
 researchers are often interested in *which* of the differences is
-statistically significant. Researchers use post-hoc tests to study these
+statistically significant. Researchers use "post-hoc tests" to study these
 pairwise differences while controlling the experiment-wise error rate. Until
 recently, no post-hoc tests were available in SciPy [@virtanen2020scipy], the
 de-facto standard library of fundamental algorithms for scientific computing
@@ -76,7 +76,7 @@ There is no closed form expression for this integral, and numerical
 integration requires care, as naive evaluation of the integrand results
 in overflow even for modest values of the parameters. Consequently, other
 packages in the open-source scientific Python ecosystem, such as statsmodels
-[@seabold2010statsmodels] and Pingouin [@vallat2018pingouin], rely on
+[@seabold2010statsmodels] and Pingouin [@vallat2018pingouin], have relied on
 interpolation between tabulated values. To satisfy the need for a more
 accurate implementation of this integral, we contributed
 `scipy.stats.studentized_range` [@PRstudentized_range], a class that
