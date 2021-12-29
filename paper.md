@@ -1,5 +1,5 @@
 ---
-title: Gala: A Python package for galactic dynamics Tukey
+title: 'An Accurate Implementation of the Tukey Honestly Significant Difference Test in Python'
 tags:
   - Python
   - astronomy
