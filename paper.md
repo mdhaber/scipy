@@ -73,7 +73,16 @@ number of degrees of freedom used to determine the pooled sample variance, and
 $\phi(z)$ and $\Phi(z)$ represent the normal PDF and normal CDF, respectively.
 There is no closed form expression for this integral, and numerical
 integration requires care, as naive evaluation of the integrand results
-in overflow even for modest values of the parameters.
+in overflow even for modest values of the parameters. Consequently, other
+packages in the open-source scientific Python ecosystem, such as statsmodels
+[@seabold2010statsmodels] and Pingouin [@vallat2018pingouin], rely on
+interpolation between tabulated values. To satisfy the need for a more
+accurate implementation of this integral, we contributed
+`scipy.stats.studentized_range` [@PRstudentized_range], a class that
+evaluates the CDF and many other functions of the distribution. A thorough
+assessment of the methods, accuracy, and speed of these calculations is
+available in [@StudentizedRangeSciPy], and an extensive test and
+benchmark suite included in SciPy guards against regressions.
 
 # Mathematics
 
