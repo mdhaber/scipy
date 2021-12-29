@@ -58,7 +58,15 @@ in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
 [@PRtukey_hsd], a function for performing Tukey's Honestly Significant
 Difference Test.
 
-The most computationally-challenging part of implementing Tukey's HSD Test is the evaluation of the cumulative density function of the studentized range distribution, which is given by
+The most computationally-challenging part of implementing Tukey's HSD Test is
+the evaluation of the cumulative density function of the studentized range
+distribution, which is given by
+
+\begin{eqnarray*}
+F(q; k, \nu) = \frac{k\nu^{\nu/2}}{\Gamma(\nu/2)2^{\nu/2-1}}
+\int_{0}^{\infty} \int_{-\infty}^{\infty} s^{\nu-1} e^{-\nu s^2/2} \phi(z)
+[\Phi(sq + z) - \Phi(z)]^{k-1} \,dz \,ds
+\end{eqnarray*}
 
 # Mathematics
 
