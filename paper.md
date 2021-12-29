@@ -10,7 +10,7 @@ tags:
 authors:
   - name: Dominic Chmiel^[co-first author]
     affiliation: 1
-  - name: Sam Wallan^[co-first author]
+  - name: Samuel Wallan^[co-first author]
     affiliation: 1
   - name: Matt Haberland^[corresponding author]
     affiliation: 1
