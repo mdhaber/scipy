@@ -68,6 +68,13 @@ F(q; k, \nu) = \frac{k\nu^{\nu/2}}{\Gamma(\nu/2)2^{\nu/2-1}}
 [\Phi(sq + z) - \Phi(z)]^{k-1} \,dz \,ds
 \end{eqnarray*}
 
+where $q$ is the studentized range, $k$ is the number of groups, $\nu$ is the
+number of degrees of freedom used to determine the pooled sample variance, and
+$\phi(z)$ and $\Phi(z)$ represent the normal PDF and normal CDF, respectively.
+There is no closed form expression for this integral, and numerical
+integration requires care, as naive evaluation of the integrand results
+in overflow even for modest values of the parameters.
+
 # Mathematics
 
 Single dollars ($) are required for inline mathematics e.g. $f(x) = e^{\pi/x}$
