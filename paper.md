@@ -1,5 +1,5 @@
 ---
-title: 'tukey_hsd: An Accurate Implementation of Tukey's Honestly Significant Difference Test in Python'
+title: 'Gala: A Python package for galactic dynamics Tukey'
 tags:
   - Python
   - astronomy
