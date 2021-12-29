@@ -20,23 +20,30 @@ affiliations:
 date: 29 December 2021
 bibliography: paper.bib
 
-# Optional fields if submitting to a AAS journal too, see this blog post:
-# https://blog.joss.theoj.org/2018/12/a-new-collaboration-with-aas-publishing
-aas-doi: 10.3847/xxxxx <- update this with the DOI from AAS once you know it.
-aas-journal: Astrophysical Journal <- The name of the AAS journal.
 ---
 
 # Summary
 
-The forces on stars, galaxies, and dark matter under external gravitational
-fields lead to the dynamical evolution of structures in the universe. The orbits
-of these bodies are therefore key to understanding the formation, history, and
-future state of galaxies. The field of "galactic dynamics," which aims to model
-the gravitating components of galaxies to study their structure and evolution,
-is now well-established, commonly taught, and frequently used in astronomy.
-Aside from toy problems and demonstrations, the majority of problems require
-efficient numerical tools, many of which require the same base code (e.g., for
-performing numerical orbit integration).
+In a world awash with data and computers, it is tempting to automate the
+process of scientific discovery by performing comparisons between many pairs
+of variables in hope of finding correlations. When frequentist hypothesis
+tests between pairs of variables are performed at a fixed confidence level,
+increasing the number of tests increases the probability of observing a
+"statistically significant" result, even when the null hypothesis is actually
+true. Carefully designed tests, such as Tukey's HSD (Honestly Significant
+Difference) Test, protect against this practice of "data
+dredging", producing p-values and confidence intervals that correctly account
+for the number of comparisons performed. Several such tests rely on the
+studentized range distribution, which models the range (i.e. the
+difference between the maximum and minimum values) of the means of samples
+from a normally distributed population. Although there are already
+implementations of these tests available in the scientific Python ecosystem,
+all of them rely on approximations of the studentized range distribution,
+which are not be accurate outside the range of inputs for which they are
+designed. Here we present the implementation of a very accurate and
+sufficiently fast implementation of the studentized range distribution and a
+function for performing Tukey's HSD test. Both of these are available in
+SciPy 1.8.0.
 
 # Statement of need
 
