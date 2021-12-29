@@ -1,47 +1,112 @@
 ---
-title: 'tukey_hsd: An Accurate Implementation of Tukey's Honestly Significant Difference Test in Python'
+title: 'Gala: A Python package for galactic dynamics'
 tags:
   - Python
-  - SciPy
-  - statistics
-  - hypothesis testing
-  - statistical distributions
+  - astronomy
+  - dynamics
+  - galactic dynamics
+  - milky way
 authors:
-  - name: Dominic Chmiel^[co-first author]
-    affiliation: 1
-  - name: Sam Wallan^[co-first author]
-    affiliation: 1
-  - name: Matt Haberland^[corresponding author]
-    affiliation: 1
-	orcid: 0000-0003-4806-3601
+  - name: Adrian M. Price-Whelan^[co-first author] # note this makes a footnote saying 'co-first author'
+    orcid: 0000-0003-0872-7098
+    affiliation: "1, 2" # (Multiple affiliations must be quoted)
+  - name: Author Without ORCID^[co-first author] # note this makes a footnote saying 'co-first author'
+    affiliation: 2
+  - name: Author with no affiliation^[corresponding author]
+    affiliation: 3
 affiliations:
- - name: California Polytechnic State University, San Luis Obispo
+ - name: Lyman Spitzer, Jr. Fellow, Princeton University
    index: 1
-date: 28 December 2021
+ - name: Institution Name
+   index: 2
+ - name: Independent Researcher
+   index: 3
+date: 13 August 2017
 bibliography: paper.bib
 
+# Optional fields if submitting to a AAS journal too, see this blog post:
+# https://blog.joss.theoj.org/2018/12/a-new-collaboration-with-aas-publishing
+aas-doi: 10.3847/xxxxx <- update this with the DOI from AAS once you know it.
+aas-journal: Astrophysical Journal <- The name of the AAS journal.
 ---
 
 # Summary
 
-In a world awash with data and computers, it is tempting to automate the process of scientific discovery by performing comparisons between many pairs of variables in hope of finding correlations. When frequentist hypothesis tests between pairs of variables are performed at a fixed confidence level, increasing the number of tests increases the probability of observing a "statistically significant" result, even when the null hypothesis is actually true. Carefully designed tests, such as Tukey's HSD (Honestly Significant Difference) Test [@Tukey:1949], protect against this practice of "data dredging", producing p-values and confidence intervals that correctly account for the number of comparisons performed. Several such tests rely on the studentized range distribution [@Lund:1983], which models the range (i.e. the difference between the maximum and minimum values) of the means of samples from a normally distributed population. Although there are already implementations of these tests available in the scientific Python ecosystem, all of them rely on approximations of the studentized range distribution, which are not be accurate outside the range of inputs for which they are designed. Here we present the implementation of a very accurate and sufficiently fast implementation of the studentized range distribution and a function for performing Tukey's HSD test. Both of these are available in SciPy 1.8.0.
+The forces on stars, galaxies, and dark matter under external gravitational
+fields lead to the dynamical evolution of structures in the universe. The orbits
+of these bodies are therefore key to understanding the formation, history, and
+future state of galaxies. The field of "galactic dynamics," which aims to model
+the gravitating components of galaxies to study their structure and evolution,
+is now well-established, commonly taught, and frequently used in astronomy.
+Aside from toy problems and demonstrations, the majority of problems require
+efficient numerical tools, many of which require the same base code (e.g., for
+performing numerical orbit integration).
 
 # Statement of need
 
-After Analysis of Variance (ANOVA) indicates that there is a statistically significant difference between at least one pair of groups in an experiment, researchers are often interested in *which* of the differences is statistically significant. Researchers use post-hoc tests to study these pairwise differences while controlling the experiment-wise error rate. Until recently, no post-hoc tests were available in SciPy [@Virtanen:2020], the de-facto standard library of fundamental algorithms for scientific computing in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd` [@Wallan:2021], a function for performing Tukey's Honestly Significant Difference Test. 
+`Gala` is an Astropy-affiliated Python package for galactic dynamics. Python
+enables wrapping low-level languages (e.g., C) for speed without losing
+flexibility or ease-of-use in the user-interface. The API for `Gala` was
+designed to provide a class-based and user-friendly interface to fast (C or
+Cython-optimized) implementations of common operations such as gravitational
+potential and force evaluation, orbit integration, dynamical transformations,
+and chaos indicators for nonlinear dynamics. `Gala` also relies heavily on and
+interfaces well with the implementations of physical units and astronomical
+coordinate systems in the `Astropy` package [@astropy] (`astropy.units` and
+`astropy.coordinates`).
 
-The most computationally-challenging part of implementing Tukey's HSD Test is the evaluation of the cumulative density function of the studentized range distribution, which is given by
+`Gala` was designed to be used by both astronomical researchers and by
+students in courses on gravitational dynamics or astronomy. It has already been
+used in a number of scientific publications [@Pearson:2017] and has also been
+used in graduate courses on Galactic dynamics to, e.g., provide interactive
+visualizations of textbook material [@Binney:2008]. The combination of speed,
+design, and support for Astropy functionality in `Gala` will enable exciting
+scientific explorations of forthcoming data releases from the *Gaia* mission
+[@gaia] by students and experts alike.
 
-\begin{eqnarray*}
-F(q; k, \nu) = \frac{k\nu^{\nu/2}}{\Gamma(\nu/2)2^{\nu/2-1}}
-\int_{0}^{\infty} \int_{-\infty}^{\infty} s^{\nu-1} e^{-\nu s^2/2} \phi(z)
-[\Phi(sq + z) - \Phi(z)]^{k-1} \,dz \,ds
-\end{eqnarray*}
+# Mathematics
 
-where $q$ is the studentized range, $k$ is the number of groups, $\nu$ is the number of degrees of freedom used to determine the pooled sample variance, and $\phi(z)$ and $\Phi(z)$ represent the normal PDF and normal CDF, respectively. There is no closed form expression for this integral, and numerical integration requires care, as naive evaluation of the integrand results in overflow even for modest values of the parameters. Consequently, other packages in the open-source scientific Python ecosystem, such as statsmodels [@Seabold:2010] and Pinguin [@Vallat:2018], rely on interpolation between tabulated values. To satisfy the need for a more accurate implementation of this integral, we contributed `scipy.stats.studentized_range`, a class that evaluates the CDF and many other functions of the distribution. A thorough assessment of the methods, accuracy, and speed of these calculations is available in [@Wallan:2021], and an extensive test and benchmark suite included in SciPy guards against regressions.
+Single dollars ($) are required for inline mathematics e.g. $f(x) = e^{\pi/x}$
+
+Double dollars make self-standing equations:
+
+$$\Theta(x) = \left\{\begin{array}{l}
+0\textrm{ if } x < 0\cr
+1\textrm{ else}
+\end{array}\right.$$
+
+You can also use plain \LaTeX for equations
+\begin{equation}\label{eq:fourier}
+\hat f(\omega) = \int_{-\infty}^{\infty} f(x) e^{i\omega x} dx
+\end{equation}
+and refer to \autoref{eq:fourier} from text.
+
+# Citations
+
+Citations to entries in paper.bib should be in
+[rMarkdown](http://rmarkdown.rstudio.com/authoring_bibliographies_and_citations.html)
+format.
+
+If you want to cite a software repository URL (e.g. something on GitHub without a preferred
+citation) then you can do it with the example BibTeX entry below for @fidgit.
+
+For a quick reference, the following citation commands can be used:
+- `@author:2001`  ->  "Author et al. (2001)"
+- `[@author:2001]` -> "(Author et al., 2001)"
+- `[@author1:2001; @author2:2001]` -> "(Author1 et al., 2001; Author2 et al., 2002)"
+
+# Figures
+
+Figures can be included like this:
+![Caption for example figure.\label{fig:example}](figure.png)
+and referenced from text using \autoref{fig:example}.
+
+Figure sizes can be customized by adding an optional second parameter:
+![Caption for example figure.](figure.png){ width=20% }
 
 # Acknowledgements
 
-We gratefully acknowledge the support of Chan Zuckerberg Initiative Essential Open Source Software for Science Grant EOSS-0000000432. Thanks also to reviewers Pamphile Roy, Nicholas McKibben, and Warren Weckesser.
+We acknowledge contributions from Brigitta Sipocz, Syrtis Major, and Semyeong
+Oh, and support from Kathryn Johnston during the genesis of this project.
 
 # References
