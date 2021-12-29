@@ -1,5 +1,6 @@
 ---
-title: 'tukey_hsd: An Accurate Implementation of the Tukey Honestly Significant Difference Test in Python'
+title: '`tukey_hsd`: An Accurate Implementation of the Tukey Honestly
+       Significant Difference Test in Python'
 tags:
   - Python
   - SciPy
