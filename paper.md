@@ -54,7 +54,7 @@ statistically significant. Researchers use post-hoc tests to study these
 pairwise differences while controlling the experiment-wise error rate. Until
 recently, no post-hoc tests were available in SciPy [@virtanen2020scipy], the
 de-facto standard library of fundamental algorithms for scientific computing
-in Python. To fill this gap, we contributed
+in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
 [@PRtukey_hsd], a function for performing Tukey's Honestly Significant
 Difference Test.
 
