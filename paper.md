@@ -2,22 +2,26 @@
 title: 'tukey_hsd: An Accurate Implementation of Tukey's Honestly Significant Difference Test in Python'
 tags:
   - Python
-  - SciPy
-  - statistics
-  - hypothesis testing
-  - statistical distributions
+  - astronomy
+  - dynamics
+  - galactic dynamics
+  - milky way
 authors:
-  - name: Dominic Chmiel^[co-first author]
-    affiliation: 1
-  - name: Sam Wallan^[co-first author]
-    affiliation: 1
-  - name: Matt Haberland^[corresponding author]
-    affiliation: 1
-    orcid: 0000-0003-4806-3601
+  - name: Adrian M. Price-Whelan^[co-first author] # note this makes a footnote saying 'co-first author'
+    orcid: 0000-0003-0872-7098
+    affiliation: "1, 2" # (Multiple affiliations must be quoted)
+  - name: Author Without ORCID^[co-first author] # note this makes a footnote saying 'co-first author'
+    affiliation: 2
+  - name: Author with no affiliation^[corresponding author]
+    affiliation: 3
 affiliations:
- - name: California Polytechnic State University, San Luis Obispo
+ - name: Lyman Spitzer, Jr. Fellow, Princeton University
    index: 1
-date: 28 December 2021
+ - name: Institution Name
+   index: 2
+ - name: Independent Researcher
+   index: 3
+date: 13 August 2017
 bibliography: paper.bib
 
 # Optional fields if submitting to a AAS journal too, see this blog post:
