@@ -31,9 +31,9 @@ of variables in hope of finding correlations. When frequentist hypothesis
 tests are performed at a fixed confidence level,
 increasing the number of tests increases the probability of observing a
 "statistically significant" result, even when the null hypothesis is actually
-true. Carefully designed tests, such as Tukey's HSD (Honestly Significant
-Difference) Test [@tukey1949comparing], protect against this practice of "data
-dredging", producing p-values and confidence intervals that account
+true. Carefully designed tests, such as Tukey's honestly significant
+difference (HSD) test [@tukey1949comparing], protect against this practice of
+"data dredging", producing p-values and confidence intervals that account
 for the number of comparisons performed. Several such tests rely on the
 studentized range distribution [@lund1983algorithm], which models the range
 (i.e. difference between maximum and minimum values) of the means of
@@ -56,10 +56,9 @@ pairwise differences while controlling the experiment-wise error rate. Until
 recently, no post-hoc tests were available in SciPy [@virtanen2020scipy], the
 de-facto standard library of fundamental algorithms for scientific computing
 in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
-[@PRtukey_hsd], a function for performing Tukey's Honestly Significant
-Difference Test.
+[@PRtukey_hsd], a function for performing Tukey's HSD test.
 
-The most computationally-challenging part of implementing Tukey's HSD Test is
+The most computationally-challenging part of implementing Tukey's HSD test is
 the evaluation of the cumulative density function of the studentized range
 distribution, which is given by
 
