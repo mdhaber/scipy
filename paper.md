@@ -15,9 +15,9 @@ authors:
     affiliation: 1
     orcid: 0000-0003-4806-3601
 affiliations:
- - name: Lyman Spitzer, Jr. Fellow, Princeton University
+ - name: California Polytechnic State University, San Luis Obispo
    index: 1
-date: 13 August 2017
+date: 29 December 2021
 bibliography: paper.bib
 
 # Optional fields if submitting to a AAS journal too, see this blog post:
