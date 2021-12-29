@@ -81,8 +81,8 @@ accurate implementation of this integral, we contributed
 `scipy.stats.studentized_range` [@PRstudentized_range], a class that
 evaluates the CDF and many other functions of the distribution. A thorough
 assessment of the methods, accuracy, and speed of these calculations is
-available in [@StudentizedRangeSciPy], and an extensive test and
-benchmark suite included in SciPy guards against regressions.
+available in [@StudentizedRangeSciPy], and an extensive test suite included
+in SciPy guards against regressions.
 
 # Acknowledgements
 
