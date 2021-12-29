@@ -103,7 +103,6 @@ and refer to \autoref{eq:fourier} from text.
 
 # Acknowledgements
 
-We acknowledge contributions from Brigitta Sipocz, Syrtis Major, and Semyeong
-Oh, and support from Kathryn Johnston during the genesis of this project.
+We gratefully acknowledge the support of Chan Zuckerberg Initiative Essential Open Source Software for Science Grant EOSS-0000000432. Thanks also to reviewers Pamphile Roy, Nicholas McKibben, and Warren Weckesser.
 
 # References
