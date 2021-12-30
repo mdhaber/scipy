@@ -33,7 +33,7 @@ increasing the number of tests increases the probability of observing a
 "statistically significant" result, even when the null hypothesis is actually
 true. Carefully designed tests, such as Tukey's honestly significant
 difference (HSD) test [@tukey1949comparing], protect against this practice of
-"data dredging", producing p-values and confidence intervals that account
+"p-hacking", producing p-values and confidence intervals that account
 for the number of comparisons performed. Several such tests rely on the
 studentized range distribution [@lund1983algorithm], which models the range
 (i.e. difference between maximum and minimum values) of the means of
