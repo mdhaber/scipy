@@ -42,9 +42,9 @@ implementations of these tests available in the scientific Python ecosystem,
 all of them rely on approximations of the studentized range distribution,
 which are not accurate outside the range of inputs for which they are
 designed. Here we present the implementation of a very accurate and
-sufficiently fast implementation of the studentized range distribution and a
-function for performing Tukey's HSD test. Both of these features are available
-in SciPy 1.8.0.
+sufficiently fast implementation [@StudentizedRangeSciPy] of the studentized
+range distribution and a function for performing Tukey's HSD test. Both of
+these features are available in SciPy 1.8.0.
 
 # Statement of need
 
@@ -59,8 +59,8 @@ in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
 [@PRtukey_hsd], a function for performing Tukey's HSD test.
 
 The most computationally-challenging part of implementing Tukey's HSD test is
-the evaluation of the cumulative density function of the studentized range
-distribution, which is given by
+the evaluation of the cumulative density function (CDF) of the studentized
+range distribution, which is given by
 
 \begin{eqnarray*}
 F(q; k, \nu) = \frac{k\nu^{\nu/2}}{\Gamma(\nu/2)2^{\nu/2-1}}
@@ -70,7 +70,8 @@ F(q; k, \nu) = \frac{k\nu^{\nu/2}}{\Gamma(\nu/2)2^{\nu/2-1}}
 
 where $q$ is the studentized range, $k$ is the number of groups, $\nu$ is the
 number of degrees of freedom used to determine the pooled sample variance, and
-$\phi(z)$ and $\Phi(z)$ represent the normal PDF and normal CDF, respectively.
+$\phi(z)$ and $\Phi(z)$ represent the normal probability density function
+and normal cumulative distribution function, respectively.
 There is no closed form expression for this integral, and numerical
 integration requires care, as naive evaluation of the integrand results
 in overflow even for modest values of the parameters. Consequently, other
