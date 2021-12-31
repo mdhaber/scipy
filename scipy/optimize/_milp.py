@@ -174,7 +174,7 @@ def milp(c, *, integrality=None, bounds=None, constraints=None, options=None):
 
         1. A single `LinearConstraint` object
         2. A single tuple that can be converted to a `LinearConstraint` object
-           as ``LinearConstraint(*constraints)
+           as ``LinearConstraint(*constraints)``
         3. A sequence composed entirely of objects of type 1. and 2.
 
         Before the problem is solved, all values are converted to double
