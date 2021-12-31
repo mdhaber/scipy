@@ -100,13 +100,14 @@ def _milp_iv(c, integrality, bounds, constraints, options):
     indptr, indices, data = A.indptr, A.indices, A.data.astype(np.double)
 
     # relying on options input validation in _highs_wrapper
+    options = options or {}
     options_iv = {'log_to_console': False}
     options_iv.update(options)
 
     return c, integrality, lb, ub, indptr, indices, data, b_l, b_u, options_iv
 
 
-def milp(c, *, integrality=None, bounds=None, constraints=None, options={}):
+def milp(c, *, integrality=None, bounds=None, constraints=None, options=None):
     r"""
     Mixed-integer linear programming
 
