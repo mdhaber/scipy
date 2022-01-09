@@ -16,7 +16,7 @@ with safe_import():
     import scipy.optimize
     from scipy.optimize.optimize import rosen, rosen_der, rosen_hess
     from scipy.optimize import (leastsq, basinhopping, differential_evolution,
-                                dual_annealing)
+                                dual_annealing, zoom_opt)
     from scipy.optimize._minimize import MINIMIZE_METHODS
 
 
@@ -184,6 +184,22 @@ class _BenchOptimizers(Benchmark):
         res.nfev = self.function.nfev
         self.add_result(res, t1 - t0, 'DE')
 
+    def run_zoom_opt(self):
+        """
+        Do an optimization run for zoom_opt
+        """
+        self.function.nfev = 0
+
+        t0 = time.time()
+
+        res = scipy.optimize.OptimizeResult()
+        res.x = zoom_opt(self.fun, self.bounds)
+        t1 = time.time()
+        res.success = self.function.success(res.x)
+        res.nfev = self.function.nfev
+        self.add_result(res, t1 - t0, 'ZO')
+
+
     def run_dualannealing(self):
         """
         Do an optimization run for dual_annealing
@@ -206,11 +222,12 @@ class _BenchOptimizers(Benchmark):
         """
 
         if methods is None:
-            methods = ['DE', 'basinh.', 'DA']
+            methods = ['DE', 'basinh.', 'DA', 'ZO']
 
         method_fun = {'DE': self.run_differentialevolution,
                       'basinh.': self.run_basinhopping,
-                      'DA': self.run_dualannealing,}
+                      'DA': self.run_dualannealing,
+                      'ZO': self.run_zoom_opt}
 
         for i in range(numtrials):
             for m in methods:
@@ -441,7 +458,7 @@ class BenchGlobal(Benchmark):
     ])
 
     if not is_xslow():
-        _enabled_functions = []
+        _enabled_functions = ['Ackley01', 'Ackley02']
     elif 'SCIPY_GLOBAL_BENCH' in os.environ:
         _enabled_functions = [x.strip() for x in
                               os.environ['SCIPY_GLOBAL_BENCH'].split(',')]
@@ -451,7 +468,7 @@ class BenchGlobal(Benchmark):
     params = [
         list(_functions.keys()),
         ["success%", "<nfev>"],
-        ['DE', 'basinh.', 'DA'],
+        ['DE', 'basinh.', 'DA', 'ZO'],
     ]
     param_names = ["test function", "result type", "solver"]
 
@@ -460,7 +477,7 @@ class BenchGlobal(Benchmark):
         try:
             self.numtrials = int(os.environ['SCIPY_GLOBAL_BENCH_NUMTRIALS'])
         except (KeyError, ValueError):
-            self.numtrials = 100
+            self.numtrials = 1
 
         self.dump_fn = os.path.join(os.path.dirname(__file__), '..', 'global-bench-results.json')
         self.results = {}

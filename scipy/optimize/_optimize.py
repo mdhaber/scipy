@@ -21,7 +21,7 @@ __all__ = ['fmin', 'fmin_powell', 'fmin_bfgs', 'fmin_ncg', 'fmin_cg',
            'fminbound', 'brent', 'golden', 'bracket', 'rosen', 'rosen_der',
            'rosen_hess', 'rosen_hess_prod', 'brute', 'approx_fprime',
            'line_search', 'check_grad', 'OptimizeResult', 'show_options',
-           'OptimizeWarning']
+           'OptimizeWarning', 'zoom_opt']
 
 __docformat__ = "restructuredtext en"
 
@@ -3295,6 +3295,25 @@ def _endprint(x, flag, fval, maxfun, xtol, disp):
         if disp:
             print("\n{}".format(_status_message['nan']))
     return
+
+
+def zoom_opt(func, bounds, args=()):
+    zoom_factor = 0.5
+    mid = [(upper+lower)/2 for lower, upper in bounds]
+    spread = [(upper-lower)/2 for lower, upper in bounds]
+    last_opt = 0
+    for i in range(100):
+        f = zoom_factor**i
+        new_bounds = [(x-f*y, x+f*y) for x, y in zip(mid, spread)]
+        new_bounds = [np.clip(bnd, *limits)
+                      for bnd, limits in zip(new_bounds, bounds)]
+        res = brute(func, new_bounds, args, Ns=20, finish=False)
+        opt = func(res, *args)
+        if np.allclose(opt, last_opt, atol=1e-6, rtol=0):
+            break
+        last_opt = opt
+        mid = np.atleast_1d(res)
+    return res
 
 
 def brute(func, ranges, args=(), Ns=20, full_output=0, finish=fmin,
