@@ -458,7 +458,7 @@ class BenchGlobal(Benchmark):
     ])
 
     if not is_xslow():
-        _enabled_functions = ['Ackley01', 'Ackley02']
+        _enabled_functions = list(_functions.keys())
     elif 'SCIPY_GLOBAL_BENCH' in os.environ:
         _enabled_functions = [x.strip() for x in
                               os.environ['SCIPY_GLOBAL_BENCH'].split(',')]
@@ -467,8 +467,8 @@ class BenchGlobal(Benchmark):
 
     params = [
         list(_functions.keys()),
-        ["success%", "<nfev>"],
-        ['DE', 'basinh.', 'DA', 'ZO'],
+        ["success%", "<nfev>", "time"],
+        ['DE', 'DA', 'ZO'],
     ]
     param_names = ["test function", "result type", "solver"]
 
@@ -506,6 +506,8 @@ class BenchGlobal(Benchmark):
                 return 100 * av_results[solver]['nsuccess'] / av_results[solver]['ntrials']
             elif ret_value == '<nfev>':
                 return av_results[solver]['mean_nfev']
+            elif ret_value == "time":
+                return av_results[solver]['mean_time']
             else:
                 raise ValueError()
 
@@ -527,6 +529,8 @@ class BenchGlobal(Benchmark):
                 return 100 * av_results[solver]['nsuccess'] / av_results[solver]['ntrials']
             elif ret_value == '<nfev>':
                 return av_results[solver]['mean_nfev']
+            elif ret_value == "time":
+                return av_results[solver]['mean_time']
             else:
                 raise ValueError()
         except Exception:
