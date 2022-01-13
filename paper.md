@@ -12,6 +12,7 @@ authors:
     affiliation: 1
   - name: Samuel Wallan^[co-first author]
     affiliation: 1
+    orcid: 0000-0002-5952-8921
   - name: Matt Haberland^[corresponding author]
     affiliation: 1
     orcid: 0000-0003-4806-3601
@@ -72,7 +73,7 @@ where $q$ is the studentized range, $k$ is the number of groups, $\nu$ is the
 number of degrees of freedom used to determine the pooled sample variance, and
 $\phi(z)$ and $\Phi(z)$ represent the normal probability density function
 and normal cumulative distribution function, respectively.
-There is no closed form expression for this integral, and numerical
+There is no closed-form expression for this integral, and numerical
 integration requires care, as naive evaluation of the integrand results
 in overflow even for modest values of the parameters. Consequently, other
 packages in the open-source scientific Python ecosystem, such as statsmodels
