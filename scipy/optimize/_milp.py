@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 from scipy.sparse import csc_array, vstack
 from ._highs._highs_wrapper import _highs_wrapper
@@ -101,7 +102,13 @@ def _milp_iv(c, integrality, bounds, constraints, options):
 
     # relying on options input validation in _highs_wrapper
     options = options or {}
-    options_iv = {'log_to_console': False}
+    supported_options = {'disp', 'presolve', 'time_limit'}
+    unsupported_options = set(options).difference(supported_options)
+    if unsupported_options:
+        message = (f"Unrecognized options detected: {unsupported_options}. "
+                   "These will be passed to HiGHS verbatim.")
+        warnings.warn(message, RuntimeWarning, stacklevel=3)
+    options_iv = {'log_to_console': options.get("disp", False)}
     options_iv.update(options)
 
     return c, integrality, lb, ub, indptr, indices, data, b_l, b_u, options_iv
@@ -184,6 +191,9 @@ def milp(c, *, integrality=None, bounds=None, constraints=None, options=None):
 
     Options
     -------
+    disp : bool (default: ``False``)
+        Set to ``True`` if indicators of optimization status are to be
+        printed to the console during optimization.
     presolve : bool (default: ``True``)
         Presolve attempts to identify trivial infeasibilities,
         identify trivial unboundedness, and simplify the problem before
@@ -194,40 +204,6 @@ def milp(c, *, integrality=None, bounds=None, constraints=None, options=None):
         The maximum time in seconds allotted to solve the problem;
         default is the largest possible value for a ``double`` on the
         platform.
-    dual_feasibility_tolerance : double (default: 1e-07)
-        Dual feasibility tolerance for
-        :ref:`'highs-ds' <optimize.linprog-highs-ds>`.
-        The minimum of this and ``primal_feasibility_tolerance``
-        is used for the feasibility tolerance of
-        :ref:`'highs-ipm' <optimize.linprog-highs-ipm>`.
-    primal_feasibility_tolerance : double (default: 1e-07)
-        Primal feasibility tolerance for
-        :ref:`'highs-ds' <optimize.linprog-highs-ds>`.
-        The minimum of this and ``dual_feasibility_tolerance``
-        is used for the feasibility tolerance of
-        :ref:`'highs-ipm' <optimize.linprog-highs-ipm>`.
-    ipm_optimality_tolerance : double (default: ``1e-08``)
-        Optimality tolerance for
-        :ref:`'highs-ipm' <optimize.linprog-highs-ipm>`.
-        Minimum allowable value is 1e-12.
-    simplex_dual_edge_weight_strategy : str (default: None)
-        Strategy for simplex dual edge weights. The default, ``None``,
-        automatically selects one of the following.
-
-        ``'dantzig'`` uses Dantzig's original strategy of choosing the most
-        negative reduced cost.
-
-        ``'devex'`` uses the strategy described in [15]_.
-
-        ``steepest`` uses the exact steepest edge strategy as described in
-        [16]_.
-
-        ``'steepest-devex'`` begins with the exact steepest edge strategy
-        until the computation is too costly or inexact and then switches to
-        the devex method.
-
-        Curently, ``None`` always selects ``'steepest-devex'``, but this
-        may change as new options become available.
 
     Returns
     -------
@@ -237,26 +213,40 @@ def milp(c, *, integrality=None, bounds=None, constraints=None, options=None):
 
         status : int
             An integer representing the exit status of the algorithm.
+
+            ``0`` : Optimal solution found.
+
+            ``1`` : Iteration or time limit reached.
+
+            ``2`` : Problem is infeasible.
+
+            ``3`` : Problem is unbounded.
+
+            ``4`` : Other; see message for details.
+
+        success : bool
+            True when an optimal solution is found, the problem is determined
+            to be infeasible, or the problem is determined to be unbounded.
+
         message : str
             A string descriptor of the exit status of the algorithm.
 
-        Depending on the exit status, the following attributes may
-        also be available.
+        The following attributes will also be present, but the values may be
+        ``None``, depending on the solution status.
 
         x : ndarray
             The values of the decision variables that minimizes the
             objective function while satisfying the constraints.
         fun : float
             The optimal value of the objective function ``c @ x``.
-        simplex_nit : int
-            The total number of iterations performed by the simplex algorithm
-            in all phases.
-        ipm_nit : int
-            The number of iterations performed by the interior-point algorithm.
-            This does not include crossover iterations.
-        crossover_nit : int
-            The number of primal/dual pushes performed after completion of the
-            interior-point algorithm.
+        mip_node_count : int
+            The number of subproblems or "nodes" solved by the MILP solver.
+        mip_dual_bound : float
+            The MILP solver's final estimate of the lower bound on the optimal
+            solution.
+        mip_gap : float
+            The difference between the final objective function value and the
+            final dual bound.
 
     Notes
     -----
@@ -332,7 +322,22 @@ def milp(c, *, integrality=None, bounds=None, constraints=None, options=None):
     args_iv = _milp_iv(c, integrality, bounds, constraints, options)
     c, integrality, lb, ub, indptr, indices, data, b_l, b_u, options = args_iv
 
-    res = _highs_wrapper(c, indptr, indices, data, b_l, b_u,
-                         lb, ub, integrality, options)
+    highs_res = _highs_wrapper(c, indptr, indices, data, b_l, b_u,
+                               lb, ub, integrality, options)
+
+
+    res = {}
+
+    status_map = {7: 0, 13: 1, 8: 2, 10: 3}
+    res['status'] = status_map.get(highs_res.get('status', None), 4)
+    res['success'] = res['status'] in {0, 2, 3}
+    res['message'] = highs_res.get('message', 'No message provided by HiGHs')
+
+    x = highs_res.get('x', None)
+    res['x'] = np.array(x) if x is not None else None
+    res['fun'] = highs_res.get('fun', None)
+    res['mip_node_count'] = highs_res.get('mip_node_count', None)
+    res['mip_dual_bound'] = highs_res.get('mip_dual_bound', None)
+    res['mip_gap'] = highs_res.get('mip_gap', None)
 
     return OptimizeResult(res)

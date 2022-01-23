@@ -39,6 +39,62 @@ def test_milp_iv():
         milp([1, 2, 3], bounds=([1, 2, 3], [4, 5]))
 
 
+def test_milp_options(capsys):
+    message = "Unrecognized options detected: {'ekki'}..."
+    options = {'ekki': True}
+    with pytest.warns(RuntimeWarning, match=message):
+        milp(1, options=options)
+
+    A, b, c, numbers, M = magic_square(3)
+    options = {"disp": True, "presolve": False, "time_limit": 0.05}
+    res = milp(c=c, constraints=(A, b, b), bounds=(0, 1), integrality=1,
+               options=options)
+
+    # This shows that captured.out tests work
+    # Need to pass this test when the following print statement is _removed_.
+    print("Time Limit Reached, Presolve is switched off")
+
+    captured = capsys.readouterr()
+    assert "Presolve is switched off" in captured.out
+    assert "Time Limit Reached" in captured.out
+    assert res.success == False
+
+
+def test_result():
+    A, b, c, numbers, M = magic_square(3)
+    res = milp(c=c, constraints=(A, b, b), bounds=(0, 1), integrality=1)
+    assert res.status == 0
+    assert res.success
+    assert isinstance(res.message, str)
+    assert isinstance(res.x, np.ndarray)
+    assert isinstance(res.fun, float)
+    assert isinstance(res.mip_node_count, int)
+    assert isinstance(res.mip_dual_bound, float)
+    assert isinstance(res.mip_gap, float)
+
+    A, b, c, numbers, M = magic_square(6)
+    res = milp(c=c*0, constraints=(A, b, b), bounds=(0, 1), integrality=1,
+               options={'time_limit': 0.05})
+    assert res.status == 1
+    assert not res.success
+    assert isinstance(res.message, str)
+    assert (res.fun == res.mip_dual_bound == res.mip_gap
+            == res.mip_node_count == res.x == None)
+
+    res = milp(1, bounds=(1, -1))
+    assert res.status == 2
+    assert res.success
+    assert isinstance(res.message, str)
+    assert (res.fun == res.mip_dual_bound == res.mip_gap
+            == res.mip_node_count == res.x == None)
+
+    res = milp(-1)
+    assert res.status == 3
+    assert res.success
+    assert isinstance(res.message, str)
+    assert (res.fun == res.mip_dual_bound == res.mip_gap
+            == res.mip_node_count == res.x == None)
+
 def test_milp_optional_args():
     # check that arguments other than `c` are indeed optional
     res = milp(1)
