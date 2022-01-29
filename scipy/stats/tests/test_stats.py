@@ -2272,6 +2272,19 @@ class TestMode:
         np.testing.assert_array_equal(res.mode.shape, reference_shape)
         np.testing.assert_array_equal(res.count.shape, reference_shape)
 
+    def test_nan_policy_propagate_9815(self):
+        a = [2, np.nan, 1, np.nan]
+        res = stats.mode(a)
+        assert np.isnan(res.mode) and res.count == 2
+
+        a = np.array(a, dtype='object')
+        res = stats.mode(a)
+        assert np.isnan(res.mode) and res.count == 2
+
+        a = np.array([10, True, 'hello', 10], dtype='object')
+        res = stats.mode(a)
+        assert_array_equal(res, (10, 2))
+
 
 class TestSEM:
 
