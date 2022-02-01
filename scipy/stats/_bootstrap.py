@@ -133,8 +133,8 @@ def _bca_interval(data, statistic, axis, alpha, theta_hat_b, batch):
     return alpha_1, alpha_2
 
 
-def _bootstrap_iv(data, statistic, vectorized, paired, axis, confidence_level,
-                  n_resamples, batch, method, random_state):
+def _bootstrap_iv(data, statistic, distributions, vectorized, paired, axis,
+                  confidence_level, n_resamples, batch, method, random_state):
     """Input validation and standardization for `bootstrap`."""
 
     if vectorized not in {True, False}:
@@ -155,6 +155,15 @@ def _bootstrap_iv(data, statistic, vectorized, paired, axis, confidence_level,
 
     if n_samples == 0:
         raise ValueError("`data` must contain at least one sample.")
+
+    try:
+        if distributions and len(distributions) != n_samples:
+            raise ValueError("`distributions` must contain one element for "
+                             "each sample in `data`.")
+        elif not distributions:
+            distributions = [None]*n_samples
+    except TypeError:
+        raise ValueError("`distributions` must be a sequence of callables.")
 
     data_iv = []
     for sample in data:
@@ -208,7 +217,7 @@ def _bootstrap_iv(data, statistic, vectorized, paired, axis, confidence_level,
 
     random_state = check_random_state(random_state)
 
-    return (data_iv, statistic, vectorized, paired, axis_int,
+    return (data_iv, statistic, distributions, vectorized, paired, axis_int,
             confidence_level_float, n_resamples_int, batch_iv,
             method, random_state)
 
@@ -217,14 +226,14 @@ fields = ['confidence_interval', 'standard_error']
 BootstrapResult = make_dataclass("BootstrapResult", fields)
 
 
-def bootstrap(data, statistic, *, n_resamples=9999, batch=None,
-              vectorized=True, paired=False, axis=0, confidence_level=0.95,
-              method='BCa', random_state=None):
+def bootstrap(data, statistic, *, distributions=None, n_resamples=9999,
+              batch=None, vectorized=True, paired=False, axis=0,
+              confidence_level=0.95, method='BCa', random_state=None):
     r"""
     Compute a two-sided bootstrap confidence interval of a statistic.
 
-    When `method` is ``'percentile'``, a bootstrap confidence interval is
-    computed according to the following procedure.
+    When `method` is ``'percentile'``, a nonparametric bootstrap confidence
+    interval is computed according to the following procedure.
 
     1. Resample the data: for each sample in `data` and for each of
        `n_resamples`, take a random sample of the original sample
@@ -244,6 +253,10 @@ def bootstrap(data, statistic, *, n_resamples=9999, batch=None,
     ('reverse percentile') and ``'BCa'`` ('bias-corrected and accelerated');
     they differ in how step 3 is performed.
 
+    The parametric bootstrap differs only in step 1: instead of resampling
+    from the original sample, new samples are generated from a provided
+    distribution.
+
     If the samples in `data` are  taken at random from their respective
     distributions :math:`n` times, the confidence interval returned by
     `bootstrap` will contain the true value of the statistic for those
@@ -260,6 +273,17 @@ def bootstrap(data, statistic, *, n_resamples=9999, batch=None,
         If `vectorized` is set ``True``,
         `statistic` must also accept a keyword argument `axis` and be
         vectorized to compute the statistic along the provided `axis`.
+    distributions : sequence of callables, optional
+        If provided, perform a parametric bootstrap: resamples for the *i*\th
+        sample in `data` will be generated using the *i*\th callable in
+        `distributions` rather than being resampled from the original data.
+        Callables must return a numerical array with shape indicated by one
+        keyword argument, a tuple ``size``.
+        A ``None`` in the sequence indicates that resamples for the
+        corresponding sample are to be be drawn with replacement from the
+        original sample, as in the nonparametric bootstrap. The default is to
+        perform a fully nonparametric bootstrap, resampling with replacement
+        from all samples in `data`.
     n_resamples : int, default: ``9999``
         The number of resamples performed to form the bootstrap distribution
         of the statistic.
@@ -447,11 +471,11 @@ def bootstrap(data, statistic, *, n_resamples=9999, batch=None,
 
     """
     # Input validation
-    args = _bootstrap_iv(data, statistic, vectorized, paired, axis,
-                         confidence_level, n_resamples, batch, method,
+    args = _bootstrap_iv(data, statistic, distributions, vectorized, paired,
+                         axis, confidence_level, n_resamples, batch, method,
                          random_state)
-    data, statistic, vectorized, paired, axis = args[:5]
-    confidence_level, n_resamples, batch, method, random_state = args[5:]
+    data, statistic, distributions, vectorized, paired, axis = args[:6]
+    confidence_level, n_resamples, batch, method, random_state = args[6:]
 
     theta_hat_b = []
 
@@ -461,9 +485,15 @@ def bootstrap(data, statistic, *, n_resamples=9999, batch=None,
         batch_actual = min(batch_nominal, n_resamples-k)
         # Generate resamples
         resampled_data = []
-        for sample in data:
-            resample = _bootstrap_resample(sample, n_resamples=batch_actual,
-                                           random_state=random_state)
+        for sample, dist in zip(data, distributions):
+            if dist:  # parametric bootstrap
+                shape = list(sample.shape)
+                shape.insert(-1, batch_actual)
+                resample = dist(size=shape, random_state=random_state)
+            else:   # nonparametric bootstrap
+                resample = _bootstrap_resample(sample,
+                                               n_resamples=batch_actual,
+                                               random_state=random_state)
             resampled_data.append(resample)
 
         # Compute bootstrap distribution of statistic

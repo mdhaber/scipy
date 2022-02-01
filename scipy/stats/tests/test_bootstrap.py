@@ -33,6 +33,14 @@ def test_bootstrap_iv():
     with pytest.raises(ValueError, match=message):
         bootstrap(([1, 2, 3],), np.mean, axis=1.5)
 
+    message = "`distributions` must be a sequence of callables."
+    with pytest.raises(ValueError, match=message):
+        bootstrap((1, 2), np.mean, distributions=stats.norm.rvs)
+
+    message = "`distributions` must contain one element for each sample in..."
+    with pytest.raises(ValueError, match=message):
+        bootstrap((1, 2), np.mean, distributions=[None])
+
     message = "could not convert string to float"
     with pytest.raises(ValueError, match=message):
         bootstrap(([1, 2, 3],), np.mean, confidence_level='ni')
