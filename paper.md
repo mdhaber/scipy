@@ -10,6 +10,7 @@ tags:
 authors:
   - name: Dominic Chmiel^[co-first author]
     affiliation: 1
+    orcid: 0000-0003-2499-6693
   - name: Samuel Wallan^[co-first author]
     affiliation: 1
     orcid: 0000-0002-5952-8921
