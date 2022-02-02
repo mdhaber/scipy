@@ -43,13 +43,15 @@ implementations of these tests available in the scientific Python ecosystem,
 all of them rely on approximations of the studentized range distribution,
 which are not accurate outside the range of inputs for which they are
 designed. Here we present the implementation of a very accurate and
-sufficiently fast implementation [@StudentizedRangeSciPy] of the studentized
-range distribution and a function for performing Tukey's HSD test. Both of
-these features are available in SciPy 1.8.0.
+sufficiently fast implementation of the studentized range distribution and a
+function for performing Tukey's HSD test. A thorough assessment of the methods,
+accuracy, and speed of the underlying calculations is available in
+[@StudentizedRangeSciPy], and an extensive test  suite included in SciPy guards
+against regressions. Both of these features are available in SciPy 1.8.0.
 
 # Statement of need
 
-After analysis of variance (ANOVA) indicates that there is a statistically
+When analysis of variance (ANOVA) indicates that there is a statistically
 significant difference between at least one pair of groups in an experiment,
 researchers are often interested in *which* of the differences is
 statistically significant. Researchers use "post-hoc tests" to study these
@@ -81,10 +83,9 @@ packages in the open-source scientific Python ecosystem, such as statsmodels
 interpolation between tabulated values. To satisfy the need for a more
 accurate implementation of this integral, we contributed
 `scipy.stats.studentized_range` [@PRstudentized_range], a class that
-evaluates the CDF and many other functions of the distribution. A thorough
-assessment of the methods, accuracy, and speed of these calculations is
-available in [@StudentizedRangeSciPy], and an extensive test suite included
-in SciPy guards against regressions.
+evaluates the CDF and many other functions of the distribution. Both
+statsmodels and Pingouin have since adopted this class to perform
+studentized range distribution calculations.
 
 # Acknowledgements
 
