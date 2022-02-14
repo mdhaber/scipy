@@ -39,6 +39,7 @@ from scipy.spatial.distance import cdist
 from scipy.ndimage import _measurements
 from scipy._lib._util import (check_random_state, MapWrapper,
                               rng_integers, float_factorial)
+from scipy._lib._bunch import _make_tuple_bunch
 import scipy.special as special
 from scipy import linalg
 from . import distributions
@@ -5827,7 +5828,8 @@ def _equal_var_ttest_denom(v1, n1, v2, n2):
     return df, denom
 
 
-Ttest_indResult = namedtuple('Ttest_indResult', ('statistic', 'pvalue'))
+Ttest_indResult = _make_tuple_bunch('Ttest_indResult', ['statistic', 'pvalue'],
+                                    ['estimate', 'standard_error'])
 
 
 def ttest_ind_from_stats(mean1, std1, nobs1, mean2, std2, nobs2,
@@ -5953,7 +5955,7 @@ def ttest_ind_from_stats(mean1, std1, nobs1, mean2, std2, nobs2,
                                              std2**2, nobs2)
 
     res = _ttest_ind_from_stats(mean1, mean2, denom, df, alternative)
-    return Ttest_indResult(*res)
+    return Ttest_indResult(*res, estimate=mean1-mean2, standard_error=denom)
 
 
 def _ttest_nans(a, b, axis, namedtuple_type):
@@ -5993,10 +5995,15 @@ def _ttest_nans(a, b, axis, namedtuple_type):
     if len(shp) == 0:
         t = np.nan
         p = np.nan
+        estimate = np.nan
+        standard_error = np.nan
     else:
         t = np.full(shp, fill_value=np.nan)
         p = t.copy()
-    return namedtuple_type(t, p)
+        estimate = t.copy()
+        standard_error = t.copy()
+    return namedtuple_type(t, p, estimate=estimate,
+                           standard_error=standard_error)
 
 
 def ttest_ind(a, b, axis=0, equal_var=True, nan_policy='propagate',
@@ -6257,7 +6264,9 @@ def ttest_ind(a, b, axis=0, equal_var=True, nan_policy='propagate',
                                  nan_policy=nan_policy,
                                  random_state=random_state,
                                  alternative=alternative)
-
+        return Ttest_indResult(*res,
+                               estimate=np.mean(a, axis)-np.mean(b, axis),
+                               standard_error=None)
     else:
         n1 = a.shape[axis]
         n2 = b.shape[axis]
@@ -6276,7 +6285,7 @@ def ttest_ind(a, b, axis=0, equal_var=True, nan_policy='propagate',
         else:
             df, denom = _unequal_var_ttest_denom(v1, n1, v2, n2)
         res = _ttest_ind_from_stats(m1, m2, denom, df, alternative)
-    return Ttest_indResult(*res)
+        return Ttest_indResult(*res, estimate=m1-m2, standard_error=denom)
 
 
 def _ttest_trim_var_mean_len(a, trim, axis):
@@ -6473,7 +6482,8 @@ def _get_len(a, axis, msg):
     return n
 
 
-Ttest_relResult = namedtuple('Ttest_relResult', ('statistic', 'pvalue'))
+Ttest_relResult = _make_tuple_bunch('Ttest_relResult', ['statistic', 'pvalue'],
+                                    ['estimate', 'standard_error'])
 
 
 def ttest_rel(a, b, axis=0, nan_policy='propagate', alternative="two-sided"):
@@ -6586,7 +6596,7 @@ def ttest_rel(a, b, axis=0, nan_policy='propagate', alternative="two-sided"):
         t = np.divide(dm, denom)
     t, prob = _ttest_finish(df, t, alternative)
 
-    return Ttest_relResult(t, prob)
+    return Ttest_relResult(t, prob, estimate=dm, standard_error=denom)
 
 
 # Map from names to lambda_ values used in power_divergence().
