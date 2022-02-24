@@ -3395,12 +3395,6 @@ class gumbel_r_gen(rv_continuous):
         data, floc, fscale = _check_fit_input_parameters(self, data,
                                                          args, kwds)
 
-        # # if user has provided `floc` or `fscale`, fall back on super fit
-        # # method. This scenario is not suitable for solving a system of
-        # # equations
-        # if floc is not None or fscale is not None:
-        #     return super().fit(data, *args, **kwds)
-
         # rv_continuous provided guesses
         loc, scale = self._fitstart(data)
         # account for user provided guesses
