@@ -3395,11 +3395,11 @@ class gumbel_r_gen(rv_continuous):
         data, floc, fscale = _check_fit_input_parameters(self, data,
                                                          args, kwds)
 
-        # if user has provided `floc` or `fscale`, fall back on super fit
-        # method. This scenario is not suitable for solving a system of
-        # equations
-        if floc is not None or fscale is not None:
-            return super().fit(data, *args, **kwds)
+        # # if user has provided `floc` or `fscale`, fall back on super fit
+        # # method. This scenario is not suitable for solving a system of
+        # # equations
+        # if floc is not None or fscale is not None:
+        #     return super().fit(data, *args, **kwds)
 
         # rv_continuous provided guesses
         loc, scale = self._fitstart(data)
@@ -3413,15 +3413,27 @@ class gumbel_r_gen(rv_continuous):
         # Source: Statistical Distributions, 3rd Edition. Evans, Hastings,
         # and Peacock (2000), Page 101
 
-        def func(scale, data):
-            sdata = -data / scale
-            wavg = _average_with_log_weights(data, logweights=sdata)
-            return data.mean() - wavg - scale
+        loc = floc
 
-        soln = optimize.root(func, scale, args=(data,),
-                             options={'xtol': 1e-14})
-        scale = soln.x[0]
-        loc = -scale * (sc.logsumexp(-data/scale) - np.log(len(data)))
+        if loc is None:
+            def func(scale):
+                sdata = -data / scale
+                wavg = _average_with_log_weights(data, logweights=sdata)
+                return data.mean() - wavg - scale
+        else:
+            N = len(data)
+            def func(scale):
+                return (((loc-data)*np.exp((loc-data)/scale) + data).sum()
+                        - N*(loc + scale))
+
+        if fscale is None:
+            soln = optimize.root_scalar(func, bracket=(0.1, 10))
+            scale = soln.root
+        else:
+            scale = fscale
+
+        if loc is None:
+            loc = -scale * (sc.logsumexp(-data/scale) - np.log(len(data)))
 
         return loc, scale
 
