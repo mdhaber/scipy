@@ -53,7 +53,6 @@ def delaunay_plot_2d(tri, ax=None):
     See Also
     --------
     Delaunay
-    matplotlib.pyplot.triplot
 
     Notes
     -----

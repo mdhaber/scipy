@@ -341,7 +341,7 @@ def freqz(b, a=1, worN=512, whole=False, plot=None, fs=2*pi, include_nyquist=Fal
 
     Notes
     -----
-    Using Matplotlib's :func:`matplotlib.pyplot.plot` function as the callable
+    Using Matplotlib's ``matplotlib.pyplot.plot`` function as the callable
     for `plot` produces unexpected results, as this plots the real part of the
     complex transfer function, not the magnitude.
     Try ``lambda w, h: plot(w, np.abs(h))``.

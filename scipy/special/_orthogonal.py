@@ -1551,7 +1551,7 @@ def gegenbauer(n, alpha, monic=False):
     >>> x = np.linspace(-3, 3, 400)
     >>> y = p(x)
 
-    We can then visualize ``x, y`` using `matplotlib.pyplot`.
+    We can then visualize ``x, y`` using ``matplotlib.pyplot``.
 
     >>> fig, ax = plt.subplots()
     >>> ax.plot(x, y)

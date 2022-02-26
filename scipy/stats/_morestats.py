@@ -498,8 +498,8 @@ def probplot(x, sparams=(), dist='norm', fit=True, plot=None, rvalue=False):
         If given, plots the quantiles.
         If given and `fit` is True, also plots the least squares fit.
         `plot` is an object that has to have methods "plot" and "text".
-        The `matplotlib.pyplot` module or a Matplotlib Axes object can be used,
-        or a custom object with the same methods.
+        The ``matplotlib.pyplot`` module or a Matplotlib Axes object can be
+        used, or a custom object with the same methods.
         Default is None, which means that no plot is created.
 
     Returns
@@ -742,8 +742,8 @@ def ppcc_plot(x, a, b, dist='tukeylambda', plot=None, N=80):
     plot : object, optional
         If given, plots PPCC against the shape parameter.
         `plot` is an object that has to have methods "plot" and "text".
-        The `matplotlib.pyplot` module or a Matplotlib Axes object can be used,
-        or a custom object with the same methods.
+        The ``matplotlib.pyplot`` module or a Matplotlib Axes object can be
+        used, or a custom object with the same methods.
         Default is None, which means that no plot is created.
     N : int, optional
         Number of points on the horizontal axis (equally distributed from
@@ -1303,8 +1303,8 @@ def boxcox_normplot(x, la, lb, plot=None, N=80):
     plot : object, optional
         If given, plots the quantiles and least squares fit.
         `plot` is an object that has to have methods "plot" and "text".
-        The `matplotlib.pyplot` module or a Matplotlib Axes object can be used,
-        or a custom object with the same methods.
+        The ``matplotlib.pyplot`` module or a Matplotlib Axes object can be
+        used, or a custom object with the same methods.
         Default is None, which means that no plot is created.
     N : int, optional
         Number of points on the horizontal axis (equally distributed from
@@ -1632,8 +1632,8 @@ def yeojohnson_normplot(x, la, lb, plot=None, N=80):
     plot : object, optional
         If given, plots the quantiles and least squares fit.
         `plot` is an object that has to have methods "plot" and "text".
-        The `matplotlib.pyplot` module or a Matplotlib Axes object can be used,
-        or a custom object with the same methods.
+        The ``matplotlib.pyplot`` module or a Matplotlib Axes object can be
+        used, or a custom object with the same methods.
         Default is None, which means that no plot is created.
     N : int, optional
         Number of points on the horizontal axis (equally distributed from
