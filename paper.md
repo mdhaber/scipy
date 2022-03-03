@@ -8,17 +8,17 @@ tags:
   - hypothesis testing
   - statistical distributions
 authors:
-  - name: Dominic Chmiel^[co-first author]
+  - name: Dominic Chmiel^[Co-first author]
     affiliation: 1
     orcid: 0000-0003-2499-6693
-  - name: Samuel Wallan^[co-first author]
+  - name: Samuel Wallan^[Co-first author]
     affiliation: 1
     orcid: 0000-0002-5952-8921
-  - name: Matt Haberland^[corresponding author]
+  - name: Matt Haberland^[Corresponding author]
     affiliation: 1
     orcid: 0000-0003-4806-3601
 affiliations:
- - name: California Polytechnic State University, San Luis Obispo
+ - name: California Polytechnic State University, San Luis Obispo, USA
    index: 1
 date: 2 February 2022
 bibliography: paper.bib
