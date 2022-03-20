@@ -359,6 +359,7 @@ def _binary_search_for_binom_tst(a, d, lo, hi):
     while lo < hi:
         mid = lo + (hi-lo)//2
         midval = a(mid)
+        print(lo, hi, midval, d)
         if midval < d:
             lo = mid+1
         elif midval > d:
