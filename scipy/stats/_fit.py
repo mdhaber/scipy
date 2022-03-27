@@ -308,13 +308,13 @@ def fit(dist, data, bounds=None, *, guess=None,
     >>> import numpy as np
     >>> from scipy import stats
     >>> rng = np.random.default_rng()
-    >>> dist = stats.nbinom
+    >>> dist = stats.pascal
     >>> shapes = (5, 0.5)
     >>> data = dist.rvs(*shapes, size=1000, random_state=rng)
 
     Suppose we do not know how the data were generated, but we suspect that
-    it follows a negative binomial distribution with parameters *n* and *p*\.
-    (See `scipy.stats.nbinom`.) We believe that the parameter *n* was fewer
+    it follows a Pascal distribution with parameters *n* and *p*\.
+    (See `scipy.stats.pascal`.) We believe that the parameter *n* was fewer
     than 30, and we know that the parameter *p* must lie on the interval
     [0, 1]. We record this information in a variable `bounds` and pass
     this information to `fit`.
@@ -339,8 +339,8 @@ def fit(dist, data, bounds=None, *, guess=None,
     >>> plt.show()
 
     Note that the estimate for *n* was exactly integral; this is because
-    the domain of the `nbinom` PMF includes only integral *n*, and the `nbinom`
-    object "knows" that. `nbinom` also knows that the shape *p* must be a
+    the domain of the `pascal` PMF includes only integral *n*, and the `pascal`
+    object "knows" that. `pascal` also knows that the shape *p* must be a
     value between 0 and 1. In such a case - when the domain of the distribution
     with respect to a parameter is finite - we are not required to specify
     bounds for the parameter.

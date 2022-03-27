@@ -311,11 +311,11 @@ class nbinom_gen(rv_discrete):
 
     See Also
     --------
-    hypergeom, binom, nhypergeom
+    pascal, hypergeom, binom, nhypergeom
 
     """
     def _shape_info(self):
-        return [_ShapeInfo("n", True, (0, np.inf), (True, False)),
+        return [_ShapeInfo("n", False, (0, np.inf), (True, False)),
                 _ShapeInfo("p", False, (0, 1), (True, True))]
 
     def _rvs(self, n, p, size=None, random_state=None):
@@ -377,6 +377,51 @@ class nbinom_gen(rv_discrete):
 
 
 nbinom = nbinom_gen(name='nbinom')
+
+
+class pascal_gen(nbinom_gen):
+    r"""A Pascal discrete random variable.
+
+    %(before_notes)s
+
+    Notes
+    -----
+    The Pascal distribution describes a sequence of i.i.d. Bernoulli
+    trials, repeated until a predefined, non-random, integer number of
+    successes occurs.
+
+    The probability mass function of the number of failures for `pascal` is:
+
+    .. math::
+
+       f(k) = \binom{k+n-1}{n-1} p^n (1-p)^k
+
+    for integer :math:`k \ge 0`, :math:`0 < p \leq 1`, and integer
+    :math:`n > 0`.
+
+    `pascal` accepts ``n`` and ``p`` as shape parameters for
+    :math:`n` and :math:`p`, where :math:`n` is the number of successes,
+    :math:`p` is the probability of a single success, and :math:`1-p` is the
+    probability of a single failure.
+
+    %(after_notes)s
+
+    %(example)s
+
+    See Also
+    --------
+    nbinom, hypergeom, binom, nhypergeom
+
+    """
+    def _shape_info(self):
+        return [_ShapeInfo("n", True, (0, np.inf), (True, False)),
+                _ShapeInfo("p", False, (0, 1), (True, True))]
+
+    def _argcheck(self, n, p):
+        return (n > 0) & _isintegral(n) & (p > 0) & (p <= 1)
+
+
+pascal = pascal_gen(name='pascal')
 
 
 class geom_gen(rv_discrete):

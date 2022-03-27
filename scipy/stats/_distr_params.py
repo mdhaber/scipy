@@ -131,6 +131,7 @@ distdiscrete = [
     ['logser', (0.6,)],  # re-enabled, numpy ticket:921
     ['nbinom', (0.4, 0.4)],  # from tickets: 583
     ['nbinom', (5, 0.5)],
+    ['pascal', (5, 0.5)],
     ['planck', (0.51,)],   # 4.1
     ['poisson', (0.6,)],
     ['randint', (7, 31)],
@@ -157,6 +158,7 @@ invdistdiscrete = [
     ['geom', (1.5, )],
     ['logser', (1.5, )],
     ['nbinom', (10, 1.5)],
+    ['pascal', (5.5, 0.5)],
     ['planck', (-0.5, )],
     ['poisson', (-0.5, )],
     ['randint', (5, 2)],
