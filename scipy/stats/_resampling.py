@@ -912,6 +912,13 @@ def _calculate_null_samples(data, statistic, n_permutations, batch,
                                     batch, random_state)
 
 
+def _null_precision_check(null_distribution, observed):
+    diff = null_distribution - observed
+    close = np.isclose(null_distribution, observed)
+    equal = (null_distribution == observed)
+    close_not_equal = (close ^ equal)
+
+
 def _permutation_test_iv(data, statistic, permutation_type, vectorized,
                          n_resamples, batch, alternative, axis, random_state):
     """Input validation for `permutation_test`."""
@@ -1406,6 +1413,8 @@ def permutation_test(data, statistic, *, permutation_type='independent',
     calculate_null = null_calculators[permutation_type]
     null_distribution, n_resamples, exact_test = (
         calculate_null(*null_calculator_args))
+
+    _null_precision_check(null_distribution, observed)
 
     # See References [2] and [3]
     adjustment = 0 if exact_test else 1
