@@ -4053,3 +4053,185 @@ def get_distribution_names(namespace_pairs, rv_base_class):
         if isinstance(value, rv_base_class):
             distn_names.append(name)
     return distn_names, distn_gen_names
+
+
+# TODO: how to override methods
+# TODO: x beyond support
+class TruncatedDistribution(rv_continuous):
+    def _parse_args(self, x, left, right, *args, **kwargs):
+        a, b = self.dist.support(*args, **kwargs)
+        if left is None:
+            left = a
+        if right is None:
+            right = b
+        shapes, loc, scale = self.dist._parse_args(*args, **kwargs)
+
+        all_arrays = (a, b, left, right, loc, scale) + (shapes)
+        if x is not None:
+            all_arrays = (x,) + all_arrays
+
+        params = np.broadcast_arrays(*all_arrays)
+
+        if x is None:
+            a, b, left, right, loc, scale = params[:6]
+            shapes = params[6:]
+        else:
+            x, a, b, left, right, loc, scale = params[:7]
+            shapes = params[7:]
+
+        i = a > left
+        left[i] = a[i]
+        i = b < right
+        right[i] = b[i]
+
+        # replace this
+        assert np.all(left < right)
+
+        return x, left, right, shapes, loc, scale
+
+    def _get_norm(self, left, right, *args, **kwargs):
+        return (self.dist.cdf(right, *args, **kwargs)
+                - self.dist.cdf(left, *args, **kwargs))
+
+    def _get_log_norm(self, left, right, *args, **kwargs):
+        # can we improve this?
+        return np.log(self._get_norm(left, right, *args, **kwargs))
+
+    def __init__(self, dist):
+        self.dist = dist
+        self.name = f"truncated_{dist.name}"
+
+    def support(self, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(None, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        return left[()], right[()]
+
+    def pdf(self, x, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(x, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        norm = self._get_norm(left, right, *args, **kwargs)
+
+        return self.dist.pdf(x, *args, **kwargs) / norm
+
+    def logpdf(self, x, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(x, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        log_norm = self._get_log_norm(left, right, *args, **kwargs)
+
+        return self.dist.logpdf(x, *args, **kwargs) - log_norm
+
+    def cdf(self, x, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(x, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        norm = self._get_norm(left, right, *args, **kwargs)
+
+        return (self.dist.cdf(x, *args, **kwargs)
+                - self.dist.cdf(left, *args, **kwargs))/norm
+
+    def logcdf(self, x, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(x, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        log_norm = self._get_log_norm(left, right, *args, **kwargs)
+
+        # can we improve this?
+        return np.log(self.dist.cdf(x, *args, **kwargs)
+                      - self.dist.cdf(left, *args, **kwargs)) - log_norm
+
+    def sf(self, x, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(x, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        norm = self._get_norm(left, right, *args, **kwargs)
+
+        return (self.dist.sf(x, *args, **kwargs)
+                - self.dist.sf(right, *args, **kwargs))/norm
+
+    def logsf(self, x, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(x, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        log_norm = self._get_log_norm(left, right, *args, **kwargs)
+
+        # can we improve this?
+        return np.log(self.dist.sf(x, *args, **kwargs)
+                      - self.dist.sf(right, *args, **kwargs)) - log_norm
+
+    def ppf(self, x, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(x, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        cdf_l = self.dist.cdf(left, *args, **kwargs)
+        cdf_r = self.dist.cdf(right, *args, **kwargs)
+
+        return self.dist.ppf(cdf_l + x*(cdf_r - cdf_l), *args, **kwargs)
+
+    def isf(self, x, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(x, left, right, *args, **kwargs)
+        x, left, right, shapes, loc, scale = params
+
+        sf_l = self.dist.sf(left, *args, **kwargs)
+        sf_r = self.dist.sf(right, *args, **kwargs)
+
+        return self.dist.isf(sf_r + x*(sf_l - sf_r), *args, **kwargs)
+
+    def median(self, *args, left=None, right=None, **kwargs):
+        return self.ppf(0.5, *args, left=left, right=right, **kwargs)
+
+    def interval(self, alpha, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(alpha, left, right, *args, **kwargs)
+        alpha, left, right, shapes, loc, scale = params
+
+        a = self.ppf((1-alpha)/2, *args, left=left, right=right, **kwargs)
+        b = self.isf((1-alpha)/2, *args, left=left, right=right, **kwargs)
+
+        return a, b
+
+    def expect(self, func, args=tuple(), *, left=None, right=None, lb=None,
+               ub=None, **kwargs):
+        # conditional would mean that left = lb and right = ub, right?
+        params = self._parse_args(None, left, right, *args, **kwargs)
+        alpha, left, right, shapes, loc, scale = params
+
+        a, b = self.support(*args, left=left, right=right)
+        if lb is None or lb < a:
+            lb = a
+        if ub is None or ub > b:
+            ub = b
+
+        norm = self._get_norm(left, right, *args, **kwargs)
+
+        return self.dist.expect(func, args, lb=lb, ub=ub, **kwargs) / norm
+
+    def _mean_1d(self, loc, scale, left, right, *args):
+        return self.dist.expect(lambda x: x, args, loc=loc, scale=scale,
+                                lb=left, ub=right, conditional=True)
+
+    def mean(self, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(None, left, right, *args, **kwargs)
+        _, left, right, shapes, loc, scale = params
+
+        mean = np.vectorize(self._mean_1d)
+        return mean(loc, scale, left, right, *shapes)
+
+    def _var_1d(self, loc, scale, left, right, *args):
+        mean = self._mean_1d(loc, scale, left, right, *args)
+        return self.dist.expect(lambda x: (x-mean)**2, args, loc=loc,
+                                scale=scale, lb=left, ub=right,
+                                conditional=True)
+
+    def var(self, *args, left=None, right=None, **kwargs):
+        params = self._parse_args(None, left, right, *args, **kwargs)
+        _, left, right, shapes, loc, scale = params
+
+        var = np.vectorize(self._var_1d)
+        return var(loc, scale, left, right, *shapes)
+
+    def std(self, *args, left=None, right=None, **kwargs):
+        return np.sqrt(self.var(*args, left=left, right=right, **kwargs))
+
+    # rvs, moment, stats, entropy, fit, fit_loc_scale, nnlf
