@@ -63,7 +63,7 @@ in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
 [@PRtukey_hsd], a function for performing Tukey's HSD test.
 
 The most computationally-challenging part of implementing Tukey's HSD test is
-the evaluation of the cumulative distribution function (CDF) of the studentized
+the evaluation of the cumulative distribution function of the studentized
 range distribution, which is given by
 
 \begin{eqnarray*}
@@ -75,7 +75,7 @@ F(q; k, \nu) = \frac{k\nu^{\nu/2}}{\Gamma(\nu/2)2^{\nu/2-1}}
 where $q$ is the studentized range, $k$ is the number of groups, $\nu$ is the
 number of degrees of freedom used to determine the pooled sample variance, and
 $\phi(z)$ and $\Phi(z)$ represent the normal probability density function
-and normal CDF, respectively.
+and normal cumulative distribution function, respectively.
 There is no closed-form expression for this integral, and numerical
 integration requires care, as naive evaluation of the integrand results
 in overflow even for modest values of the parameters. Consequently, other
