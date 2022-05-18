@@ -29,13 +29,13 @@ bibliography: paper.bib
 
 In a world awash with data and computers, it is tempting to automate the
 process of scientific discovery by performing comparisons between many pairs
-of variables in hope of finding correlations. When frequentist hypothesis
+of variables in the hope of finding correlations. When frequentist hypothesis
 tests are performed at a fixed confidence level,
 increasing the number of tests increases the probability of observing a
 "statistically significant" result, even when the null hypothesis is actually
-true. Carefully designed tests, such as Tukey's honestly significant
+true. Carefully-designed tests, such as Tukey's honestly significant
 difference (HSD) test [@tukey1949comparing], protect against this practice of
-"p-hacking", producing p-values and confidence intervals that account
+"p-hacking" by producing p-values and confidence intervals that account
 for the number of comparisons performed. Several such tests rely on the
 studentized range distribution [@lund1983algorithm], which models the range
 (i.e. difference between maximum and minimum values) of the means of
@@ -63,7 +63,7 @@ in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
 [@PRtukey_hsd], a function for performing Tukey's HSD test.
 
 The most computationally-challenging part of implementing Tukey's HSD test is
-the evaluation of the cumulative density function (CDF) of the studentized
+the evaluation of the cumulative distribution function (CDF) of the studentized
 range distribution, which is given by
 
 \begin{eqnarray*}
@@ -75,7 +75,7 @@ F(q; k, \nu) = \frac{k\nu^{\nu/2}}{\Gamma(\nu/2)2^{\nu/2-1}}
 where $q$ is the studentized range, $k$ is the number of groups, $\nu$ is the
 number of degrees of freedom used to determine the pooled sample variance, and
 $\phi(z)$ and $\Phi(z)$ represent the normal probability density function
-and normal cumulative distribution function, respectively.
+and normal CDF, respectively.
 There is no closed-form expression for this integral, and numerical
 integration requires care, as naive evaluation of the integrand results
 in overflow even for modest values of the parameters. Consequently, other
