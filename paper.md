@@ -84,9 +84,9 @@ packages in the open-source scientific Python ecosystem, such as statsmodels
 interpolation between tabulated values. To satisfy the need for a more
 accurate implementation of this integral, we contributed
 `scipy.stats.studentized_range` [@PRstudentized_range], a class that
-evaluates the CDF and many other functions of the distribution. Both
-statsmodels and Pingouin have since adopted this class to perform
-studentized range distribution calculations.
+evaluates the cumulative distribution function and many other functions of the
+distribution. Both statsmodels and Pingouin have since adopted this class to
+perform studentized range distribution calculations.
 
 # Acknowledgements
 
