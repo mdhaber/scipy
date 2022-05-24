@@ -45,23 +45,10 @@ all of them rely on approximations of the studentized range distribution,
 which are not accurate outside the range of inputs for which they are
 designed. Here we present the implementation of a very accurate and
 sufficiently fast implementation of the studentized range distribution and a
-function for performing Tukey's HSD test. A thorough assessment of the methods,
-accuracy, and speed of the underlying calculations is available in
-[@StudentizedRangeSciPy], and an extensive test  suite included in SciPy guards
-against regressions. Both of these features are available in SciPy 1.8.0.
+function for performing Tukey's HSD test. Both of these features are available
+in SciPy 1.8.0.
 
-# Statement of need
-
-When analysis of variance (ANOVA) indicates that there is a statistically
-significant difference between at least one pair of groups in an experiment,
-researchers are often interested in *which* of the differences is
-statistically significant. Researchers use "post-hoc tests" to study these
-pairwise differences while controlling the experiment-wise error rate. Until
-recently, no post-hoc tests were available in SciPy [@virtanen2020scipy], the
-de-facto standard library of fundamental algorithms for scientific computing
-in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
-[@PRtukey_hsd], a function for performing Tukey's HSD test.
-
+# Performance
 The most computationally-challenging part of implementing Tukey's HSD test is
 the evaluation of the cumulative distribution function of the studentized
 range distribution, which is given by
@@ -85,8 +72,37 @@ interpolation between tabulated values. To satisfy the need for a more
 accurate implementation of this integral, we contributed
 `scipy.stats.studentized_range` [@PRstudentized_range], a class that
 evaluates the cumulative distribution function and many other functions of the
-distribution. Both statsmodels and Pingouin have since adopted this class to
-perform studentized range distribution calculations.
+distribution.
+
+To address numerical difficulties, ratios in the integrand are implemented by
+exponentiating the difference in the logarithms of the individual terms.
+Consequently, `scipy.stats.studentized_range` works well for $\nu$ through at
+least $10^5$. The integrand is written in Cython and integrated using
+`scipy.integrate.nquad`, resulting in evaluation times on the order of 5 ms
+on modern computers. Compared to a reference implementation evaluated using
+arbitrary precision arithmetic, the relative error in the cumulative density
+function is typically on the order of $10^-14$: six order of magnitude better
+than a commonly used implementation in R, and ten orders of magnitude better
+than the approximation provided by statsmodels. A thorough assessment of the
+methods, accuracy, and speed of the underlying calculations is available in
+[@StudentizedRangeSciPy], and an extensive test suite included in SciPy guards
+against regressions.
+
+# Statement of need
+
+When analysis of variance (ANOVA) indicates that there is a statistically
+significant difference between at least one pair of groups in an experiment,
+researchers are often interested in *which* of the differences is
+statistically significant. Researchers use "post-hoc tests" to study these
+pairwise differences while controlling the experiment-wise error rate. Until
+recently, no post-hoc tests were available in SciPy [@virtanen2020scipy], the
+de-facto standard library of fundamental algorithms for scientific computing
+in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
+[@PRtukey_hsd], a function for performing Tukey's HSD test. Also, there
+was no accurate implementation of the underlying studentized range distribution
+in Python, so we contributed `scipy.stats.studentized_range`. Both statsmodels
+and Pingouin have since adopted this class to perform studentized range
+distribution calculations.
 
 # Acknowledgements
 
