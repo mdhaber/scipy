@@ -48,6 +48,22 @@ sufficiently fast implementation of the studentized range distribution and a
 function for performing Tukey's HSD test. Both of these features are available
 in SciPy 1.8.0.
 
+# Statement of need
+
+When analysis of variance (ANOVA) indicates that there is a statistically
+significant difference between at least one pair of groups in an experiment,
+researchers are often interested in *which* of the differences is
+statistically significant. Researchers use "post-hoc tests" to study these
+pairwise differences while controlling the experiment-wise error rate. Until
+recently, no post-hoc tests were available in SciPy [@virtanen2020scipy], the
+de-facto standard library of fundamental algorithms for scientific computing
+in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
+[@PRtukey_hsd], a function for performing Tukey's HSD test. Also, there
+was no accurate implementation of the underlying studentized range distribution
+in Python, so we contributed `scipy.stats.studentized_range`. Both statsmodels
+and Pingouin have since adopted this class to perform studentized range
+distribution calculations.
+
 # Performance
 The most computationally-challenging part of implementing Tukey's HSD test is
 the evaluation of the cumulative distribution function of the studentized
@@ -87,22 +103,6 @@ magnitude better than the approximation provided by statsmodels. A thorough
 assessment of the methods, accuracy, and speed of the underlying calculations
 is available in [@StudentizedRangeSciPy], and an extensive test suite included
 in SciPy guards against regressions.
-
-# Statement of need
-
-When analysis of variance (ANOVA) indicates that there is a statistically
-significant difference between at least one pair of groups in an experiment,
-researchers are often interested in *which* of the differences is
-statistically significant. Researchers use "post-hoc tests" to study these
-pairwise differences while controlling the experiment-wise error rate. Until
-recently, no post-hoc tests were available in SciPy [@virtanen2020scipy], the
-de-facto standard library of fundamental algorithms for scientific computing
-in Python. To fill this gap, we contributed `scipy.stats.tukey_hsd`
-[@PRtukey_hsd], a function for performing Tukey's HSD test. Also, there
-was no accurate implementation of the underlying studentized range distribution
-in Python, so we contributed `scipy.stats.studentized_range`. Both statsmodels
-and Pingouin have since adopted this class to perform studentized range
-distribution calculations.
 
 # Acknowledgements
 
