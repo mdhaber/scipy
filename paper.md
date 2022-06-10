@@ -80,13 +80,13 @@ Consequently, `scipy.stats.studentized_range` works well for $\nu$ through at
 least $10^5$. The integrand is written in Cython and integrated using
 `scipy.integrate.nquad`, resulting in evaluation times on the order of 5 ms
 on modern computers. Compared to a reference implementation evaluated using
-arbitrary precision arithmetic, the relative error in the cumulative density
-function is typically on the order of $10^-14$: six order of magnitude better
-than a commonly used implementation in R, and ten orders of magnitude better
-than the approximation provided by statsmodels. A thorough assessment of the
-methods, accuracy, and speed of the underlying calculations is available in
-[@StudentizedRangeSciPy], and an extensive test suite included in SciPy guards
-against regressions.
+arbitrary precision arithmetic, the relative error in the cumulative
+distribution function is typically on the order of $10^-14$: six orders of
+magnitude better than a commonly used implementation in R, and ten orders of
+magnitude better than the approximation provided by statsmodels. A thorough
+assessment of the methods, accuracy, and speed of the underlying calculations
+is available in [@StudentizedRangeSciPy], and an extensive test suite included
+in SciPy guards against regressions.
 
 # Statement of need
 
