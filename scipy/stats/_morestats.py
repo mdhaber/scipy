@@ -394,6 +394,7 @@ def _calc_uniform_order_statistic_medians(n):
     the interval, but the distributions are skewed in a way that
     pushes the medians slightly towards the endpoints of the unit interval:
 
+    >>> import numpy as np
     >>> n = 4
     >>> k = np.arange(1, n+1)
     >>> from scipy.stats import beta
@@ -552,6 +553,7 @@ def probplot(x, sparams=(), dist='norm', fit=True, plot=None, rvalue=False):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy import stats
     >>> import matplotlib.pyplot as plt
     >>> nsample = 100
@@ -692,6 +694,7 @@ def ppcc_max(x, brack=(0.0, 1.0), dist='tukeylambda'):
     First we generate some random data from a Weibull distribution
     with shape parameter 2.5:
 
+    >>> import numpy as np
     >>> from scipy import stats
     >>> import matplotlib.pyplot as plt
     >>> rng = np.random.default_rng()
@@ -784,6 +787,7 @@ def ppcc_plot(x, a, b, dist='tukeylambda', plot=None, N=80):
     First we generate some random data from a Weibull distribution
     with shape parameter 2.5, and plot the histogram of the data:
 
+    >>> import numpy as np
     >>> from scipy import stats
     >>> import matplotlib.pyplot as plt
     >>> rng = np.random.default_rng()
@@ -873,6 +877,7 @@ def boxcox_llf(lmb, data):
     Generate some random variates and calculate Box-Cox log-likelihood values
     for them for a range of ``lmbda`` values:
 
+    >>> import numpy as np
     >>> rng = np.random.default_rng()
     >>> x = stats.loggamma.rvs(5, loc=10, size=1000, random_state=rng)
     >>> lmbdas = np.linspace(-2, 10)
@@ -1168,6 +1173,7 @@ def boxcox_normmax(x, brack=None, method='pearsonr', optimizer=None):
     We can generate some data and determine the optimal ``lmbda`` in various
     ways:
 
+    >>> import numpy as np
     >>> rng = np.random.default_rng()
     >>> x = stats.loggamma.rvs(5, size=30, random_state=rng) + 5
     >>> y, lmax_mle = stats.boxcox(x)
@@ -1541,6 +1547,7 @@ def yeojohnson_llf(lmb, data):
     Generate some random variates and calculate Yeo-Johnson log-likelihood
     values for them for a range of ``lmbda`` values:
 
+    >>> import numpy as np
     >>> x = stats.loggamma.rvs(5, loc=10, size=1000)
     >>> lmbdas = np.linspace(-2, 10)
     >>> llf = np.zeros(lmbdas.shape, dtype=float)
@@ -1633,6 +1640,7 @@ def yeojohnson_normmax(x, brack=(-2, 2)):
 
     Generate some data and determine optimal ``lmbda``
 
+    >>> import numpy as np
     >>> rng = np.random.default_rng()
     >>> x = stats.loggamma.rvs(5, size=30, random_state=rng) + 5
     >>> lmax = stats.yeojohnson_normmax(x)
@@ -1773,6 +1781,7 @@ def shapiro(x):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy import stats
     >>> rng = np.random.default_rng()
     >>> x = stats.norm.rvs(loc=5, scale=3, size=100, random_state=rng)
@@ -2108,6 +2117,7 @@ def anderson_ksamp(samples, midrank=True):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy import stats
     >>> rng = np.random.default_rng()
 
@@ -2310,6 +2320,7 @@ def ansari(x, y, alternative='two-sided'):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats import ansari
     >>> rng = np.random.default_rng()
 
@@ -2488,6 +2499,7 @@ def bartlett(*samples):
     This is not surprising, given that the sample variance of `b` is much
     larger than that of `a` and `c`:
 
+    >>> import numpy as np
     >>> [np.var(x, ddof=1) for x in [a, b, c]]
     [0.007054444444444413, 0.13073888888888888, 0.008890000000000002]
 
@@ -2591,6 +2603,7 @@ def levene(*samples, center='median', proportiontocut=0.05):
     This is not surprising, given that the sample variance of `b` is much
     larger than that of `a` and `c`:
 
+    >>> import numpy as np
     >>> [np.var(x, ddof=1) for x in [a, b, c]]
     [0.007054444444444413, 0.13073888888888888, 0.008890000000000002]
 
@@ -2846,6 +2859,7 @@ def fligner(*samples, center='median', proportiontocut=0.05):
     This is not surprising, given that the sample variance of `b` is much
     larger than that of `a` and `c`:
 
+    >>> import numpy as np
     >>> [np.var(x, ddof=1) for x in [a, b, c]]
     [0.007054444444444413, 0.13073888888888888, 0.008890000000000002]
 
@@ -3031,6 +3045,7 @@ def mood(x, y, axis=0, alternative="two-sided"):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy import stats
     >>> rng = np.random.default_rng()
     >>> x2 = rng.standard_normal((2, 45, 6, 7))
@@ -3706,6 +3721,7 @@ def circmean(samples, high=2*pi, low=0, axis=None, nan_policy='propagate'):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats import circmean
     >>> circmean([0.1, 2*np.pi+0.2, 6*np.pi+0.3])
     0.2
@@ -3787,6 +3803,7 @@ def circvar(samples, high=2*pi, low=0, axis=None, nan_policy='propagate'):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats import circvar
     >>> circvar([0, 2*np.pi/3, 5*np.pi/3])
     0.6666666666666665
@@ -3864,6 +3881,7 @@ def circstd(samples, high=2*pi, low=0, axis=None, nan_policy='propagate', *,
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats import circstd
     >>> small_samples = [0, 0.1*np.pi/2, 0.001*np.pi, 0.03*np.pi/2]
     >>> circstd(small_samples)

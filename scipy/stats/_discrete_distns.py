@@ -490,6 +490,7 @@ class hypergeom_gen(rv_discrete):
     choose at random 12 of the 20 animals, we can initialize a frozen
     distribution and plot the probability mass function:
 
+    >>> import numpy as np
     >>> [M, n, N] = [20, 7, 12]
     >>> rv = hypergeom(M, n, N)
     >>> x = np.arange(0, n+1)
@@ -655,6 +656,7 @@ class nhypergeom_gen(rv_discrete):
     aren't dogs (failures), we can initialize a frozen distribution
     and plot the probability mass function:
 
+    >>> import numpy as np
     >>> M, n, r = [20, 7, 12]
     >>> rv = nhypergeom(M, n, r)
     >>> x = np.arange(0, n+2)

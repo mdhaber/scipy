@@ -170,6 +170,7 @@ def variation(a, axis=0, nan_policy='propagate', ddof=0, *, keepdims=False):
     Compute the variation along a given dimension of an array that contains
     a few ``nan`` values:
 
+    >>> import numpy as np
     >>> x = np.array([[  10.0, np.nan, 11.0, 19.0, 23.0, 29.0, 98.0],
     ...               [  29.0,   30.0, 32.0, 33.0, 35.0, 56.0, 57.0],
     ...               [np.nan, np.nan, 12.0, 13.0, 16.0, 16.0, 17.0]])

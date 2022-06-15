@@ -94,6 +94,7 @@ def linregress(x, y=None, alternative='two-sided'):
 
     Examples
     --------
+    >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> from scipy import stats
     >>> rng = np.random.default_rng()
@@ -288,6 +289,7 @@ def theilslopes(y, x=None, alpha=0.95, method='separate'):
     >>> from scipy import stats
     >>> import matplotlib.pyplot as plt
 
+    >>> import numpy as np
     >>> x = np.linspace(-5, 5, num=150)
     >>> y = x + np.random.normal(size=x.size)
     >>> y[11:15] += 10  # add outliers
@@ -460,6 +462,7 @@ def siegelslopes(y, x=None, method="hierarchical"):
     >>> from scipy import stats
     >>> import matplotlib.pyplot as plt
 
+    >>> import numpy as np
     >>> x = np.linspace(-5, 5, num=150)
     >>> y = x + np.random.normal(size=x.size)
     >>> y[11:15] += 10  # add outliers

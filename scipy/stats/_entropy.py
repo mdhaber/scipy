@@ -185,6 +185,7 @@ def differential_entropy(
 
     Entropy of a standard normal distribution:
 
+    >>> import numpy as np
     >>> rng = np.random.default_rng()
     >>> values = rng.standard_normal(100)
     >>> differential_entropy(values)

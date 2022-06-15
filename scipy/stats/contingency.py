@@ -50,6 +50,7 @@ def margins(a):
 
     Examples
     --------
+    >>> import numpy as np
     >>> a = np.arange(12).reshape(2, 6)
     >>> a
     array([[ 0,  1,  2,  3,  4,  5],
@@ -106,6 +107,7 @@ def expected_freq(observed):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats.contingency import expected_freq
     >>> observed = np.array([[10, 10, 20],[20, 20, 20]])
     >>> expected_freq(observed)
@@ -222,6 +224,7 @@ def chi2_contingency(observed, correction=True, lambda_=None):
     --------
     A two-way example (2 x 3):
 
+    >>> import numpy as np
     >>> from scipy.stats import chi2_contingency
     >>> obs = np.array([[10, 10, 20], [20, 20, 20]])
     >>> chi2_contingency(obs)
@@ -360,6 +363,7 @@ def association(observed, method="cramer", correction=False, lambda_=None):
     --------
     An example with a 4x2 contingency table:
 
+    >>> import numpy as np
     >>> from scipy.stats.contingency import association
     >>> obs4x2 = np.array([[100, 150], [203, 322], [420, 700], [320, 210]])
 

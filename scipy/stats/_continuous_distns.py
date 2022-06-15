@@ -8738,6 +8738,7 @@ class uniform_gen(rv_continuous):
 
         We'll fit the uniform distribution to `x`:
 
+        >>> import numpy as np
         >>> x = np.array([2, 2.5, 3.1, 9.5, 13.0])
 
         For a uniform distribution MLE, the location is the minimum of the
@@ -9760,6 +9761,7 @@ class studentized_range_gen(rv_continuous):
 
     Display the probability density function (``pdf``):
 
+    >>> import numpy as np
     >>> x = np.linspace(studentized_range.ppf(0.01, k, df),
     ...                 studentized_range.ppf(0.99, k, df), 100)
     >>> ax.plot(x, studentized_range.pdf(x, k, df),

@@ -332,6 +332,7 @@ def cramervonmises(rvs, cdf, args=()):
     were, in fact, drawn from the standard normal distribution. We choose a
     significance level of alpha=0.05.
 
+    >>> import numpy as np
     >>> from scipy import stats
     >>> rng = np.random.default_rng()
     >>> x = stats.norm.rvs(size=500, random_state=rng)
@@ -1358,6 +1359,7 @@ def cramervonmises_2samp(x, y, method='auto'):
     ``scipy.stats.norm.rvs`` have the same distribution. We choose a
     significance level of alpha=0.05.
 
+    >>> import numpy as np
     >>> from scipy import stats
     >>> rng = np.random.default_rng()
     >>> x = stats.norm.rvs(size=100, random_state=rng)
@@ -1710,6 +1712,7 @@ def tukey_hsd(*args):
     We can also compute the confidence interval associated with our chosen
     confidence level.
 
+    >>> import numpy as np
     >>> group0 = [24.5, 23.5, 26.4, 27.1, 29.9]
     >>> group1 = [28.4, 34.2, 29.5, 32.2, 30.1]
     >>> group2 = [26.1, 28.3, 24.3, 26.2, 27.8]

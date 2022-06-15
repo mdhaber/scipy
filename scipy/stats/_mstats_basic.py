@@ -206,6 +206,7 @@ def count_tied_groups(x, use_missing=False):
 
     In the above example, the ties were 0 (3x), 2 (3x) and 3 (2x).
 
+    >>> import numpy as np
     >>> z = np.ma.array([0, 0, 1, 2, 2, 2, 3, 3, 4, 5, 6])
     >>> mstats.count_tied_groups(z)
     {2: 2, 3: 1}
@@ -308,6 +309,7 @@ def mode(a, axis=0):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy import stats
     >>> from scipy.stats import mstats
     >>> m_arr = np.ma.array([1, 1, 0, 0, 0, 0], mask=[0, 0, 1, 1, 1, 0])
@@ -482,6 +484,7 @@ def pearsonr(x, y):
 
     This should be close to the exact value given by
 
+    >>> import numpy as np
     >>> 1/np.sqrt(1 + s**2)
     0.8944271909999159
 
@@ -1609,6 +1612,7 @@ def trima(a, limits=None, inclusive=(True,True)):
     --------
     >>> from scipy.stats.mstats import trima
 
+    >>> import numpy as np
     >>> a = np.arange(10)
 
     The interval is left-closed and right-open, i.e., `[2, 8)`.
@@ -2070,6 +2074,7 @@ def tmean(a, limits=None, inclusive=(True, True), axis=None):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats import mstats
     >>> a = np.array([[6, 8, 3, 0],
     ...               [3, 9, 1, 2],
@@ -2163,6 +2168,7 @@ def tmin(a, lowerlimit=None, axis=0, inclusive=True):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats import mstats
     >>> a = np.array([[6, 8, 3, 0],
     ...               [3, 2, 1, 2],
@@ -2213,6 +2219,7 @@ def tmax(a, upperlimit=None, axis=0, inclusive=True):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats import mstats
     >>> a = np.array([[6, 8, 3, 0],
     ...               [3, 9, 1, 2],
@@ -2326,6 +2333,7 @@ def winsorize(a, limits=None, inclusive=(True, True), inplace=False,
 
     A shuffled array contains integers from 1 to 10.
 
+    >>> import numpy as np
     >>> a = np.array([10, 4, 9, 8, 5, 3, 7, 2, 1, 6])
 
     The 10% of the lowest value (i.e., `1`) and the 20% of the highest
@@ -2517,6 +2525,7 @@ def variation(a, axis=0, ddof=0):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats.mstats import variation
     >>> a = np.array([2,8,4])
     >>> variation(a)
@@ -2685,6 +2694,7 @@ def describe(a, axis=0, ddof=0, bias=True):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats.mstats import describe
     >>> ma = np.ma.array(range(6), mask=[0, 0, 0, 1, 1, 1])
     >>> describe(ma)
@@ -2978,6 +2988,7 @@ def mquantiles(a, prob=list([.25,.5,.75]), alphap=.4, betap=.4, axis=None,
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats.mstats import mquantiles
     >>> a = np.array([6., 47., 49., 15., 42., 41., 7., 39., 43., 40., 36.])
     >>> mquantiles(a)
@@ -3166,6 +3177,7 @@ def sem(a, axis=0, ddof=1):
     --------
     Find standard error along the first axis:
 
+    >>> import numpy as np
     >>> from scipy import stats
     >>> a = np.arange(20).reshape(5,4)
     >>> print(stats.mstats.sem(a))

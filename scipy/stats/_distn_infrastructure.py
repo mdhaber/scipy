@@ -173,6 +173,7 @@ Calculate the first four moments:
 
 Display the probability density function (``pdf``):
 
+>>> import numpy as np
 >>> x = np.linspace(%(name)s.ppf(0.01, %(shapes)s),
 ...                 %(name)s.ppf(0.99, %(shapes)s), 100)
 >>> ax.plot(x, %(name)s.pdf(x, %(shapes)s),
@@ -302,6 +303,7 @@ Calculate the first four moments:
 
 Display the probability mass function (``pmf``):
 
+>>> import numpy as np
 >>> x = np.arange(%(name)s.ppf(0.01, %(shapes)s),
 ...               %(name)s.ppf(0.99, %(shapes)s))
 >>> ax.plot(x, %(name)s.pmf(x, %(shapes)s), 'bo', ms=8, label='%(name)s pmf')
@@ -543,6 +545,7 @@ def argsreduce(cond, *args):
 
     Examples
     --------
+    >>> import numpy as np
     >>> rng = np.random.default_rng()
     >>> A = rng.random((4, 5))
     >>> B = 2
@@ -1882,6 +1885,7 @@ class rv_continuous(rv_generic):
     --------
     To create a new Gaussian distribution, we would do the following:
 
+    >>> import numpy as np
     >>> from scipy.stats import rv_continuous
     >>> class gaussian_gen(rv_continuous):
     ...     "Gaussian distribution"
@@ -3140,6 +3144,7 @@ class rv_discrete(rv_generic):
     --------
     Custom made discrete distribution:
 
+    >>> import numpy as np
     >>> from scipy import stats
     >>> xk = np.arange(7)
     >>> pk = (0.1, 0.2, 0.3, 0.1, 0.1, 0.0, 0.2)

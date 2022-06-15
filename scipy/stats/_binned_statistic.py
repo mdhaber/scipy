@@ -117,6 +117,7 @@ def binned_statistic(x, values, statistic='mean',
            [8. , 9. ]]), bin_edges=array([1., 4., 7.]),
            binnumber=array([1, 1, 1, 2, 2]))
 
+    >>> import numpy as np
     >>> stats.binned_statistic([1, 2, 1, 2, 4], np.arange(5), statistic='mean',
     ...                        bins=3)
     BinnedStatisticResult(statistic=array([1., 2., 4.]),
@@ -482,6 +483,7 @@ def binned_statistic_dd(sample, values, statistic='mean',
     `binned_statistic_dd` can handle arrays of higher dimension `D`. But a plot
     of dimension `D+1` is required.
 
+    >>> import numpy as np
     >>> mu = np.array([0., 1.])
     >>> sigma = np.array([[1., -0.5],[-0.5, 1.5]])
     >>> multinormal = stats.multivariate_normal(mu, sigma)

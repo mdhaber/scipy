@@ -321,6 +321,7 @@ class multivariate_normal_gen(multi_rv_generic):
     >>> import matplotlib.pyplot as plt
     >>> from scipy.stats import multivariate_normal
 
+    >>> import numpy as np
     >>> x = np.linspace(0, 5, 10, endpoint=False)
     >>> y = multivariate_normal.pdf(x, mean=2.5, cov=0.5); y
     array([ 0.00108914,  0.01033349,  0.05946514,  0.20755375,  0.43939129,
@@ -883,6 +884,7 @@ class matrix_normal_gen(multi_rv_generic):
 
     >>> from scipy.stats import matrix_normal
 
+    >>> import numpy as np
     >>> M = np.arange(6).reshape(3,2); M
     array([[0, 1],
            [2, 3],
@@ -1156,6 +1158,7 @@ class matrix_normal_frozen(multi_rv_frozen):
     --------
     >>> from scipy.stats import matrix_normal
 
+    >>> import numpy as np
     >>> distn = matrix_normal(mean=np.zeros((3,3)))
     >>> X = distn.rvs(); X
     array([[-0.02976962,  0.93339138, -0.09663178],
@@ -1361,6 +1364,7 @@ class dirichlet_gen(multi_rv_generic):
 
     Generate a dirichlet random variable
 
+    >>> import numpy as np
     >>> quantiles = np.array([0.2, 0.2, 0.6])  # specify quantiles
     >>> alpha = np.array([0.4, 5, 15])  # specify concentration parameters
     >>> dirichlet.pdf(quantiles, alpha)
@@ -1706,6 +1710,7 @@ class wishart_gen(multi_rv_generic):
 
     Examples
     --------
+    >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> from scipy.stats import wishart, chi2
     >>> x = np.linspace(1e-5, 8, 100)
@@ -2443,6 +2448,7 @@ class invwishart_gen(wishart_gen):
 
     Examples
     --------
+    >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> from scipy.stats import invwishart, invgamma
     >>> x = np.linspace(0.01, 1, 100)
@@ -3330,6 +3336,7 @@ class special_ortho_group_gen(multi_rv_generic):
     >>> from scipy.stats import special_ortho_group
     >>> x = special_ortho_group.rvs(3)
 
+    >>> import numpy as np
     >>> np.dot(x, x.T)
     array([[  1.00000000e+00,   1.13231364e-17,  -2.86852790e-16],
            [  1.13231364e-17,   1.00000000e+00,  -1.46845020e-16],
@@ -3493,6 +3500,7 @@ class ortho_group_gen(multi_rv_generic):
     >>> from scipy.stats import ortho_group
     >>> x = ortho_group.rvs(3)
 
+    >>> import numpy as np
     >>> np.dot(x, x.T)
     array([[  1.00000000e+00,   1.13231364e-17,  -2.86852790e-16],
            [  1.13231364e-17,   1.00000000e+00,  -1.46845020e-16],
@@ -3672,6 +3680,7 @@ class random_correlation_gen(multi_rv_generic):
 
     Examples
     --------
+    >>> import numpy as np
     >>> from scipy.stats import random_correlation
     >>> rng = np.random.default_rng()
     >>> x = random_correlation.rvs((.5, .8, 1.2, 1.5), random_state=rng)
@@ -3919,6 +3928,7 @@ class unitary_group_gen(multi_rv_generic):
     >>> from scipy.stats import unitary_group
     >>> x = unitary_group.rvs(3)
 
+    >>> import numpy as np
     >>> np.dot(x, x.conj().T)
     array([[  1.00000000e+00,   1.13231364e-17,  -2.86852790e-16],
            [  1.13231364e-17,   1.00000000e+00,  -1.46845020e-16],
@@ -4121,6 +4131,7 @@ class multivariate_t_gen(multi_rv_generic):
 
     Create a contour plot of the PDF.
 
+    >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> x, y = np.mgrid[-1:3:.01, -2:1.5:.01]
     >>> pos = np.dstack((x, y))
@@ -4399,6 +4410,7 @@ class multivariate_t_frozen(multi_rv_frozen):
 
         Examples
         --------
+        >>> import numpy as np
         >>> loc = np.zeros(3)
         >>> shape = np.eye(3)
         >>> df = 10
