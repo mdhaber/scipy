@@ -43,7 +43,7 @@ samples from a normally distributed population. Although there are already
 implementations of these tests available in the scientific Python ecosystem,
 all of them rely on approximations of the studentized range distribution,
 which are not accurate outside the range of inputs for which they are
-designed. Here we present the implementation of a very accurate and
+designed. Here we present a very accurate and
 sufficiently fast implementation of the studentized range distribution and a
 function for performing Tukey's HSD test. Both of these features are available
 in SciPy 1.8.0.
