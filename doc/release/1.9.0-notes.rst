@@ -290,8 +290,11 @@ Backwards incompatible changes
   output will be a scalar or ``np.ndarray`` rather than a masked array with
   ``mask=False``.
 - The default method of `scipy.optimize.linprog` is now ``'highs'``, not
-  ``'interior-point'`` (which is now deprecated), so callback functions and some
-  options are no longer supported with the default method.
+  ``'interior-point'`` (which is now deprecated), so callback functions and
+  some options are no longer supported with the default method. With the
+  default method, the ``x`` attribute of the returned ``OptimizeResult`` is
+  now ``None`` (instead of a non-optimal array) when an optimal solution
+  cannot be found (e.g. infeasible problem).
 - For `scipy.stats.combine_pvalues`, the sign of the test statistic returned
   for the method ``"pearson"`` has been flipped so that higher values of the
   statistic now correspond to lower p-values, making the statistic more
