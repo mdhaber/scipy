@@ -38,7 +38,7 @@ difference (HSD) test [@tukey1949comparing], protect against this practice of
 "p-hacking" by producing p-values and confidence intervals that account
 for the number of comparisons performed. Several such tests rely on the
 studentized range distribution [@lund1983algorithm], which models the range
-(i.e. difference between maximum and minimum values) of the means of
+(i.e., the difference between maximum and minimum values) of the means of
 samples from a normally distributed population. Although there are already
 implementations of these tests available in the scientific Python ecosystem,
 all of them rely on approximations of the studentized range distribution,
