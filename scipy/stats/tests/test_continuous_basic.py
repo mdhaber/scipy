@@ -44,7 +44,7 @@ distslow = ['recipinvgauss', 'vonmises', 'kappa4', 'vonmises_line',
 distxslow = ['studentized_range', 'kstwo', 'ksone', 'wrapcauchy', 'genexpon']
 
 # For skipping test_moments, which is already marked slow
-distxslow_test_moments = ['studentized_range', 'vonmises', 'vonmises_line',
+distxslow_test_moments = ['studentized_range', 'vonmises_line', 'skewnorm',
                           'ksone', 'kstwo', 'recipinvgauss', 'genexpon']
 
 # skip check_fit_args (test is slow)

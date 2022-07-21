@@ -8641,6 +8641,10 @@ class vonmises_gen(rv_continuous):
         return (-kappa * sc.i1(kappa) / sc.i0(kappa) +
                 np.log(2 * np.pi * sc.i0(kappa)))
 
+    @inherit_docstring_from(rv_continuous)
+    def expect(self, *args, **kwds):
+        return super().expect(*args, **kwds, lb=-np.pi, ub=np.pi)
+
 
 vonmises = vonmises_gen(name='vonmises')
 vonmises_line = vonmises_gen(a=-np.pi, b=np.pi, name='vonmises_line')
