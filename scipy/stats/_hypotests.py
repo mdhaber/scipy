@@ -6,6 +6,7 @@ import warnings
 from itertools import combinations
 import scipy.stats
 from scipy.optimize import shgo
+from scipy import sparse
 from . import distributions
 from ._common import ConfidenceInterval
 from ._continuous_distns import chi2, norm
@@ -1297,26 +1298,31 @@ def _pval_cvm_2samp_exact(s, m, n):
     max_gs = max(zeta_bound, combinations)
     dtype = np.min_scalar_type(max_gs)
 
-    # the frequency table of $g_{u, v}^+$ defined in [1, p. 6]
-    gs = ([np.array([[0], [1]], dtype=dtype)]
-          + [np.empty((2, 0), dtype=dtype) for _ in range(m)])
-    for u in range(n + 1):
-        next_gs = []
-        tmp = np.empty((2, 0), dtype=dtype)
-        for v, g in enumerate(gs):
-            # Calculate g recursively with eq. 11 in [1]. Even though it
-            # doesn't look like it, this also does 12/13 (all of Algorithm 1).
-            vi, i0, i1 = np.intersect1d(tmp[0], g[0], return_indices=True)
-            tmp = np.concatenate([
-                np.stack([vi, tmp[1, i0] + g[1, i1]]),
-                np.delete(tmp, i0, 1),
-                np.delete(g, i1, 1)
-            ], 1)
-            tmp[0] += (a * v - b * u) ** 2
-            next_gs.append(tmp)
-        gs = next_gs
-    value, freq = gs[m]
-    return np.float64(np.sum(freq[value >= zeta]) / combinations)
+    # Algorithm 1 of [1]
+    # start with `lil_matrix` just to avoid SparseEfficiencyWarning
+    gum1 = sparse.lil_matrix((m+1, zeta_bound), dtype=dtype)
+    for v in range(m+1):
+        gum1[v, a**2*v*(v+1)*(2*v + 1) // 6] = 1
+    gum1 = sparse.csr_matrix(gum1)
+
+    for u in range(1, n+1):
+        gu = sparse.lil_matrix((m+1, zeta_bound), dtype=dtype)
+        gu[0, b**2*u*(u+1)*(2*u + 1) // 6] = 1
+        gu = sparse.csr_matrix(gu)
+
+        for v in range(1, m+1):
+            tmp = gum1[v] + gu[v-1]
+            tmp.indices += (a*v - b*u)**2
+
+            # Same as gu[v] = tmp[0], but much faster
+            gu.indptr[v+1:] += len(tmp.indices)
+            gu.indices = np.concatenate((gu.indices, tmp.indices))
+            gu.data = np.concatenate((gu.data, tmp.data))
+
+        gum1 = gu
+
+    p = np.sum(gum1[m].data[gum1[m].indices >= zeta]) / comb((m + n), m)
+    return p
 
 
 def cramervonmises_2samp(x, y, method='auto'):
