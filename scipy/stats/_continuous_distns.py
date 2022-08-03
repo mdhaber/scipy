@@ -7819,21 +7819,20 @@ class skew_norm_gen(rv_continuous):
             f2=lambda x, a: 2.*_norm_pdf(x)*_norm_cdf(a*x)
         )
 
-    def _cdf_single(self, x, *args):
+    def _cdf_single(self, Q, L):  # use Q, L for easy comparison against [1]
         """
         This method implements the method discussed in [1]. As stated in the
         paper, the cdf value is calculated by assuming the skewness is
         non-negative. For negative values of skewness, we use the reflection
-        property: P(x;-shape) = 1 - P(-x;shape).
+        property: P(Q; -shape) = 1 - P(-Q; shape).
 
-        As recommented in the conclusion section of [1],
-        * when shape==1, we use ``norm_cdf(Q)`` which provide exact results
-            accross all Q.
+        As recommended in the conclusion section of [1],
+        * when shape==1, we use ``_norm_cdf(Q)**2``, which is exact
         * we use equation 14 when Q < 0, which is an approximation for the
-            lower tail of the distribution.
-        * we use equation 3 elsewhere since it is accurate for the "central
-            portion" of the distribution (10^-20 <= cdf <= 1 - 10^-20) and
-            upper tail (cdf > 1 - 10^-20).
+          lower tail of the distribution.
+        * we use equation 3 elsewhere, since it exact and can be calculated
+          accurately for the "central portion" of the distribution
+          (10^-20 <= cdf <= 1 - 10^-20) and upper tail (cdf > 1 - 10^-20).
 
         References
         ----------
@@ -7841,26 +7840,22 @@ class skew_norm_gen(rv_continuous):
             the Skew Normal distribution. Empir Econ 60, 3171–3202 (2021).
             https://doi.org/10.1007/s00181-020-01868-6
         """
-        q = x
-        (shape,) = args
-        orig_shape = shape
+        orig_shape = L
 
         if orig_shape < 0:
-            shape = -shape
-            q = -q
+            L = -L
+            Q = -Q
 
-        if shape == 1:
-            # exact approximation across all values of q
-            cdf = sc.ndtr(q) ** 2
-        elif q < 0:
-            z = (1 + shape ** 2) * q * q
-            cdf = math.exp(-0.5 * z) / (math.pi * shape * z)
+        if L == 1:
+            cdf = _norm_cdf(Q) ** 2
+        elif Q < 0:
+            z = (1 + L ** 2) * Q * Q
+            cdf = math.exp(-0.5 * z) / (math.pi * L * z)
         else:
-            q = np.c_[np.zeros_like(q), q]
             # construct the covariance of the bivariate standard normal
-            corr = -shape / math.sqrt(1 + shape ** 2)
-            cov = ((1, corr), (corr, 1))
-            cdf = 2 * multivariate_normal.cdf(q, cov=cov)
+            corr = -L / math.sqrt(1 + L ** 2)
+            cov = [[1, corr], [corr, 1]]
+            cdf = 2 * multivariate_normal.cdf([0, Q], cov=cov)
         return (1 - cdf) if orig_shape < 0 else cdf
 
     def _sf(self, x, a):
