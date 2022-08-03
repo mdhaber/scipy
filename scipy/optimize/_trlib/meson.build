@@ -7,8 +7,8 @@ _trlib = py3.extension_module('_trlib',
     'trlib_quadratic_zero.c',
     'trlib_tri_factor.c'
   ],
-  c_args: numpy_nodepr_api,
-  dependencies: [py3_dep, lapack],
+  c_args: cython_c_args,
+  dependencies: [lapack],
   include_directories: [
     inc_np,
     '../../_lib',
