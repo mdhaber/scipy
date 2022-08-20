@@ -84,7 +84,8 @@ class CovViaDiagonal(Covariance):
         self._rank = positive_diagonal.shape[-1]
         self._A = np.diag(diagonal)
         self._dimensionality = diagonal.shape[-1]
-        self.i_positive = i_positive
+        self._i_positive = i_positive
+        self._allow_singular = True
 
     def _whiten(self, x):
         return x * self._LP
@@ -93,7 +94,7 @@ class CovViaDiagonal(Covariance):
         """
         Check whether x lies in the support of the distribution.
         """
-        return np.all(x[..., ~self.i_positive] == 0, axis=-1)
+        return np.all(x[..., ~self._i_positive] == 0, axis=-1)
 
 
 class CovViaPrecision(Covariance):
@@ -112,6 +113,7 @@ class CovViaPrecision(Covariance):
         self._precision = precision
         self._covariance = covariance
         self._dimensionality = self._rank
+        self._allow_singular = False
 
     def _whiten(self, x):
         return x @ self._LP
@@ -127,8 +129,9 @@ class CovViaEigendecomposition(Covariance):
     Representation of a covariance provided via eigenvalues and eigenvectors
     """
 
-    def __init__(self, eigenvalues, eigenvectors):
-        eigenvalues = self._validate_vector(eigenvectors, 'eigenvalues')
+    def __init__(self, eigendecomposition):
+        eigenvalues, eigenvectors = eigendecomposition
+        eigenvalues = self._validate_vector(eigenvalues, 'eigenvalues')
         eigenvectors = self._validate_matrix(eigenvectors, 'eigenvectors')
 
         i_positive = eigenvalues > 0
@@ -143,9 +146,9 @@ class CovViaEigendecomposition(Covariance):
         self._w = eigenvalues
         self._v = eigenvectors
         self._dimensionality = eigenvalues.shape[-1]
-        self.i_positive = i_positive
         self._null_basis = eigenvectors[..., ~i_positive]
         self._eps = _multivariate._eigvalsh_to_eps(eigenvalues) * 10**3
+        self._allow_singular = True
 
     def _whiten(self, x):
         return x @ self._LP
@@ -176,6 +179,7 @@ class CovViaCov(Covariance):
         self._rank = cov.shape[-1]  # must be full rank for cholesky
         self._A = cov
         self._dimensionality = self._rank
+        self._allow_singular = False
 
     def _whiten(self, x):
         return linalg.solve_triangular(self._factor, x.T, lower=False).T
@@ -193,6 +197,7 @@ class CovViaPSD(Covariance):
         self._A = psd._M
         self._dimensionality = psd._M.shape[-1]
         self._psd = psd
+        self._allow_singular = False  # by default
 
     def _whiten(self, x):
         return x @ self._LP
