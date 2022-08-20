@@ -487,6 +487,7 @@ from ._rvs_sampling import rvs_ratio_uniforms
 from ._page_trend_test import page_trend_test
 from ._mannwhitneyu import mannwhitneyu
 from ._fit import fit
+from ._covariance import *
 
 # Deprecated namespaces, to be removed in v2.0.0
 from . import (
