@@ -151,7 +151,7 @@ class CovViaPrecision(Covariance):
             covariance = self._validate_matrix(precision, 'covariance')
 
         self._LP = np.linalg.cholesky(precision)
-        self._log_pdet = -2*np.log(np.diag(self._LP)).sum(axis=-1)
+        self._log_pdet = -2*np.log(_extract_diag(self._LP)).sum(axis=-1)
         self._rank = precision.shape[-1]  # must be full rank in invertible
         self._precision = precision
         self._covariance = covariance
