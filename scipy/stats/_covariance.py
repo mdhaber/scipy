@@ -177,19 +177,21 @@ class CovViaEigendecomposition(Covariance):
         eigenvalues = self._validate_vector(eigenvalues, 'eigenvalues')
         eigenvectors = self._validate_matrix(eigenvectors, 'eigenvectors')
 
-        i_positive = eigenvalues > 0
-        positive_eigenvalues = eigenvalues[i_positive]
-        self._log_pdet = np.sum(np.log(positive_eigenvalues))
+        i_zero = eigenvalues <= 0
+        positive_eigenvalues = np.array(eigenvalues, dtype=np.float64)
 
-        psuedo_reciprocals = np.zeros_like(eigenvalues)
-        psuedo_reciprocals[i_positive] = 1 / np.sqrt(positive_eigenvalues)
+        positive_eigenvalues[i_zero] = 1  # ones don't affect determinant
+        self._log_pdet = np.sum(np.log(positive_eigenvalues), axis=-1)
 
-        self._LP = eigenvectors * psuedo_reciprocals
-        self._rank = positive_eigenvalues.shape[-1]
+        psuedo_reciprocals = 1 / np.sqrt(positive_eigenvalues)
+        psuedo_reciprocals[i_zero] = 0
+
+        self._LP = eigenvectors * np.expand_dims(psuedo_reciprocals, -2)
+        self._rank = positive_eigenvalues.shape[-1] - i_zero.sum(axis=-1)
         self._w = eigenvalues
         self._v = eigenvectors
         self._dimensionality = eigenvalues.shape[-1]
-        self._null_basis = eigenvectors[..., ~i_positive]
+        self._null_basis = eigenvectors * np.expand_dims(i_zero, -2)
         self._eps = _multivariate._eigvalsh_to_eps(eigenvalues) * 10**3
         self._allow_singular = True
 
