@@ -36,11 +36,20 @@ def _solve_triangular(A, *args, **kwargs):
 
 
 def _T(A):
-    return np.swapaxes(A, -1, -2)
+    if A.ndim < 2:
+        return A
+    else:
+        return np.swapaxes(A, -1, -2)
 
 
 def _J(A):
     return np.flip(A, axis=(-1, -2))
+
+
+def _dot_diag(x, d):
+    # If d were a full diagonal matrix, x @ d would always do what we want
+    # This is for when `d` is compressed to include only the diagonal elements
+    return x * d if x.ndim < 2 else x * np.expand_dims(d, -2)
 
 
 class Covariance():
@@ -123,21 +132,21 @@ class CovViaDiagonal(Covariance):
         psuedo_reciprocals = 1 / np.sqrt(positive_diagonal)
         psuedo_reciprocals[i_zero] = 0
 
-        self._LP = np.expand_dims(psuedo_reciprocals, -2)
+        self._LP = psuedo_reciprocals
         self._rank = positive_diagonal.shape[-1] - i_zero.sum(axis=-1)
         self._A = np.apply_along_axis(np.diag, -1, diagonal)
         self._dimensionality = diagonal.shape[-1]
-        self._i_zero = np.expand_dims(i_zero, -2)
+        self._i_zero = i_zero
         self._allow_singular = True
 
     def _whiten(self, x):
-        return x * self._LP
+        return _dot_diag(x, self._LP)
 
     def _support_mask(self, x):
         """
         Check whether x lies in the support of the distribution.
         """
-        return ~np.any(x * self._i_zero, axis=-1)
+        return ~np.any(_dot_diag(x, self._i_zero), axis=-1)
 
 
 class CovViaPrecision(Covariance):
