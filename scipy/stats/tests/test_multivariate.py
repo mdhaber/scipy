@@ -44,25 +44,45 @@ def _sample_orthonormal_matrix(n):
 
 class TestCovariance:
     def test_iv(self):
-        message = "The input `diagonal` must be a one-dimensional array..."
+        message = "The input `diagonal` must be an array of numbers."
         with pytest.raises(ValueError, match=message):
-            stats.CovViaDiagonal(np.eye(2))
+            stats.CovViaDiagonal("alpaca")
 
-        message = "The input `eigenvalues` must be a one-dimensional array..."
+        message = "The input `eigenvalues` must be an array of numbers."
         with pytest.raises(ValueError, match=message):
-            stats.CovViaEigendecomposition((np.eye(2), np.eye(2)))
+            stats.CovViaEigendecomposition(("alpaca", np.eye(2)))
 
-        message = "The input `precision` must be a square, two-dimensional..."
+        message = "The input `precision` must be an array of numbers."
         with pytest.raises(ValueError, match=message):
-            stats.CovViaPrecision(np.ones(2))
+            stats.CovViaPrecision("alpaca")
 
-        message = "The input `eigenvectors` must be a square, two-..."
+        message = r"`precision.shape\[-2\]` must equal `precision.shape\[-1\]`"
         with pytest.raises(ValueError, match=message):
-            stats.CovViaEigendecomposition((np.ones(2), np.ones(2)))
+            stats.CovViaPrecision([[2], [1]])
 
-        message = "The input `cov` must be a square, two-dimensional..."
+        message = "`precision.shape` must equal `covariance.shape`."
         with pytest.raises(ValueError, match=message):
-            stats.CovViaCov(np.ones(2))
+            stats.CovViaPrecision(np.eye(3), covariance=np.eye(2))
+
+        message = "The input `eigenvectors` must be an array of numbers."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaEigendecomposition((np.eye(2), "alpaca"))
+
+        message = r"`eigenvectors.shape\[-2\]` must equal..."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaEigendecomposition((np.eye(2), [[2], [1]]))
+
+        message = "The shapes of `eigenvalues` and `eigenvectors` must be..."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaEigendecomposition((np.eye(3), np.eye(2)))
+
+        message = "The input `cov` must be an array of numbers."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaCov("alpaca")
+
+        message = r"`cov.shape\[-2\]` must equal `cov.shape\[-1\]`"
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaCov([[2], [1]])
 
     def test_mean(self):
         # test the interaction between a Covariance object and mean

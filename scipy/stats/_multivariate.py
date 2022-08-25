@@ -658,7 +658,7 @@ class multivariate_normal_gen(multi_rv_generic):
         x = self._process_quantiles(x, dim)
         if not maxpts:
             maxpts = 1000000 * dim
-        cdf = self._cdf(x, mean, cov_object.A, maxpts, abseps, releps, 
+        cdf = self._cdf(x, mean, cov_object.A, maxpts, abseps, releps,
                         lower_limit)
         # the log of a negative real is complex, and cdf can be negative
         # if lower limit is greater than upper limit
@@ -703,7 +703,8 @@ class multivariate_normal_gen(multi_rv_generic):
         x = self._process_quantiles(x, dim)
         if not maxpts:
             maxpts = 1000000 * dim
-        out = self._cdf(x, mean, cov_object.A, maxpts, abseps, releps, lower_limit)
+        out = self._cdf(x, mean, cov_object.A, maxpts, abseps, releps,
+                        lower_limit)
         return out
 
     def rvs(self, mean=None, cov=1, size=1, random_state=None):
@@ -832,7 +833,7 @@ class multivariate_normal_frozen(multi_rv_frozen):
 
     def cdf(self, x, *, lower_limit=None):
         x = self._dist._process_quantiles(x, self.dim)
-        out = self._dist._cdf(x, self.mean, self.cov_object.A, self.maxpts, 
+        out = self._dist._cdf(x, self.mean, self.cov_object.A, self.maxpts,
                               self.abseps, self.releps, lower_limit)
         return _squeeze_output(out)
 

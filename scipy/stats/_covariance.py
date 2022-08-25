@@ -21,7 +21,8 @@ def _apply_over_matrices(f):
         def _f_on_raveled(x):
             return f(x.reshape((m, n)), *args, **kwargs)
 
-        return np.apply_along_axis(_f_on_raveled, axis=-1, arr=x.reshape(new_shape))
+        return np.apply_along_axis(_f_on_raveled, axis=-1,
+                                   arr=x.reshape(new_shape))
     return _f_wrapper
 
 
@@ -100,10 +101,12 @@ class Covariance():
 
     def _validate_matrix(self, A, name):
         A = np.atleast_2d(A)
+        if not np.issubdtype(A.dtype, np.number):
+            message = (f"The input `{name}` must be an array of numbers.")
+            raise ValueError(message)
         m, n = A.shape[-2:]
-        if m != n or not np.issubdtype(A.dtype, np.number):
-            message = (f"`{name}` must be an array of numbers, and "
-                       f"`{name}.shape[-2]` must equal `{name}.shape[-1]`")
+        if m != n:
+            message = (f"`{name}.shape[-2]` must equal `{name}.shape[-1]`")
             raise ValueError(message)
         return A
 
@@ -157,7 +160,10 @@ class CovViaPrecision(Covariance):
     def __init__(self, precision, covariance=None):
         precision = self._validate_matrix(precision, 'precision')
         if covariance is not None:
-            covariance = self._validate_matrix(precision, 'covariance')
+            covariance = self._validate_matrix(covariance, 'covariance')
+            message = "`precision.shape` must equal `covariance.shape`."
+            if precision.shape != covariance.shape:
+                raise ValueError(message)
 
         self._LP = np.linalg.cholesky(precision)
         self._log_pdet = -2*np.log(_extract_diag(self._LP)).sum(axis=-1)
@@ -185,6 +191,15 @@ class CovViaEigendecomposition(Covariance):
         eigenvalues, eigenvectors = eigendecomposition
         eigenvalues = self._validate_vector(eigenvalues, 'eigenvalues')
         eigenvectors = self._validate_matrix(eigenvectors, 'eigenvectors')
+        message = ("The shapes of `eigenvalues` and `eigenvectors` "
+                   "must be compatible.")
+        try:
+            eigenvalues = np.expand_dims(eigenvalues, -2)
+            eigenvectors, eigenvalues = np.broadcast_arrays(eigenvectors,
+                                                            eigenvalues)
+            eigenvalues = eigenvalues[..., 0, :]
+        except ValueError:
+            raise ValueError(message)
 
         i_zero = eigenvalues <= 0
         positive_eigenvalues = np.array(eigenvalues, dtype=np.float64)
