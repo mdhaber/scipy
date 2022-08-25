@@ -8,6 +8,41 @@ __all__ = ["Covariance", "CovViaDiagonal", "CovViaPrecision",
            "CovViaEigendecomposition", "CovViaCov", "CovViaPSD"]
 
 
+def _apply_over_matrices(f):
+    def _f_wrapper(x, *args, **kwargs):
+        x = np.asarray(x)
+        if x.ndim <= 2:
+            return f(x, *args, **kwargs)
+
+        old_shape = list(x.shape)
+        m, n = old_shape[-2:]
+        new_shape = old_shape[:-2] + [m*n]
+
+        def _f_on_raveled(x):
+            return f(x.reshape((m, n)), *args, **kwargs)
+
+        return np.apply_along_axis(_f_on_raveled, axis=-1, arr=x.reshape(new_shape))
+    return _f_wrapper
+
+
+@_apply_over_matrices
+def _extract_diag(A):
+    return np.diag(A)
+
+
+@_apply_over_matrices
+def _solve_triangular(A, *args, **kwargs):
+    return linalg.solve_triangular(A, *args, **kwargs)
+
+
+def _T(A):
+    return np.swapaxes(A, -1, -2)
+
+
+def _J(A):
+    return np.flip(A, axis=(-1, -2))
+
+
 class Covariance():
     """
     Representation of a covariance matrix as needed by multivariate_normal
@@ -81,11 +116,11 @@ class CovViaDiagonal(Covariance):
         psuedo_reciprocals = 1 / np.sqrt(positive_diagonal)
         psuedo_reciprocals[i_zero] = 0
 
-        self._LP = psuedo_reciprocals
+        self._LP = psuedo_reciprocals[..., np.newaxis]
         self._rank = positive_diagonal.shape[-1] - i_zero.sum(axis=-1)
         self._A = np.apply_along_axis(np.diag, -1, diagonal)
         self._dimensionality = diagonal.shape[-1]
-        self._i_zero = i_zero
+        self._i_zero = i_zero[..., np.newaxis]
         self._allow_singular = True
 
     def _whiten(self, x):
@@ -95,7 +130,7 @@ class CovViaDiagonal(Covariance):
         """
         Check whether x lies in the support of the distribution.
         """
-        return np.all(x[..., self._i_zero] == 0, axis=-1)
+        return ~np.any(x * self._i_zero, axis=-2)
 
 
 class CovViaPrecision(Covariance):
@@ -175,15 +210,15 @@ class CovViaCov(Covariance):
     def __init__(self, cov):
         cov = self._validate_matrix(cov, 'cov')
 
-        self._factor = np.linalg.cholesky(cov.T[::-1, ::-1])[::-1, ::-1]
-        self._log_pdet = 2*np.log(np.diag(self._factor)).sum(axis=-1)
+        self._factor = _J(np.linalg.cholesky(_J(_T(cov))))
+        self._log_pdet = 2*np.log(_extract_diag(self._factor)).sum(axis=-1)
         self._rank = cov.shape[-1]  # must be full rank for cholesky
         self._A = cov
         self._dimensionality = self._rank
         self._allow_singular = False
 
     def _whiten(self, x):
-        return linalg.solve_triangular(self._factor, x.T, lower=False).T
+        return _solve_triangular(self._factor, x, lower=False)
 
 
 class CovViaPSD(Covariance):
