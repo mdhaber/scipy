@@ -47,6 +47,13 @@ class Covariance():
     """
     Representation of a covariance matrix as needed by multivariate_normal
     """
+    # The last two axes of matrix-like input represent the dimensionality
+    # In the case of diagonal elements or eigenvalues, in which a diagonal
+    # matrix has been reduced to one dimension, the last dimension
+    # of the input represents the dimensionality. Internally, it
+    # will be expanded in the second to last axis as needed.
+    # Matrix math works, but instead of the fundamental matrix-vector
+    # operation being A@x, think of x are row vectors that pre-multiply A.
 
     def whiten(self, x):
         """
@@ -116,11 +123,11 @@ class CovViaDiagonal(Covariance):
         psuedo_reciprocals = 1 / np.sqrt(positive_diagonal)
         psuedo_reciprocals[i_zero] = 0
 
-        self._LP = psuedo_reciprocals[..., np.newaxis]
+        self._LP = np.expand_dims(psuedo_reciprocals, -2)
         self._rank = positive_diagonal.shape[-1] - i_zero.sum(axis=-1)
         self._A = np.apply_along_axis(np.diag, -1, diagonal)
         self._dimensionality = diagonal.shape[-1]
-        self._i_zero = i_zero[..., np.newaxis]
+        self._i_zero = np.expand_dims(i_zero, -2)
         self._allow_singular = True
 
     def _whiten(self, x):
@@ -130,7 +137,7 @@ class CovViaDiagonal(Covariance):
         """
         Check whether x lies in the support of the distribution.
         """
-        return ~np.any(x * self._i_zero, axis=-2)
+        return ~np.any(x * self._i_zero, axis=-1)
 
 
 class CovViaPrecision(Covariance):
@@ -218,7 +225,7 @@ class CovViaCov(Covariance):
         self._allow_singular = False
 
     def _whiten(self, x):
-        return _solve_triangular(self._factor, x, lower=False)
+        return _T(_solve_triangular(self._factor, _T(x), lower=False))
 
 
 class CovViaPSD(Covariance):
