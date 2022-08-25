@@ -50,17 +50,16 @@ class Covariance():
     def _validate_matrix(self, A, name):
         A = np.atleast_2d(A)
         m, n = A.shape[-2:]
-        if m != n or A.ndim != 2 or not np.issubdtype(A.dtype, np.number):
-            message = (f"The input `{name}` must be a square, "
-                       "two-dimensional array of numbers.")
+        if m != n or not np.issubdtype(A.dtype, np.number):
+            message = (f"`{name}` must be an array of numbers, and "
+                       f"`{name}.shape[-2]` must equal `{name}.shape[-1]`")
             raise ValueError(message)
         return A
 
     def _validate_vector(self, A, name):
         A = np.atleast_1d(A)
-        if A.ndim != 1 or not np.issubdtype(A.dtype, np.number):
-            message = (f"The input `{name}` must be a one-dimensional array "
-                       "of numbers.")
+        if not np.issubdtype(A.dtype, np.number):
+            message = (f"The input `{name}` must be an array of numbers.")
             raise ValueError(message)
         return A
 
@@ -73,18 +72,20 @@ class CovViaDiagonal(Covariance):
     def __init__(self, diagonal):
         diagonal = self._validate_vector(diagonal, 'diagonal')
 
-        i_positive = diagonal > 0
-        positive_diagonal = diagonal[i_positive]
-        self._log_pdet = np.sum(np.log(positive_diagonal))
+        i_zero = diagonal <= 0
+        positive_diagonal = np.array(diagonal, dtype=np.float64)
 
-        psuedo_reciprocals = np.zeros_like(diagonal, dtype=np.float64)
-        psuedo_reciprocals[i_positive] = 1 / np.sqrt(positive_diagonal)
+        positive_diagonal[i_zero] = 1  # ones don't affect determinant
+        self._log_pdet = np.sum(np.log(positive_diagonal), axis=-1)
+
+        psuedo_reciprocals = 1 / np.sqrt(positive_diagonal)
+        psuedo_reciprocals[i_zero] = 0
 
         self._LP = psuedo_reciprocals
-        self._rank = positive_diagonal.shape[-1]
-        self._A = np.diag(diagonal)
+        self._rank = positive_diagonal.shape[-1] - i_zero.sum(axis=-1)
+        self._A = np.apply_along_axis(np.diag, -1, diagonal)
         self._dimensionality = diagonal.shape[-1]
-        self._i_positive = i_positive
+        self._i_zero = i_zero
         self._allow_singular = True
 
     def _whiten(self, x):
@@ -94,7 +95,7 @@ class CovViaDiagonal(Covariance):
         """
         Check whether x lies in the support of the distribution.
         """
-        return np.all(x[..., ~self._i_positive] == 0, axis=-1)
+        return np.all(x[..., self._i_zero] == 0, axis=-1)
 
 
 class CovViaPrecision(Covariance):
