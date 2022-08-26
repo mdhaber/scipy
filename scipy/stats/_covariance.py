@@ -31,9 +31,60 @@ def _extract_diag(A):
     return np.diag(A)
 
 
-@_apply_over_matrices
-def _solve_triangular(A, *args, **kwargs):
-    return linalg.solve_triangular(A, *args, **kwargs)
+# @_apply_over_matrices
+# def _solve_triangular(A, *args, **kwargs):
+#     return linalg.solve_triangular(A, *args, **kwargs)
+
+def _solve_triangular(A, x, *args, **kwds):
+
+    dims = A.shape[-1]
+    message = "`x.shape[-1] must equal the `dimensionality` of the covariance."
+    if x.shape[-1] != dims:
+        raise ValueError(message)
+
+    try:
+        np.broadcast_shapes(x.shape[:-2], A.shape[:-2])
+    except ValueError as e:
+        message = "Shape of `x` must be compatible with that of `cov`."
+        raise ValueError(message) from e
+
+    # Prepend 1s as needed so `ndim` are equal
+    ndim = max(A.ndim, x.ndim)
+    A = A.reshape((1,)*(ndim-A.ndim) + A.shape)
+    x = x.reshape((1,)*(ndim-x.ndim) + x.shape)
+    dimnums = np.arange(ndim-2)
+
+    # If dimension of A is non-singleton, we need to loop over it. ("loop")
+    # Move all of these to the front.
+    # Remaining dimensions will end up next to -2. We'll combine them with -2 and
+    # act over them in a multiple-RHS single call to `solve_triangular`. ("mrhs")
+    i_loop = np.array(A.shape[:-2]) > 1
+    j_loop = dimnums[i_loop]
+    n_loop_dims = len(j_loop)
+    A = np.moveaxis(A, j_loop, np.arange(n_loop_dims))
+    x = np.moveaxis(x, j_loop, np.arange(n_loop_dims))
+
+    # Next, broadcast the looping dimensions of x against those of A
+    x_new_shape = list(x.shape)
+    x_new_shape[:n_loop_dims] = A.shape[:n_loop_dims]
+    x = np.broadcast_to(x, x_new_shape)
+
+    # Combine the dimensions
+    n_loops = np.prod(A.shape[:n_loop_dims], dtype=int)
+    n_mrhs = np.prod(x.shape[n_loop_dims:-1], dtype=int)
+    A = A.reshape((n_loops, dims, dims))
+    x = x.reshape((n_loops, n_mrhs, dims))
+
+    # Calculate
+    res = np.zeros_like(x)
+    for i in range(n_loops):
+        res[i, :] = linalg.solve_triangular(A[i], x[i].T, *args, **kwds).T
+
+    # Undo the shape transformations
+    res = res.reshape(x_new_shape)
+    res = np.moveaxis(res, np.arange(n_loop_dims), j_loop)
+
+    return res
 
 
 def _T(A):
@@ -251,7 +302,8 @@ class CovViaCov(Covariance):
         self._allow_singular = False
 
     def _whiten(self, x):
-        return _T(_solve_triangular(self._factor, _T(x), lower=False))
+        res = _solve_triangular(self._factor, x, lower=False)
+        return res if x.ndim > 1 else res[..., 0, :]
 
 
 class CovViaPSD(Covariance):
