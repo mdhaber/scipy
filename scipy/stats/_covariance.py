@@ -56,8 +56,9 @@ def _solve_triangular(A, x, *args, **kwds):
 
     # If dimension of A is non-singleton, we need to loop over it. ("loop")
     # Move all of these to the front.
-    # Remaining dimensions will end up next to -2. We'll combine them with -2 and
-    # act over them in a multiple-RHS single call to `solve_triangular`. ("mrhs")
+    # Remaining dimensions will end up next to -2. We'll combine them with
+    # -2 and act over them in a multiple-RHS single call to
+    # `solve_triangular`. ("mrhs")
     i_loop = np.array(A.shape[:-2]) > 1
     j_loop = dimnums[i_loop]
     n_loop_dims = len(j_loop)
@@ -275,7 +276,7 @@ class CovViaEigendecomposition(Covariance):
 
     @cached_property
     def _A(self):
-        return (self._v * self._w) @ self._v.swapaxes(-2, -1)
+        return (self._v * self._w[..., np.newaxis, :]) @ _T(self._v)
 
     def _support_mask(self, x):
         """
