@@ -404,11 +404,25 @@ class multivariate_normal_gen(multi_rv_generic):
 
     def _process_parameters_new(self, mean, cov):
         dim = cov.dimensionality
-        mean = np.array([0.]) if mean is None else mean
+        mean = np.array([0.]) if mean is None else np.asarray(mean)
+
         message = (f"`cov` represents a covariance matrix in {dim} dimensions,"
                    f"and so `mean` must be broadcastable to shape {(dim,)}")
+        if mean.ndim <= 1:
+            try:
+                mean = np.broadcast_to(mean, dim)
+            except ValueError as e:
+                raise ValueError(message) from e
+
+        message = "Shapes of `cov` and `mean` must be compatible."
+        cov_shape_prefix = cov.shape[:-2]
+        mean_shape_prefix = mean.shape[:-2]
+        new_shape_prefix = np.broadcast_shapes(cov_shape_prefix,
+                                               mean_shape_prefix)
+        new_shape = new_shape_prefix + tuple(mean.shape[-2:-1]) + (dim,)
+
         try:
-            mean = np.broadcast_to(mean, dim)
+            np.broadcast_shapes(mean.shape, new_shape)
         except ValueError as e:
             raise ValueError(message) from e
         return dim, mean, cov
@@ -508,6 +522,9 @@ class multivariate_normal_gen(multi_rv_generic):
         """
         log_det_cov, rank = cov_object.log_pdet, cov_object.rank
         dev = x - mean
+        if dev.ndim > 1:
+            log_det_cov = log_det_cov[..., np.newaxis]
+            rank = rank[..., np.newaxis]
         maha = np.sum(np.square(cov_object.whiten(dev)), axis=-1)
         return -0.5 * (rank * _LOG_2PI + log_det_cov + maha)
 
@@ -535,7 +552,7 @@ class multivariate_normal_gen(multi_rv_generic):
         x = self._process_quantiles(x, dim)
         out = self._logpdf(x, mean, cov_object)
         allow_singular = allow_singular or cov_object._allow_singular
-        if allow_singular and (cov_object.rank < dim):
+        if allow_singular and np.any(cov_object.rank < dim):
             out_of_bounds = ~cov_object._support_mask(x-mean)
             out[out_of_bounds] = -np.inf
         return _squeeze_output(out)
@@ -564,7 +581,7 @@ class multivariate_normal_gen(multi_rv_generic):
         x = self._process_quantiles(x, dim)
         out = np.exp(self._logpdf(x, mean, cov_object))
         allow_singular = allow_singular or cov_object._allow_singular
-        if allow_singular and (cov_object.rank < dim):
+        if allow_singular and np.any((cov_object.rank < dim)):
             out_of_bounds = ~cov_object._support_mask(x-mean)
             out[out_of_bounds] = 0.0
         return _squeeze_output(out)
@@ -802,10 +819,10 @@ class multivariate_normal_frozen(multi_rv_frozen):
         array([[1.]])
 
         """
-        self.allow_singular = allow_singular
         self._dist = multivariate_normal_gen(seed)
         self.dim, self.mean, self.cov_object = (
             self._dist._process_parameters(mean, cov, allow_singular))
+        self.allow_singular = allow_singular or self.cov_object._allow_singular
         if not maxpts:
             maxpts = 1000000 * self.dim
         self.maxpts = maxpts
@@ -815,7 +832,7 @@ class multivariate_normal_frozen(multi_rv_frozen):
     def logpdf(self, x):
         x = self._dist._process_quantiles(x, self.dim)
         out = self._dist._logpdf(x, self.mean, self.cov_object)
-        if self.allow_singular and (self.cov_object.rank < self.dim):
+        if self.allow_singular and np.any(self.cov_object.rank < self.dim):
             out_of_bounds = ~self.cov_object._support_mask(x-self.mean)
             out[out_of_bounds] = -np.inf
         return _squeeze_output(out)

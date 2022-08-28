@@ -135,8 +135,8 @@ class TestCovariance:
                  "general rank-deficient": [[5, -1, 0], [-1, 5, 0], [0, 0, 0]]}
     _cov_types = {"diagonal full rank": _all_covariance_types,
                   "general full rank": _all_covariance_types[1:],
-                  "diagonal rank-deficient": _all_covariance_types[[0, 3]],
-                  "general rank-deficient": _all_covariance_types[3]}
+                  "diagonal rank-deficient": _all_covariance_types[[0, 3, 4]],
+                  "general rank-deficient": _all_covariance_types[[3, 4]]}
 
     @pytest.mark.parametrize("matrix_type", list(_matrices))
     @pytest.mark.parametrize("cov_type_name", _all_covariance_types)
@@ -248,6 +248,73 @@ class TestCovariance:
         assert_allclose(dist1.logpdf(x), dist0.logpdf(x))
         assert_allclose(mvn.entropy(mean, cov_object), dist0.entropy())
         assert_allclose(dist1.entropy(), dist0.entropy())
+
+    @pytest.mark.parametrize("matrix_type", list(_matrices))
+    @pytest.mark.parametrize("cov_type_name", _all_covariance_types[:-1])
+    def test_mvn_with_covariance_vectorized(self, matrix_type, cov_type_name):
+        message = f"{cov_type_name} does not support {matrix_type} matrices"
+        if cov_type_name not in self._cov_types[matrix_type]:
+            pytest.skip(message)
+
+        rng = np.random.default_rng(243658924536983)
+
+        # The intent of these shapes is to test a very general case of the
+        # broadcasting rules. The usual rules apply except in the last
+        # two dimensions: if A_shape[-2:] is (m, m), x_shape[-2:] can be
+        # (n, m), where n is any number (multiple RHS).
+        x_shape = [7, 6, 5, 1, 2, 3]
+        A_shape =    [6, 1, 4, 3, 3]  # noqa
+        u_shape =    [6, 5, 4, 1, 3]
+
+        rank_deficient = "rank-deficient" in matrix_type
+        diagonal = "diagonal" in matrix_type
+
+        # Generate random data
+        x = rng.random(x_shape)
+        eigenvalues = rng.random(size=A_shape[:-1])
+        if rank_deficient:
+            i = rng.random(size=eigenvalues.shape)
+            eigenvalues[i<0.25] = 0
+        A = _random_covariance(eigenvalues, diagonal, rng)
+        mean = rng.random(size=(u_shape))
+
+        # Check covariance object results
+        cov_type = getattr(stats, cov_type_name)
+        preprocessing = self._covariance_preprocessing[cov_type_name]
+        cov_object = cov_type(preprocessing(A))
+        mvn = stats.multivariate_normal(mean, cov_object)
+        pdf1 = stats.multivariate_normal.pdf(x, mean, cov_object)
+        pdf2 = mvn.pdf(x)
+        logpdf1 = stats.multivariate_normal.logpdf(x, mean, cov_object)
+        logpdf2 = mvn.logpdf(x)
+        # Hold of entropy - need to adjust some shape handling
+        # entropy1 = stats.multivariate_normal.entropy(mean, cov_object)
+        # entropy2 = mvn.entropy()
+
+        assert_allclose(pdf1, pdf2)
+        assert_allclose(logpdf1, logpdf2)
+        assert_allclose(np.exp(logpdf1), pdf2)
+
+        # Generate Reference Values
+        x_shape_prefix = x_shape[:-2]
+        A_shape_prefix = A_shape[:-2]
+        u_shape_prefix = u_shape[:-2]
+        shape_prefix = np.broadcast_shapes(x_shape_prefix,
+                                           A_shape_prefix,
+                                           u_shape_prefix)
+        x = np.broadcast_to(x, shape_prefix + x.shape[-2:])
+        A = np.broadcast_to(A, shape_prefix + A.shape[-2:])
+        mean = np.broadcast_to(mean, shape_prefix + mean.shape[-2:])
+
+        for i, j, k, l in np.ndindex(*shape_prefix):
+            Ai = A[i, j, k, l]
+            xi = x[i, j, k, l]
+            meani = mean[i, j, k, l].ravel()
+
+            mvn_ref = stats.multivariate_normal(meani, Ai, allow_singular=True)
+
+            assert_allclose(pdf1[i, j, k, l], mvn_ref.pdf(xi))
+            assert_allclose(logpdf1[i, j, k, l], mvn_ref.logpdf(xi))
 
 
 def _sample_orthonormal_matrix(n):

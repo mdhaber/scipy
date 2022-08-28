@@ -128,14 +128,14 @@ class Covariance():
         """
         Log of the pseudo-determinant of the covariance matrix
         """
-        return self._log_pdet
+        return np.array(self._log_pdet, dtype=float)[()]
 
     @cached_property
     def rank(self):
         """
         Rank of the covariance matrix
         """
-        return self._rank
+        return np.array(self._rank, dtype=int)[()]
 
     @cached_property
     def A(self):
@@ -149,7 +149,14 @@ class Covariance():
         """
         Dimensionality of the vector space
         """
-        return self._dimensionality
+        return np.array(self._dimensionality, dtype=int)[()]
+
+    @cached_property
+    def shape(self):
+        """
+        Shape of the covariance array
+        """
+        return self._shape
 
     def _validate_matrix(self, A, name):
         A = np.atleast_2d(A)
@@ -192,6 +199,7 @@ class CovViaDiagonal(Covariance):
         self._A = np.apply_along_axis(np.diag, -1, diagonal)
         self._dimensionality = diagonal.shape[-1]
         self._i_zero = i_zero
+        self._shape = self._A.shape
         self._allow_singular = True
 
     def _whiten(self, x):
@@ -223,6 +231,7 @@ class CovViaPrecision(Covariance):
         self._precision = precision
         self._covariance = covariance
         self._dimensionality = self._rank
+        self._shape = precision.shape
         self._allow_singular = False
 
     def _whiten(self, x):
@@ -267,6 +276,7 @@ class CovViaEigendecomposition(Covariance):
         self._w = eigenvalues
         self._v = eigenvectors
         self._dimensionality = eigenvalues.shape[-1]
+        self._shape = eigenvectors.shape
         self._null_basis = eigenvectors * np.expand_dims(i_zero, -2)
         self._eps = _multivariate._eigvalsh_to_eps(eigenvalues) * 10**3
         self._allow_singular = True
@@ -300,6 +310,7 @@ class CovViaCov(Covariance):
         self._rank = cov.shape[-1]  # must be full rank for cholesky
         self._A = cov
         self._dimensionality = self._rank
+        self._shape = cov.shape
         self._allow_singular = False
 
     def _whiten(self, x):
@@ -318,6 +329,7 @@ class CovViaPSD(Covariance):
         self._rank = psd.rank
         self._A = psd._M
         self._dimensionality = psd._M.shape[-1]
+        self._shape = psd._M.shape
         self._psd = psd
         self._allow_singular = False  # by default
 
