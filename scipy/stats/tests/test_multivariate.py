@@ -26,6 +26,7 @@ from scipy.stats import (multivariate_normal, multivariate_hypergeom,
                          beta, wishart, multinomial, invwishart, chi2,
                          invgamma, norm, uniform, ks_2samp, kstest, binom,
                          hypergeom, multivariate_t, cauchy, normaltest)
+from scipy import stats
 
 from scipy.integrate import romb
 from scipy.special import multigammaln
@@ -33,6 +34,287 @@ from scipy.special import multigammaln
 from .common_tests import check_random_state_property
 
 from unittest.mock import patch
+from scipy.stats._covariance import _extract_diag, _T
+
+
+def _random_covariance(eigenvalues, diagonal, rng):
+    # Generates random symmetric matrices with specified eigenvalues.
+    # Accepts ND input; each row specifies the eigenvalues of a matrix.
+    n = eigenvalues.shape[-1]
+    A_shape = eigenvalues.shape + (n,)
+
+    if diagonal:
+        v = np.broadcast_to(np.eye(n), A_shape)
+    else:
+        a = rng.random(size=A_shape)
+        _, v = np.linalg.eigh(a @ _T(a))
+
+    A = (v * eigenvalues[..., np.newaxis, :]) @ _T(v)
+
+    # ensure the eigenvalues are as specified
+    w, v = np.linalg.eigh(A)
+    assert_allclose(np.sort(w, axis=-1),
+                    np.sort(eigenvalues, axis=-1), atol=1e-14)
+
+    return A
+
+
+class TestCovariance:
+    def test_iv(self):
+        message = "The input `diagonal` must be an array of numbers."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaDiagonal("alpaca")
+
+        message = "The input `eigenvalues` must be an array of numbers."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaEigendecomposition(("alpaca", np.eye(2)))
+
+        message = "The input `precision` must be an array of numbers."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaPrecision("alpaca")
+
+        message = r"`precision.shape\[-2\]` must equal `precision.shape\[-1\]`"
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaPrecision([[2], [1]])
+
+        message = "`precision.shape` must equal `covariance.shape`."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaPrecision(np.eye(3), covariance=np.eye(2))
+
+        message = "The input `eigenvectors` must be an array of numbers."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaEigendecomposition((np.eye(2), "alpaca"))
+
+        message = r"`eigenvectors.shape\[-2\]` must equal..."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaEigendecomposition((np.eye(2), [[2], [1]]))
+
+        message = "The shapes of `eigenvalues` and `eigenvectors` must be..."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaEigendecomposition((np.eye(3), np.eye(2)))
+
+        message = "The input `cov` must be an array of numbers."
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaCov("alpaca")
+
+        message = r"`cov.shape\[-2\]` must equal `cov.shape\[-1\]`"
+        with pytest.raises(ValueError, match=message):
+            stats.CovViaCov([[2], [1]])
+
+    def test_mean(self):
+        # test the interaction between a Covariance object and mean
+        cov = np.diag([1, 2, 3])
+        cov_object = stats.CovViaDiagonal(np.diag(cov))
+
+        message = "`cov` represents a covariance matrix in 3 dimensions..."
+        with pytest.raises(ValueError, match=message):
+            multivariate_normal.entropy([0, 0], cov_object)
+
+        x = [0.5, 0.5, 0.5]
+        ref = multivariate_normal.pdf(x, [0, 0, 0], cov_object)
+        assert_equal(multivariate_normal.pdf(x, cov=cov_object), ref)
+
+        ref = multivariate_normal.pdf(x, [1, 1, 1], cov_object)
+        assert_equal(multivariate_normal.pdf(x, 1, cov=cov_object), ref)
+
+    def _eigh(A):
+        w, v = np.linalg.eigh(A)
+        w[w < 1e-14] = 0
+        return w, v
+
+    _covariance_preprocessing = {"CovViaDiagonal": _extract_diag,
+                                 "CovViaPrecision": np.linalg.inv,
+                                 "CovViaCov": lambda x: x,
+                                 "CovViaEigendecomposition": _eigh,
+                                 "CovViaPSD": lambda x:
+                                     _PSD(x, allow_singular=True)}
+    _all_covariance_types = np.array(list(_covariance_preprocessing))
+    _matrices = {"diagonal full rank": np.diag([1, 2, 3]),
+                 "general full rank": [[5, 1, 3], [1, 6, 4], [3, 4, 7]],
+                 "diagonal rank-deficient": np.diag([1, 0, 3]),
+                 "general rank-deficient": [[5, -1, 0], [-1, 5, 0], [0, 0, 0]]}
+    _cov_types = {"diagonal full rank": _all_covariance_types,
+                  "general full rank": _all_covariance_types[1:],
+                  "diagonal rank-deficient": _all_covariance_types[[0, 3, 4]],
+                  "general rank-deficient": _all_covariance_types[[3, 4]]}
+
+    @pytest.mark.parametrize("matrix_type", list(_matrices))
+    @pytest.mark.parametrize("cov_type_name", _all_covariance_types)
+    def test_covariance(self, matrix_type, cov_type_name):
+        message = f"{cov_type_name} does not support {matrix_type} matrices"
+        if cov_type_name not in self._cov_types[matrix_type]:
+            pytest.skip(message)
+
+        A = self._matrices[matrix_type]
+        cov_type = getattr(stats, cov_type_name)
+        preprocessing = self._covariance_preprocessing[cov_type_name]
+
+        psd = _PSD(A, allow_singular=True)
+
+        # test properties
+        cov_object = cov_type(preprocessing(A))
+        assert_allclose(cov_object.log_pdet, psd.log_pdet)
+        assert_allclose(cov_object.rank, psd.rank)
+        assert_allclose(cov_object.dimensionality, np.array(A).shape[-1])
+        assert_allclose(cov_object.A, A)
+
+        # test whitening 1D x
+        rng = np.random.default_rng(5292808890472453840)
+        x = rng.random(size=3)
+        res = cov_object.whiten(x)
+        ref = x @ psd.U
+        assert_allclose(res @ res, ref @ ref)
+
+        # test whitening 3D x
+        x = rng.random(size=(2, 4, 3))
+        res = cov_object.whiten(x)
+        ref = x @ psd.U
+        assert_allclose((res**2).sum(axis=-1), (ref**2).sum(axis=-1))
+
+    @pytest.mark.parametrize("matrix_type", list(_matrices))
+    @pytest.mark.parametrize("cov_type_name", _all_covariance_types[:-1])
+    def test_covariance_vectorized(self, matrix_type, cov_type_name):
+        message = f"{cov_type_name} does not support {matrix_type} matrices"
+        if cov_type_name not in self._cov_types[matrix_type]:
+            pytest.skip(message)
+
+        rank_deficient = "rank-deficient" in matrix_type
+        diagonal = "diagonal" in matrix_type
+
+        rng = np.random.default_rng(243658924536983)
+
+        # The intent of these shapes is to test a very general case of the
+        # broadcasting rules. The usual rules apply except in the last
+        # two dimensions: if A_shape[-2:] is (m, m), x_shape[-2:] can be
+        # (n, m), where n is any number (multiple RHS).
+        x_shape = [7, 6, 5, 1, 2, 3]
+        A_shape =    [6, 1, 4, 3, 3]  # noqa
+
+        # Generate random data with specified eigenvalues
+        x = rng.random(x_shape)
+        eigenvalues = rng.random(size=A_shape[:-1])
+        if rank_deficient:
+            i = rng.random(size=eigenvalues.shape)
+            eigenvalues[i < 0.25] = 0
+        A = _random_covariance(eigenvalues, diagonal, rng)
+
+        # Generate Reference Values
+        if not rank_deficient:
+            P = np.linalg.inv(A)
+            xPxT0 = _extract_diag(x @ P @ _T(x))
+
+        with np.errstate(divide='ignore'):
+            log_evals = np.log(eigenvalues)
+            log_evals[~np.isfinite(log_evals)] = 0
+            log_det0 = np.sum(log_evals, axis=-1)
+
+        rank0 = np.linalg.matrix_rank(A)
+
+        # Check covariance object results
+        cov_type = getattr(stats, cov_type_name)
+        preprocessing = self._covariance_preprocessing[cov_type_name]
+        cov_object = cov_type(preprocessing(A))
+        xPxT = (cov_object.whiten(x)**2).sum(axis=-1)
+
+        if not rank_deficient:
+            assert_allclose(xPxT, xPxT0)
+        assert_allclose(cov_object._log_pdet, log_det0)
+        assert_allclose(cov_object.rank, rank0)
+        assert_allclose(cov_object.dimensionality, 3)
+        assert_allclose(cov_object.A, A, atol=1e-14)
+
+    @pytest.mark.parametrize("matrix_type", list(_matrices))
+    @pytest.mark.parametrize("cov_type_name", _all_covariance_types)
+    def test_mvn_with_covariance(self, matrix_type, cov_type_name):
+        message = f"{cov_type_name} does not support {matrix_type} matrices"
+        if cov_type_name not in self._cov_types[matrix_type]:
+            pytest.skip(message)
+
+        A = self._matrices[matrix_type]
+        cov_type = getattr(stats, cov_type_name)
+        preprocessing = self._covariance_preprocessing[cov_type_name]
+
+        mean = [0.1, 0.2, 0.3]
+        cov_object = cov_type(preprocessing(A))
+        mvn = multivariate_normal
+        dist0 = multivariate_normal(mean, A, allow_singular=True)
+        dist1 = multivariate_normal(mean, cov_object, allow_singular=True)
+
+        rng = np.random.default_rng(5292808890472453840)
+        x = rng.multivariate_normal(mean, A, size=(2, 4, 3))
+        assert_allclose(mvn.pdf(x, mean, cov_object), dist0.pdf(x))
+        assert_allclose(dist1.pdf(x), dist0.pdf(x))
+        assert_allclose(mvn.logpdf(x, mean, cov_object), dist0.logpdf(x))
+        assert_allclose(dist1.logpdf(x), dist0.logpdf(x))
+        assert_allclose(mvn.entropy(mean, cov_object), dist0.entropy())
+        assert_allclose(dist1.entropy(), dist0.entropy())
+
+    @pytest.mark.parametrize("matrix_type", list(_matrices))
+    @pytest.mark.parametrize("cov_type_name", _all_covariance_types[:-1])
+    def test_mvn_with_covariance_vectorized(self, matrix_type, cov_type_name):
+        message = f"{cov_type_name} does not support {matrix_type} matrices"
+        if cov_type_name not in self._cov_types[matrix_type]:
+            pytest.skip(message)
+
+        rng = np.random.default_rng(243658924536983)
+
+        # The intent of these shapes is to test a very general case of the
+        # broadcasting rules. The usual rules apply except in the last
+        # two dimensions: if A_shape[-2:] is (m, m), x_shape[-2:] can be
+        # (n, m), where n is any number (multiple RHS).
+        x_shape = [7, 6, 5, 1, 2, 3]
+        A_shape =    [6, 1, 4, 3, 3]  # noqa
+        u_shape =    [6, 5, 4, 1, 3]
+
+        rank_deficient = "rank-deficient" in matrix_type
+        diagonal = "diagonal" in matrix_type
+
+        # Generate random data
+        x = rng.random(x_shape)
+        eigenvalues = rng.random(size=A_shape[:-1])
+        if rank_deficient:
+            i = rng.random(size=eigenvalues.shape)
+            eigenvalues[i<0.25] = 0
+        A = _random_covariance(eigenvalues, diagonal, rng)
+        mean = rng.random(size=(u_shape))
+
+        # Check covariance object results
+        cov_type = getattr(stats, cov_type_name)
+        preprocessing = self._covariance_preprocessing[cov_type_name]
+        cov_object = cov_type(preprocessing(A))
+        mvn = stats.multivariate_normal(mean, cov_object)
+        pdf1 = stats.multivariate_normal.pdf(x, mean, cov_object)
+        pdf2 = mvn.pdf(x)
+        logpdf1 = stats.multivariate_normal.logpdf(x, mean, cov_object)
+        logpdf2 = mvn.logpdf(x)
+        # Hold of entropy - need to adjust some shape handling
+        # entropy1 = stats.multivariate_normal.entropy(mean, cov_object)
+        # entropy2 = mvn.entropy()
+
+        assert_allclose(pdf1, pdf2)
+        assert_allclose(logpdf1, logpdf2)
+        assert_allclose(np.exp(logpdf1), pdf2)
+
+        # Generate Reference Values
+        x_shape_prefix = x_shape[:-2]
+        A_shape_prefix = A_shape[:-2]
+        u_shape_prefix = u_shape[:-2]
+        shape_prefix = np.broadcast_shapes(x_shape_prefix,
+                                           A_shape_prefix,
+                                           u_shape_prefix)
+        x = np.broadcast_to(x, shape_prefix + x.shape[-2:])
+        A = np.broadcast_to(A, shape_prefix + A.shape[-2:])
+        mean = np.broadcast_to(mean, shape_prefix + mean.shape[-2:])
+
+        for i, j, k, l in np.ndindex(*shape_prefix):
+            Ai = A[i, j, k, l]
+            xi = x[i, j, k, l]
+            meani = mean[i, j, k, l].ravel()
+
+            mvn_ref = stats.multivariate_normal(meani, Ai, allow_singular=True)
+
+            assert_allclose(pdf1[i, j, k, l], mvn_ref.pdf(xi))
+            assert_allclose(logpdf1[i, j, k, l], mvn_ref.logpdf(xi))
 
 
 def _sample_orthonormal_matrix(n):
@@ -132,7 +414,7 @@ class TestMultivariateNormal:
             s = np.random.randn(n, expected_rank)
             cov = np.dot(s, s.T)
             distn = multivariate_normal(mean, cov, allow_singular=True)
-            assert_equal(distn.cov_info.rank, expected_rank)
+            assert_equal(distn.cov_object.rank, expected_rank)
 
     def test_degenerate_distributions(self):
 
@@ -163,9 +445,9 @@ class TestMultivariateNormal:
                                                allow_singular=True)
                 distn_rr = multivariate_normal(np.zeros(n), cov_rr,
                                                allow_singular=True)
-                assert_equal(distn_kk.cov_info.rank, k)
-                assert_equal(distn_nn.cov_info.rank, k)
-                assert_equal(distn_rr.cov_info.rank, k)
+                assert_equal(distn_kk.cov_object.rank, k)
+                assert_equal(distn_nn.cov_object.rank, k)
+                assert_equal(distn_rr.cov_object.rank, k)
                 pdf_kk = distn_kk.pdf(x[:k])
                 pdf_nn = distn_nn.pdf(x)
                 pdf_rr = distn_rr.pdf(y)
