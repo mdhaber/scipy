@@ -7625,7 +7625,9 @@ def ks_1samp(x, cdf, args=(), alternative='two-sided', method='auto'):
 
     See Also
     --------
-    ks_2samp, kstest
+    ks_2samp : the two-sample Kolmogorov-Smirnov test
+    kstest : a common interface to the one- and two-samples KS tests
+    goodness_of_fit : a general one-sample goodness-of-fit test
 
     Notes
     -----
@@ -7690,6 +7692,58 @@ def ks_1samp(x, cdf, args=(), alternative='two-sided', method='auto'):
 
     and indeed, with p-value smaller than our threshold, we reject the null
     hypothesis in favor of the alternative.
+
+    As for all hypothesis tests, the p-values produced by `ks_1samp` are
+    uniformly distributed when the null hypothesis is true. In this case,
+    a p-value of 0.05 can be interpreted as meaning that there is a 5% chance
+    of obtaining such an extreme value of the KS statistic under the null
+    hypothesis; if the threshold for significance is p=0.05, there is a 5%
+    chance of making a type I error (rejection of the null hypothesis when it
+    is actually true).
+
+    >>> import matplotlib.pyplot as plt
+    >>> n_observations = 50
+    >>> n_repetitions = 1000
+    >>> rng = np.random.default_rng()
+    >>> dist_true = stats.norm(loc=0, scale=1)
+    >>> ax = plt.gca()
+    >>> ps = []
+    >>> for i in range(n_repetitions):
+    ...    data = dist_true.rvs(size=n_observations, random_state=rng)
+    ...    ps.append(stats.ks_1samp(data, dist_true.cdf).pvalue)
+    >>> ax.hist(ps, density=True, alpha=0.5)
+    >>> ax.set_xlabel('p-value')
+    >>> ax.set_ylabel('frequency density')
+    >>> ax.set_title('p-values produced by `ks_1samp`, fixed distribution')
+    >>> plt.show()
+
+    However, it is not uncommon to try using the one-sample KS test to
+    determine whether a sample was drawn from any member of a family of
+    distributions, e.g. *any* normal distribution, by fitting the distribution
+    parameters to the data before performing the test. In this case, the
+    distribution of p-values is no longer uniform. The p-value can no longer
+    be interpreted in the same way, and if the threshold for significance is
+    0.05, the chance of making a type I error is typically much smaller than
+    5%.
+
+    >>> ax = plt.gca()
+    >>> ps = []
+    >>> for i in range(n_repetitions):
+    ...     data = dist_true.rvs(size=n_observations, random_state=rng)
+    ...     params_fit = stats.norm.fit(data)
+    ...     dist_fit = stats.norm(*params_fit)
+    ...     ps.append(stats.ks_1samp(data, dist_fit.cdf).pvalue)
+    >>> ax.hist(ps, density=True, alpha=0.5)
+    >>> ax.set_xlabel('p-value')
+    >>> ax.set_ylabel('frequency density')
+    >>> ax.set_title('p-values produced by `ks_1samp`, fitted distribution')
+    >>> plt.show()
+
+    Therefore, `ks_1samp` should only be used to assess whether a sample
+    was drawn from a known distribution. To test whether a sample was drawn
+    from any member of a family of distributions, or for a potentially
+    more powerful test of whether a sample was drawn from a known distribution,
+    see `goodness_of_fit`.
 
     """
     mode = method
