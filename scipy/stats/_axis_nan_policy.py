@@ -183,7 +183,6 @@ def _masked_arrays_2_sentinel_arrays(samples):
     # Choose a sentinel value. We can't use `np.nan`, because sentinel (masked)
     # values are always omitted, but there are different nan policies.
     dtype = np.result_type(*samples)
-    dtype = dtype if np.issubdtype(dtype, np.number) else np.float64
     for i in range(len(samples)):
         # Things get more complicated if the arrays are of different types.
         # We could have different sentinel values for each array, but
@@ -309,7 +308,7 @@ masked array with ``mask=False``.""").split('\n')
 def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
                              n_samples=1, paired=False,
                              result_to_tuple=None, too_small=0,
-                             n_outputs=2, kwd_samples=[]):
+                             n_outputs=2, kwd_samples=[], propagate_nans=True):
     """Factory for a wrapper that adds axis/nan_policy params to a function.
 
     Parameters
@@ -481,7 +480,8 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
                 # Consider adding option to let function propagate nans, but
                 # currently the hypothesis tests this is applied to do not
                 # propagate nans in a sensible way
-                if any(contains_nans) and nan_policy == 'propagate':
+                if (any(contains_nans) and nan_policy == 'propagate' and
+                        propagate_nans):
                     res = np.full(n_out, np.nan)
                     res = _add_reduced_axes(res, reduced_axes, keepdims)
                     return tuple_to_result(*res)
@@ -541,7 +541,7 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
                     return result_to_tuple(hypotest_fun_out(*samples, **kwds))
 
             # Addresses nan_policy == "propagate"
-            elif contains_nan and nan_policy == 'propagate':
+            elif contains_nan and nan_policy == 'propagate' and propagate_nans:
                 def hypotest_fun(x):
                     if np.isnan(x).any():
                         return np.full(n_out, np.nan)
