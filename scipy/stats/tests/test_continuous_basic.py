@@ -259,7 +259,7 @@ def cases_test_moments():
     fail_higher = set(['ncf'])
 
     for distname, arg in distcont[:] + histogram_test_instances:
-        if distname == 'levy_stable':
+        if distname in {'levy_stable', 'vonmises'}:
             continue
 
         if distname in distxslow_test_moments:
