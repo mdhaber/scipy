@@ -7,7 +7,7 @@ from numpy import asarray_chkfinite, asarray
 from numpy.lib import NumpyVersion
 import scipy.linalg
 from scipy._lib import doccer
-from scipy.special import gammaln, psi, multigammaln, xlogy, entr, betaln
+from scipy.special import gammaln, psi, multigammaln, xlogy, entr, betaln, gamma
 from scipy._lib._util import check_random_state
 from scipy.linalg.blas import drot
 from scipy.linalg._misc import LinAlgError
@@ -20,6 +20,7 @@ from . import _mvn, _covariance
 __all__ = ['multivariate_normal',
            'matrix_normal',
            'dirichlet',
+           'dirichlet_multinomial',
            'wishart',
            'invwishart',
            'multinomial',
@@ -5057,6 +5058,139 @@ class multivariate_hypergeom_frozen(multi_rv_frozen):
                               size=size,
                               random_state=random_state)
 
+class dirichlet_multinomial_gen(multi_rv_generic):
+    r"""A Dirichlet multinomial random variable.
+
+    Methods
+    -------
+    pmf(alpha, x, n):
+        Probability mass function.
+    mean(alpha, n):
+        Mean of the Dirichlet multinomial distribution.
+    var(alpha, n):
+        Variance of the Dirichlet multinomial distribution.
+    cov(alpha, n):
+        The covariance of the Dirichlet multinomial distribution.
+
+    Parameters
+    ----------
+    %(_dirichlet_doc_default_callparams)s
+    %(_doc_random_state)s
+
+    References
+    ----------
+    .. [1] Dirichlet-multinomial distribution,
+     https://www.wikipedia.org/wiki/Dirichlet-multinomial_distribution
+     """
+    def __init__(self, seed=None):
+        super().__init__(seed)
+        self.__doc__ = doccer.docformat(self.__doc__, dirichlet_docdict_params)
+
+    def __call__(self, alpha, seed=None):
+        return dirichlet_frozen(alpha, seed=seed)
+
+    def pmf(self, alpha, x, n):
+        """
+        Probability mass function for a Dirichlet multinomial distribution.
+
+        Parameters
+        ----------
+        %(_dirichlet_doc_default_callparams)s
+
+        Returns
+        -------
+        out: scalar
+            Probability mass function for a Dirichlet multinomial distribution.
+        """
+        alpha = _dirichlet_check_parameters(alpha)
+
+        #Checking to see the lengths are the same.
+        try:
+            A = x[len(alpha) - 1]
+            B = alpha[len(x) - 1]
+
+        except IndexError:
+            print("x and alpha need to have the same length.")
+
+        out = gamma(sum(alpha)) * gamma(n + 1) / gamma(n + sum(alpha))
+        for i in range(0, len(x)):
+            out *= gamma(x[i] + alpha[i]) / (gamma(alpha[i]) * gamma(x[i] + 1))
+
+        return out
+
+    def mean(self, alpha, n):
+        """
+        Mean of a Dirichlet multinomial distribution.
+
+        Parameters
+        ----------
+        %(_dirichlet_doc_default_callparams)s
+        n: int
+            Number of trials.
+
+        Returns
+        -------
+        out: scalar
+            Mean of a Dirichlet multinomial distribution.
+        """
+        alpha = _dirichlet_check_parameters(alpha)
+
+        out = n * alpha / (np.sum(alpha))
+        return _squeeze_output(out)
+
+    def var(self, alpha, n):
+        """
+        The variance of the Dirichlet multinomial distribution.
+
+        Parameters
+        ----------
+        %(_dirichlet_doc_default_callparams)s
+        n: int
+            Number of trials.
+
+        Returns
+        -------
+        out: array_like
+            The variances of the components of the distribution.  This is
+            the diagonal of the covariance matrix of the distribution.
+        """
+        alpha = _dirichlet_check_parameters(alpha)
+
+        out = (n * alpha / sum(alpha)) * (1 - (alpha / sum(alpha))) * ((n + sum(alpha)) / (1 + sum(alpha)))
+        return _squeeze_output(out)
+
+    def cov(self, alpha, n):
+        """
+        Covariance matrix of a Dirichlet multinomial distribution.
+
+        Parameters
+        ----------
+        %(_dirichlet_doc_default_callparams)s
+        n: int
+            Number of trials.
+
+        Returns
+        -------
+        out : array_like
+            The covariance matrix of the distribution
+        """
+        alpha = _dirichlet_check_parameters(alpha)
+
+        out = np.zeros((n, n))
+
+        for i in range(0, n):
+            for j in range(0, n):
+                if i == j:
+                    out[i][j] = (n * alpha[i] / sum(alpha)) * (1 - (alpha[i] / sum(alpha))) * ((n + sum(alpha)) / (1 + sum(alpha)))
+                else:
+                    try:
+                        out[i][j] = -n * alpha[i] * alpha[j] / (sum(alpha) ** 2) * ((n + sum(alpha)) / (1 + sum(alpha)))
+                    except IndexError:
+                        print("n can not be larger than len(alpha).")
+
+        return _squeeze_output(out)
+
+dirichlet_multinomial = dirichlet_multinomial_gen()
 
 # Set frozen generator docstrings from corresponding docstrings in
 # multivariate_hypergeom and fill in default strings in class docstrings

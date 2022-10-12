@@ -6,7 +6,7 @@ import pickle
 
 from numpy.testing import (assert_allclose, assert_almost_equal,
                            assert_array_almost_equal, assert_equal,
-                           assert_array_less, assert_)
+                           assert_array_less, assert_array_equal, assert_)
 import pytest
 from pytest import raises as assert_raises
 
@@ -23,13 +23,14 @@ from scipy.stats._multivariate import (_PSD,
 from scipy.stats import (multivariate_normal, multivariate_hypergeom,
                          matrix_normal, special_ortho_group, ortho_group,
                          random_correlation, unitary_group, dirichlet,
-                         beta, wishart, multinomial, invwishart, chi2,
-                         invgamma, norm, uniform, ks_2samp, kstest, binom,
-                         hypergeom, multivariate_t, cauchy, normaltest)
+                         dirichlet_multinomial, beta, wishart, multinomial,
+                         invwishart, chi2, invgamma, norm, uniform, ks_2samp,
+                         kstest, binom, hypergeom, multivariate_t, cauchy, normaltest)
+
 from scipy.stats import _covariance, Covariance
 
 from scipy.integrate import romb
-from scipy.special import multigammaln
+from scipy.special import multigammaln, gamma
 
 from .common_tests import check_random_state_property
 
@@ -2479,3 +2480,62 @@ def test_random_state_property():
     for distfn, args in dists:
         check_random_state_property(distfn, args)
         check_pickling(distfn, args)
+
+class TestDirichletMultinomial:
+    def test_covariance_diagonal(self):
+        #Makes sure that the diagonal of the
+        #covariance matrix is the variance.
+        alpha = [1, 5, 3]
+        n = 3
+        c = dirichlet_multinomial.cov(alpha, n)
+        v = dirichlet_multinomial.var(alpha, n)
+
+        assert_array_equal(v, c.diagonal())
+
+    def test_variance(self):
+        alpha = [0.3, 2.1, 5.4]
+        n = 3
+        #Truncated to the 3rd digit, so not
+        #exactly what we would expect from var
+        expected_v = [0.136, 0.724, 0.784]
+        v = dirichlet_multinomial.var(alpha, n)
+        assert_array_almost_equal(expected_v, v, decimal = 3)
+
+    def test_covariance(self):
+        alpha = [0.3, 2.1, 5.4]
+        n = 3
+        #Truncated to the 3rd digit, so not
+        #exactly what we would expect from var
+        expected_c = np.array([[0.136, -0.038, -0.098],
+                               [-0.038, 0.724, -0.686],
+                               [-0.098, -0.686, 0.784]])
+        c = dirichlet_multinomial.cov(alpha, n)
+        assert_array_almost_equal(expected_c, c, decimal = 3)
+
+    def test_pmf(self):
+        x = [1, 2, 3]
+        n = 3
+        alpha = [3, 4, 5]
+        y = 2.884615384615385
+        y_1 = dirichlet_multinomial.pmf(alpha, x, n)
+        assert_almost_equal(y, y_1)
+
+    def test_lengths(self):
+        x = [1, 2, 3, 4]
+        alpha = [3, 4, 5]
+        n = 3
+        assert_raises(IndexError, dirichlet_multinomial.pmf, alpha, x, n)
+
+    def test_postive_semi_definite(self):
+        #Makes sure that the covariance matrix
+        #is positive-semidefinite.
+        n = np.random.randint(0, 30)
+        alpha = np.random.random(10) * 5
+        c = dirichlet_multinomial.cov(alpha, n)
+        for i in range(0, n):
+            if np.nonzero(c[:, i])[0].shape[0] != 0:
+                y = np.dot(c[:, i].T, np.dot(c , c[:, i]))
+                #Adding a small amount protects against floating point errors.
+                assert (y + 1e-6) >= 0
+
+
