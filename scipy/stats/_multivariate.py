@@ -5105,12 +5105,8 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         alpha = _dirichlet_check_parameters(alpha)
 
         #Checking to see the lengths are the same.
-        try:
-            A = x[len(alpha) - 1]
-            B = alpha[len(x) - 1]
-
-        except IndexError:
-            print("x and alpha need to have the same length.")
+        if len(alpha) != len(x):
+            raise ValueError("`x` and `alpha` must have the same length.")
 
         out = gamma(sum(alpha)) * gamma(n + 1) / gamma(n + sum(alpha))
         for i in range(0, len(x)):
