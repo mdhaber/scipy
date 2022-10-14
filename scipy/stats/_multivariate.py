@@ -5109,8 +5109,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             raise ValueError("`x` and `alpha` must have the same length.")
 
         out = gamma(sum(alpha)) * gamma(n + 1) / gamma(n + sum(alpha))
-        for i in range(0, len(x)):
-            out *= gamma(x[i] + alpha[i]) / (gamma(alpha[i]) * gamma(x[i] + 1))
+        out *= np.prod(gamma(x + alpha) / (gamma(alpha) * gamma(x + 1)))
 
         return out
 
