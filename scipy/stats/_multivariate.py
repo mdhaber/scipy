@@ -7,7 +7,9 @@ from numpy import asarray_chkfinite, asarray
 from numpy.lib import NumpyVersion
 import scipy.linalg
 from scipy._lib import doccer
-from scipy.special import gammaln, psi, multigammaln, xlogy, entr, betaln, gamma
+from scipy.special import (gammaln, psi, multigammaln, xlogy,
+                          entr, betaln, gamma, loggamma)
+
 from scipy._lib._util import check_random_state
 from scipy.linalg.blas import drot
 from scipy.linalg._misc import LinAlgError
@@ -1335,7 +1337,6 @@ def _dirichlet_check_parameters(alpha):
         raise ValueError("Parameter vector 'a' must be one dimensional, "
                          "but a.shape = %s." % (alpha.shape, ))
     return alpha
-
 
 def _dirichlet_check_input(alpha, x):
     x = np.asarray(x)
@@ -5063,6 +5064,8 @@ class dirichlet_multinomial_gen(multi_rv_generic):
 
     Methods
     -------
+    logpmf(alpha, x, n):
+        Log of the probability mass function.
     pmf(alpha, x, n):
         Probability mass function.
     mean(alpha, n):
@@ -5089,27 +5092,63 @@ class dirichlet_multinomial_gen(multi_rv_generic):
     def __call__(self, alpha, seed=None):
         return dirichlet_frozen(alpha, seed=seed)
 
-    def pmf(self, alpha, x, n):
+    def logpmf(self, alpha, x, n):
         """
-        Probability mass function for a Dirichlet multinomial distribution.
+        The log of the probability mass function.
 
         Parameters
         ----------
-        %(_dirichlet_doc_default_callparams)s
+        alpha: ndarray
+            The concentration parameters. The number of
+            entries determines the dimensionality of the distribution.
+        n: int
+            Number of trials.
+
+        Returns
+        -------
+        out: scalar
+            Log of the probability mass function.
+        """
+
+        if alpha.shape != x.shape:
+            raise ValueError("`x` and `alpha` must have the same shape.")
+
+        #Reduces line length
+        A = alpha
+
+        out = loggamma(np.sum(A,A.ndim-1))+loggamma(n+1)-loggamma(n+np.sum(A,A.ndim-1))
+        out += np.sum(loggamma(x+A)-(loggamma(A)+loggamma(np.add(x,1))),A.ndim-1)
+
+        return out
+
+    def pmf(self, alpha, x, n):
+        """
+        Probability mass function for a Dirichlet multinomial distribution.
+        .. note::
+        The results for this function can be inaccurate when n,
+        the sum of alpha, or the sum of x is very large. If using large
+        values, consider using logpmf and exponentiating instead.
+
+        Parameters
+        ----------
+        alpha: ndarray
+            The concentration parameters. The number of
+            entries determines the dimensionality of the distribution.
+        n: int
+            Number of trials.
 
         Returns
         -------
         out: scalar
             Probability mass function for a Dirichlet multinomial distribution.
         """
-        alpha = _dirichlet_check_parameters(alpha)
+        if alpha.shape != x.shape:
+            raise ValueError("`x` and `alpha` must have the same shape.")
 
-        #Checking to see the lengths are the same.
-        if len(alpha) != len(x):
-            raise ValueError("`x` and `alpha` must have the same length.")
+        A = alpha
 
-        out = gamma(sum(alpha)) * gamma(n + 1) / gamma(n + sum(alpha))
-        out *= np.prod(gamma(x + alpha) / (gamma(alpha) * gamma(x + 1)))
+        out = gamma(np.sum(A,A.ndim-1))*gamma(n+1)/gamma(n+np.sum(A,A.ndim-1))
+        out *= np.prod(gamma(x + A) / (gamma(A) * gamma(np.add(x, 1))))
 
         return out
 
@@ -5119,7 +5158,9 @@ class dirichlet_multinomial_gen(multi_rv_generic):
 
         Parameters
         ----------
-        %(_dirichlet_doc_default_callparams)s
+        alpha: ndarray
+            The concentration parameters. The number of
+            entries determines the dimensionality of the distribution.
         n: int
             Number of trials.
 
@@ -5128,10 +5169,11 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         out: scalar
             Mean of a Dirichlet multinomial distribution.
         """
-        alpha = _dirichlet_check_parameters(alpha)
+        A = alpha
+        n = np.asarray(n)
 
-        out = n * alpha / (np.sum(alpha))
-        return _squeeze_output(out)
+        out = ((n * A.T) / (np.sum(A, A.ndim - 1))).T
+        return out
 
     def var(self, alpha, n):
         """
@@ -5150,9 +5192,10 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             the diagonal of the covariance matrix of the distribution.
         """
         alpha = _dirichlet_check_parameters(alpha)
+        A = alpha
 
-        out = (n * alpha / sum(alpha)) * (1 - (alpha / sum(alpha))) * ((n + sum(alpha)) / (1 + sum(alpha)))
-        return _squeeze_output(out)
+        out = (n*A/sum(A))*(1-(A/sum(A)))*((n+sum(A))/(1+sum(A)))
+        return out
 
     def cov(self, alpha, n):
         """
@@ -5170,20 +5213,12 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             The covariance matrix of the distribution
         """
         alpha = _dirichlet_check_parameters(alpha)
+        A = alpha
 
-        out = np.zeros((n, n))
+        out = -n*np.outer(A,A)/(sum(A)**2)*((n+sum(A))/(1+sum(A)))
+        np.fill_diagonal(out,(n*A/sum(A))*(1-(A/sum(A)))*((n+sum(A))/(1+sum(A))))
 
-        for i in range(0, n):
-            for j in range(0, n):
-                if i == j:
-                    out[i][j] = (n * alpha[i] / sum(alpha)) * (1 - (alpha[i] / sum(alpha))) * ((n + sum(alpha)) / (1 + sum(alpha)))
-                else:
-                    try:
-                        out[i][j] = -n * alpha[i] * alpha[j] / (sum(alpha) ** 2) * ((n + sum(alpha)) / (1 + sum(alpha)))
-                    except IndexError:
-                        print("n can not be larger than len(alpha).")
-
-        return _squeeze_output(out)
+        return out
 
 dirichlet_multinomial = dirichlet_multinomial_gen()
 

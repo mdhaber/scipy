@@ -22,7 +22,7 @@ from scipy.stats._multivariate import (_PSD,
                                        multivariate_normal_frozen)
 from scipy.stats import (multivariate_normal, multivariate_hypergeom,
                          matrix_normal, special_ortho_group, ortho_group,
-                         random_correlation, unitary_group, dirichlet,
+                         random_correlation, unitary_group, dirichlet, gamma,
                          dirichlet_multinomial, beta, wishart, multinomial,
                          invwishart, chi2, invgamma, norm, uniform, ks_2samp,
                          kstest, binom, hypergeom, multivariate_t, cauchy, normaltest)
@@ -2513,18 +2513,63 @@ class TestDirichletMultinomial:
         assert_array_almost_equal(expected_c, c, decimal = 3)
 
     def test_pmf(self):
-        x = [1, 2, 3]
+        x = np.array([1, 2, 3])
         n = 3
-        alpha = [3, 4, 5]
+        alpha = np.array([3, 4, 5])
         y = 2.884615384615385
         y_1 = dirichlet_multinomial.pmf(alpha, x, n)
         assert_almost_equal(y, y_1)
 
-    def test_lengths(self):
-        x = [1, 2, 3, 4]
-        alpha = [3, 4, 5]
+    def test_logpmf(self):
+        x = np.array([1, 2, 3])
         n = 3
-        assert_raises(IndexError, dirichlet_multinomial.pmf, alpha, x, n)
+        alpha = np.array([3, 4, 5])
+        y = dirichlet_multinomial.pmf(alpha, x, n)
+        y_1 = dirichlet_multinomial.logpmf(alpha, x, n)
+        assert_almost_equal(y, np.exp(y_1))
+
+    def test_broadcasting(self):
+        x_1 = np.array([1, 2])
+        x_2 = np.array([4, 5])
+        n_1 = 3
+        n_2 = 4
+        alpha_1 = np.array([3, 4])
+        alpha_2 = np.array([6, 7])
+        x = np.array([[1, 2],
+                      [4, 5]])
+
+        alpha = np.array([[3, 4],
+                          [6, 7]])
+
+        n = np.array([3, 4])
+        y = dirichlet_multinomial.logpmf(alpha, x, n)
+        y_1 = dirichlet_multinomial.logpmf(alpha_1, x_1, n_1)
+        y_2 = dirichlet_multinomial.logpmf(alpha_2, x_2, n_2)
+        assert_equal(y[0], y_1)
+        assert_equal(y[1], y_2)
+
+    def test_broadcasting_mean(self):
+        n_1 = 3
+        n_2 = 4
+        alpha_1 = np.array([3, 4])
+        alpha_2 = np.array([6, 7])
+
+        alpha = np.array([[3, 4],
+                          [6, 7]])
+
+        n = np.array([3, 4])
+
+        y = dirichlet_multinomial.mean(alpha, n)
+        y_1 = dirichlet_multinomial.mean(alpha_1, n_1)
+        y_2 = dirichlet_multinomial.mean(alpha_2, n_2)
+        assert_equal(y[0], y_1)
+        assert_equal(y[1], y_2)
+
+    def test_lengths(self):
+        x = np.array([1, 2, 3, 4])
+        alpha = np.array([3, 4, 5])
+        n = 3
+        assert_raises(ValueError, dirichlet_multinomial.logpmf, alpha, x, n)
 
     def test_postive_semi_definite(self):
         #Makes sure that the covariance matrix
