@@ -23,10 +23,11 @@ from scipy.stats._multivariate import (_PSD,
 from scipy.stats import (multivariate_normal, multivariate_hypergeom,
                          matrix_normal, special_ortho_group, ortho_group,
                          random_correlation, unitary_group, dirichlet,
-                         beta, wishart, multinomial, invwishart, chi2,
-                         invgamma, norm, uniform, ks_2samp, kstest, binom,
-                         hypergeom, multivariate_t, cauchy, normaltest,
-                         random_table, uniform_direction)
+                         dirichlet_multinomial, beta, wishart, multinomial,
+                         invwishart, chi2, invgamma, norm, uniform, ks_2samp,
+                         kstest, binom, hypergeom, multivariate_t, cauchy,
+                         normaltest, random_table, uniform_direction)
+
 from scipy.stats import _covariance, Covariance
 
 from scipy.integrate import romb
