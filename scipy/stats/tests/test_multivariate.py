@@ -2496,22 +2496,22 @@ class TestDirichletMultinomial:
     def test_variance(self):
         alpha = [0.3, 2.1, 5.4]
         n = 3
-        #Truncated to the 3rd digit, so not
+        #Truncated to the 6th digit, so not
         #exactly what we would expect from var
-        expected_v = [0.136, 0.724, 0.784]
+        expected_v = [0.136162, 0.724381, 0.784293]
         v = dirichlet_multinomial.var(alpha, n)
-        assert_array_almost_equal(expected_v, v, decimal = 3)
+        assert_array_almost_equal(expected_v, v)
 
     def test_covariance(self):
         alpha = [0.3, 2.1, 5.4]
         n = 3
-        #Truncated to the 3rd digit, so not
+        #Truncated to the 6th digit, so not
         #exactly what we would expect from var
-        expected_c = np.array([[0.136, -0.038, -0.098],
-                               [-0.038, 0.724, -0.686],
-                               [-0.098, -0.686, 0.784]])
+        expected_c = np.array([[0.136162, -0.038125, -0.098037],
+                               [-0.038125, 0.724381, -0.686256],
+                               [-0.098037, -0.686256, 0.784293]])
         c = dirichlet_multinomial.cov(alpha, n)
-        assert_array_almost_equal(expected_c, c, decimal = 3)
+        assert_array_almost_equal(expected_c, c)
 
     def test_pmf(self):
         x = np.array([1, 2, 3])
