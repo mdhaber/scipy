@@ -5115,9 +5115,11 @@ class dirichlet_multinomial_gen(multi_rv_generic):
 
         #Reduces line length
         A = alpha
+        B = np.sum(A, A.ndim - 1)
+        C = np.add(x, 1)
 
-        out = loggamma(np.sum(A,A.ndim-1))+loggamma(n+1)-loggamma(n+np.sum(A,A.ndim-1))
-        out += np.sum(loggamma(x+A)-(loggamma(A)+loggamma(np.add(x,1))),A.ndim-1)
+        out = loggamma(B) + loggamma(n + 1) - loggamma(n + B)
+        out += np.sum(loggamma(x + A) - (loggamma(A) + loggamma(C)), A.ndim - 1)
 
         return out
 
@@ -5146,9 +5148,11 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             raise ValueError("`x` and `alpha` must have the same shape.")
 
         A = alpha
+        B = np.sum(A, A.ndim - 1)
+        C = np.add(x, 1)
 
-        out = gamma(np.sum(A,A.ndim-1))*gamma(n+1)/gamma(n+np.sum(A,A.ndim-1))
-        out *= np.prod(gamma(x + A) / (gamma(A) * gamma(np.add(x, 1))))
+        out = gamma(B) * gamma(n + 1) / gamma(n + B)
+        out *= np.prod(gamma(x + A) / (gamma(A) * gamma(C)))
 
         return out
 
@@ -5171,8 +5175,9 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         """
         A = alpha
         n = np.asarray(n)
+        B = np.sum(A, A.ndim - 1)
 
-        out = ((n * A.T) / (np.sum(A, A.ndim - 1))).T
+        out = ((n * A.T) / B).T
         return out
 
     def var(self, alpha, n):
@@ -5193,8 +5198,9 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         """
         alpha = _dirichlet_check_parameters(alpha)
         A = alpha
+        B = sum(A)
 
-        out = (n*A/sum(A))*(1-(A/sum(A)))*((n+sum(A))/(1+sum(A)))
+        out = (n * A / B) * (1 - (A / B)) * ((n + B) / (1 + B))
         return out
 
     def cov(self, alpha, n):
@@ -5214,9 +5220,10 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         """
         alpha = _dirichlet_check_parameters(alpha)
         A = alpha
+        B = sum(A)
 
-        out = -n*np.outer(A,A)/(sum(A)**2)*((n+sum(A))/(1+sum(A)))
-        np.fill_diagonal(out,(n*A/sum(A))*(1-(A/sum(A)))*((n+sum(A))/(1+sum(A))))
+        out = -n * np.outer(A, A) / (B ** 2) * ((n + B)/ (1 + B))
+        np.fill_diagonal(out,(n * A / B) * (1 - (A / B)) * ((n + B) / (1 + B)))
 
         return out
 
