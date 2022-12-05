@@ -5115,7 +5115,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
 
         #Reduces line length
         A = alpha
-        B = np.sum(A, A.ndim - 1)
+        B = np.sum(A, -1)
         C = np.add(x, 1)
 
         out = loggamma(B) + loggamma(n + 1) - loggamma(n + B)
