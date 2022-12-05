@@ -26,7 +26,7 @@ from scipy.stats import (multivariate_normal, multivariate_hypergeom,
                          dirichlet_multinomial, beta, wishart, multinomial,
                          invwishart, chi2, invgamma, norm, uniform, ks_2samp,
                          kstest, binom, hypergeom, multivariate_t, cauchy,
-                         normaltest, random_table, uniform_direction)
+                         normaltest)
 
 from scipy.stats import _covariance, Covariance
 
