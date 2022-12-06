@@ -2529,6 +2529,22 @@ class TestDirichletMultinomial:
         y_1 = dirichlet_multinomial.logpmf(alpha, x, n)
         assert_almost_equal(y, np.exp(y_1))
 
+    def test_negative_x(self):
+        x = np.array([1, -1, 3])
+        n = 3
+        alpha = np.array([3, 4, 5])
+        text = "`x` must not contain a non-negative integer."
+        with assert_raises(ValueError, match = text):
+            dirichlet_multinomial.logpmf(alpha, x, n)
+
+    def test_float_x(self):
+        x = np.array([1, 1.3, 3])
+        n = 3
+        alpha = np.array([3, 4, 5])
+        text = "`x` must only contain integers."
+        with assert_raises(ValueError, match = text):
+            dirichlet_multinomial.logpmf(alpha, x, n)
+
     def test_broadcasting(self):
         x_1 = np.array([1, 2])
         x_2 = np.array([4, 5])

@@ -5113,6 +5113,13 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         if alpha.shape != x.shape:
             raise ValueError("`x` and `alpha` must have the same shape.")
 
+        if np.less(x, 0).any():
+            raise ValueError("`x` must not contain a non-negative integer.")
+
+        #Checks to make sure that every number in x can be expressed as an int.
+        if not np.equal(np.mod(x, 1), 0).all():
+            raise ValueError("`x` must only contain integers.")
+
         #Reduces line length
         A = alpha
         B = np.sum(A, -1)
@@ -5146,6 +5153,13 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         """
         if alpha.shape != x.shape:
             raise ValueError("`x` and `alpha` must have the same shape.")
+
+        if np.less(x, 0).any():
+            raise ValueError("`x` must not contain a non-negative integer.")
+
+        #Checks to make sure that every number in x can be expressed as an int.
+        if not np.equal(np.mod(x, 1), 0).all():
+            raise ValueError("`x` must only contain integers.")
 
         A = alpha
         B = np.sum(A, A.ndim - 1)
