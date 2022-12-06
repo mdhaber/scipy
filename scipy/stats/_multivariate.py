@@ -5151,23 +5151,8 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         out: scalar
             Probability mass function for a Dirichlet multinomial distribution.
         """
-        if alpha.shape != x.shape:
-            raise ValueError("`x` and `alpha` must have the same shape.")
 
-        if np.less(x, 0).any():
-            raise ValueError("`x` must not contain a non-negative integer.")
-
-        #Checks to make sure that every number in x can be expressed as an int.
-        if not np.equal(np.mod(x, 1), 0).all():
-            raise ValueError("`x` must only contain integers.")
-
-        A = alpha
-        B = np.sum(A, A.ndim - 1)
-        C = np.add(x, 1)
-
-        out = gamma(B) * gamma(n + 1) / gamma(n + B)
-        out *= np.prod(gamma(x + A) / (gamma(A) * gamma(C)))
-
+        out = np.exp(self.logpmf(alpha, x, n))
         return out
 
     def mean(self, alpha, n):
