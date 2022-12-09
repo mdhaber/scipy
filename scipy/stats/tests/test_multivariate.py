@@ -2534,15 +2534,15 @@ class TestDirichletMultinomial:
 
     def test_pmf(self):
         x = np.array([1, 2, 3])
-        n = 3
+        n = 6
         alpha = np.array([3, 4, 5])
-        y = 2.884615384615385
+        y = 0.08484162895927604
         y_1 = dirichlet_multinomial.pmf(alpha, x, n)
         assert_almost_equal(y, y_1)
 
     def test_logpmf(self):
         x = np.array([1, 2, 3])
-        n = 3
+        n = 6
         alpha = np.array([3, 4, 5])
         y = dirichlet_multinomial.pmf(alpha, x, n)
         y_1 = dirichlet_multinomial.logpmf(alpha, x, n)
@@ -2558,15 +2558,23 @@ class TestDirichletMultinomial:
 
     def test_float_x(self):
         x = np.array([1, 1.3, 3])
-        n = 3
+        n = 12
         alpha = np.array([3, 4, 5])
         text = "`x` must only contain integers."
         with assert_raises(ValueError, match = text):
             dirichlet_multinomial.logpmf(alpha, x, n)
 
+    def test_wrong_x_sum(self):
+        x = np.array([1, 2, 3])
+        n = 7
+        alpha = np.array([3, 4, 5])
+        text = "The sum of `x` must equal `n`."
+        with assert_raises(ValueError, match = text):
+            dirichlet_multinomial.logpmf(alpha, x, n)
+
     def test_alpha_with_zero(self):
         alpha = np.array([1, 0, 2])
-        n = 3
+        n = 6
         x = np.array([1, 2, 3])
         text = "All parameters must be greater than 0"
         with assert_raises(ValueError, match = text):
@@ -2574,7 +2582,7 @@ class TestDirichletMultinomial:
 
     def test_negative_alpha(self):
         alpha = np.array([1, 0, 2])
-        n = 3
+        n = 6
         x = np.array([1, 2, 3])
         text = "All parameters must be greater than 0"
         with assert_raises(ValueError, match = text):
@@ -2616,6 +2624,30 @@ class TestDirichletMultinomial:
         y_2 = dirichlet_multinomial.mean(alpha_2, n_2)
         assert_equal(y[0], y_1)
         assert_equal(y[1], y_2)
+
+    def test_broadcasting_negative_x(self):
+        x = np.array([[1, 2, 3], [1, -3, 3], [1, 2, 3]])
+        n = np.array([6, 1, 6])
+        alpha = np.array([[3, 4, 5], [3, 4, 5], [3, 4, 5]])
+        text = "`x` must only contain integers."
+        with assert_raises(ValueError, match = text):
+            dirichlet_multinomial.logpmf(alpha, x, n)
+
+    def test_broadcasting_float_x(self):
+        x = np.array([[1, 2, 3], [1, 0.3, 3], [1, 2, 3]])
+        n = np.array([6, 4.3, 6])
+        alpha = np.array([[3, 4, 5], [3, 4, 5], [3, 4, 5]])
+        text = "`x` must only contain integers."
+        with assert_raises(ValueError, match = text):
+            dirichlet_multinomial.logpmf(alpha, x, n)
+
+    def test_broadcasting_wrong_x_sum(self):
+        x = np.array([[1, 2, 3], [1, 3, 3], [1, 2, 3]])
+        n = np.array([6, 6, 6])
+        alpha = np.array([[3, 4, 5], [3, 4, 5], [3, 4, 5]])
+        text = "The sum of `x` must equal `n`."
+        with assert_raises(ValueError, match = text):
+            dirichlet_multinomial.logpmf(alpha, x, n)
 
     def test_lengths(self):
         x = np.array([1, 2, 3, 4])

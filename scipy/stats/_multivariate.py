@@ -5118,6 +5118,8 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             Log of the probability mass function.
         """
 
+        n = np.asarray(n)
+
         if alpha.shape != x.shape:
             raise ValueError("`x` and `alpha` must have the same shape.")
 
@@ -5127,6 +5129,9 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         #Checks to make sure that every number in x can be expressed as an int.
         if not np.equal(np.mod(x, 1), 0).all():
             raise ValueError("`x` must only contain integers.")
+
+        if not np.equal(np.sum(x, -1), n).all():
+            raise ValueError("The sum of `x` must equal `n`.")
 
         #Reduces line length
         A = _dirichlet_multinomial_check_parameters(alpha)
