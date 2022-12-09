@@ -1338,6 +1338,13 @@ def _dirichlet_check_parameters(alpha):
                          "but a.shape = %s." % (alpha.shape, ))
     return alpha
 
+def _dirichlet_multinomial_check_parameters(alpha):
+    alpha = np.asarray(alpha)
+    if np.min(alpha) <= 0:
+        raise ValueError("All parameters must be greater than 0")
+
+    return alpha
+
 def _dirichlet_check_input(alpha, x):
     x = np.asarray(x)
 
@@ -5122,7 +5129,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             raise ValueError("`x` must only contain integers.")
 
         #Reduces line length
-        A = alpha
+        A = _dirichlet_multinomial_check_parameters(alpha)
         B = np.sum(A, -1)
         C = np.add(x, 1)
 
@@ -5173,7 +5180,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         out: scalar
             Mean of a Dirichlet multinomial distribution.
         """
-        A = alpha
+        A = _dirichlet_multinomial_check_parameters(alpha)
         n = np.asarray(n)
         B = np.sum(A, A.ndim - 1)
 
@@ -5196,7 +5203,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             The variances of the components of the distribution.  This is
             the diagonal of the covariance matrix of the distribution.
         """
-        alpha = _dirichlet_check_parameters(alpha)
+        alpha = _dirichlet_multinomial_check_parameters(alpha)
         A = alpha
         B = sum(A)
 
@@ -5218,7 +5225,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         out : array_like
             The covariance matrix of the distribution
         """
-        alpha = _dirichlet_check_parameters(alpha)
+        alpha = _dirichlet_multinomial_check_parameters(alpha)
         A = alpha
         B = sum(A)
 

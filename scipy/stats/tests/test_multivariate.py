@@ -2564,6 +2564,22 @@ class TestDirichletMultinomial:
         with assert_raises(ValueError, match = text):
             dirichlet_multinomial.logpmf(alpha, x, n)
 
+    def test_alpha_with_zero(self):
+        alpha = np.array([1, 0, 2])
+        n = 3
+        x = np.array([1, 2, 3])
+        text = "All parameters must be greater than 0"
+        with assert_raises(ValueError, match = text):
+            dirichlet_multinomial.logpmf(alpha, x, n)
+
+    def test_negative_alpha(self):
+        alpha = np.array([1, 0, 2])
+        n = 3
+        x = np.array([1, 2, 3])
+        text = "All parameters must be greater than 0"
+        with assert_raises(ValueError, match = text):
+            dirichlet_multinomial.logpmf(alpha, x, n)
+
     def test_broadcasting(self):
         x_1 = np.array([1, 2])
         x_2 = np.array([4, 5])
