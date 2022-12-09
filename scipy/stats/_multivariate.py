@@ -5087,10 +5087,11 @@ class dirichlet_multinomial_gen(multi_rv_generic):
      """
     def __init__(self, seed=None):
         super().__init__(seed)
-        self.__doc__ = doccer.docformat(self.__doc__, dirichlet_docdict_params)
+        self.__doc__ = doccer.docformat(self.__doc__,
+                                        dirichlet_docdict_params)
 
     def __call__(self, alpha, seed=None):
-        return dirichlet_frozen(alpha, seed=seed)
+        return dirichlet_multinomial_frozen(alpha, seed=seed)
 
     def logpmf(self, alpha, x, n):
         """
@@ -5227,6 +5228,36 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         return out
 
 dirichlet_multinomial = dirichlet_multinomial_gen()
+
+class dirichlet_multinomial_frozen(multi_rv_frozen):
+    def __init__(self, alpha, seed=None):
+	    self.alpha = alpha
+	    self._dist = dirichlet_multinomial_gen(seed)
+
+    def logpmf(self, x, n):
+	    return self._dist.logpmf(self.alpha, x, n)
+
+    def pmf(self, x, n):
+	    return self._dist.pmf(self.alpha, x, n)
+
+    def mean(self, n):
+	    return self._dist.mean(self.alpha, n)
+
+    def var(self,  n):
+	    return self._dist.var(self.alpha, n)
+
+    def cov(self, n):
+	    return self._dist.cov(self.alpha, n)
+
+#Set frozen generator docstrings from corresponding docstrings in
+#dirichlet_multinomial and fill in default strings in class docstrings.
+for name in ['logpmf', 'pmf', 'mean', 'var', 'cov']:
+    method = dirichlet_multinomial_gen.__dict__[name]
+    method_frozen = dirichlet_multinomial_frozen.__dict__[name]
+    method_frozen.__doc__ = doccer.docformat(
+        method.__doc__, dirichlet_docdict_noparams)
+    method.__doc__ = doccer.docformat(method.__doc__,
+                                      dirichlet_docdict_params)
 
 # Set frozen generator docstrings from corresponding docstrings in
 # multivariate_hypergeom and fill in default strings in class docstrings

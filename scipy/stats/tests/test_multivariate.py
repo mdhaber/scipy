@@ -2483,6 +2483,25 @@ def test_random_state_property():
         check_pickling(distfn, args)
 
 class TestDirichletMultinomial:
+    def test_frozen(self):
+        rng = np.random.default_rng(2846)
+
+        n = rng.integers(0, 32)
+        alpha = rng.uniform(1e-10, 100, n)
+        x = rng.integers(0, n, n)
+
+        d = dirichlet_multinomial(alpha)
+
+        assert_equal(d.logpmf(x, n),
+                     dirichlet_multinomial.logpmf(alpha, x, n))
+
+        assert_equal(d.pmf(x, n),
+                     dirichlet_multinomial.pmf(alpha, x, n))
+
+        assert_equal(d.mean(n), dirichlet_multinomial.mean(alpha, n))
+        assert_equal(d.var(n), dirichlet_multinomial.var(alpha, n))
+        assert_equal(d.cov(n), dirichlet_multinomial.cov(alpha, n))
+
     def test_covariance_diagonal(self):
         #Makes sure that the diagonal of the
         #covariance matrix is the variance.
