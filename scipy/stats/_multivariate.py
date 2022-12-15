@@ -5212,7 +5212,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         A = alpha
         B = sum(A)
 
-        out = (n * A / B) * (1 - (A / B)) * ((n + B) / (1 + B))
+        out = (n * (A /  B)) * (1 - (A / B)) * ((n + B) / (1 + B))
         return out
 
     def cov(self, alpha, n):

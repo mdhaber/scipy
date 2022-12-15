@@ -2486,9 +2486,10 @@ class TestDirichletMultinomial:
     def test_frozen(self):
         rng = np.random.default_rng(2846)
 
-        n = rng.integers(0, 32)
-        alpha = rng.uniform(1e-10, 100, n)
-        x = rng.integers(0, n, n)
+        alpha = rng.uniform(1e-10, 100, 10)
+        x = rng.integers(0, 10, 10)
+
+        n = np.sum(x, -1)
 
         d = dirichlet_multinomial(alpha)
 
@@ -2588,26 +2589,11 @@ class TestDirichletMultinomial:
         with assert_raises(ValueError, match = text):
             dirichlet_multinomial.logpmf(alpha, x, n)
 
-    def test_large_alpha(self):
-        #Dirichlet multinomial distribution should approximate
-        #the multinomial distribution if alpha is large enough
-        rng = np.random.default_rng(2486)
-        alpha = rng.uniform(1e-10, 10, size = 1000)
-        #alpha has to sum to 1 for multinomial
-        alpha /= sum(alpha)
-        x = rng.integers(0, 30, size = 1000)
-        n = sum(x)
-
-        y_1 = dirichlet_multinomial.logpmf(alpha, x, n)
-        y_2 = multinomial.logpmf(x, n, alpha)
-
-        assert_almost_equal(y_1, y_2)
-
     def test_broadcasting(self):
         x_1 = np.array([1, 2])
         x_2 = np.array([4, 5])
         n_1 = 3
-        n_2 = 4
+        n_2 = 9
         alpha_1 = np.array([3, 4])
         alpha_2 = np.array([6, 7])
         x = np.array([[1, 2],
@@ -2616,7 +2602,7 @@ class TestDirichletMultinomial:
         alpha = np.array([[3, 4],
                           [6, 7]])
 
-        n = np.array([3, 4])
+        n = np.array([n_1, n_2])
         y = dirichlet_multinomial.logpmf(alpha, x, n)
         z = dirichlet_multinomial.pmf(alpha, x, n)
         y_1 = dirichlet_multinomial.logpmf(alpha_1, x_1, n_1)
@@ -2647,32 +2633,20 @@ class TestDirichletMultinomial:
         assert_equal(y[1], y_2)
 
     def test_broadcasting_var(self):
-        alpha = np.array([[0.3, 2.1, 5.4], [0.3, 2.1, 5.4], [0.3, 2.1, 5.4]])
+        alpha = np.array([[0.3, 2.1, 5.4], [0.3, 2.1, 5.4], [0.3, 2.1, 5.4]]).T
         n = 3
-        expected_v = np.array([[0.136162, 0.724381, 0.784293],
-                               [0.136162, 0.724381, 0.784293],
-                               [0.136162, 0.724381, 0.784293]])
+        expected_v = np.array([[0.136162, 0.136162, 0.136162],
+                               [0.724381, 0.724381, 0.724381],
+                               [0.784293, 0.784293, 0.784293]])
 
         v = dirichlet_multinomial.var(alpha, n)
         assert_array_almost_equal(expected_v, v)
-
-    def test_broadcasting_cov(self):
-        alpha = np.array([[0.3, 2.1, 5.4], [0.3, 2.1, 5.4], [0.3, 2.1, 5.4]])
-        n = 3
-        expected_c = np.array([[0.136162, -0.038125, -0.098037],
-                               [-0.038125, 0.724381, -0.686256],
-                               [-0.098037, -0.686256, 0.784293]])
-
-        c = dirichlet_multinomial.cov(alpha, n)
-        assert_array_almost_equal(expected_c, c[0])
-        assert_array_almost_equal(expected_c, c[1])
-        assert_array_almost_equal(expected_c, c[2])
 
     def test_broadcasting_negative_x(self):
         x = np.array([[1, 2, 3], [1, -3, 3], [1, 2, 3]])
         n = np.array([6, 1, 6])
         alpha = np.array([[3, 4, 5], [3, 4, 5], [3, 4, 5]])
-        text = "`x` must only contain integers."
+        text = "`x` must not contain a non-negative integer."
         with assert_raises(ValueError, match = text):
             dirichlet_multinomial.logpmf(alpha, x, n)
 
@@ -2692,49 +2666,6 @@ class TestDirichletMultinomial:
         with assert_raises(ValueError, match = text):
             dirichlet_multinomial.logpmf(alpha, x, n)
 
-    def test_pmf_3D(self):
-        rng = np.random.default_rng(2486)
-        alpha = rng.uniform(1e-10, 10, size = (4, 5, 6))
-        x = rng.integers(0, 10, size = (4, 5, 6))
-        n = np.sum(x, -1)
-
-        y = dirichlet_multinomial.logpmf(alpha, x, n)
-        z = dirichlet_multinomial.pmf(alpha, x, n)
-
-        assert_array_equal(y[0], dirichlet_multinomial.logpmf(alpha[0], x[0], n[0]))
-        assert_array_equal(y[1], dirichlet_multinomial.logpmf(alpha[0], x[1], n[1]))
-        assert_array_equal(y[2], dirichlet_multinomial.logpmf(alpha[2], x[2], n[2]))
-        assert_array_equal(y[3], dirichlet_multinomial.logpmf(alpha[3], x[3], n[3]))
-
-        assert_array_equal(y[0], dirichlet_multinomial.pmf(alpha[0], x[0], n[0]))
-        assert_array_equal(y[1], dirichlet_multinomial.pmf(alpha[0], x[1], n[1]))
-        assert_array_equal(y[2], dirichlet_multinomial.pmf(alpha[2], x[2], n[2]))
-        assert_array_equal(y[3], dirichlet_multinomial.pmf(alpha[3], x[3], n[3]))
-
-    def test_mean_3D(self):
-        rng = np.random.default_rng(2486)
-        alpha = rng.uniform(1e-10, 10, size = (4, 5, 6))
-        n = rng.integers(1, 10, size = (5, 6))
-
-        m = dirichlet_multinomial.mean(alpha, n)
-
-        assert_array_equal(m[0], dirichlet_multinomial.mean(alpha[0], n[0])
-        assert_array_equal(m[1], dirichlet_multinomial.mean(alpha[1], n[1])
-        assert_array_equal(m[2], dirichlet_multinomial.mean(alpha[2], n[2])
-        assert_array_equal(m[3], dirichlet_multinomial.mean(alpha[3], n[3])
-
-    def test_var_3D(self):
-        rng = np.random.default_rng(2486)
-        alpha = rng.uniform(1e-10, 10, size = (4, 5, 6))
-        n = rng.integers(1, 10, size = (5, 6))
-
-        v = dirichlet_multinomial.var(alpha, n)
-
-        assert_array_equal(v[0], dirichlet_multinomial.var(alpha[0], n[0])
-        assert_array_equal(v[1], dirichlet_multinomial.var(alpha[1], n[1])
-        assert_array_equal(v[2], dirichlet_multinomial.var(alpha[2], n[2])
-        assert_array_equal(v[3], dirichlet_multinomial.var(alpha[3], n[3])
-
     def test_lengths(self):
         x = np.array([1, 2, 3, 4])
         alpha = np.array([3, 4, 5])
@@ -2752,5 +2683,3 @@ class TestDirichletMultinomial:
                 y = np.dot(c[:, i].T, np.dot(c , c[:, i]))
                 #Adding a small amount protects against floating point errors.
                 assert (y + 1e-6) >= 0
-
-
