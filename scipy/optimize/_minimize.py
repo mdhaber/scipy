@@ -745,7 +745,7 @@ def minimize(fun, x0, args=(), method=None, jac=None, hess=None,
 
 
 def minimize_scalar(fun, bracket=None, bounds=None, args=(),
-                    method='brent', tol=None, options=None):
+                    method='brent', tol=None, options=None, *, callback):
     """Minimization of scalar function of one variable.
 
     Parameters
@@ -907,16 +907,17 @@ def minimize_scalar(fun, bracket=None, bounds=None, args=(),
         options['disp'] = 2 * int(disp)
 
     if meth == '_custom':
-        return method(fun, args=args, bracket=bracket, bounds=bounds, **options)
+        return method(fun, args=args, bracket=bracket, bounds=bounds,
+                      callback=callback, **options)
     elif meth == 'brent':
-        return _minimize_scalar_brent(fun, bracket, args, **options)
+        return _minimize_scalar_brent(fun, bracket, args, callback, **options)
     elif meth == 'bounded':
         if bounds is None:
             raise ValueError('The `bounds` parameter is mandatory for '
                              'method `bounded`.')
-        return _minimize_scalar_bounded(fun, bounds, args, **options)
+        return _minimize_scalar_bounded(fun, bounds, args, callback, **options)
     elif meth == 'golden':
-        return _minimize_scalar_golden(fun, bracket, args, **options)
+        return _minimize_scalar_golden(fun, bracket, args, callback, **options)
     else:
         raise ValueError('Unknown solver %s' % method)
 

@@ -2223,7 +2223,7 @@ def fminbound(func, x1, x2, args=(), xtol=1e-5, maxfun=500,
         return res['x']
 
 
-def _minimize_scalar_bounded(func, bounds, args=(),
+def _minimize_scalar_bounded(func, bounds, args=(), callback=None,
                              xatol=1e-5, maxiter=500, disp=0,
                              **unknown_options):
     """
@@ -2242,6 +2242,7 @@ def _minimize_scalar_bounded(func, bounds, args=(),
 
     """
     _check_unknown_options(unknown_options)
+    _wrap_callback(callback)
     maxfun = maxiter
     # Test bounds are of correct form
     if len(bounds) != 2:
@@ -2628,8 +2629,8 @@ def brent(func, args=(), brack=None, tol=1.48e-8, full_output=0, maxiter=500):
         return res['x']
 
 
-def _minimize_scalar_brent(func, brack=None, args=(), xtol=1.48e-8,
-                           maxiter=500, disp=0,
+def _minimize_scalar_brent(func, brack=None, args=(), callback=None,
+                           xtol=1.48e-8, maxiter=500, disp=0,
                            **unknown_options):
     """
     Options
@@ -2651,6 +2652,7 @@ def _minimize_scalar_brent(func, brack=None, args=(), xtol=1.48e-8,
 
     """
     _check_unknown_options(unknown_options)
+    _wrap_callback(callback)
     tol = xtol
     if tol < 0:
         raise ValueError('tolerance should be >= 0, got %r' % tol)
@@ -2747,7 +2749,7 @@ def golden(func, args=(), brack=None, tol=_epsilon,
         return res['x']
 
 
-def _minimize_scalar_golden(func, brack=None, args=(),
+def _minimize_scalar_golden(func, brack=None, args=(), callback=None,
                             xtol=_epsilon, maxiter=5000, disp=0,
                             **unknown_options):
     """
@@ -2765,6 +2767,7 @@ def _minimize_scalar_golden(func, brack=None, args=(),
             3 : print iteration results.
     """
     _check_unknown_options(unknown_options)
+    _wrap_callback(callback)
     tol = xtol
     if brack is None:
         xa, xb, xc, fa, fb, fc, funcalls = bracket(func, args=args)
@@ -2835,6 +2838,11 @@ def _minimize_scalar_golden(func, brack=None, args=(),
             print(f"{funcalls:^12g} {xmin:^12.6g} {fval:^12.6g}")
 
         nit += 1
+        intermediate_result = OptimizeResult(x1=x1, f1=f1, x2=x2, f2=f2,
+                                             nit=nit)
+        if _call_callback_maybe_halt(callback, intermediate_result):
+            break
+
     # end of iteration loop
 
     if (f1 < f2):
