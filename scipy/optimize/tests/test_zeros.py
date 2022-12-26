@@ -292,6 +292,10 @@ class TestBasic:
                             fprime=f_1, fprime2=f_2, xtol=1e-6)
             assert_allclose(f(r.root), 0, atol=1e-6)
 
+    def test_chandrupatla_by_name(self):
+        r"""Invoke chandrupatla through root_scalar()"""
+        pass
+
     def test_root_scalar_fail(self):
         with pytest.raises(ValueError):
             root_scalar(f1, method='secant', x0=3, xtol=1e-6)  # no x1
@@ -301,6 +305,19 @@ class TestBasic:
             root_scalar(f1, method='halley', fprime=f1_1, x0=3, xtol=1e-6)  # no fprime2
         with pytest.raises(ValueError):
             root_scalar(f1, method='halley', fprime2=f1_2, x0=3, xtol=1e-6)  # no fprime
+
+    def test_array_chandrupatla(self):
+        """test chandrupatla with array, similar to newton method"""
+
+        def f1(x, a):
+            return a-x*x
+
+        k = np.arange(1,8)
+        x = zeros.chandrupatla(f1, 0, 3, args=(k,))
+        x_expected = ([1., 1.41421356, 1.73205081,
+                       2., 2.23606798, 2.44948974,
+                       2.64575131])
+        assert_allclose(x, x_expected)
 
     def test_array_newton(self):
         """test newton with array"""
