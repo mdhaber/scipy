@@ -1397,7 +1397,7 @@ def toms748(f, a, b, args=(), k=1,
 
 def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
                  rtol=_rtol, maxiter=_iter, full_output=False,
-                 disp=True, verbose=False):
+                 disp=False, verbose=False):
     """
     As written in [Sachs2015]_ which in turn is based on Chandrupatla's
     algorithm as described in [Scherer2018]_.
@@ -1406,8 +1406,10 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     Parameters
     ----------
     
-    f : function
-        Python function returning a number.
+    f : callable
+        The function whose zero is wanted. It must be a function of a
+        single variable of the form ``f(x,a,b,c...)``, where ``a,b,c...``
+        are extra arguments that can be passed in the `args` parameter.
     x0 : float, sequence, or ndarray
         An initial estimate of the zero that should be somewhere near the
         actual zero. If not scalar, then `func` must be vectorized and return
@@ -1415,12 +1417,6 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     x1 : float, optional
         Another estimate of the zero that should be somewhere near the
         actual zero.
-    full_output : bool, optional
-        If `full_output` is False (default), the root is returned.
-        If True and `x0` is scalar, the return value is ``(x, r)``, where ``x``
-        is the root and ``r`` is a `RootResults` object.
-        If True and `x0` is non-scalar, the return value is ``(x, converged,
-        zero_der)`` (see Returns section for details).
     xtol : float, optional
         Tolerance (absolute) for termination.
     rtol : float, optional
@@ -1428,6 +1424,12 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     maxiter : int, optional
         If convergence is not achieved in `maxiter` iterations, an error is
         raised. Must be >= 0.
+    full_output : bool, optional
+        If `full_output` is False (default), the root is returned.
+        If True and `x0` is scalar, the return value is ``(x, r)``, where ``x``
+        is the root and ``r`` is a `RootResults` object.
+        If True and `x0` is non-scalar, the return value is ``(x, converged,
+        zero_der)`` (see Returns section for details).
     disp : bool, optional
         If True, raise a RuntimeError if the algorithm didn't converge, with
         the error message containing the number of iterations and current
@@ -1441,8 +1443,13 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     
     Returns
     -------
-    xm : need to adjust to be like other methods
-    iterations : need to adjust to be like other methods
+    root : float, sequence, or ndarray
+        Estimated location where function is zero.
+    r : `RootResults`, optional
+        Present if ``full_output=True`` and `x0` is scalar.
+        Object containing information about the convergence. In particular,
+        ``r.converged`` is True if the routine converged.
+    
     Notes
     -----
     
@@ -1459,21 +1466,24 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
        Scherer, Philipp
        *Computational physics: Simulation of classical and Quantum Systems*.
        SPRINGER INTERNATIONAL PU, 2018. Ch. 6.1.7.3.
+       
     See Also
     --------
     brentq, brenth, ridder, bisect, newton
-    fsolve : find zeroes in N dimensions.
+    root_scalar : interface to root solvers for scalar functions
     
     Examples
     --------
     >>> from scipy import optimize
     >>> def f(x,a):
     ...     return a-x*x
+
     >>> k = np.arange(1,8)
-    >>> y = optimize.chandrupatla(f,0,3,args=(k,))
+    >>> y = optimize.chandrupatla(f,0,3,args=(k,)) # array case
     >>> y
     [1. 1.41421356  1.73205081  2. 2.23606798  2.44948974  2.64575131]
-    >>> y = optimize.chandrupatla(f,0,3,args=(7.0,))
+
+    >>> y = optimize.chandrupatla(f,0,3,args=(7.0,)) # scalar case
     >>> y
     2.6457513110645907
     """
@@ -1520,8 +1530,6 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
             )
             if verbose:
                 print(output)
-            else:
-                print(output, file=verbose)
 
         # update our history of the last few points so that
         # - a is the newest estimate (we're going to update it from xt)
@@ -1535,12 +1543,12 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
         a = xt
         fa = ft
 
-        # set xm so that f(xm) is the minimum magnitude of f(a) and f(b)
+        # set r so that f(r) is the minimum magnitude of f(a) and f(b)
         fa_is_smaller = np.abs(fa) < np.abs(fb)
-        xm = np.choose(fa_is_smaller, [b, a])
+        r = np.choose(fa_is_smaller, [b, a])
         fm = np.choose(fa_is_smaller, [fb, fa])
 
-        tol = 2 * xtol * np.abs(xm) + rtol
+        tol = 2 * xtol * np.abs(r) + rtol
         tlim = tol / np.abs(b - c)
         terminate = np.logical_or(terminate, np.logical_or(fm == 0, tlim > 0.5))
 
@@ -1548,8 +1556,6 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
             output = f"fm={fm}\n tlim={tlim}\n term={terminate}"
             if verbose:
                 print(output)
-            else:
-                print(output, file=verbose)
 
         if np.all(terminate):
             break
@@ -1589,13 +1595,11 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
         # limit to the range (tlim, 1-tlim)
         t = np.minimum(1 - tlim, np.maximum(tlim, t))
 
-    # done!
-    if full_output:
-        return xm, iterations
-    else:
-        return xm
+    if disp:
+        msg = (f'Failed to converge after {iterations+1} iterations, value is {r}.')
+        raise RuntimeError(msg)
 
-    # returning too many values, see what other
-    # methods are returning
-    # return results_c(full_output, xm)
+    # need to add funcalls, added 0 as placeholder
+    # where does converge flag go in func
+    return results_c(full_output, (r, 0, iterations + 1, _ECONVERGED))
 
