@@ -3248,7 +3248,7 @@ def wilcoxon_outputs(kwds):
     result_to_tuple=wilcoxon_result_unpacker, n_outputs=wilcoxon_outputs,
 )
 def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
-             alternative="two-sided", method='auto'):
+             alternative="two-sided", method='auto', *, axis=0):
     """Calculate the Wilcoxon signed-rank test.
 
     The Wilcoxon signed-rank test tests the null hypothesis that two
@@ -3267,23 +3267,23 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
         Either the second set of measurements (if ``x`` is the first set of
         measurements), or not specified (if ``x`` is the differences between
         two sets of measurements.)  Must be one-dimensional.
-    zero_method : {"wilcox", "pratt", "zsplit"}, optional
+    zero_method : {"wilcox", "pratt", "zsplit"}, default: "wilcox"
         There are different conventions for handling pairs of observations
         with equal values ("zero-differences", or "zeros").
 
-        * "wilcox": Discards all zero-differences (default); see [4]_.
+        * "wilcox": Discards all zero-differences; see [4]_.
         * "pratt": Includes zero-differences in the ranking process,
           but drops the ranks of the zeros (more conservative); see [3]_.
           In this case, the normal approximation is adjusted as in [5]_.
         * "zsplit": Includes zero-differences in the ranking process and
           splits the zero rank between positive and negative ones.
 
-    correction : bool, optional
+    correction : bool, default: False
         If True, apply continuity correction by adjusting the Wilcoxon rank
         statistic by 0.5 towards the mean value when computing the
-        z-statistic if a normal approximation is used.  Default is False.
-    alternative : {"two-sided", "greater", "less"}, optional
-        Defines the alternative hypothesis. Default is 'two-sided'.
+        z-statistic if a normal approximation is used.
+    alternative : {"two-sided", "greater", "less"}, default: "two-sided"
+        Defines the alternative hypothesis.
         In the following, let ``d`` represent the difference between the paired
         samples: ``d = x - y`` if both ``x`` and ``y`` are provided, or
         ``d = x`` otherwise.
@@ -3295,8 +3295,13 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
         * 'greater': the distribution underlying ``d`` is stochastically
           greater than a distribution symmetric about zero.
 
-    method : {"auto", "exact", "approx"}, optional
-        Method to calculate the p-value, see Notes. Default is "auto".
+    method : {"auto", "exact", "approx"}, default: "auto"
+        Method to calculate the p-value, see Notes.
+    axis : int or None, default: 0
+        If an int, the axis of the input along which to compute the statistic.
+        The statistic of each axis-slice (e.g. row) of the input will appear
+        in a corresponding element of the output. If ``None``, the input will
+        be raveled before computing the statistic.
 
     Returns
     -------
@@ -3421,54 +3426,59 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
                          "'greater' or 'less'")
 
     if y is None:
-        d = asarray(x)
-        if d.ndim > 1:
-            raise ValueError('Sample x must be one-dimensional.')
+        d = np.asarray(x)
     else:
-        x, y = map(asarray, (x, y))
-        if x.ndim > 1 or y.ndim > 1:
-            raise ValueError('Samples x and y must be one-dimensional.')
-        if len(x) != len(y):
-            raise ValueError('The samples x and y must have the same length.')
+        msg = 'The samples x and y must have the same length along `axis`.'
+        if np.shape(x)[axis] != np.shape(y)[axis]:
+            raise ValueError(msg)
+        x, y = np.broadcast_arrays(x, y)
         d = x - y
 
-    if len(d) == 0:
-        res = WilcoxonResult(np.nan, np.nan)
+    if d.size == 0:
+        # shapes are hard; let NumPy do it
+        nans = np.sum(d, axis=axis)
+        res = WilcoxonResult(nans, nans)
         if method == 'approx':
-            res.zstatistic = np.nan
+            res.zstatistic = nans
         return res
 
     if mode == "auto":
-        if len(d) <= 50:
+        if d.shape[axis] <= 50:
             mode = "exact"
         else:
             mode = "approx"
 
-    n_zero = np.sum(d == 0)
-    if n_zero > 0 and mode == "exact":
+    d0 = d == 0
+    n_zero = np.sum(d0, axis=axis)
+    if np.any(n_zero > 0) and mode == "exact":
         mode = "approx"
         warnings.warn("Exact p-value calculation does not work if there are "
                       "zeros. Switching to normal approximation.")
 
-    if mode == "approx":
-        if zero_method in ["wilcox", "pratt"]:
-            if n_zero == len(d):
-                raise ValueError("zero_method 'wilcox' and 'pratt' do not "
-                                 "work if x - y is zero for all elements.")
-        if zero_method == "wilcox":
-            # Keep all non-zero differences
-            d = compress(np.not_equal(d, 0), d)
+    # if zero_method in ["wilcox", "pratt"]:
+    #     if np.all(n_zero == len(d)):
+    #         raise ValueError("zero_method 'wilcox' and 'pratt' do not "
+    #                           "work if x - y is zero for all elements.")
 
-    count = len(d)
-    if count < 10 and mode == "approx":
+    if zero_method == "wilcox" and np.any(n_zero):
+        # wilcox keeps all non-zero differences
+        d = np.array(d, dtype=float)
+        d[d0] = np.nan
+        count = np.nansum(~d0)
+        # return wilcoxon(d, None, zero_method, correction, alternative, mode,
+        #                 nan_policy='omit', axis=axis)
+    else:
+        count = d.shape[axis]
+
+    if np.any(count < 10) and mode == "approx":
         warnings.warn("Sample size too small for normal approximation.")
 
-    r = _stats_py.rankdata(abs(d))
-    r_plus = np.sum((d > 0) * r)
-    r_minus = np.sum((d < 0) * r)
+    r = _stats_py.rankdata(abs(d), nan_policy='omit', axis=axis)
+    r_plus = np.nansum((d > 0) * r, axis=axis)
+    r_minus = np.nansum((d < 0) * r, axis=axis)
 
     if zero_method == "zsplit":
-        r_zero = np.sum((d == 0) * r)
+        r_zero = np.sum((d0) * r)
         r_plus += r_zero / 2.
         r_minus += r_zero / 2.
 
@@ -3480,7 +3490,7 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
     # [3] uses the r_plus for the one-sided test, keep min for two-sided test
     # to keep backwards compatibility
     if alternative == "two-sided":
-        T = min(r_plus, r_minus)
+        T = np.minimum(r_plus, r_minus)
     else:
         T = r_plus
 
@@ -3489,15 +3499,16 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
         se = count * (count + 1.) * (2. * count + 1.)
 
         if zero_method == "pratt":
-            r = r[d != 0]
+            r[d0] = np.nan
             # normal approximation needs to be adjusted, see Cureton (1967)
             mn -= n_zero * (n_zero + 1.) * 0.25
             se -= n_zero * (n_zero + 1.) * (2. * n_zero + 1.)
 
-        replist, repnum = find_repeats(r)
+        # test that find_repeats does not consider NaNs
+        replist, repnum = np.apply_along_axis(find_repeats, axis, r)
         if repnum.size != 0:
             # Correction for repeated elements.
-            se -= 0.5 * (repnum * (repnum * repnum - 1)).sum()
+            se -= 0.5 * (repnum * (repnum * repnum - 1)).sum(axis=axis)
 
         se = sqrt(se / 24)
 
@@ -3523,8 +3534,13 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
             prob = distributions.norm.cdf(z)
     elif mode == "exact":
         # get pmf of the possible positive ranksums r_plus
-        pmf = _get_wilcoxon_distr(count)
+        if np.ndim(count) > 1:
+            pmf = np.apply_along_axis(_get_wilcoxon_distr, axis, count)
+        else:
+            pmf = _get_wilcoxon_distr(count)
+            pmf = np.broadcast_to(pmf, r_plus.shape + pmf.shape)
         # note: r_plus is int (ties not allowed), need int for slices below
+
         r_plus = int(r_plus)
         if alternative == "two-sided":
             if r_plus == (len(pmf) - 1) // 2:
