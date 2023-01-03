@@ -2,6 +2,7 @@ import warnings
 from collections import namedtuple
 import operator
 from . import _zeros
+from ._optimize import OptimizeResult
 import numpy as np
 
 
@@ -1396,8 +1397,8 @@ def toms748(f, a, b, args=(), k=1,
 
 
 def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
-                 rtol=_rtol, maxiter=_iter, full_output=False,
-                 disp=False, verbose=False):
+                 rtol=_rtol, maxiter=_iter, callback=None):
+
     """
     As written in [Sachs2015]_ which in turn is based on Chandrupatla's
     algorithm as described in [Scherer2018]_.
@@ -1424,38 +1425,26 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     maxiter : int, optional
         If convergence is not achieved in `maxiter` iterations, an error is
         raised. Must be >= 0.
-    full_output : bool, optional
-        If `full_output` is False (default), the root is returned.
-        If True and `x0` is scalar, the return value is ``(x, r)``, where ``x``
-        is the root and ``r`` is a `RootResults` object.
-        If True and `x0` is non-scalar, the return value is ``(x, converged,
-        zero_der)`` (see Returns section for details).
-    disp : bool, optional
-        If True, raise a RuntimeError if the algorithm didn't converge, with
-        the error message containing the number of iterations and current
-        function value. Otherwise, the convergence status is recorded in a
-        `RootResults` return object.
-        Ignored if `x0` is not scalar.
-        *Note: this has little to do with displaying, however,
-        the `disp` keyword cannot be renamed for backwards compatibility.*
-    verbose : bool, optional
-        need to modify to integrate with rest of root solver
-    
+    callback : callable, optional
+        An optional user-supplied function, called after each iteration.
+        Called as ``callback(xk)``, where ``xk`` is the current value of `x0`.
+
     Returns
     -------
-    root : float, sequence, or ndarray
-        Estimated location where function is zero.
-    r : `RootResults`, optional
-        Present if ``full_output=True`` and `x0` is scalar.
-        Object containing information about the convergence. In particular,
-        ``r.converged`` is True if the routine converged.
-    
+    result : OptimizeResult
+        The optimization result represented as an ``OptimizeResult`` object.
+        Important attributes are: ``x`` the solution array, ``success`` an 
+        array of Boolean flags indicating if the optimizer exited successfully,
+        ``fun``, the current function value, ``nfev``, the number of function 
+        evaluations, and ``nit``, the number of iterations. See 
+        `OptimizeResult` for a description of other attributes.
+
     Notes
     -----
-    
+
     References
     ----------
-    
+
     .. [Sachs2015]
        Sachs, Jason
        "Ten Little Algorithms, Part 5: Quadratic Extremum Interpolation and
@@ -1479,11 +1468,11 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     ...     return a-x*x
 
     >>> k = np.arange(1,8)
-    >>> y = optimize.chandrupatla(f,0,3,args=(k,)) # array case
+    >>> y = optimize.chandrupatla(f,0,3,args=(k,))
     >>> y
     [1. 1.41421356  1.73205081  2. 2.23606798  2.44948974  2.64575131]
 
-    >>> y = optimize.chandrupatla(f,0,3,args=(7.0,)) # scalar case
+    >>> y = optimize.chandrupatla(f,0,3,args=(7.0,))
     >>> y
     2.6457513110645907
     """
@@ -1493,6 +1482,9 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     a = x1
     fa = f(a, *args)
     fb = f(b, *args)
+
+    # flag to check state of convergence
+    flag = np.full(np.shape(np.broadcast_arrays(a,b,fa,fb)),_EINPROGRESS)
 
     # Make sure we know the size of the result
     shape = np.shape(fa)
@@ -1507,7 +1499,21 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     c = a
 
     # Make sure we are bracketing a root in each case
-    assert (np.sign(fa) * np.sign(fb) <= 0).all()
+    if not (np.sign(fa) * np.sign(fb) <= 0).all():
+        flag = _ESIGNERR
+        raise ValueError('`f(a)` and `f(b)` must have opposite signs.')
+
+    # check for finite reals for a and b 
+    if not ((np.isfinite(a).all() and np.isreal(a).all()) and 
+            (np.isfinite(b).all() and np.isreal(b).all())):
+        flag = _EVALUEERR
+        raise ValueError('`a` and `b` must be finite real numbers.')
+
+    # check for reals for f(b) and f(b)
+    if not (np.isreal(fa) and np.isreal(fb)):
+        flag = _EVALUEERR
+        raise ValueError('`f(a)` and `f(b)` must be real numbers.')
+
     t = 0.5
 
     # Initialize an array of False,
@@ -1515,6 +1521,7 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     iqi = np.zeros(shape, dtype=bool)
 
     iterations = 0
+    funcalls = np.full(np.shape(flag),0) 
     terminate = False
 
     while maxiter > 0:
@@ -1523,13 +1530,7 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
         # and evaluate this function as our newest estimate xt
         xt = a + t * (b - a)
         ft = f(xt, *args)
-
-        if verbose:
-            output = (
-                f"IQI? {iqi}\n t={t}\n xt={xt}\n ft={ft}\n a={a}\n" f" b={b}\n c={c}"
-            )
-            if verbose:
-                print(output)
+        funcalls += 1 
 
         # update our history of the last few points so that
         # - a is the newest estimate (we're going to update it from xt)
@@ -1550,14 +1551,12 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
 
         tol = 2 * xtol * np.abs(r) + rtol
         tlim = tol / np.abs(b - c)
-        terminate = np.logical_or(terminate, np.logical_or(fm == 0, tlim > 0.5))
+        terminate = np.logical_or(terminate, 
+                                  np.logical_or(fm == 0, tlim > 0.5))
 
-        if verbose:
-            output = f"fm={fm}\n tlim={tlim}\n term={terminate}"
-            if verbose:
-                print(output)
-
+        # check convergence here, update flag if so 
         if np.all(terminate):
+            flag = _ECONVERGED
             break
         iterations += 1 - terminate
 
@@ -1595,11 +1594,21 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
         # limit to the range (tlim, 1-tlim)
         t = np.minimum(1 - tlim, np.maximum(tlim, t))
 
-    if disp:
-        msg = (f'Failed to converge after {iterations+1} iterations, value is {r}.')
-        raise RuntimeError(msg)
+        # right spot / variable? 
+        if callback is not None:
+            callback(r)
 
-    # need to add funcalls, added 0 as placeholder
-    # where does converge flag go in func
-    return results_c(full_output, (r, 0, iterations + 1, _ECONVERGED))
+    if iterations > maxiter:
+        flag = _ECONVERR 
+        raise ValueError("max iterations exceeded.")
+
+    result = OptimizeResult(x=r,
+                            success=flag==0,
+                            status=flag_map[flag],
+                            message='this is a message',
+                            fun=ft,
+                            nfev=funcalls,
+                            nit=iterations+1)
+
+    return result 
 
