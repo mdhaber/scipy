@@ -310,14 +310,14 @@ class TestBasic:
         """test chandrupatla with array, similar to newton method"""
 
         def f1(x, a):
-            return a-x*x
+            return a-x**2
 
         k = np.arange(1,8)
-        x = zeros.chandrupatla(f1, 0, 3, args=(k,))
+        result = zeros.chandrupatla(f1, 0, 3, args=(k,))
         x_expected = ([1., 1.41421356, 1.73205081,
                        2., 2.23606798, 2.44948974,
                        2.64575131])
-        assert_allclose(x, x_expected)
+        assert_allclose(result.x, x_expected)
 
     def test_array_newton(self):
         """test newton with array"""

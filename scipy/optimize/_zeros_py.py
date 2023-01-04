@@ -1483,12 +1483,16 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     fa = f(a, *args)
     fb = f(b, *args)
 
-    # flag to check state of convergence
-    flag = np.full(np.shape(np.broadcast_arrays(a,b,fa,fb)),_EINPROGRESS)
 
     # Make sure we know the size of the result
     shape = np.shape(fa)
     assert shape == np.shape(fb)
+    
+    # flag to check state of convergence
+    if len(shape) == 0:
+        flag = _EINPROGRESS
+    else:
+        flag = np.full(shape, _EINPROGRESS)
 
     # In case x0, x1 are scalars, make sure we broadcast them to become the
     # size of the result
@@ -1510,7 +1514,9 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
         raise ValueError('`a` and `b` must be finite real numbers.')
 
     # check for reals for f(b) and f(b)
-    if not (np.isreal(fa) and np.isreal(fb)):
+    check_fa = fa + np.zeros(shape)
+    check_fb = fb + np.zeros(shape)
+    if not (np.isreal(check_fa).all() and np.isreal(check_fb).all()):
         flag = _EVALUEERR
         raise ValueError('`f(a)` and `f(b)` must be real numbers.')
 
@@ -1598,14 +1604,13 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
         if callback is not None:
             callback(r)
 
-    if iterations > maxiter:
+    if iterations.any() > maxiter:
         flag = _ECONVERR 
         raise ValueError("max iterations exceeded.")
 
     result = OptimizeResult(x=r,
                             success=flag==0,
                             status=flag_map[flag],
-                            message='this is a message',
                             fun=ft,
                             nfev=funcalls,
                             nit=iterations+1)
