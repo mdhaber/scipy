@@ -2,7 +2,7 @@ import warnings
 from collections import namedtuple
 import operator
 from . import _zeros
-from ._optimize import OptimizeResult
+from ._optimize import OptimizeResult, _call_callback_maybe_halt
 import numpy as np
 
 
@@ -1403,10 +1403,10 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     As written in [Sachs2015]_ which in turn is based on Chandrupatla's
     algorithm as described in [Scherer2018]_.
     This allows vector arguments for x0, x1, and args
-    
+
     Parameters
     ----------
-    
+
     f : callable
         The function whose zero is wanted. It must be a function of a
         single variable of the form ``f(x,a,b,c...)``, where ``a,b,c...``
@@ -1483,11 +1483,10 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
     fa = f(a, *args)
     fb = f(b, *args)
 
-
     # Make sure we know the size of the result
     shape = np.shape(fa)
     assert shape == np.shape(fb)
-    
+
     # flag to check state of convergence
     if len(shape) == 0:
         flag = _EINPROGRESS
@@ -1501,24 +1500,6 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
 
     fc = fa
     c = a
-
-    # Make sure we are bracketing a root in each case
-    if not (np.sign(fa) * np.sign(fb) <= 0).all():
-        flag = _ESIGNERR
-        raise ValueError('`f(a)` and `f(b)` must have opposite signs.')
-
-    # check for finite reals for a and b 
-    if not ((np.isfinite(a).all() and np.isreal(a).all()) and 
-            (np.isfinite(b).all() and np.isreal(b).all())):
-        flag = _EVALUEERR
-        raise ValueError('`a` and `b` must be finite real numbers.')
-
-    # check for reals for f(b) and f(b)
-    check_fa = fa + np.zeros(shape)
-    check_fb = fb + np.zeros(shape)
-    if not (np.isreal(check_fa).all() and np.isreal(check_fb).all()):
-        flag = _EVALUEERR
-        raise ValueError('`f(a)` and `f(b)` must be real numbers.')
 
     t = 0.5
 
@@ -1600,20 +1581,35 @@ def chandrupatla(f, x0, x1, args=(), xtol=_xtol,
         # limit to the range (tlim, 1-tlim)
         t = np.minimum(1 - tlim, np.maximum(tlim, t))
 
-        # right spot / variable? 
-        if callback is not None:
-            callback(r)
+        intermediate_result = OptimizeResult(x=r, fun=ft)
+        if _call_callback_maybe_halt(callback, intermediate_result):
+            break
 
-    if iterations.any() > maxiter:
-        flag = _ECONVERR 
-        raise ValueError("max iterations exceeded.")
+    # check for reals for f(b) and f(b),
+    # need vectors if f(a) and f(b) are scalars
+    check_fa = fa + np.zeros(shape)
+    check_fb = fb + np.zeros(shape)
+
+    # checks for convergence and conditions
+    if iterations.any() >= maxiter:
+        flag = _ECONVERR
+    elif not (np.sign(fa) * np.sign(fb) <= 0).all():
+        flag = _ESIGNERR
+    elif not ((np.isfinite(a).all() and np.isreal(a).all()) and
+            (np.isfinite(b).all() and np.isreal(b).all())):
+        flag = _EVALUEERR
+    elif not (np.isreal(check_fa).all() and np.isreal(check_fb).all()):
+        flag = _EVALUEERR
+    else:
+        flag = _ECONVERGED
 
     result = OptimizeResult(x=r,
                             success=flag==0,
-                            status=flag_map[flag],
+                            status=flag,
                             fun=ft,
                             nfev=funcalls,
-                            nit=iterations+1)
+                            nit=iterations+1,
+                            message=flag_map[flag])
 
     return result 
 
