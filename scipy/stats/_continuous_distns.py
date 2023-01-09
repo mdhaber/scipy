@@ -60,11 +60,34 @@ def _call_super_mom(fun):
     @wraps(fun)
     def wrapper(self, *args, **kwds):
         method = kwds.get('method', 'mle').lower()
-        if method == 'mm':
+        if method != 'mle':
             return super(type(self), self).fit(*args, **kwds)
         else:
             return fun(self, *args, **kwds)
     return wrapper
+
+
+def _get_left_bracket(fun, rbrack, lbrack=None):
+    # find left bracket for `root_scalar`. A guess for lbrack may be provided.
+    lbrack = lbrack or rbrack - 1
+    diff = rbrack - lbrack
+
+    # if there is no sign change in `fun` between the brackets, expand
+    # rbrack - lbrack until a sign change occurs
+    def interval_contains_root(lbrack, rbrack):
+        # return true if the signs disagree.
+        return np.sign(fun(lbrack)) != np.sign(fun(rbrack))
+
+    while not interval_contains_root(lbrack, rbrack):
+        diff *= 2
+        lbrack = rbrack - diff
+
+        msg = ("The solver could not find a bracket containing a "
+               "root to an MLE first order condition.")
+        if np.isinf(lbrack):
+            raise FitSolverError(msg)
+
+    return lbrack
 
 
 class ksone_gen(rv_continuous):
@@ -671,7 +694,7 @@ class beta_gen(rv_continuous):
             return _boost._beta_ppf(q, a, b)
 
     def _stats(self, a, b):
-        return(
+        return (
             _boost._beta_mean(a, b),
             _boost._beta_variance(a, b),
             _boost._beta_skewness(a, b),
@@ -846,6 +869,10 @@ class betaprime_gen(rv_continuous):
 
     def _cdf(self, x, a, b):
         return sc.betainc(a, b, x/(1.+x))
+
+    def _ppf(self, p, a, b):
+        r = sc.betaincinv(a, b, p)
+        return r / (1 - r)
 
     def _munp(self, n, a, b):
         if n == 1.0:
@@ -2025,6 +2052,13 @@ class foldcauchy_gen(rv_continuous):
     def _cdf(self, x, c):
         return 1.0/np.pi*(np.arctan(x-c) + np.arctan(x+c))
 
+    def _sf(self, x, c):
+        # 1 - CDF(x, c) = 1 - (atan(x - c) + atan(x + c))/pi
+        #               = ((pi/2 - atan(x - c)) + (pi/2 - atan(x + c)))/pi
+        #               = (acot(x - c) + acot(x + c))/pi
+        #               = (atan2(1, x - c) + atan2(1, x + c))/pi
+        return (np.arctan2(1, x - c) + np.arctan2(1, x + c))/np.pi
+
     def _stats(self, c):
         return np.inf, np.inf, np.nan, np.nan
 
@@ -2172,6 +2206,9 @@ class foldnorm_gen(rv_continuous):
     def _cdf(self, x, c):
         return _norm_cdf(x-c) + _norm_cdf(x+c) - 1.0
 
+    def _sf(self, x, c):
+        return _norm_sf(x - c) + _norm_sf(x + c)
+
     def _stats(self, c):
         # Regina C. Elandt, Technometrics 3, 551 (1961)
         # https://www.jstor.org/stable/1266561
@@ -2298,11 +2335,11 @@ class weibull_min_gen(rv_continuous):
         s = stats.skew(data)
         max_c = 1e4
         s_min = skew(max_c)
-        if s < s_min and method == "mle" and fc is None and not args:
+        if s < s_min and method != "mm" and fc is None and not args:
             return super().fit(data, *args, **kwds)
 
         # If method is method of moments, we don't need the user's guesses.
-        # If method is "mle", extract the guesses from args and kwds.
+        # Otherwise, extract the guesses from args and kwds.
         if method == "mm":
             c, loc, scale = None, None, None
         else:
@@ -2736,8 +2773,9 @@ class genexpon_gen(rv_continuous):
     H.K. Ryu, "An Extension of Marshall and Olkin's Bivariate Exponential
     Distribution", Journal of the American Statistical Association, 1993.
 
-    N. Balakrishnan, "The Exponential Distribution: Theory, Methods and
-    Applications", Asit P. Basu.
+    N. Balakrishnan, Asit P. Basu (editors), *The Exponential Distribution:
+    Theory, Methods and Applications*, Gordon and Breach, 1995.
+    ISBN 10: 2884491929
 
     %(example)s
 
@@ -2760,8 +2798,18 @@ class genexpon_gen(rv_continuous):
     def _cdf(self, x, a, b, c):
         return -sc.expm1((-a-b)*x + b*(-sc.expm1(-c*x))/c)
 
+    def _ppf(self, p, a, b, c):
+        s = a + b
+        t = (b - c*np.log1p(-p))/s
+        return (t + sc.lambertw(-b/s * np.exp(-t)).real)/c
+
     def _sf(self, x, a, b, c):
         return np.exp((-a-b)*x + b*(-sc.expm1(-c*x))/c)
+
+    def _isf(self, p, a, b, c):
+        s = a + b
+        t = (b - c*np.log(p))/s
+        return (t + sc.lambertw(-b/s * np.exp(-t)).real)/c
 
 
 genexpon = genexpon_gen(a=0.0, name='genexpon')
@@ -3574,6 +3622,12 @@ class gompertz_gen(rv_continuous):
     def _ppf(self, q, c):
         return sc.log1p(-1.0 / c * sc.log1p(-q))
 
+    def _sf(self, x, c):
+        return np.exp(-c * sc.expm1(x))
+
+    def _isf(self, p, c):
+        return sc.log1p(-np.log(p)/c)
+
     def _entropy(self, c):
         return 1.0 - np.log(c) - np.exp(c)*sc.expn(1, c)
 
@@ -3834,6 +3888,12 @@ class halfcauchy_gen(rv_continuous):
     def _ppf(self, q):
         return np.tan(np.pi/2*q)
 
+    def _sf(self, x):
+        return 2.0/np.pi * np.arctan2(1, x)
+
+    def _isf(self, p):
+        return 1.0/np.tan(np.pi*p/2)
+
     def _stats(self):
         return np.inf, np.inf, np.nan, np.nan
 
@@ -3940,6 +4000,12 @@ class halfnorm_gen(rv_continuous):
 
     def _ppf(self, q):
         return sc.ndtri((1+q)/2.0)
+
+    def _sf(self, x):
+        return 2 * _norm_sf(x)
+
+    def _isf(self, p):
+        return -sc.ndtri(p/2)
 
     def _stats(self):
         return (np.sqrt(2.0/np.pi),
@@ -4398,7 +4464,7 @@ class geninvgauss_gen(rv_continuous):
         # following [2], the quasi-pdf is used instead of the pdf for the
         # generation of rvs
         invert_res = False
-        if not(numsamples):
+        if not numsamples:
             numsamples = 1
         if p < 0:
             # note: if X is geninvgauss(p, b), then 1/X is geninvgauss(-p, b)
@@ -4717,7 +4783,7 @@ norminvgauss = norminvgauss_gen(name="norminvgauss")
 
 
 class invweibull_gen(rv_continuous):
-    u"""An inverted Weibull continuous random variable.
+    """An inverted Weibull continuous random variable.
 
     This distribution is also known as the Fréchet distribution or the
     type II extreme value distribution.
@@ -4762,8 +4828,14 @@ class invweibull_gen(rv_continuous):
         xc1 = np.power(x, -c)
         return np.exp(-xc1)
 
+    def _sf(self, x, c):
+        return -np.expm1(-x**-c)
+
     def _ppf(self, q, c):
         return np.power(-np.log(q), -1.0/c)
+
+    def _isf(self, p, c):
+        return (-np.log1p(-p))**(-1/c)
 
     def _munp(self, n, c):
         return sc.gamma(1 - n / c)
@@ -5739,6 +5811,12 @@ class gibrat_gen(rv_continuous):
     def _ppf(self, q):
         return np.exp(_norm_ppf(q))
 
+    def _sf(self, x):
+        return _norm_sf(np.log(x))
+
+    def _isf(self, p):
+        return np.exp(_norm_isf(p))
+
     def _stats(self):
         p = np.e
         mu = np.sqrt(p)
@@ -5751,45 +5829,7 @@ class gibrat_gen(rv_continuous):
         return 0.5 * np.log(2 * np.pi) + 0.5
 
 
-# deprecation of gilbrat, see #15911
-deprmsg = ("`gilbrat` is a misspelling of the correct name for the `gibrat` "
-           "distribution, and will be removed in SciPy 1.11.")
-
-
-class gilbrat_gen(gibrat_gen):
-    # override __call__ protocol from rv_generic to also
-    # deprecate instantiation of frozen distributions
-    r"""
-
-    .. deprecated:: 1.9.0
-        `gilbrat` is deprecated, use `gibrat` instead!
-        `gilbrat` is a misspelling of the correct name for the `gibrat`
-        distribution, and will be removed in SciPy 1.11.
-
-    """
-    def __call__(self, *args, **kwds):
-        # align with warning text from np.deprecated that's used for methods
-        msg = "`gilbrat` is deprecated, use `gibrat` instead!\n" + deprmsg
-        warnings.warn(msg, DeprecationWarning, stacklevel=2)
-        return self.freeze(*args, **kwds)
-
-
 gibrat = gibrat_gen(a=0.0, name='gibrat')
-gilbrat = gilbrat_gen(a=0.0, name='gilbrat')
-
-
-# since the deprecated class gets intantiated upon import (and we only want to
-# warn upon use), add the deprecation to each (documented) class method, c.f.
-# https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gilbrat.html
-_gibrat_method_names = [
-    "cdf", "entropy", "expect", "fit", "interval", "isf", "logcdf", "logpdf",
-    "logsf", "mean", "median", "moment", "pdf", "ppf", "rvs", "sf", "stats",
-    "std", "var"
-]
-for m in _gibrat_method_names:
-    wrapper = np.deprecate(getattr(gilbrat, m), f"gilbrat.{m}", f"gibrat.{m}",
-                           deprmsg)
-    setattr(gilbrat, m, wrapper)
 
 
 class maxwell_gen(rv_continuous):
@@ -7265,6 +7305,9 @@ class powerlaw_gen(rv_continuous):
     def _ppf(self, q, a):
         return pow(q, 1.0/a)
 
+    def _sf(self, p, a):
+        return -sc.powm1(p, a)
+
     def _stats(self, a):
         return (a / (a + 1.0),
                 a / (a + 2.0) / (a + 1.0) ** 2,
@@ -7637,13 +7680,6 @@ class rdist_gen(rv_continuous):
 rdist = rdist_gen(a=-1.0, b=1.0, name="rdist")
 
 
-def _rayleigh_fit_check_error(ier, msg):
-    if ier != 1:
-        raise RuntimeError('rayleigh.fit: fsolve failed to find the root of '
-                           'the first-order conditions of the log-likelihood '
-                           f'function: {msg} (ier={ier})')
-
-
 class rayleigh_gen(rv_continuous):
     r"""A Rayleigh continuous random variable.
 
@@ -7716,15 +7752,17 @@ class rayleigh_gen(rv_continuous):
         for the root finder; the `scale` parameter and any other parameters
         for the optimizer are ignored.\n\n""")
     def fit(self, data, *args, **kwds):
+        if kwds.pop('superfit', False):
+            return super().fit(data, *args, **kwds)
         data, floc, fscale = _check_fit_input_parameters(self, data,
                                                          args, kwds)
 
-        def scale_mle(loc, data):
+        def scale_mle(loc):
             # Source: Statistical Distributions, 3rd Edition. Evans, Hastings,
             # and Peacock (2000), Page 175
             return (np.sum((data - loc) ** 2) / (2 * len(data))) ** .5
 
-        def loc_mle(loc, data):
+        def loc_mle(loc):
             # This implicit equation for `loc` is used when
             # both `loc` and `scale` are free.
             xm = data - loc
@@ -7733,7 +7771,7 @@ class rayleigh_gen(rv_continuous):
             s3 = (1/xm).sum()
             return s1 - s2/(2*len(data))*s3
 
-        def loc_mle_scale_fixed(loc, scale, data):
+        def loc_mle_scale_fixed(loc, scale=fscale):
             # This implicit equation for `loc` is used when
             # `scale` is fixed but `loc` is not.
             xm = data - loc
@@ -7744,7 +7782,7 @@ class rayleigh_gen(rv_continuous):
             if np.any(data - floc <= 0):
                 raise FitDataError("rayleigh", lower=1, upper=np.inf)
             else:
-                return floc, scale_mle(floc, data)
+                return floc, scale_mle(floc)
 
         # Account for user provided guess of `loc`.
         loc0 = kwds.get('loc')
@@ -7752,19 +7790,15 @@ class rayleigh_gen(rv_continuous):
             # Use _fitstart to estimate loc; ignore the returned scale.
             loc0 = self._fitstart(data)[0]
 
-        if fscale is not None:
-            # `scale` is fixed
-            x, info, ier, msg = optimize.fsolve(loc_mle_scale_fixed, x0=loc0,
-                                                args=(fscale, data,),
-                                                xtol=1e-10, full_output=True)
-            _rayleigh_fit_check_error(ier, msg)
-            return x[0], fscale
-        else:
-            # Neither `loc` nor `scale` are fixed.
-            x, info, ier, msg = optimize.fsolve(loc_mle, x0=loc0, args=(data,),
-                                                xtol=1e-10, full_output=True)
-            _rayleigh_fit_check_error(ier, msg)
-            return x[0], scale_mle(x[0], data)
+        fun = loc_mle if fscale is None else loc_mle_scale_fixed
+        rbrack = np.nextafter(np.min(data), -np.inf)
+        lbrack = _get_left_bracket(fun, rbrack)
+        res = optimize.root_scalar(fun, bracket=(lbrack, rbrack))
+        if not res.converged:
+            raise FitSolverError(res.flag)
+        loc = res.root
+        scale = fscale or scale_mle(loc)
+        return loc, scale
 
 
 rayleigh = rayleigh_gen(a=0.0, name="rayleigh")
@@ -7837,23 +7871,25 @@ class reciprocal_gen(rv_continuous):
         return a, b
 
     def _pdf(self, x, a, b):
-        # reciprocal.pdf(x, a, b) = 1 / (x*log(b/a))
-        return 1.0 / (x * np.log(b * 1.0 / a))
+        # reciprocal.pdf(x, a, b) = 1 / (x*(log(b) - log(a)))
+        return np.exp(self._logpdf(x, a, b))
 
     def _logpdf(self, x, a, b):
-        return -np.log(x) - np.log(np.log(b * 1.0 / a))
+        return -np.log(x) - np.log(np.log(b) - np.log(a))
 
     def _cdf(self, x, a, b):
-        return (np.log(x)-np.log(a)) / np.log(b * 1.0 / a)
+        return (np.log(x)-np.log(a)) / (np.log(b) - np.log(a))
 
     def _ppf(self, q, a, b):
-        return a*pow(b*1.0/a, q)
+        return np.exp(np.log(a) + q*(np.log(b) - np.log(a)))
 
     def _munp(self, n, a, b):
-        return 1.0/np.log(b*1.0/a) / n * (pow(b*1.0, n) - pow(a*1.0, n))
+        t1 = 1 / (np.log(b) - np.log(a)) / n
+        t2 = np.real(np.exp(_log_diff(n * np.log(b), n*np.log(a))))
+        return t1 * t2
 
     def _entropy(self, a, b):
-        return 0.5*np.log(a*b)+np.log(np.log(b*1.0/a))
+        return 0.5*(np.log(a) + np.log(b)) + np.log(np.log(b) - np.log(a))
 
     fit_note = """\
         `loguniform`/`reciprocal` is over-parameterized. `fit` automatically
@@ -8162,6 +8198,8 @@ class skew_norm_gen(rv_continuous):
 
     def _cdf(self, x, a):
         cdf = _boost._skewnorm_cdf(x, 0, 1, a)
+        # for some reason, a isn't broadcasted if some of x are invalid
+        a = np.broadcast_to(a, cdf.shape)
         # Boost is not accurate in left tail when a > 0
         i_small_cdf = (cdf < 1e-6) & (a > 0)
         cdf[i_small_cdf] = super()._cdf(x[i_small_cdf], a[i_small_cdf])
@@ -8277,11 +8315,11 @@ class skew_norm_gen(rv_continuous):
         # MoM won't provide a good guess. Get out early.
         s = stats.skew(data)
         s_max = skew_d(1)
-        if abs(s) >= s_max and method == "mle" and fa is None and not args:
+        if abs(s) >= s_max and method != "mm" and fa is None and not args:
             return super().fit(data, *args, **kwds)
 
         # If method is method of moments, we don't need the user's guesses.
-        # If method is "mle", extract the guesses from args and kwds.
+        # Otherwise, extract the guesses from args and kwds.
         if method == "mm":
             a, loc, scale = None, None, None
         else:
@@ -9211,8 +9249,75 @@ class vonmises_gen(rv_continuous):
         return 0, None, 0, None
 
     def _entropy(self, kappa):
-        return (-kappa * sc.i1(kappa) / sc.i0(kappa) +
-                np.log(2 * np.pi * sc.i0(kappa)))
+        # vonmises.entropy(kappa) = -kappa * I[1](kappa) / I[0](kappa) +
+        #                           log(2 * np.pi * I[0](kappa))
+        #                         = -kappa * I[1](kappa) * exp(-kappa) /
+        #                           (I[0](kappa) * exp(-kappa)) +
+        #                           log(2 * np.pi *
+        #                           I[0](kappa) * exp(-kappa) / exp(-kappa))
+        #                         = -kappa * sc.i1e(kappa) / sc.i0e(kappa) +
+        #                           log(2 * np.pi * i0e(kappa)) + kappa
+        return (-kappa * sc.i1e(kappa) / sc.i0e(kappa) +
+                np.log(2 * np.pi * sc.i0e(kappa)) + kappa)
+
+    @extend_notes_in_docstring(rv_continuous, notes="""\
+        The default limits of integration are endpoints of the interval
+        of width ``2*pi`` centered at `loc` (e.g. ``[-pi, pi]`` when
+        ``loc=0``).\n\n""")
+    def expect(self, func=None, args=(), loc=0, scale=1, lb=None, ub=None,
+               conditional=False, **kwds):
+        _a, _b = -np.pi, np.pi
+
+        if lb is None:
+            lb = loc + _a
+        if ub is None:
+            ub = loc + _b
+
+        return super().expect(func, args, loc,
+                              scale, lb, ub, conditional, **kwds)
+
+    @_call_super_mom
+    @extend_notes_in_docstring(rv_continuous, notes="""\
+        The `scale` parameter is ignored. Fit data is assumed to represent
+        angles and will be wrapped onto the unit circle.\n\n""")
+    def fit(self, data, *args, **kwds):
+        if kwds.pop('superfit', False):
+            return super().fit(data, *args, **kwds)
+
+        data, fshape, floc, fscale = _check_fit_input_parameters(self, data,
+                                                                 args, kwds)
+        if self.a == -np.pi:
+            # vonmises line case, here the default fit method will be used
+            return super().fit(data, *args, **kwds)
+
+        # wrap data to interval [0, 2*pi]
+        data = np.mod(data, 2 * np.pi)
+
+        def find_mu(data):
+            return stats.circmean(data)
+
+        def find_kappa(data):
+            # kappa is the solution to
+            # r = I[1](kappa)/I[0](kappa)
+            #   = I[1](kappa) * exp(-kappa)/(I[0](kappa) * exp(-kappa))
+            #   = sc.i1e(kappa)/sc.i0e(kappa)
+            # where r = mean resultant length
+            r = 1 - stats.circvar(data)
+
+            def solve_for_kappa(kappa):
+                return sc.i1e(kappa)/sc.i0e(kappa) - r
+
+            root_res = root_scalar(solve_for_kappa, method="brentq",
+                                   bracket=(1e-8, 1e12))
+            return root_res.root
+
+        if floc is None:
+            floc = find_mu(data)
+            fshape = find_kappa(data)
+            return floc, fshape
+        else:
+            fshape = find_kappa(data)
+            return floc, fshape
 
 
 vonmises = vonmises_gen(name='vonmises')
