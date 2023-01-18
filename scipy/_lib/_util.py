@@ -364,12 +364,13 @@ class _FunctionWrapper:
     """
     Object to wrap user's function, allowing picklability
     """
-    def __init__(self, f, args):
+    def __init__(self, f, args, kwargs):
         self.f = f
         self.args = [] if args is None else args
+        self.kwargs = {} if kwargs is None else kwargs
 
     def __call__(self, x):
-        return self.f(x, *self.args)
+        return self.f(x, *self.args, **self.kwargs)
 
 
 class MapWrapper:
@@ -444,6 +445,146 @@ class MapWrapper:
             # wrong number of arguments
             raise TypeError("The map-like callable must be of the"
                             " form f(func, iterable)") from e
+
+
+class Parallelizer:
+    """Generate a multi-process callable from a single-process callable
+
+    This is a convenience function that divides the work of an embarrassingly
+    parallel function ``func(x, *args, **kwargs)`` across multiple workers.
+
+    The input array ``x`` will be split into `workers` separate slices along
+    `split_axis`,`func` will be called with a different slice of ``x`` in each
+    of `workers` separate processes, and the results will be concatenated along
+    `concatenate_axis`.
+
+    Parameters
+    ----------
+    func : callable
+        A pickleable callable with signature::
+
+            func(x: ArrayLike, *args, **kwargs) -> ArrayLike
+
+        The callable may eliminate and/or add dimensions, but at least one of
+        the dimensions of the output array must have the same length as a
+        corresponding dimension of the input array ``x``. See `split_axis` and
+        `concatenate_axis` below.
+    workers : int, default: 1
+        The default number of processes to use. If ``workers == 0``, then
+        multiprocessing will not be used. If ``workers == -1``, then the
+        all available CPUs will be used.
+    split_axis : int, default: 0
+        The axis along which to split ``x``.
+    concatenate_axis : int, default: 0
+        The axis along which to concatenate the output of ``func``.
+        If the function works element-wise (e.g. `numpy.sin`), any axis of
+        ``x`` of length greater than ``workers`` is suitable, and
+        `concatenate_axis` should equal `split_axis`.
+        If the function works along and reduces an axis (e.g. `numpy.sum`), or
+        if the function produces multiple outputs for each element of the
+        input, then `concatenate_axis` and `split_axis` should correspond
+        with a dimension that is neither added nor removed.
+
+    Returns
+    -------
+    parametrized_func : callable
+        A callable with the same inputs and outputs as `func`, but:
+
+            - with new keyword-only arguments `workers`, `split_axis`,
+              and `concatenate_axis`, which can be used to temporarily override
+              the values provided when initializing the `Parallelizer`, and
+            - the work is performed using multiple processes.
+
+    Notes
+    -----
+    `Parallelizer` is a convenience wrapper of functionality from the
+    `multiprocessing` standard library, and therefore the `multiprocessing`
+    programming guidelines (e.g. pickleability of callables, use of
+    ``if __name__ == '__main__':`` idiom) apply.
+
+    Examples
+    --------
+    Suppose we have a three-dimensional array ``x``, and each column (slice
+    along axis 1) is a sample. `scipy.stats.moment` can be used to calculate
+    three sample moments of each column as follows.
+
+    >>> import numpy as np
+    >>> from scipy import stats
+    >>> rng = np.random.default_rng()
+    >>> x = rng.random(size=(12, 13, 14))
+    >>> # Compute three sample moments of each column
+    >>> ref = stats.moment(x, axis=1, moment=[2, 3, 4])
+    >>> ref.shape
+    (3, 12, 14)
+
+    The calculation of sample moments of each column may be performed
+    independently of all the other columns, and as such the procedure is
+    "embarassingly parallel". We can divide this work over multiple processes
+    using `Parallelizer`.
+
+    Note that the call to`scipy.stats.moment` consumes axis 1 of the input, so
+    the output no longer has a dimension of length 13. Also, note that axis 0
+    of the output has length 3 corresponding with the three sample moments,
+    but this axis has been added by `scipy.stats.moment`. Therefore, we cannot
+    divide the work along these axes. However, the last axis is preserved
+    from input to output, so we can split ``x`` along this axis, distribute the
+    slices to two processes, and concatenate the results from the two processes
+    along the same axis.
+
+    >>> from scipy._lib._util import Parallelizer
+    >>> parallel_moment = Parallelizer(stats.moment, workers=2,
+    ...                                split_axis=-1, concatenate_axis=-1)
+    >>> res = parallel_moment(x, axis=1, moment=[2, 3, 4])
+    >>> res.shape
+    (3, 12, 14)
+    >>> np.all(res == ref)
+    True
+
+    If we wish to distribute the work to three processes, however, we should
+    split the work along axis 0 of the input array: 12 is divisible by three,
+    ensuring that each process is assigned an equal amount of the work. Because
+    the call to `scipy.stats.moment` adds an axis corresponding with the three
+    sample moments, the outputs of `scipy.stats.moment` from each process need
+    to be concatenated along axis 1.
+
+    >>> res = parallel_moment(x, axis=1, moment=[2, 3, 4], workers=3,
+    ...                       split_axis=0, concatenate_axis=1)
+    >>> np.all(res == ref)
+    True
+
+    """
+    def __init__(self, func, *, workers=1, split_axis=0, concatenate_axis=0):
+        self.func = func
+        self.workers = workers
+        self.split_axis = split_axis
+        self.concatenate_axis = concatenate_axis
+
+        def parallelized_func(x, *args, workers=workers, split_axis=split_axis,
+                              concatenate_axis=concatenate_axis, **kwargs):
+            xs = np.array_split(x, workers, axis=split_axis)
+            f = _FunctionWrapper(func, args, kwargs)
+            with MapWrapper(pool=workers) as mapper:
+                out = mapper(f, xs)
+            out = np.concatenate(out, axis=concatenate_axis)
+            return out
+
+        self.parallelized_func = parallelized_func
+
+    def __call__(self, x, *args, workers=None, split_axis=None,
+                 concatenate_axis=None, **kwargs):
+        if workers is None:
+            workers = self.workers
+        if split_axis is None:
+            split_axis = self.split_axis
+        if concatenate_axis is None:
+            concatenate_axis = self.concatenate_axis
+
+        if workers == 1:
+            return self.func(x, *args, **kwargs)
+        else:
+            options = dict(workers=workers, split_axis=split_axis,
+                           concatenate_axis=concatenate_axis)
+            return self.parallelized_func(x, *args, **options, **kwargs)
 
 
 def rng_integers(gen, low, high=None, size=None, dtype='int64',
