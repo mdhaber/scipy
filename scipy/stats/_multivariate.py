@@ -5926,7 +5926,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         A = alpha
         B = sum(A)
 
-        out = (n * (A /  B)) * (1 - (A / B)) * ((n + B) / (1 + B))
+        out = (n * (A / B)) * (1 - (A / B)) * ((n + B) / (1 + B))
         return out
 
     def cov(self, alpha, n):
@@ -5961,7 +5961,6 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             for i in range(0, len(n)):
                 np.fill_diagonal(out[i], dirichlet_multinomial.var(A, n[i]))
 
-
         return out
 
 
@@ -5982,11 +5981,12 @@ class dirichlet_multinomial_frozen(multi_rv_frozen):
     def mean(self, n):
 	    return self._dist.mean(self.alpha, n)
 
-    def var(self,  n):
+    def var(self, n):
 	    return self._dist.var(self.alpha, n)
 
     def cov(self, n):
-	    return self._dist.cov(self.alpha, n)
+        return self._dist.cov(self.alpha, n)
+
 
 #Set frozen generator docstrings from corresponding docstrings in
 #dirichlet_multinomial and fill in default strings in class docstrings.
