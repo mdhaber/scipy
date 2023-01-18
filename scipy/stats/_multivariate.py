@@ -5964,7 +5964,9 @@ class dirichlet_multinomial_gen(multi_rv_generic):
 
         return out
 
+
 dirichlet_multinomial = dirichlet_multinomial_gen()
+
 
 class dirichlet_multinomial_frozen(multi_rv_frozen):
     def __init__(self, alpha, seed=None):
