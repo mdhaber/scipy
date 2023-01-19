@@ -91,6 +91,13 @@ def check_entropy(distfn, arg, msg):
     ent = distfn.entropy(*arg)
     npt.assert_(not np.isnan(ent), msg + 'test Entropy is nan')
 
+    # if entropy method is overridden
+    if distfn._entropy.__code__ is not stats.rv_continuous._entropy.__code__:
+        res = distfn._entropy(*arg)
+        ref = super(type(distfn), distfn)._entropy(*arg)
+        assert_allclose(res, ref)
+        assert not res == ref
+
 
 def check_private_entropy(distfn, args, superclass):
     # compare a generic _entropy with the distribution-specific implementation
