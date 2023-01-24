@@ -5776,22 +5776,21 @@ def _dirichlet_multinomial_check_parameters(alpha, n, x=None):
         x, alpha = np.broadcast_arrays(x, alpha)
 
         x_int = np.floor(x)
-        if np.any(x <= 0) or np.any(x != x_int):
+        if np.any(x < 0) or np.any(x != x_int):
             raise ValueError("`x` must contain only non-negative integers.")
         x = x_int
 
     alpha = np.asarray(alpha)
 
-    if np.any(alpha < 0):
+    if np.any(alpha <= 0):
         raise ValueError("`alpha` must contain only positive values.")
 
     n_int = np.floor(n)
-    if np.any(n <= 0) or np.any(n != n_int):
+    if np.any(n < 0) or np.any(n != n_int):
         raise ValueError("`n` must be non-negative integer(s).")
     n = n_int
 
     sum_alpha = np.sum(alpha, axis=-1)
-    sum_alpha, n = np.broadcast_arrays(sum_alpha, n)
 
     return (alpha, sum_alpha, n) if x is None else (alpha, sum_alpha, n, x)
 
@@ -5877,29 +5876,6 @@ class dirichlet_multinomial_gen(multi_rv_generic):
     array([[6.0, -3.0, -3.0],
            [-3.0, 6.0, -3.0],
            [-3.0, -3.0, 6.0]])
-
-    The functions support broadcasting, under the convention that the
-    vector parameters are interpreted as if each row along the last
-    axis is a single object. For instance:
-
-    >>> x = [[1, 2, 3], [4, 5, 6]]
-    >>> alpha = [[1, 2, 3], [4, 5, 6]]
-    >>> n = [6, 15]
-    >>> dirichlet_multinomial.pmf(x, alpha, n)
-    array([0.06493506, 0.02626937])
-
-    Broadcasting also works for ``cov``. The output objects are square matrices
-    with shape ``(m, m)``, where ``m = np.shape(alpha)``. For example:
-
-    >>> alpha = [1, 1, 1]
-    >>> n = [9, 9]
-    >>> dirichlet_multinomial.cov(alpha, n)
-    array([[[6.0, -3.0, -3.0],
-            [-3.0, 6.0, -3.0],
-            [-3.0, -3.0, 6.0]],
-           [[6.0, -3.0, -3.0],
-            [-3.0, 6.0, -3.0],
-            [-3.0, -3.0, 6.0]]])
 
     Alternatively, the object may be called (as a function) to fix the `m`
     and `n` parameters, returning a "frozen" multivariate hypergeometric
@@ -6005,24 +5981,11 @@ class dirichlet_multinomial_gen(multi_rv_generic):
 
         """
         a, Sa, n = _dirichlet_multinomial_check_parameters(alpha, n)
-
-        def cov_1d(a, Sa, n):
-            aiaj = np.outer(a, a)
-            cov = -n * aiaj / Sa ** 2 * (n + Sa) / (1 + Sa)
-            var = dirichlet_multinomial.var(a, n)
-            np.fill_diagonal(cov, var)
-            return cov
-
-        shape = a.shape + a.shape[-1:]
-        out = np.zeros(shape)
-
-        if out.ndim == 2:
-            return cov_1d(a, Sa, n)
-        else:
-            for i in range(len(out)):
-                out[i] = cov_1d(a[i], Sa[i], n[i])
-
-        return out.reshape(shape)
+        aiaj = np.outer(a, a)
+        cov = -n * aiaj / Sa ** 2 * (n + Sa) / (1 + Sa)
+        var = dirichlet_multinomial.var(a, n)
+        np.fill_diagonal(cov, var)
+        return cov
 
 
 dirichlet_multinomial = dirichlet_multinomial_gen()
@@ -6031,7 +5994,7 @@ dirichlet_multinomial = dirichlet_multinomial_gen()
 class dirichlet_multinomial_frozen(multi_rv_frozen):
     def __init__(self, alpha, n, seed=None):
         self.alpha = alpha
-        self.n= n
+        self.n = n
         self._dist = dirichlet_multinomial_gen(seed)
 
     def logpmf(self, x):
@@ -6049,7 +6012,7 @@ class dirichlet_multinomial_frozen(multi_rv_frozen):
     def cov(self):
         return self._dist.cov(self.alpha, self.n)
 
-#
+
 # Set frozen generator docstrings from corresponding docstrings in
 # dirichlet_multinomial and fill in default strings in class docstrings.
 for name in ['logpmf', 'pmf', 'mean', 'var', 'cov']:
