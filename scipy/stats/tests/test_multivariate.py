@@ -31,7 +31,7 @@ from scipy.stats import (multivariate_normal, multivariate_hypergeom,
 from scipy.stats import _covariance, Covariance
 
 from scipy.integrate import romb
-from scipy.special import multigammaln, gamma
+from scipy.special import multigammaln
 
 from .common_tests import check_random_state_property
 
@@ -2910,6 +2910,7 @@ def test_random_state_property():
         check_random_state_property(distfn, args)
         check_pickling(distfn, args)
 
+
 class TestDirichletMultinomial:
     def test_frozen(self):
         rng = np.random.default_rng(2846)
@@ -2930,8 +2931,8 @@ class TestDirichletMultinomial:
         assert_equal(d.cov(n), dirichlet_multinomial.cov(alpha, n))
 
     def test_covariance_diagonal(self):
-        #Makes sure that the diagonal of the
-        #covariance matrix is the variance.
+        # Makes sure that the diagonal of the
+        # covariance matrix is the variance.
         alpha = [1, 5, 3]
         n = np.array([3])
         c = dirichlet_multinomial.cov(alpha, n)
@@ -2942,8 +2943,8 @@ class TestDirichletMultinomial:
     def test_variance(self):
         alpha = [0.3, 2.1, 5.4]
         n = 3
-        #Truncated to the 6th digit, so not
-        #exactly what we would expect from var
+        # Truncated to the 6th digit, so not
+        # exactly what we would expect from var
         expected_v = [0.136162, 0.724381, 0.784293]
         v = dirichlet_multinomial.var(alpha, n)
         assert_array_almost_equal(expected_v, v)
@@ -2951,8 +2952,8 @@ class TestDirichletMultinomial:
     def test_covariance(self):
         alpha = [0.3, 2.1, 5.4]
         n = np.array([3])
-        #Truncated to the 6th digit, so not
-        #exactly what we would expect from var
+        # Truncated to the 6th digit, so not
+        # exactly what we would expect from var
         expected_c = np.array([[0.136162, -0.038125, -0.098037],
                                [-0.038125, 0.724381, -0.686256],
                                [-0.098037, -0.686256, 0.784293]])
@@ -2977,28 +2978,28 @@ class TestDirichletMultinomial:
         x = np.array([1, -1, 3])
         alpha = np.array([3, 4, 5])
         text = "`x` must not contain a non-negative integer."
-        with assert_raises(ValueError, match = text):
+        with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(alpha, x)
 
     def test_float_x(self):
         x = np.array([1, 1.3, 3])
         alpha = np.array([3, 4, 5])
         text = "`x` must only contain integers."
-        with assert_raises(ValueError, match = text):
+        with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(alpha, x)
 
     def test_alpha_with_zero(self):
         alpha = np.array([1, 0, 2])
         x = np.array([1, 2, 3])
         text = "All parameters must be greater than 0"
-        with assert_raises(ValueError, match = text):
+        with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(alpha, x)
 
     def test_negative_alpha(self):
         alpha = np.array([1, -1, 2])
         x = np.array([1, 2, 3])
         text = "All parameters must be greater than 0"
-        with assert_raises(ValueError, match = text):
+        with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(alpha, x)
 
     def test_broadcasting(self):
@@ -3066,14 +3067,14 @@ class TestDirichletMultinomial:
         x = np.array([[1, 2, 3], [1, -3, 3], [1, 2, 3]])
         alpha = np.array([[3, 4, 5], [3, 4, 5], [3, 4, 5]])
         text = "`x` must not contain a non-negative integer."
-        with assert_raises(ValueError, match = text):
+        with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(alpha, x)
 
     def test_broadcasting_float_x(self):
         x = np.array([[1, 2, 3], [1, 0.3, 3], [1, 2, 3]])
         alpha = np.array([[3, 4, 5], [3, 4, 5], [3, 4, 5]])
         text = "`x` must only contain integers."
-        with assert_raises(ValueError, match = text):
+        with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(alpha, x)
 
     def test_lengths(self):
@@ -3082,11 +3083,11 @@ class TestDirichletMultinomial:
         assert_raises(ValueError, dirichlet_multinomial.logpmf, alpha, x)
 
     def test_postive_semi_definite(self):
-        #Makes sure that the covariance matrix
-        #is positive-semidefinite.
+        # Makes sure that the covariance matrix
+        # is positive-semidefinite.
         n = np.random.randint(0, 30)
         alpha = np.random.random(10) * 5
         n = np.array([n])
         c = dirichlet_multinomial.cov(alpha, n)
-        eig = scipy.linalg.eigh(c, eigvals_only = True)
+        eig = scipy.linalg.eigh(c, eigvals_only=True)
         assert np.greater_equal(eig, 0).any()

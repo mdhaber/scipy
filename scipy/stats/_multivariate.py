@@ -8,7 +8,7 @@ from numpy.lib import NumpyVersion
 import scipy.linalg
 from scipy._lib import doccer
 from scipy.special import (gammaln, psi, multigammaln, xlogy, entr, betaln,
-                           gamma, loggamma)
+                           loggamma)
 from scipy._lib._util import check_random_state
 from scipy.linalg.blas import drot
 from scipy.linalg._misc import LinAlgError
@@ -5894,11 +5894,11 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         if np.less(x, 0).any():
             raise ValueError("`x` must not contain a non-negative integer.")
 
-        #Checks to make sure that every number in x can be expressed as an int.
+        # Checks to make sure that every number in x can be expressed as an int.
         if not np.equal(np.mod(x, 1), 0).all():
             raise ValueError("`x` must only contain integers.")
 
-        #Reduces line length
+        # Reduces line length
         A = _dirichlet_multinomial_check_parameters(alpha)
         B = np.sum(A, -1)
         C = x + 1
@@ -6032,8 +6032,8 @@ class dirichlet_multinomial_frozen(multi_rv_frozen):
         return self._dist.cov(self.alpha, n)
 
 
-#Set frozen generator docstrings from corresponding docstrings in
-#dirichlet_multinomial and fill in default strings in class docstrings.
+# Set frozen generator docstrings from corresponding docstrings in
+# dirichlet_multinomial and fill in default strings in class docstrings.
 for name in ['logpmf', 'pmf', 'mean', 'var', 'cov']:
     method = dirichlet_multinomial_gen.__dict__[name]
     method_frozen = dirichlet_multinomial_frozen.__dict__[name]
