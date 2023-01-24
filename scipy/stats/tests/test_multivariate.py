@@ -3088,5 +3088,5 @@ class TestDirichletMultinomial:
         alpha = np.random.random(10) * 5
         n = np.array([n])
         c = dirichlet_multinomial.cov(alpha, n)
-        eig = np.linalg.eigvals(c)
-        assert np.less_equal(eig, 0).any()
+        eig = scipy.linalg.eigh(c, eigvals_only = True)
+        assert np.greater_equal(eig, 0).any()
