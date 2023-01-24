@@ -5772,11 +5772,21 @@ class dirichlet_multinomial_gen(multi_rv_generic):
     %(_dirichlet_doc_default_callparams)s
     %(_doc_random_state)s
 
+    See Also
+    --------
+    scipy.stats.dirichlet : The dirichlet distribution.
+    scipy.stats.multinomial : The multinomial distribution.
+
     Notes
     -----
     ``x`` should be an array of integers greater than or equal to 0,
     ``n`` should be equal to the sum of ``x``, and ``alpha`` should be
     an array of positive numbers.
+
+    References
+    ----------
+    .. [1] Dirichlet-multinomial distribution, Wikipedia,
+           https://www.wikipedia.org/wiki/Dirichlet-multinomial_distribution
 
     Examples
     --------
@@ -5784,6 +5794,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
 
     Get the PMF
 
+    >>> import numpy as np
     >>> alpha = np.array([3, 4, 5])
     >>> x = np.array([1, 2, 3])
     >>> dirichlet_multinomial.pmf(alpha, x)
@@ -5819,17 +5830,18 @@ class dirichlet_multinomial_gen(multi_rv_generic):
            [-3.0, 6.0, -3.0],
            [-3.0, -3.0, 6.0]])
 
-   The functions support broadcasting, under the convention that the
-   vector parameters are interpreted as if each row along the last
-   axis is a single object. For instance:
+    The functions support broadcasting, under the convention that the
+    vector parameters are interpreted as if each row along the last
+    axis is a single object. For instance:
 
-   >>> alpha = np.array([[1, 2, 3], [4, 5, 6]])
-   >>> x = np.array([[1, 2, 3], [4, 5, 6]])
-   >>> dirichlet_multinomial.pmf(alpha, x)
-   array([0.06493506, 0.02626937])
+    >>> alpha = np.array([[1, 2, 3], [4, 5, 6]])
+    >>> x = np.array([[1, 2, 3], [4, 5, 6]])
+    >>> dirichlet_multinomial.pmf(alpha, x)
+    array([0.06493506, 0.02626937])
 
-   This broadcasting also works for ``cov``, where the output objects are
-   square matrices of size ``m.shape[-1]``. For example:
+    This broadcasting also works for ``cov``, where the output objects are
+    square matrices of size ``m.shape[-1]``. For example:
+
     >>> alpha = np.array([1, 1, 1])
     >>> n = np.array([9, 9])
     >>> dirichlet_multinomial.cov(alpha, n)
@@ -5848,17 +5860,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
     >>> dm.pmf(x = [1, 2, 3])
     0.08484162895927604
 
-    See Also
-    --------
-    scipy.stats.dirichlet : The dirichlet distribution.
-    scipy.stats.multinomial : The multinomial distribution.
-
-    References
-    ----------
-    .. [1] Dirichlet-multinomial distribution,
-     https://www.wikipedia.org/wiki/Dirichlet-multinomial_distribution
-
-     """
+    """
     def __init__(self, seed=None):
         super().__init__(seed)
         self.__doc__ = doccer.docformat(self.__doc__,
@@ -5968,7 +5970,7 @@ class dirichlet_multinomial_gen(multi_rv_generic):
         A = alpha
         B = sum(A)
 
-        out = (n * (A /  B)) * (1 - (A / B)) * ((n + B) / (1 + B))
+        out = (n * (A / B)) * (1 - (A / B)) * ((n + B) / (1 + B))
         return out
 
     def cov(self, alpha, n):
@@ -6003,30 +6005,32 @@ class dirichlet_multinomial_gen(multi_rv_generic):
             for i in range(0, len(n)):
                 np.fill_diagonal(out[i], dirichlet_multinomial.var(A, n[i]))
 
-
         return out
+
 
 dirichlet_multinomial = dirichlet_multinomial_gen()
 
+
 class dirichlet_multinomial_frozen(multi_rv_frozen):
     def __init__(self, alpha, seed=None):
-	    self.alpha = alpha
-	    self._dist = dirichlet_multinomial_gen(seed)
+        self.alpha = alpha
+        self._dist = dirichlet_multinomial_gen(seed)
 
     def logpmf(self, x):
-	    return self._dist.logpmf(self.alpha, x)
+        return self._dist.logpmf(self.alpha, x)
 
     def pmf(self, x):
-	    return self._dist.pmf(self.alpha, x)
+        return self._dist.pmf(self.alpha, x)
 
     def mean(self, n):
-	    return self._dist.mean(self.alpha, n)
+        return self._dist.mean(self.alpha, n)
 
-    def var(self,  n):
-	    return self._dist.var(self.alpha, n)
+    def var(self, n):
+        return self._dist.var(self.alpha, n)
 
     def cov(self, n):
-	    return self._dist.cov(self.alpha, n)
+        return self._dist.cov(self.alpha, n)
+
 
 #Set frozen generator docstrings from corresponding docstrings in
 #dirichlet_multinomial and fill in default strings in class docstrings.

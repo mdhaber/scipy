@@ -165,6 +165,7 @@ Multivariate distributions
    wishart                -- Wishart
    invwishart             -- Inverse Wishart
    multinomial            -- Multinomial distribution
+   dirichlet_multinomial  -- Dirichlet multinomial distribution
    special_ortho_group    -- SO(N) group
    ortho_group            -- O(N) group
    unitary_group          -- U(N) group
