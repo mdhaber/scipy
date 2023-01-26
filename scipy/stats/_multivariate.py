@@ -5773,7 +5773,11 @@ def _dirichlet_multinomial_check_parameters(alpha, n, x=None):
     else:
         # Ensure that `x` and `alpha` are arrays. If the shapes are
         # incompatible, NumPy will raise an appropriate error.
-        x, alpha = np.broadcast_arrays(x, alpha)
+        try:
+            x, alpha = np.broadcast_arrays(x, alpha)
+        except ValueError as e:
+            msg = '`x` and `alpha` must be broadcastable.'
+            raise ValueError(msg) from e
 
         x_int = np.floor(x)
         if np.any(x < 0) or np.any(x != x_int):
@@ -5786,8 +5790,8 @@ def _dirichlet_multinomial_check_parameters(alpha, n, x=None):
         raise ValueError("`alpha` must contain only positive values.")
 
     n_int = np.floor(n)
-    if np.any(n < 0) or np.any(n != n_int):
-        raise ValueError("`n` must be non-negative integer(s).")
+    if np.any(n <= 0) or np.any(n != n_int):
+        raise ValueError("`n` must be a positive integer.")
     n = n_int
 
     sum_alpha = np.sum(alpha, axis=-1)

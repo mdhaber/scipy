@@ -29,6 +29,7 @@ from scipy.stats import (multivariate_normal, multivariate_hypergeom,
                          random_table, uniform_direction,
                          dirichlet_multinomial)
 from scipy.stats import _covariance, Covariance
+from scipy import stats
 
 from scipy.integrate import romb
 from scipy.special import multigammaln
@@ -2912,12 +2913,20 @@ def test_random_state_property():
 
 
 class TestDirichletMultinomial:
-    def test_frozen(self):
-        rng = np.random.default_rng(2846)
+    @classmethod
+    def get_params(self, m):
+        rng = np.random.default_rng(28469824356873456)
+        alpha = rng.uniform(0, 100, size=2)
+        x = rng.integers(1, 10, size=(m, 2))
+        n = x.sum(axis=-1)
+        return rng, m, alpha, n, x
 
-        alpha = rng.uniform(1e-10, 100, 10)
+    def test_frozen(self):
+        rng = np.random.default_rng(28469824356873456)
+
+        alpha = rng.uniform(0, 100, 10)
         x = rng.integers(0, 10, 10)
-        n = np.sum(x, -1)
+        n = np.sum(x, axis=-1)
 
         d = dirichlet_multinomial(alpha, n)
         assert_equal(d.logpmf(x), dirichlet_multinomial.logpmf(x, alpha, n))
@@ -2926,92 +2935,102 @@ class TestDirichletMultinomial:
         assert_equal(d.var(), dirichlet_multinomial.var(alpha, n))
         assert_equal(d.cov(), dirichlet_multinomial.cov(alpha, n))
 
-    def test_covariance_diagonal(self):
-        # Makes sure that the diagonal of the
-        # covariance matrix is the variance.
-        alpha = [1, 5, 3]
-        n = np.array([3])
-        c = dirichlet_multinomial.cov(alpha, n)
-        v = dirichlet_multinomial.var(alpha, n)
-
-        assert_array_equal(v, c.diagonal())
-
-    def test_variance(self):
-        alpha = [0.3, 2.1, 5.4]
-        n = 3
-        # Truncated to the 6th digit, so not
-        # exactly what we would expect from var
-        expected_v = [0.136162, 0.724381, 0.784293]
-        v = dirichlet_multinomial.var(alpha, n)
-        assert_array_almost_equal(expected_v, v)
-
-    def test_covariance(self):
-        alpha = [0.3, 2.1, 5.4]
-        n = np.array([3])
-        # Truncated to the 6th digit, so not
-        # exactly what we would expect from var
-        expected_c = np.array([[0.136162, -0.038125, -0.098037],
-                               [-0.038125, 0.724381, -0.686256],
-                               [-0.098037, -0.686256, 0.784293]])
-        c = dirichlet_multinomial.cov(alpha, n)
-        assert_array_almost_equal(expected_c, c)
-
-    def test_pmf(self):
+    def test_pmf_logpmf_against_R(self):
+        # # Compare PMF against R's extraDistr ddirmnon
+        # # library(extraDistr)
+        # # options(digits=16)
+        # ddirmnom(c(1, 2, 3), 6, c(3, 4, 5))
         x = np.array([1, 2, 3])
         n = np.sum(x)
         alpha = np.array([3, 4, 5])
-        y = 0.08484162895927604
-        y_1 = dirichlet_multinomial.pmf(x, alpha, n)
-        assert_almost_equal(y, y_1)
+        res = dirichlet_multinomial.pmf(x, alpha, n)
+        logres = dirichlet_multinomial.logpmf(x, alpha, n)
+        ref = 0.08484162895927638
+        assert_allclose(res, ref)
+        assert_allclose(logres, np.log(ref))
 
-    def test_logpmf(self):
-        x = np.array([1, 2, 3])
-        n = np.sum(x)
-        alpha = np.array([3, 4, 5])
-        y = dirichlet_multinomial.pmf(x, alpha, n)
-        y_1 = dirichlet_multinomial.logpmf(x, alpha, n)
-        assert_equal(y, np.exp(y_1))
+        # library(extraDistr)
+        # options(digits=16)
+        # ddirmnom(c(4, 3, 2, 0, 2, 3, 5, 7, 4, 7), 37,
+        #          c(45.01025314, 21.98739582, 15.14851365, 80.21588671,
+        #            52.84935481, 25.20905262, 53.85373737, 4.88568118,
+        #            89.06440654, 20.11359466))
+        rng = np.random.default_rng(28469824356873456)
+        alpha = rng.uniform(0, 100, 10)
+        x = rng.integers(0, 10, 10)
+        n = np.sum(x, axis=-1)
+        res = dirichlet_multinomial(alpha, n).pmf(x)
+        logres = dirichlet_multinomial.logpmf(x, alpha, n)
+        ref = 3.65409306285992e-16
+        assert_allclose(res, ref)
+        assert_allclose(logres, np.log(ref))
 
-    def test_negative_x(self):
-        x = np.array([1, -1, 3])
-        alpha = np.array([3, 4, 5])
+    @pytest.mark.parametrize('method_name', ['pmf', 'logpmf'])
+    def test_against_betabinom_pmf(self, method_name):
+        rng, m, alpha, n, x = self.get_params(100)
+
+        method = getattr(dirichlet_multinomial(alpha, n), method_name)
+        ref_method = getattr(stats.betabinom(n, *alpha.T), method_name)
+
+        res = method(x)
+        ref = ref_method(x.T[0])
+
+    @pytest.mark.parametrize('method_name', ['mean', 'var'])
+    def test_against_betabinom_moments(self, method_name):
+        rng, m, alpha, n, x = self.get_params(1)
+
+        method = getattr(dirichlet_multinomial(alpha, n), method_name)
+        ref_method = getattr(stats.betabinom(n, *alpha.T), method_name)
+
+        res = method()[0]
+        ref = ref_method()
+
+    def test_moments(self):
+        rng, m, alpha, n, x = self.get_params(100)
+        rng = np.random.default_rng(28469824356873456)
+        n = rng.integers(1, 100)
+        alpha = rng.random(size=5) * 10
+        dist = dirichlet_multinomial(alpha, n)
+
+        # Generate a random sample from the distribution using NumPy
+        m = 100000
+        p = rng.dirichlet(alpha, size=m)
+        x = rng.multinomial(n, p, size=m)
+
+        assert_allclose(dist.mean(), np.mean(x, axis=0), rtol=5e-3)
+        assert_allclose(dist.var(), np.var(x, axis=0), rtol=1e-2)
+
+        cov = dist.cov()
+        assert_allclose(cov, np.cov(x.T), rtol=2e-2)
+        assert_equal(np.diag(cov), dist.var())
+        assert np.all(scipy.linalg.eigh(cov)[0] > 0)  # positive definite
+
+    def test_input_validation(self):
+        # valid inputs
+        x0 = np.array([1, 2, 3])
+        n0 = np.sum(x0)
+        alpha0 = np.array([3, 4, 5])
+
         text = "`x` must contain only non-negative integers."
         with assert_raises(ValueError, match=text):
-            dirichlet_multinomial.logpmf(x, alpha, x.sum())
-
-    def test_float_x(self):
-        x = np.array([1, 1.3, 3])
-        alpha = np.array([3, 4, 5])
-        text = "`x` must contain only non-negative integers."
+            dirichlet_multinomial.logpmf([1, -1, 3], alpha0, n0)
         with assert_raises(ValueError, match=text):
-            dirichlet_multinomial.logpmf(x, alpha, x.sum())
+            dirichlet_multinomial.logpmf([1, 2.1, 3], alpha0, n0)
 
-    def test_alpha_with_zero(self):
-        alpha = np.array([1, 0, 2])
-        x = np.array([1, 2, 3])
         text = "`alpha` must contain only positive values."
         with assert_raises(ValueError, match=text):
-            dirichlet_multinomial.logpmf(x, alpha, x.sum())
-
-    def test_negative_alpha(self):
-        alpha = np.array([1, -1, 2])
-        x = np.array([1, 2, 3])
-        text = "`alpha` must contain only positive values."
+            dirichlet_multinomial.logpmf(x0, [3, 0, 4], n0)
         with assert_raises(ValueError, match=text):
-            dirichlet_multinomial.logpmf(x, alpha, x.sum())
+            dirichlet_multinomial.logpmf(x0, [3, -1, 4], n0)
 
-    def test_lengths(self):
+        text = "`n` must be a positive integer."
+        with assert_raises(ValueError, match=text):
+            dirichlet_multinomial.logpmf(x0, alpha0, 49.1)
+        with assert_raises(ValueError, match=text):
+            dirichlet_multinomial.logpmf(x0, alpha0, 0)
+
         x = np.array([1, 2, 3, 4])
         alpha = np.array([3, 4, 5])
-        with assert_raises(ValueError):
+        text = "`x` and `alpha` must be broadcastable."
+        with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(x, alpha, x.sum())
-
-    def test_positive_semi_definite(self):
-        # Makes sure that the covariance matrix
-        # is positive-semidefinite.
-        n = np.random.randint(0, 30)
-        alpha = np.random.random(10) * 5
-        n = np.array([n])
-        c = dirichlet_multinomial.cov(alpha, n)
-        eig = scipy.linalg.eigh(c, eigvals_only=True)
-        assert np.greater_equal(eig, 0).any()
