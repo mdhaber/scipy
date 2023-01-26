@@ -5814,9 +5814,9 @@ class dirichlet_multinomial_gen(multi_rv_generic):
 
     Methods
     -------
-    logpmf(alpha, x):
+    logpmf(alpha, x, n):
         Log of the probability mass function.
-    pmf(alpha, x):
+    pmf(alpha, x, n):
         Probability mass function.
     mean(alpha, n):
         Mean of the Dirichlet multinomial distribution.
