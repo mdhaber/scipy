@@ -33,6 +33,7 @@ from scipy import stats
 
 from scipy.integrate import romb
 from scipy.special import multigammaln
+from scipy._lib._pep440 import Version
 
 from .common_tests import check_random_state_property
 
@@ -2917,8 +2918,10 @@ class TestDirichletMultinomial:
     def get_params(self, m):
         rng = np.random.default_rng(28469824356873456)
         alpha = rng.uniform(0, 100, size=2)
+        n = rng.integers(10, 100)
         x = rng.integers(1, 10, size=(m, 2))
-        n = x.sum(axis=-1)
+        # ensure x sums to n, not the other way around (n must be scalar)
+        x = np.round(x / x.sum(axis=-1, keepdims=True)) * n
         return rng, m, alpha, n, x
 
     def test_frozen(self):
@@ -2965,6 +2968,37 @@ class TestDirichletMultinomial:
         assert_allclose(res, ref)
         assert_allclose(logres, np.log(ref))
 
+    def test_pmf_logpmf_support(self):
+        # when the sum of the category counts does not equal the number of
+        # trials, the PMF is zero
+        rng, m, alpha, n, x = self.get_params(1)
+        n += 1
+        assert_equal(dirichlet_multinomial(alpha, n).pmf(x), 0)
+        assert_equal(dirichlet_multinomial(alpha, n).logpmf(x), -np.inf)
+
+        rng, m, alpha, n, x = self.get_params(10)
+        i = rng.random(size=10) > 0.5
+        x[i] = np.round(x[i] * 2)  # sum of these x does not equal n
+        assert_equal(dirichlet_multinomial(alpha, n).pmf(x)[i], 0)
+        assert_equal(dirichlet_multinomial(alpha, n).logpmf(x)[i], -np.inf)
+        assert np.all(dirichlet_multinomial(alpha, n).pmf(x)[~i] > 0)
+        assert np.all(dirichlet_multinomial(alpha, n).logpmf(x)[~i] > -np.inf)
+
+    def test_dimensionality_one(self):
+        # if the dimensionality is one, there is only one possible outcome
+        n = 6  # number of trials
+        alpha = [10]  # concentration parameters
+        x = [1]  # counts
+        dist = dirichlet_multinomial(alpha, n)
+
+        assert_equal(dist.pmf(n), 1)
+        assert_equal(dist.pmf(n+1), 0)
+        assert_equal(dist.logpmf(n), 0)
+        assert_equal(dist.logpmf(n+1), -np.inf)
+        assert_equal(dist.mean(), n)
+        assert_equal(dist.var(), 0)
+        assert_equal(dist.cov(), 0)
+
     @pytest.mark.parametrize('method_name', ['pmf', 'logpmf'])
     def test_against_betabinom_pmf(self, method_name):
         rng, m, alpha, n, x = self.get_params(100)
@@ -2986,6 +3020,10 @@ class TestDirichletMultinomial:
         ref = ref_method()
 
     def test_moments(self):
+        message = 'Needs NumPy 1.22.0 for multinomial broadcasting'
+        if Version(np.__version__) < Version("1.22.0"):
+            pytest.skip(reason=message)
+
         rng, m, alpha, n, x = self.get_params(100)
         rng = np.random.default_rng(28469824356873456)
         n = rng.integers(1, 100)
@@ -3023,11 +3061,19 @@ class TestDirichletMultinomial:
         with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(x0, [3, -1, 4], n0)
 
+        text = "`alpha` must be an array with exactly one dimension"
+        with assert_raises(ValueError, match=text):
+            dirichlet_multinomial.logpmf(x0, 1, n0)
+
         text = "`n` must be a positive integer."
         with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(x0, alpha0, 49.1)
         with assert_raises(ValueError, match=text):
             dirichlet_multinomial.logpmf(x0, alpha0, 0)
+
+        text = r"`n` must be an integer \(scalar\)."
+        with assert_raises(ValueError, match=text):
+            dirichlet_multinomial.logpmf(x0, alpha0, [10, 11])
 
         x = np.array([1, 2, 3, 4])
         alpha = np.array([3, 4, 5])
