@@ -2989,13 +2989,13 @@ class TestDirichletMultinomial:
         # if the dimensionality is one, there is only one possible outcome
         n = 6  # number of trials
         alpha = [10]  # concentration parameters
-        x = [1]  # counts
+        x = np.asarray([n])  # counts
         dist = dirichlet_multinomial(alpha, n)
 
-        assert_equal(dist.pmf(n), 1)
-        assert_equal(dist.pmf(n+1), 0)
-        assert_equal(dist.logpmf(n), 0)
-        assert_equal(dist.logpmf(n+1), -np.inf)
+        assert_equal(dist.pmf(x), 1)
+        assert_equal(dist.pmf(x+1), 0)
+        assert_equal(dist.logpmf(x), 0)
+        assert_equal(dist.logpmf(x+1), -np.inf)
         assert_equal(dist.mean(), n)
         assert_equal(dist.var(), 0)
         assert_equal(dist.cov(), 0)

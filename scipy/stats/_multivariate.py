@@ -5763,15 +5763,17 @@ dirichlet_mn_docdict_params = {
 }
 
 dirichlet_mn_docdict_noparams = {
-    '_dirichlet_mn_doc_default_callparams': _dirichlet_mn_doc_frozen_callparams,
+    '_dirichlet_mn_doc_default_callparams': _dirichlet_mn_doc_frozen_callparams, # noqa
     '_doc_random_state': _doc_random_state
 }
+
 
 def _dirichlet_multinomial_check_parameters(alpha, n, x=None):
 
     alpha = np.asarray(alpha)
     if alpha.ndim != 1:
-        raise ValueError("`alpha` must be an array with exactly one dimension.")
+        raise ValueError("`alpha` must be an array with"
+                         " exactly one dimension.")
 
     n = np.asarray(n)
     if n.ndim != 0:
