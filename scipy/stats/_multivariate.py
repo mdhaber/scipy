@@ -5876,9 +5876,9 @@ class dirichlet_multinomial_gen(multi_rv_generic):
     Get the covariance
 
     >>> dirichlet_multinomial.cov(alpha, n)
-    array([[6.0, -3.0, -3.0],
-           [-3.0, 6.0, -3.0],
-           [-3.0, -3.0, 6.0]])
+    array([[ 1.55769231, -0.69230769, -0.86538462],
+           [-0.69230769,  1.84615385, -1.15384615],
+           [-0.86538462, -1.15384615,  2.01923077]])
 
     Alternatively, the object may be called (as a function) to fix the
     `alpha` and `n` parameters, returning a "frozen" Dirichlet multinomial

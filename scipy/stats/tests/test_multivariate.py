@@ -2918,10 +2918,11 @@ class TestDirichletMultinomial:
     def get_params(self, m):
         rng = np.random.default_rng(28469824356873456)
         alpha = rng.uniform(0, 100, size=2)
-        n = rng.integers(10, 100)
-        x = rng.integers(1, 10, size=(m, 2))
-        # ensure x sums to n, not the other way around (n must be scalar)
-        x = np.round(x / x.sum(axis=-1, keepdims=True)) * n
+        # For now, `n` must be scalar, so ensure `x` sums to `n`. When `n` can
+        # be an array, generate `x` as random integers and calculate
+        # `n = x.sum(axis=-1)`.
+        n = 10000
+        x = rng.multinomial(n, [0.5, 0.5], size=m)
         return rng, m, alpha, n, x
 
     def test_frozen(self):
@@ -3008,6 +3009,7 @@ class TestDirichletMultinomial:
 
         res = method(x)
         ref = ref_method(x.T[0])
+        assert_allclose(res, ref)
 
     @pytest.mark.parametrize('method_name', ['mean', 'var'])
     def test_against_betabinom_moments(self, method_name):
@@ -3018,6 +3020,7 @@ class TestDirichletMultinomial:
 
         res = method()[0]
         ref = ref_method()
+        assert_allclose(res, ref)
 
     def test_moments(self):
         message = 'Needs NumPy 1.22.0 for multinomial broadcasting'
