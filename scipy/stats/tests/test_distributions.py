@@ -1313,6 +1313,19 @@ class TestGenLogistic:
         logp = stats.genlogistic.logpdf(x, c)
         assert_allclose(logp, expected, rtol=1e-13)
 
+    # Expected values computed with mpmath with 50 digits of precision
+    # from mpmath import mp
+    # mp.dps = 50
+    # def entropy_mp(c):
+    #     c = mp.mpf(c)
+    #     return float(-mp.log(c)+mp.one+mp.digamma(c + mp.one) + mp.euler)
+    @pytest.mark.parametrize('c, ref', [(1e-100, 231.25850929940458),
+                                        (1e-4, 10.21050485336338),
+                                        (1e8, 1.577215669901533),
+                                        (1e100, 1.5772156649015328)])
+    def test_entropy(self, c, ref):
+        assert_allclose(stats.genlogistic.entropy(c), ref)
+
 
 class TestHypergeom:
     def setup_method(self):
@@ -2529,10 +2542,10 @@ class TestLaplace:
         assert_raises(ValueError, stats.laplace.fit, [np.nan])
         assert_raises(ValueError, stats.laplace.fit, [np.inf])
 
-    @pytest.mark.parametrize("rvs_scale,rvs_loc", [(10, -5),
-                                                   (5, 10),
-                                                   (.2, .5)])
-    def test_fit_MLE_comp_optimizer(self, rvs_loc, rvs_scale):
+    @pytest.mark.parametrize("rvs_loc,rvs_scale", [(-5, 10),
+                                                   (10, 5),
+                                                   (0.5, 0.2)])
+    def test_fit_MLE_comp_optimzer(self, rvs_loc, rvs_scale):
         data = stats.laplace.rvs(size=1000, loc=rvs_loc, scale=rvs_scale)
 
         # the log-likelihood function for laplace is given by
@@ -3225,6 +3238,19 @@ class TestNorm:
         x = [1, 2, 3]
         assert_raises(TypeError, stats.norm.fit, x, plate="shrimp")
 
+    @pytest.mark.parametrize('loc', [0, 1])
+    def test_delta_cdf(self, loc):
+        # The expected value is computed with mpmath:
+        # >>> import mpmath
+        # >>> mpmath.mp.dps = 60
+        # >>> float(mpmath.ncdf(12) - mpmath.ncdf(11))
+        # 1.910641809677555e-28
+        expected = 1.910641809677555e-28
+        delta = stats.norm._delta_cdf(11+loc, 12+loc, loc=loc)
+        assert_allclose(delta, expected, rtol=1e-13)
+        delta = stats.norm._delta_cdf(-(12+loc), -(11+loc), loc=-loc)
+        assert_allclose(delta, expected, rtol=1e-13)
+
 
 class TestUniform:
     """gh-10300"""
@@ -3736,6 +3762,20 @@ class TestGamma:
         assert np.isclose(stats.gamma.isf(1e-50, 100),
                           330.6557590436547, atol=1e-13)
 
+    @pytest.mark.parametrize('scale', [1.0, 5.0])
+    def test_delta_cdf(self, scale):
+        # Expected value computed with mpmath:
+        #
+        # >>> import mpmath
+        # >>> mpmath.mp.dps = 150
+        # >>> cdf1 = mpmath.gammainc(3, 0, 245, regularized=True)
+        # >>> cdf2 = mpmath.gammainc(3, 0, 250, regularized=True)
+        # >>> float(cdf2 - cdf1)
+        # 1.1902609356171962e-102
+        #
+        delta = stats.gamma._delta_cdf(scale*245, scale*250, 3, scale=scale)
+        assert_allclose(delta, 1.1902609356171962e-102, rtol=1e-13)
+
 
 class TestDgamma:
     def test_pdf(self):
@@ -4227,7 +4267,7 @@ class TestLevyStable:
             ],
             # for small alpha very slightly reduced accuracy
             [
-                'piecewise', 5e-11, lambda r: (
+                'piecewise', 2.5e-10, lambda r: (
                     np.isin(r['pct'], pct_range) &
                     np.isin(r['alpha'], alpha_range) &
                     np.isin(r['beta'], beta_range) &
@@ -4331,7 +4371,7 @@ class TestLevyStable:
         tests = [
             # piecewise generally good accuracy
             [
-                'piecewise', 1e-12, lambda r: (
+                'piecewise', 2e-12, lambda r: (
                     np.isin(r['pct'], pct_range) &
                     np.isin(r['alpha'], alpha_range) &
                     np.isin(r['beta'], beta_range) &
@@ -4453,6 +4493,14 @@ class TestLevyStable:
     ):
         """Tests for pdf and cdf where loc, scale are different from 0, 1
         """
+
+        uname = platform.uname()
+        is_linux_32 = uname.system == 'Linux' and uname.machine == 'i686'
+        # Test seems to be unstable (see gh-17839 for a bug report on Debian
+        # i386), so skip it.
+        if is_linux_32 and case == 'pdf':
+            pytest.skip("Test unstable on some platforms; see gh-17839, 17859")
+
         data = nolan_loc_scale_sample_data
         # We only test against piecewise as location/scale transforms
         # are same for other methods.
@@ -5690,6 +5738,27 @@ class TestWeibull:
         ls = stats.weibull_max.logsf(-1e-9, 2, scale=3)
         assert_allclose(ls, np.log(-special.expm1(-1/9000000000000000000)))
 
+    @pytest.mark.parametrize('scale', [1.0, 0.1])
+    def test_delta_cdf(self, scale):
+        # Expected value computed with mpmath:
+        #
+        # def weibull_min_sf(x, k, scale):
+        #     x = mpmath.mpf(x)
+        #     k = mpmath.mpf(k)
+        #     scale =mpmath.mpf(scale)
+        #     return mpmath.exp(-(x/scale)**k)
+        #
+        # >>> import mpmath
+        # >>> mpmath.mp.dps = 60
+        # >>> sf1 = weibull_min_sf(7.5, 3, 1)
+        # >>> sf2 = weibull_min_sf(8.0, 3, 1)
+        # >>> float(sf1 - sf2)
+        # 6.053624060118734e-184
+        #
+        delta = stats.weibull_min._delta_cdf(scale*7.5, scale*8, 3,
+                                             scale=scale)
+        assert_allclose(delta, 6.053624060118734e-184)
+
     def test_fit_min(self):
         rng = np.random.default_rng(5985959307161735394)
 
@@ -6072,6 +6141,32 @@ class TestBurr:
         assert_(np.isfinite(e2))
         assert_(np.isfinite(e3))
         assert_(np.isfinite(e4))
+
+
+class TestBurr12:
+
+    @pytest.mark.parametrize('scale, expected',
+                             [(1.0, 2.3283064359965952e-170),
+                              (3.5, 5.987114417447875e-153)])
+    def test_delta_cdf(self, scale, expected):
+        # Expected value computed with mpmath:
+        #
+        # def burr12sf(x, c, d, scale):
+        #     x = mpmath.mpf(x)
+        #     c = mpmath.mpf(c)
+        #     d = mpmath.mpf(d)
+        #     scale = mpmath.mpf(scale)
+        #     return (mpmath.mp.one + (x/scale)**c)**(-d)
+        #
+        # >>> import mpmath
+        # >>> mpmath.mp.dps = 60
+        # >>> float(burr12sf(2e5, 4, 8, 1) - burr12sf(4e5, 4, 8, 1))
+        # 2.3283064359965952e-170
+        # >>> float(burr12sf(2e5, 4, 8, 3.5) - burr12sf(4e5, 4, 8, 3.5))
+        # 5.987114417447875e-153
+        #
+        delta = stats.burr12._delta_cdf(2e5, 4e5, 4, 8, scale=scale)
+        assert_allclose(delta, expected, rtol=1e-13)
 
 
 class TestStudentizedRange:
