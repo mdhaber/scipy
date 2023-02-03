@@ -3711,7 +3711,7 @@ class TestBetaPrime:
 
     @pytest.mark.parametrize('x, a, b, p', cdf_vals)
     def test_ppf_gh_17631(self, x, a, b, p):
-        if p > 0.99:
+        if p > 0.95:
             pytest.skip(reason='Test cases were generated for CDF, not PPF')
             # So these rounded, double-precision representations of `p` cannot
             # be expected to map exactly back to the original `x`
