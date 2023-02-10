@@ -287,8 +287,8 @@ class Complex:
 
         if printout:
             print("A sub hyper cube with:")
-            print("origin: {}".format(origin))
-            print("supremum: {}".format(supremum))
+            print(f"origin: {origin}")
+            print(f"supremum: {supremum}")
             for v in C_new():
                 v.print_out()
 
@@ -369,7 +369,7 @@ class Complex:
 
              To plot a single simplex S in a set C, use e.g., [C[0]]
         """
-        from matplotlib import pyplot  # type: ignore[import]
+        from matplotlib import pyplot
         if self.dim == 2:
             pyplot.figure()
             for C in self.H:
@@ -451,7 +451,7 @@ class Complex:
         return
 
 
-class VertexGroup(object):
+class VertexGroup:
     def __init__(self, p_gen, p_hgr):
         self.p_gen = p_gen  # parent generation
         self.p_hgr = p_hgr  # parent homology group rank
@@ -510,7 +510,7 @@ class Cell(VertexGroup):
     """
 
     def __init__(self, p_gen, p_hgr, origin, supremum):
-        super(Cell, self).__init__(p_gen, p_hgr)
+        super().__init__(p_gen, p_hgr)
 
         self.origin = origin
         self.supremum = supremum
@@ -525,7 +525,7 @@ class Simplex(VertexGroup):
     """
 
     def __init__(self, p_gen, p_hgr, generation_cycle, dim):
-        super(Simplex, self).__init__(p_gen, p_hgr)
+        super().__init__(p_gen, p_hgr)
 
         self.generation_cycle = (generation_cycle + 1) % (dim - 1)
 
@@ -600,13 +600,13 @@ class Vertex:
         return self._min
 
     def print_out(self):
-        print("Vertex: {}".format(self.x))
+        print(f"Vertex: {self.x}")
         constr = 'Connections: '
         for vc in self.nn:
-            constr += '{} '.format(vc.x)
+            constr += f'{vc.x} '
 
         print(constr)
-        print('Order = {}'.format(self.order))
+        print(f'Order = {self.order}')
 
 
 class VertexCache:
