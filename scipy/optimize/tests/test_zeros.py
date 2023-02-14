@@ -206,6 +206,15 @@ class TestBasic:
         self.run_collection('aps', zeros.brentq, 'brentq', smoothness=1,
                             xtol=1e-14, rtol=1e-14)
 
+    def test_chandrupatla(self):
+        self.run_check(zeros._chandrupatla, 'chandrupatla')
+# =============================================================================
+#         self.run_check_lru_cached(zeros._chandrupatla, 'chandrupatla')
+#         self.run_check_by_name('chandrupatla')
+#         self.run_collection('aps', zeros._chandrupatla, 'chandrupatla', smoothness=1,
+#                             xtol=1e-14, rtol=1e-14)
+# =============================================================================
+
     def test_brenth(self):
         self.run_check(zeros.brenth, 'brenth')
         self.run_check_lru_cached(zeros.brenth, 'brenth')
@@ -259,6 +268,10 @@ class TestBasic:
     def f2_2(x):
         return exp(x) + cos(x)
 
+    @staticmethod
+    def f3(x,a):
+        return a-x**2
+
     def test_newton(self):
         for f, f_1, f_2 in [(self.f1, self.f1_1, self.f1_2),
                             (self.f2, self.f2_1, self.f2_2)]:
@@ -292,10 +305,6 @@ class TestBasic:
                             fprime=f_1, fprime2=f_2, xtol=1e-6)
             assert_allclose(f(r.root), 0, atol=1e-6)
 
-    def test_chandrupatla_by_name(self):
-        r"""Invoke chandrupatla through root_scalar()"""
-        pass
-
     def test_root_scalar_fail(self):
         with pytest.raises(ValueError):
             root_scalar(f1, method='secant', x0=3, xtol=1e-6)  # no x1
@@ -307,17 +316,67 @@ class TestBasic:
             root_scalar(f1, method='halley', fprime2=f1_2, x0=3, xtol=1e-6)  # no fprime
 
     def test_array_chandrupatla(self):
-        """test chandrupatla with array, similar to newton method"""
-
-        def f1(x, a):
-            return a-x**2
+        """test _chandrupatla with array, similar to newton method"""
 
         k = np.arange(1,8)
-        result = zeros.chandrupatla(f1, 0, 3, args=(k,))
+        result = zeros._chandrupatla(self.f3, 0, 3, args=(k,))
         x_expected = ([1., 1.41421356, 1.73205081,
-                       2., 2.23606798, 2.44948974,
-                       2.64575131])
+                      2., 2.23606798,2.44948974,
+                      2.64575131])
         assert_allclose(result.x, x_expected)
+
+    def test_chandrupatla_newton_similar(self):
+        """test that _chandrupatla is giving a similar result to newton"""
+
+        k = np.arange(1,8)
+
+        result = zeros._chandrupatla(self.f3, 0, 3, args=(k[0],))
+        expected = zeros.newton(self.f3, x0=0, x1=3, args=(k[0],))
+        assert_allclose(result.x, expected)
+
+    def test_chandrupatla_brent_similar(self):
+        """test than chandrupatla gives equal scalar result to brentq"""
+        def f3(x):
+            return (x**3 - 1)
+
+        result = zeros._chandrupatla(f3,0,3,maxiter=50)
+        expected = zeros.brentq(f3,0,3)
+
+        assert_allclose(result.x, expected)
+
+    def test_chandrupatla_np_vectorize(self):
+        """test that _chandrupatla handles input with np.vectorize"""
+
+        k = np.arange(1,8)
+
+        res = zeros._chandrupatla(self.f3,0,3,
+                                  args=(k,),
+                                  maxiter=50)
+
+        vec_res = zeros._chandrupatla(np.vectorize(self.f3),0,3,
+                                  args=(k,),
+                                  maxiter=50)
+
+        assert_allclose(res.fun, vec_res.fun)
+        assert_allclose(res.x, vec_res.x)
+
+    def test_chandrupatla_broadcasting(self):
+        """test that _chandrupatla broadcasts inputs correctly"""
+
+        x0 = np.zeros((2,1,1))
+        x1 = np.full((1,2,1), 3)
+        k = np.array([[[1, 2]]])
+
+        res = zeros._chandrupatla(self.f3,x0=x0,x1=x1,
+                                  args=(k,),
+                                  maxiter=50)
+
+        expected = ([[[1., 1.41421356],
+                      [1., 1.41421356]],
+                     [[1., 1.41421356],
+                      [1., 1.41421356]]])
+
+        assert_allclose(res.x, expected)
 
     def test_array_newton(self):
         """test newton with array"""

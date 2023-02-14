@@ -13,7 +13,7 @@ from . import _zeros_py as optzeros
 __all__ = ['root_scalar']
 
 ROOT_SCALAR_METHODS = ['bisect', 'brentq', 'brenth', 'ridder', 'toms748',
-                       'newton', 'secant', 'halley', 'chandrupatla']
+                       'newton', 'secant', 'halley']
 
 
 class MemoizeDer:
@@ -83,7 +83,6 @@ def root_scalar(f, args=(), method=None, bracket=None,
             - 'newton'    :ref:`(see here) <optimize.root_scalar-newton>`
             - 'secant'    :ref:`(see here) <optimize.root_scalar-secant>`
             - 'halley'    :ref:`(see here) <optimize.root_scalar-halley>`
-            - 'chandrupatla' :ref:`(see here) <optimize.root_scalar-chandrupatla>`
 
     bracket: A sequence of 2 floats, optional
         An interval bracketing a root.  `f(x, *args)` must have different
@@ -141,27 +140,25 @@ def root_scalar(f, args=(), method=None, bracket=None,
 
     Arguments for each method are as follows (x=required, o=optional).
 
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    |                    method                                 | f | args | bracket | x0 | x1 | fprime | fprime2 | xtol | rtol | maxiter | options |
-    +===========================================================+===+======+=========+====+====+========+=========+======+======+=========+=========+
-    | :ref:`bisect <optimize.root_scalar-bisect>`               | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    | :ref:`brentq <optimize.root_scalar-brentq>`               | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    | :ref:`brenth <optimize.root_scalar-brenth>`               | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    | :ref:`ridder <optimize.root_scalar-ridder>`               | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    | :ref:`toms748 <optimize.root_scalar-toms748>`             | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    | :ref:`newton <optimize.root_scalar-newton>`               | x |  o   |         | x  |    |   x    |         |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    | :ref:`secant <optimize.root_scalar-secant>`               | x |  o   |         | x  | x  |        |         |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    | :ref:`halley <optimize.root_scalar-halley>`               | x |  o   |         | x  |    |   x    |    x    |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
-    | :ref:`chandrupatla <optimize.root_scalar-chandrupatla>`   | x |  o   |         | x  | x  |        |         |  o   |  o   |    o    |   o     |
-    +-----------------------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    |                    method                     | f | args | bracket | x0 | x1 | fprime | fprime2 | xtol | rtol | maxiter | options |
+    +===============================================+===+======+=========+====+====+========+=========+======+======+=========+=========+
+    | :ref:`bisect <optimize.root_scalar-bisect>`   | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    | :ref:`brentq <optimize.root_scalar-brentq>`   | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    | :ref:`brenth <optimize.root_scalar-brenth>`   | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    | :ref:`ridder <optimize.root_scalar-ridder>`   | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    | :ref:`toms748 <optimize.root_scalar-toms748>` | x |  o   |    x    |    |    |        |         |  o   |  o   |    o    |   o     |
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    | :ref:`newton <optimize.root_scalar-newton>`   | x |  o   |         | x  |    |   x    |         |  o   |  o   |    o    |   o     |
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    | :ref:`secant <optimize.root_scalar-secant>`   | x |  o   |         | x  | x  |        |         |  o   |  o   |    o    |   o     |
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
+    | :ref:`halley <optimize.root_scalar-halley>`   | x |  o   |         | x  |    |   x    |    x    |  o   |  o   |    o    |   o     |
+    +-----------------------------------------------+---+------+---------+----+----+--------+---------+------+------+---------+---------+
 
     Examples
     --------
@@ -304,14 +301,6 @@ def root_scalar(f, args=(), method=None, bracket=None,
         if 'xtol' in kwargs:
             kwargs['tol'] = kwargs.pop('xtol')
         r, sol = methodc(f, x0, args=args, fprime=fprime, fprime2=fprime2, **kwargs)
-    elif meth in ['chandrupatla']:
-        if x0 is None:
-            raise ValueError('x0 must not be None for %s' % method)
-        if x1 is None:
-            raise ValueError('x1 must not be None for %s' % method)
-        if 'xtol' in kwargs:
-            kwargs['tol'] = kwargs.pop('xtol')
-        r, sol = methodc(f, x0, args=args, x1=x1, **kwargs)
     else:
         raise ValueError('Unknown solver %s' % method)
 
@@ -487,27 +476,6 @@ def _root_scalar_ridder_doc():
     options: dict, optional
         Specifies any method-specific options not covered above.
 
-    """
-    pass
-
-
-def _root_scalar_chandrupatla_doc():
-    r"""
-    Options
-    -------
-    args : tuple, optional
-        Extra arguments passed to the objective function.
-    bracket: A sequence of 2 floats, optional
-        An interval bracketing a root.  `f(x, *args)` must have different
-        signs at the two endpoints.
-    xtol : float, optional
-        Tolerance (absolute) for termination.
-    rtol : float, optional
-        Tolerance (relative) for termination.
-    maxiter : int, optional
-        Maximum number of iterations.
-    options: dict, optional
-        Specifies any method-specific options not covered above.
     """
     pass
 
