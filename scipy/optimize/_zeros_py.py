@@ -11,7 +11,7 @@ _xtol = 2e-12
 _rtol = 4 * np.finfo(float).eps
 
 __all__ = ['newton', 'bisect', 'ridder', 'brentq', 'brenth', 'toms748',
-           '_chandrupatla', 'RootResults']
+           'RootResults']
 
 # Must agree with CONVERGED, SIGNERR, CONVERR, ...  in zeros.h
 _ECONVERGED = 0
@@ -1541,12 +1541,12 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
     t = 0.5
     iterations = 0
 
-    a, b, fa, fb, iterations = np.broadcast_arrays(a, b, fa, fb, iterations)
+    a, b, fa, fb = np.broadcast_arrays(a, b, fa, fb)
     intermediate_shape = a.shape
-    a, b, fa, fb, iterations = np.atleast_1d(a, b, fa, fb, iterations)
+    a, b, fa, fb = np.atleast_1d(a, b, fa, fb)
     shape = a.shape
 
-    iterations.flags.writeable = True
+    iterations = np.zeros_like(a)
 
     # flag to check state of convergence
     flag = np.full(shape, _EINPROGRESS)
