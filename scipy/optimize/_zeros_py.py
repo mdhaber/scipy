@@ -1391,9 +1391,8 @@ def toms748(f, a, b, args=(), k=1,
 
 
 def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
-                 xatol=_rtol, maxiter=_iter, callback=None):
-    """
-    Find the root of an elementwise function using Chandrupatla's algorithm.
+                  xatol=_rtol, maxiter=_iter, callback=None):
+    """Find the root of an elementwise function using Chandrupatla's algorithm.
 
     This function allows for `x0`, `x1`, amd the output of `f` to be of any
     broadcastable shapes. For each element of the output of `f`, `chandrupatla`
@@ -1426,8 +1425,9 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
         Tolerance (relative) for termination. Termination occurs if
         `2*xatol*np.abs(r) + xrtol / np.abs(b - c) > 0.5`.
     maxiter : int, optional
-        If convergence is not achieved in `maxiter` iterations, the corresponding
-        elements of the `status` and `success` attributes will indicate the iteration
+        If convergence is not achieved in `maxiter` iterations, the
+        corresponding elements of the `status` and `success` attributes will
+        indicate the iteration
         limit was reached.
     callback : callable, optional
         An optional user-supplied function, called after each iteration.
@@ -1524,8 +1524,8 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
 
     # adapted from an earlier implementation of Jason Sachs'
     # as written in https://www.embeddedrelated.com/showarticle/855.php
-    # which in turn is based on Chandrupatla's algorithm as described in Scherer
-    # https://books.google.com/books?id=cC-8BAAAQBAJ&pg=PA95
+    # which in turn is based on Chandrupatla's algorithm as described in
+    # Scherer https://books.google.com/books?id=cC-8BAAAQBAJ&pg=PA95
 
     # Initialization
     b = x0
@@ -1549,7 +1549,7 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
     # determines whether we should do inverse quadratic interpolation
     iqi = np.zeros(shape, dtype=bool)
 
-    funcalls = np.full(np.shape(flag),0)
+    funcalls = np.full(np.shape(flag), 0)
     terminate = False
 
     while iterations.any() < maxiter:
@@ -1634,7 +1634,7 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
     elif not (np.sign(fa) * np.sign(fb) <= 0).all():
         flag.fill(_ESIGNERR)
     elif not ((np.isfinite(a).all() and np.isreal(a).all()) and
-            (np.isfinite(b).all() and np.isreal(b).all())):
+              (np.isfinite(b).all() and np.isreal(b).all())):
         flag.fill(_EVALUEERR)
     elif not (np.isreal(fa).all() and np.isreal(fb).all()):
         flag.fill(_EVALUEERR)
@@ -1643,20 +1643,23 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
 
     # iterate here to create the message since the scalar case has dimension ()
     message_flag = flag.flatten()
-    message = np.reshape([flag_map[i] for i in message_flag], intermediate_shape)
+    message = np.reshape([flag_map[i] for i in message_flag],
+                         intermediate_shape)
     flag = np.reshape(flag, intermediate_shape)
 
-    result = OptimizeResult(x=r,
-                            success=flag == 0,
-                            status=flag,
-                            fun=ft,
-                            nfev=funcalls,
-                            nit=iterations,
-                            message=message,
-                            lower_bracket=a,
-                            upper_bracket=b,
-                            lower_fun_val=fa,
-                            upper_fun_val=fb)
+    result = RootResults(root=r,
+                         function_calls=funcalls,
+                         iterations=iterations,
+                         flag=1)  # place holder
+
+    # add output specific to _chandrupatla
+    result.flag = flag
+    result.converged = flag == 0
+    result.fun = ft
+    result.message = message
+    result.lower_bracket = a
+    result.upper_bracket = b
+    result.lower_fun_value = fa
+    result.upper_fun_value = fb
 
     return result
-
