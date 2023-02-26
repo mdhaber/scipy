@@ -58,7 +58,7 @@ class RootResults(OptimizeResult):
         try:
             self.flag = flag_map[flag]
         except KeyError:
-            self.flag = 'unknown error %d' % (flag,)
+            self.flag = f'unknown error {flag}'
 
 
 def results_c(full_output, r):
@@ -1650,7 +1650,7 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
     result = RootResults(root=r,
                          function_calls=funcalls,
                          iterations=iterations,
-                         flag=1)  # place holder
+                         flag=None)
 
     # add output specific to _chandrupatla
     result.flag = flag
