@@ -155,43 +155,6 @@ class TestScalarRootFinders:
 
         The name is used to determine some optional arguments."""
         tests = get_tests(collection, smoothness=smoothness)
-
-        self.run_tests(tests, method, name, xtol=xtol, rtol=rtol,
-                       known_fail=known_fail, **kwargs)
-
-    def test_bisect(self):
-        self.run_check(zeros.bisect, 'bisect')
-        self.run_check_lru_cached(zeros.bisect, 'bisect')
-        self.run_check_by_name('bisect')
-        self.run_collection('aps', zeros.bisect, 'bisect', smoothness=1)
-
-    def test_ridder(self):
-        self.run_check(zeros.ridder, 'ridder')
-        self.run_check_lru_cached(zeros.ridder, 'ridder')
-        self.run_check_by_name('ridder')
-        self.run_collection('aps', zeros.ridder, 'ridder', smoothness=1)
-
-    def test_brentq(self):
-        self.run_check(zeros.brentq, 'brentq')
-        self.run_check_lru_cached(zeros.brentq, 'brentq')
-        self.run_check_by_name('brentq')
-        # Brentq/h needs a lower tolerance to be specified
-        self.run_collection('aps', zeros.brentq, 'brentq', smoothness=1,
-                            xtol=1e-14, rtol=1e-14)
-
-    def test_brenth(self):
-        self.run_check(zeros.brenth, 'brenth')
-        self.run_check_lru_cached(zeros.brenth, 'brenth')
-        self.run_check_by_name('brenth')
-        self.run_collection('aps', zeros.brenth, 'brenth', smoothness=1,
-                            xtol=1e-14, rtol=1e-14)
-
-    def test_toms748(self):
-        self.run_check(zeros.toms748, 'toms748')
-        self.run_check_lru_cached(zeros.toms748, 'toms748')
-        self.run_check_by_name('toms748')
-        self.run_collection('aps', zeros.toms748, 'toms748', smoothness=1)
-
         self.run_tests(tests, method, name, known_fail=known_fail, **kwargs)
 
 
@@ -259,36 +222,6 @@ class TestNewton(TestScalarRootFinders):
         for collection in ['aps', 'complex']:
             self.run_collection(collection, zeros.newton, 'halley',
                                 smoothness=2, known_fail=known_fail)
-
-
-    @staticmethod
-    def f1(x):
-        return x**2 - 2*x - 1  # == (x-1)**2 - 2
-
-    @staticmethod
-    def f1_1(x):
-        return 2*x - 2
-
-    @staticmethod
-    def f1_2(x):
-        return 2.0 + 0*x
-
-    @staticmethod
-    def f2(x):
-        return exp(x) - cos(x)
-
-    @staticmethod
-    def f2_1(x):
-        return exp(x) + sin(x)
-
-    @staticmethod
-    def f2_2(x):
-        return exp(x) + cos(x)
-
-    @staticmethod
-    def f3(x,a):
-        return a-x**2
-
 
     def test_newton(self):
         for f, f_1, f_2 in [(f1, f1_1, f1_2), (f2, f2_1, f2_2)]:
