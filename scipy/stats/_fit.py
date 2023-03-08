@@ -1291,6 +1291,21 @@ def _shapiro_francia(dist, data):
 _shapiro_francia.alternative = 'less'  # type: ignore[attr-defined]
 
 
+def _shapiro_wilk(dist, data):
+    n = data.shape[-1]
+    x = np.sort(data, axis=-1)
+    m = _order_statistic_evs(dist, n)
+    V = np.cov(m)  # this is wrong.... need covariance of distributions
+    Vinv = np.linalg.inv(V)
+    mTVinv = m @ Vinv
+    C = np.sqrt(mTVinv @ mTVinv.T)
+    a = mTVinv / C
+    num = np.sum(a * x, axis=-1)**2
+    den = np.sum((x - x.mean(axis=-1, keepdims=True))**2)
+    return num/den
+_shapiro_wilk.alternative = 'less'  # type: ignore[attr-defined]
+
+
 def _cramer_von_mises(dist, data):
     x = np.sort(data, axis=-1)
     n = data.shape[-1]
@@ -1302,7 +1317,7 @@ def _cramer_von_mises(dist, data):
 
 _compare_dict = {"ad": _anderson_darling, "ks": _kolmogorov_smirnov,
                  "cvm": _cramer_von_mises, "filliben": _filliben,
-                 "sf": _shapiro_francia}
+                 "sf": _shapiro_francia, "sw": _shapiro_wilk}
 
 
 def _gof_iv(dist, data, known_params, fit_params, guessed_params, statistic,
@@ -1345,7 +1360,7 @@ def _gof_iv(dist, data, known_params, fit_params, guessed_params, statistic,
     guessed_rfd_params.update(guessed_params)
 
     statistic = statistic.lower()
-    statistics = {'ad', 'ks', 'cvm', 'filliben', 'sf'}
+    statistics = {'ad', 'ks', 'cvm', 'filliben', 'sf', 'sw'}
     if statistic not in statistics:
         message = f"`statistic` must be one of {statistics}."
         raise ValueError(message)
