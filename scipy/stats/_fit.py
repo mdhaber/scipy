@@ -2,7 +2,7 @@ import warnings
 from collections import namedtuple
 import numpy as np
 from scipy import optimize, stats, integrate
-from scipy.special import gammaln
+from scipy.special import gammaln, logsumexp, factorial
 from scipy._lib._util import check_random_state
 
 
@@ -1280,6 +1280,68 @@ def _order_statistic_evs(dist, n):
         return x * np.exp(constant + variable)
 
     res = integrate.quad_vec(integrand, -np.inf, np.inf)
+    return res[0]
+
+
+# def _order_statistic_cov(dist, n):
+#     # i = np.arange(2, n + 1)[:, np.newaxis]
+#     i =
+
+#     # constant = gammaln(n + 1) - gammaln(i) - gammaln(j - i) - gammaln(n - j + 1)
+
+#     # def outer_integrand(y):
+#     #     def inner_integrand(x):
+#     #         def G(m, n, p):
+#     #             return dist.logpdf(x) + dist.logpdf(y) + m*dist.logcdf(x) + n*dist.logsf(y) + p*logsumexp([dist.logcdf(y), dist.logcdf(x) + np.pi*1j])
+
+#     #         return (x * y * np.real(np.exp(constant + G(i-1, n-j, j-i-1)))).ravel()
+#     #     res = integrate.quad_vec(inner_integrand, -10, 10)
+#     #     return res[0]
+
+#     constant = factorial(n)/(factorial(i-1)*factorial(j-i-1)*factorial(n-j))
+
+#     # constant = np.exp(constant)
+#     def outer_integrand(y):
+#         def inner_integrand(x):
+#             def G(m, n, p):
+#                 res = x * y * dist.pdf(x) * dist.pdf(y) * dist.cdf(x)**m * dist.sf(y)**n * (dist.cdf(y) - dist.cdf(x))**p
+#                 return res
+
+#             return (constant * G(i-1, n-j, j-i-1)).ravel()
+#         res = integrate.quad_vec(inner_integrand, -5, 5)
+#         return res[0]
+
+#     res = integrate.quad_vec(outer_integrand, -5, 5)
+#     return res[0].reshape((n, n))
+
+
+def _order_statistic_cov(dist, n, i, j):
+
+    constant = factorial(n)/(factorial(i-1)*factorial(j-i-1)*factorial(n-j))
+
+    def integrand(x, y, m, n, p):
+        def G(m, n, p):
+            res = x * y * dist.pdf(x) * dist.pdf(y) * dist.cdf(x)**m * dist.sf(y)**n * (dist.cdf(y) - dist.cdf(x))**p
+            return res
+
+        return G(m, n, p)
+    res = constant * integrate.dblquad(integrand, -10, 10, -10, lambda x: x, args=(i-1, n-j, j-i-1))[0]
+    return res
+
+
+def _order_statistic_var(dist, n):
+    j = np.arange(1, n + 1)
+
+    constant = factorial(n)/(factorial(j-1)*factorial(n-j))
+
+    def integrand(x):
+        def D(m, n):
+            res = x**2 * dist.pdf(x) * dist.cdf(x)**m * dist.sf(x)**n
+            return res
+
+        return constant * D(j-1, n-j)
+
+    res = integrate.quad_vec(integrand, -100, 100)
     return res[0]
 
 
