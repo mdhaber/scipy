@@ -1283,66 +1283,59 @@ def _order_statistic_evs(dist, n):
     return res[0]
 
 
-# def _order_statistic_cov(dist, n):
-#     # i = np.arange(2, n + 1)[:, np.newaxis]
-#     i =
-
-#     # constant = gammaln(n + 1) - gammaln(i) - gammaln(j - i) - gammaln(n - j + 1)
-
-#     # def outer_integrand(y):
-#     #     def inner_integrand(x):
-#     #         def G(m, n, p):
-#     #             return dist.logpdf(x) + dist.logpdf(y) + m*dist.logcdf(x) + n*dist.logsf(y) + p*logsumexp([dist.logcdf(y), dist.logcdf(x) + np.pi*1j])
-
-#     #         return (x * y * np.real(np.exp(constant + G(i-1, n-j, j-i-1)))).ravel()
-#     #     res = integrate.quad_vec(inner_integrand, -10, 10)
-#     #     return res[0]
-
-#     constant = factorial(n)/(factorial(i-1)*factorial(j-i-1)*factorial(n-j))
-
-#     # constant = np.exp(constant)
-#     def outer_integrand(y):
-#         def inner_integrand(x):
-#             def G(m, n, p):
-#                 res = x * y * dist.pdf(x) * dist.pdf(y) * dist.cdf(x)**m * dist.sf(y)**n * (dist.cdf(y) - dist.cdf(x))**p
-#                 return res
-
-#             return (constant * G(i-1, n-j, j-i-1)).ravel()
-#         res = integrate.quad_vec(inner_integrand, -5, 5)
-#         return res[0]
-
-#     res = integrate.quad_vec(outer_integrand, -5, 5)
-#     return res[0].reshape((n, n))
-
-
-def _order_statistic_cov(dist, n, i, j):
-
-    constant = factorial(n)/(factorial(i-1)*factorial(j-i-1)*factorial(n-j))
-
-    def integrand(x, y, m, n, p):
-        def G(m, n, p):
-            res = x * y * dist.pdf(x) * dist.pdf(y) * dist.cdf(x)**m * dist.sf(y)**n * (dist.cdf(y) - dist.cdf(x))**p
-            return res
-
-        return G(m, n, p)
-    res = constant * integrate.dblquad(integrand, -10, 10, -10, lambda x: x, args=(i-1, n-j, j-i-1))[0]
-    return res
-
-
 def _order_statistic_var(dist, n):
     j = np.arange(1, n + 1)
-
-    constant = factorial(n)/(factorial(j-1)*factorial(n-j))
-
+    constant = gammaln(n + 1) - gammaln(j) - gammaln(n - j + 1)
     def integrand(x):
         def D(m, n):
-            res = x**2 * dist.pdf(x) * dist.cdf(x)**m * dist.sf(x)**n
-            return res
+            return (2*np.log(np.abs(x)) + dist.logpdf(x)
+                    + m*dist.logcdf(x) + n*dist.logsf(x))
 
-        return constant * D(j-1, n-j)
+        return np.exp(constant + D(j-1, n-j))
 
-    res = integrate.quad_vec(integrand, -100, 100)
+    res = integrate.quad_vec(integrand, -np.inf, np.inf)
     return res[0]
+
+
+def _order_statistic_cov_off_diag(dist, n):
+    i = np.arange(1, n+1)[:, np.newaxis]
+    j = i.T
+    i, j = np.broadcast_arrays(i, j)
+    k = np.where(j > i)
+    i, j = i[k], j[k]
+
+    constant = gammaln(n + 1) - gammaln(i) - gammaln(j-i) - gammaln(n - j + 1)
+    pij = np.pi*1j
+
+    def outer(y):
+        def inner(x):
+            def G(m, n, p):
+                res = (np.log(np.abs(x)) + np.log(np.abs(y))
+                       + dist.logpdf(x) + dist.logpdf(y)
+                       + m*dist.logcdf(x) + n*dist.logsf(y)
+                       + p*logsumexp([dist.logcdf(y), dist.logcdf(x) + pij]))
+                return res
+
+            Gmnp = G(i-1, n-j, j-i-1)
+            return np.sign(x*y) * np.real(np.exp(constant + Gmnp))
+
+        res = integrate.quad_vec(inner, -np.inf, y)
+        return res[0]
+
+    with np.errstate(divide='ignore'):
+        res = integrate.quad_vec(outer, -np.inf, np.inf)
+    return res[0]
+
+
+def _order_statistic_cov(dist, n):
+    var = _order_statistic_var(dist, n)
+    cov_off_diag = _order_statistic_cov_off_diag(dist, n)
+    cov = np.zeros((n, n))
+    i = np.triu_indices(n, k=1)
+    cov[i] = cov_off_diag
+    cov += cov.T
+    cov += np.diag(var)
+    return cov
 
 
 def _shapiro_francia(dist, data):
@@ -1357,13 +1350,16 @@ def _shapiro_wilk(dist, data):
     n = data.shape[-1]
     x = np.sort(data, axis=-1)
     m = _order_statistic_evs(dist, n)
-    V = np.cov(m)  # this is wrong.... need covariance of distributions
+    # Need to check whether the covariance formulae apply to distributions
+    # that are not symmetric about 0
+    V = _order_statistic_cov(dist, n)
+    # Get rid of inv
     Vinv = np.linalg.inv(V)
     mTVinv = m @ Vinv
     C = np.sqrt(mTVinv @ mTVinv.T)
     a = mTVinv / C
     num = np.sum(a * x, axis=-1)**2
-    den = np.sum((x - x.mean(axis=-1, keepdims=True))**2)
+    den = np.sum((x - x.mean(axis=-1, keepdims=True))**2, axis=-1)
     return num/den
 _shapiro_wilk.alternative = 'less'  # type: ignore[attr-defined]
 
