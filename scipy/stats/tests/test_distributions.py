@@ -207,7 +207,7 @@ class TestVonMises:
         rng = np.random.default_rng(6762668991392531563)
         data = stats.vonmises.rvs(rvs_scale, size=1000, loc=rvs_loc,
                                   random_state=rng)
-        
+
         def negative_loglikelihood(fit_result, data):
             kappa, loc, scale = fit_result
             logpdf = stats.vonmises(kappa, loc=loc).logpdf(data).sum()
