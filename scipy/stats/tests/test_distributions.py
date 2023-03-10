@@ -198,20 +198,20 @@ class TestVonMises:
         assert_allclose(np.angle(res), loc % (2*np.pi))
         assert np.issubdtype(res.dtype, np.complexfloating)
 
+    @pytest.mark.xslow
     @pytest.mark.parametrize("rvs_loc", [0, 2])
-    @pytest.mark.parametrize("rvs_scale", [1, 100])
+    @pytest.mark.parametrize("rvs_shape", [1, 100])
     @pytest.mark.parametrize('fix_loc', [True, False])
-    def test_fit_MLE_comp_optimzer(self, rvs_loc, rvs_scale,
-                                   fix_loc):
+    def test_fit_MLE_comp_optimizer(self, rvs_loc, rvs_shape, fix_loc):
 
         rng = np.random.default_rng(6762668991392531563)
-        data = stats.vonmises.rvs(rvs_scale, size=1000, loc=rvs_loc,
+        data = stats.vonmises.rvs(rvs_shape, size=1000, loc=rvs_loc,
                                   random_state=rng)
 
         def negative_loglikelihood(fit_result, data):
-            kappa, loc, scale = fit_result
-            logpdf = stats.vonmises(kappa, loc=loc).logpdf(data).sum()
-            return -logpdf
+            # `scale` is broken for vonmises, so ignore it
+            kappa, loc, _ = fit_result
+            return stats.vonmises.nnlf((kappa, loc, 1), data)
 
         kwds = {}
         if fix_loc:
@@ -2706,7 +2706,7 @@ class TestLaplace:
     @pytest.mark.parametrize("rvs_loc,rvs_scale", [(-5, 10),
                                                    (10, 5),
                                                    (0.5, 0.2)])
-    def test_fit_MLE_comp_optimzer(self, rvs_loc, rvs_scale):
+    def test_fit_MLE_comp_optimizer(self, rvs_loc, rvs_scale):
         data = stats.laplace.rvs(size=1000, loc=rvs_loc, scale=rvs_scale)
 
         # the log-likelihood function for laplace is given by
@@ -3730,8 +3730,8 @@ class TestLognorm:
                              [e for e in product((False, True), repeat=3)
                               if False in e])
     @np.errstate(invalid="ignore")
-    def test_fit_MLE_comp_optimzer(self, rvs_shape, rvs_loc, rvs_scale,
-                                   fix_shape, fix_loc, fix_scale, rng):
+    def test_fit_MLE_comp_optimizer(self, rvs_shape, rvs_loc, rvs_scale,
+                                    fix_shape, fix_loc, fix_scale, rng):
         data = stats.lognorm.rvs(size=100, s=rvs_shape, scale=rvs_scale,
                                  loc=rvs_loc, random_state=rng)
         args = [data, (stats.lognorm._fitstart(data), )]
