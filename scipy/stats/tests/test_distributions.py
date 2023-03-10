@@ -208,17 +208,12 @@ class TestVonMises:
         data = stats.vonmises.rvs(rvs_shape, size=1000, loc=rvs_loc,
                                   random_state=rng)
 
-        def negative_loglikelihood(fit_result, data):
-            # `scale` is broken for vonmises, so ignore it
-            kappa, loc, _ = fit_result
-            return stats.vonmises.nnlf((kappa, loc, 1), data)
-
-        kwds = {}
+        kwds = {'fscale': 1}
         if fix_loc:
             kwds['floc'] = rvs_loc
 
         _assert_less_or_close_loglike(stats.vonmises, data,
-                                      negative_loglikelihood, **kwds)
+                                      stats.vonmises.nnlf, **kwds)
 
     @pytest.mark.parametrize('loc', [-0.5 * np.pi, 0, np.pi])
     @pytest.mark.parametrize('kappa', [1, 10, 100, 1000])
