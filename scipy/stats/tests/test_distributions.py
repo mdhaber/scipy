@@ -211,9 +211,12 @@ class TestVonMises:
         kwds = {'fscale': 1}
         if fix_loc:
             kwds['floc'] = rvs_loc
+            rtol = 1e-6
+        else:
+            rtol = 1e-15
 
         _assert_less_or_close_loglike(stats.vonmises, data,
-                                      stats.vonmises.nnlf, 1e-6, **kwds)
+                                      stats.vonmises.nnlf, rtol, **kwds)
 
     @pytest.mark.parametrize('loc', [-0.5 * np.pi, 0, np.pi])
     @pytest.mark.parametrize('kappa', [1, 10, 100, 1000])
@@ -262,7 +265,6 @@ def _assert_less_or_close_loglike(dist, data, func, rtol=1e-15, **kwds):
     """
     mle_analytical = dist.fit(data, **kwds)
     numerical_opt = super(type(dist), dist).fit(data, **kwds)
-    #print(f"analytical: {mle_analytical}, super: {numerical_opt}")
     ll_mle_analytical = func(mle_analytical, data)
     ll_numerical_opt = func(numerical_opt, data)
     assert (ll_mle_analytical <= ll_numerical_opt or
