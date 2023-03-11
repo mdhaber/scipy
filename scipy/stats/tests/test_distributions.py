@@ -266,7 +266,7 @@ def _assert_less_or_close_loglike(dist, data, func, rtol=1e-15, **kwds):
     ll_mle_analytical = func(mle_analytical, data)
     ll_numerical_opt = func(numerical_opt, data)
     assert (ll_mle_analytical <= ll_numerical_opt or
-            np.allclose(ll_mle_analytical, ll_numerical_opt))
+            np.allclose(ll_mle_analytical, ll_numerical_opt, rtol=rtol))
 
 
 def assert_fit_warnings(dist):
