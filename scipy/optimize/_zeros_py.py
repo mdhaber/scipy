@@ -2,7 +2,7 @@ import warnings
 from collections import namedtuple
 import operator
 from . import _zeros
-from ._optimize import OptimizeResult, _call_callback_maybe_halt
+from ._optimize import OptimizeResult, _call_callback_maybe_halt, _status_message
 import numpy as np
 
 
@@ -1391,7 +1391,8 @@ def toms748(f, a, b, args=(), k=1,
 
 
 def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
-                  xatol=_rtol, maxiter=_iter, callback=None):
+                  xatol=_rtol, maxiter=_iter, ensure_scalar_x=False,
+                  callback=None, test_switch=False):
     """Find the root of an elementwise function using Chandrupatla's algorithm.
 
     This function allows for `x0`, `x1`, amd the output of `f` to be of any
@@ -1418,6 +1419,8 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
         The upper bound of the root of the function. Follows normal
         broadcasting rules and will be broadcast against `x0` and `f` before
         being passed into `f`.
+    args : tuple, optional
+        Determines shape of output
     xatol : float, optional
         Tolerance (absolute) for termination. Termination occurs if
         `2*xatol*np.abs(r) + xrtol / np.abs(b - c) > 0.5`.
@@ -1527,11 +1530,37 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
     # which in turn is based on Chandrupatla's algorithm as described in
     # Scherer https://books.google.com/books?id=cC-8BAAAQBAJ&pg=PA95
 
+    # FOR TESTING ONLY
+    if ensure_scalar_x:
+        def f_wrapped(x, *args, **kwargs):
+            return np.asarray([f(x[0], *args, **kwargs)])
+    else:
+        f_wrapped = f
+
+    # FOR TESTING ONLY
+    def termination_function1():
+        """chandrupatla termination per paper"""
+        term = np.logical_or(terminate,
+                             np.logical_or(fm == 0, tlim > 0.5))
+        return term
+
+    def termination_function2():
+        """termination like brent / bisect for testing"""
+        delta = (xatol + xrtol * abs(r))
+        term = np.logical_or(terminate,
+                             np.logical_or(fm == 0,
+                                           abs(b - a) < delta))
+        return term
+
+    termination_function = (termination_function1
+                            if test_switch
+                            else termination_function2)
+
     # Initialization
     b = x0
     a = c = x1
-    fb = f(b, *args)
-    fa = fc = f(a, *args)
+    fb = f_wrapped(b, *args)
+    fa = fc = f_wrapped(a, *args)
     t = 0.5
     iterations = 0
 
@@ -1543,11 +1572,7 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
     iterations = np.zeros_like(a)
 
     # flag to check state of convergence
-    flag = np.full(shape, _EINPROGRESS)
-
-    # Initialize an array of False,
-    # determines whether we should do inverse quadratic interpolation
-    iqi = np.zeros(shape, dtype=bool)
+    flag = np.full(shape, "in_progress")
 
     funcalls = np.full(np.shape(flag), 0)
     terminate = False
@@ -1556,7 +1581,7 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
         # use t to linearly interpolate between a and b,
         # and evaluate this function as our newest estimate xt
         xt = a + t * (b - a)
-        ft = f(xt, *args)
+        ft = f_wrapped(xt, *args)
         funcalls += 1
 
         # update our history of the last few points so that
@@ -1576,14 +1601,14 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
         r = np.choose(fa_is_smaller, [b, a])
         fm = np.choose(fa_is_smaller, [fb, fa])
 
-        tol = 2 * xatol * np.abs(r) + xrtol
-        tlim = tol / np.abs(b - c)
-        terminate = np.logical_or(terminate,
-                                  np.logical_or(fm == 0, tlim > 0.5))
+        tol = 2 * xrtol * np.abs(r) + xatol
+        tlim = tol / np.abs(b - a)
+
+        terminate = termination_function()
 
         # check convergence here, update flag if so
         if np.all(terminate):
-            flag.fill(_ECONVERGED)
+            flag.fill(_status_message['success'])
             break
 
         iterations += 1 - terminate
@@ -1592,60 +1617,50 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
         # to determine which method we should use next
         xi = (a - b) / (c - b)
         phi = (fa - fb) / (fc - fb)
-        iqi = np.logical_and(phi**2 < xi, (1 - phi) ** 2 < 1 - xi)
-
-        if iqi.all():
-            t = np.full(shape, 0.5)
-            a2, b2, c2, fa2, fb2, fc2 = (
-                a[iqi],
-                b[iqi],
-                c[iqi],
-                fa[iqi],
-                fb[iqi],
-                fc[iqi],
-            )
-            t[iqi] = fa2 / (fb2 - fa2) * fc2 / (fb2 - fc2) + (c2 - a2) / (
-                b2 - a2
-            ) * fa2 / (fc2 - fa2) * fb2 / (fc2 - fb2)
-        else:
-            # bisection
-            t = 0.5
+        alpha = (c - a) / (b - a)
+        t = (fa / (fa - fb) * fc / (fc - fb) -
+             alpha * fa / (fc - fa) * fb / (fb - fc))
+        j = ((1-(np.sqrt(1-xi))) >= phi) | (phi >= np.sqrt(xi))
+        t[j] = 0.5
 
         # limit to the range (tlim, 1-tlim)
         t = np.minimum(1 - tlim, np.maximum(tlim, t))
 
-        intermediate_result = OptimizeResult(x=r, fun=ft)
+        intermediate_result = RootResults(root=r,
+                                          function_calls=funcalls,
+                                          iterations=iterations,
+                                          flag=None)
         if _call_callback_maybe_halt(callback, intermediate_result):
             break
 
     # reshape outputs
-    r = np.reshape(r, intermediate_shape)
-    ft = np.reshape(ft, intermediate_shape)
-    funcalls = np.reshape(funcalls, intermediate_shape)
-    a = np.reshape(a, intermediate_shape)
-    b = np.reshape(b, intermediate_shape)
-    fa = np.reshape(fa, intermediate_shape)
-    fb = np.reshape(fb, intermediate_shape)
-    iterations = np.reshape(iterations, intermediate_shape)
+    r = np.reshape(r, intermediate_shape)[()]
+    ft = np.reshape(ft, intermediate_shape)[()]
+    funcalls = np.reshape(funcalls, intermediate_shape)[()]
+    a = np.reshape(a, intermediate_shape)[()]
+    b = np.reshape(b, intermediate_shape)[()]
+    fa = np.reshape(fa, intermediate_shape)[()]
+    fb = np.reshape(fb, intermediate_shape)[()]
+    iterations = np.reshape(iterations, intermediate_shape)[()]
 
     # checks for convergence and conditions
-    if iterations.any() >= maxiter:
-        flag.fill(_ECONVERR)
+    if (iterations > maxiter).any():
+        mask = np.where(iterations > maxiter)
+        flag[mask] = 'maxiter'
     elif not (np.sign(fa) * np.sign(fb) <= 0).all():
-        flag.fill(_ESIGNERR)
+        flag.fill('sign_error')
     elif not ((np.isfinite(a).all() and np.isreal(a).all()) and
               (np.isfinite(b).all() and np.isreal(b).all())):
-        flag.fill(_EVALUEERR)
+        flag.fill('value_error')
     elif not (np.isreal(fa).all() and np.isreal(fb).all()):
-        flag.fill(_EVALUEERR)
+        flag.fill('value_error')
     else:
-        flag.fill(_ECONVERGED)
+        flag.fill('success')
 
     # iterate here to create the message since the scalar case has dimension ()
     message_flag = flag.flatten()
-    message = np.reshape([flag_map[i] for i in message_flag],
-                         intermediate_shape)
-    flag = np.reshape(flag, intermediate_shape)
+    message = {i: _status_message[i] for i in message_flag}
+    flag = np.reshape(flag, intermediate_shape)[()]
 
     result = RootResults(root=r,
                          function_calls=funcalls,
@@ -1654,7 +1669,7 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
 
     # add output specific to _chandrupatla
     result.flag = flag
-    result.converged = flag == 0
+    result.converged = flag == 'success'
     result.fun = ft
     result.message = message
     result.lower_bracket = a
