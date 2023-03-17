@@ -9614,12 +9614,14 @@ class vonmises_gen(rv_continuous):
             return stats.circmean(data)
 
         def find_kappa(data):
-            # kappa is the solution to
-            # r = I[1](kappa)/I[0](kappa)
-            #   = I[1](kappa) * exp(-kappa)/(I[0](kappa) * exp(-kappa))
-            #   = sc.i1e(kappa)/sc.i0e(kappa)
-            # where r = mean resultant length
-            r = 1 - stats.circvar(data)
+            # Usually, sources list the following as the equation to solve for
+            # the MLE of the shape parameter:
+            # r = I[1](kappa)/I[0](kappa), where r = mean resultant length
+            # This is valid when the location is the MLE of location.
+            # More generally, when the location may be fixed at an arbitrary
+            # value, r should be defined as follows:
+            r = np.sum(np.cos(floc - data))/len(data)
+            # See gh-18128 for more information.
 
             def solve_for_kappa(kappa):
                 return sc.i1e(kappa)/sc.i0e(kappa) - r

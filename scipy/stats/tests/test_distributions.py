@@ -211,12 +211,9 @@ class TestVonMises:
         kwds = {'fscale': 1}
         if fix_loc:
             kwds['floc'] = rvs_loc
-            rtol = 1e-6
-        else:
-            rtol = 1e-15
 
         _assert_less_or_close_loglike(stats.vonmises, data,
-                                      stats.vonmises.nnlf, rtol, **kwds)
+                                      stats.vonmises.nnlf, **kwds)
 
     @pytest.mark.parametrize('loc', [-0.5 * np.pi, 0, np.pi])
     @pytest.mark.parametrize('kappa', [1, 10, 100, 1000])
@@ -255,7 +252,7 @@ class TestVonMises:
         assert -np.pi < loc_fit < np.pi
 
 
-def _assert_less_or_close_loglike(dist, data, func, rtol=1e-15, **kwds):
+def _assert_less_or_close_loglike(dist, data, func, **kwds):
     """
     This utility function checks that the log-likelihood (computed by
     func) of the result computed using dist.fit() is less than or equal
@@ -268,7 +265,7 @@ def _assert_less_or_close_loglike(dist, data, func, rtol=1e-15, **kwds):
     ll_mle_analytical = func(mle_analytical, data)
     ll_numerical_opt = func(numerical_opt, data)
     assert (ll_mle_analytical <= ll_numerical_opt or
-            np.allclose(ll_mle_analytical, ll_numerical_opt, rtol=rtol))
+            np.allclose(ll_mle_analytical, ll_numerical_opt, rtol=1e-15))
 
 
 def assert_fit_warnings(dist):
