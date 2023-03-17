@@ -202,7 +202,11 @@ class TestVonMises:
     @pytest.mark.parametrize("rvs_loc", [0, 2])
     @pytest.mark.parametrize("rvs_shape", [1, 100])
     @pytest.mark.parametrize('fix_loc', [True, False])
-    def test_fit_MLE_comp_optimizer(self, rvs_loc, rvs_shape, fix_loc):
+    @pytest.mark.parametrize('fix_shape', [True, False])
+    def test_fit_MLE_comp_optimizer(self, rvs_loc, rvs_shape,
+                                    fix_loc, fix_shape):
+        if fix_shape and fix_loc:
+            pytest.skip("Nothing to fit.")
 
         rng = np.random.default_rng(6762668991392531563)
         data = stats.vonmises.rvs(rvs_shape, size=1000, loc=rvs_loc,
@@ -211,6 +215,8 @@ class TestVonMises:
         kwds = {'fscale': 1}
         if fix_loc:
             kwds['floc'] = rvs_loc
+        if fix_shape:
+            kwds['f0'] = rvs_shape
 
         _assert_less_or_close_loglike(stats.vonmises, data,
                                       stats.vonmises.nnlf, **kwds)
@@ -252,7 +258,7 @@ class TestVonMises:
         assert -np.pi < loc_fit < np.pi
 
 
-def _assert_less_or_close_loglike(dist, data, func, **kwds):
+def _assert_less_or_close_loglike(dist, data, func=None, **kwds):
     """
     This utility function checks that the log-likelihood (computed by
     func) of the result computed using dist.fit() is less than or equal

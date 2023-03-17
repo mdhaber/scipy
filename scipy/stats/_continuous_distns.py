@@ -9613,14 +9613,14 @@ class vonmises_gen(rv_continuous):
         def find_mu(data):
             return stats.circmean(data)
 
-        def find_kappa(data):
+        def find_kappa(data, loc):
             # Usually, sources list the following as the equation to solve for
             # the MLE of the shape parameter:
             # r = I[1](kappa)/I[0](kappa), where r = mean resultant length
             # This is valid when the location is the MLE of location.
             # More generally, when the location may be fixed at an arbitrary
             # value, r should be defined as follows:
-            r = np.sum(np.cos(floc - data))/len(data)
+            r = np.sum(np.cos(loc - data))/len(data)
             # See gh-18128 for more information.
 
             def solve_for_kappa(kappa):
@@ -9630,14 +9630,13 @@ class vonmises_gen(rv_continuous):
                                    bracket=(1e-8, 1e12))
             return root_res.root
 
-        if floc is None:
-            floc = find_mu(data)
-            fshape = find_kappa(data)
-        else:
-            fshape = find_kappa(data)
+        # location likelihood equation has a solution independent of kappa
+        loc = floc if floc is not None else find_mu(data)
+        # shape likelihood equation depends on location
+        shape = fshape if fshape is not None else find_kappa(data, loc)
 
-        floc = np.mod(floc + np.pi, 2 * np.pi) - np.pi  # ensure in [-pi, pi]
-        return fshape, floc, 1  # scale is not handled
+        loc = np.mod(loc + np.pi, 2 * np.pi) - np.pi  # ensure in [-pi, pi]
+        return shape, loc, 1  # scale is not handled
 
 
 vonmises = vonmises_gen(name='vonmises')
