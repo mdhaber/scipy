@@ -553,8 +553,9 @@ def test_check_empty_inputs():
         for combo in combinations_with_replacement([0, 1, 2], i):
             for axis in range(len(combo)):
                 samples = (np.zeros(combo),)
-                output = stats._axis_nan_policy._check_empty_inputs(samples,
-                                                                    axis)
+                output = stats._axis_nan_policy._check_empty_inputs(
+                    samples, axis, np.float64)
+
                 if output is not None:
                     with np.testing.suppress_warnings() as sup:
                         sup.filter(RuntimeWarning, "Mean of empty slice.")
@@ -753,6 +754,63 @@ def test_masked_dtype():
     # test that dtype is preserved in functions
     a = np.ma.array([1, 2, 3], mask=[0, 1, 0], dtype=np.float32)
     assert stats.gmean(a).dtype == np.float32
+
+
+def test_nan_dtype():
+    # Since the decorator's introduction (probably), the output dtype has
+    # changed to float64 when adding NaNs to the output. Check that this is
+    # fixed.
+    dtype1 = np.float16
+    dtype2 = np.float32
+
+    # Empty arrays are handled by `_check_empty_inputs`
+    x = np.zeros((0, 0, 1), dtype=dtype1)
+    y = np.zeros((0, 0, 1), dtype=dtype2)
+    res = stats.mannwhitneyu(x, y)
+    assert res.statistic.dtype == res.pvalue.dtype == np.result_type(x, y)
+
+    # 1D propagate
+    x = np.full(3, np.nan, dtype=dtype1)
+    y = np.full(5, np.nan, dtype=dtype2)
+    res = stats.mannwhitneyu(x, y)
+    assert res.statistic.dtype == res.pvalue.dtype == np.result_type(x, y)
+
+    # Empty 1D omit/masked array are broken; see gh-18217
+    # # 1D omit
+    # with pytest.warns(RuntimeWarning):
+    #     res = stats.sem(x, nan_policy='omit')
+    # assert res.dtype == np.result_type(x)
+
+    # # 1D masked array
+    # with pytest.warns(RuntimeWarning):
+    #     res = stats.sem(np.ma.masked_array(x, mask=np.ones_like(x)))
+    # assert res.dtype == np.result_type(x)
+
+    # ND propagate
+    x = np.full((3, 4), np.nan, dtype=dtype1)
+    y = np.full((5, 4), np.nan, dtype=dtype2)
+    res = stats.mannwhitneyu(x, y)
+    assert res.statistic.dtype == res.pvalue.dtype == np.result_type(x, y)
+
+    # ND omit
+    x = np.full((3, 4), np.nan, dtype=dtype1)
+    y = np.full((5, 4), np.nan, dtype=dtype2)
+    res = stats.mannwhitneyu(x, y, nan_policy='omit')
+    assert res.statistic.dtype == res.pvalue.dtype == np.result_type(x, y)
+
+    # ND masked array
+    x, y = np.ma.masked_invalid(x), np.ma.masked_invalid(y)
+    res = stats.mannwhitneyu(x, y)
+    assert res.statistic.dtype == res.pvalue.dtype == np.result_type(x, y)
+
+    # ND masked array with some unmasked NaNs
+    x = np.ones((3, 4), dtype=dtype1)
+    y = np.ones((5, 4), dtype=dtype2)
+    x[0, 0] = np.nan
+    x, y = np.ma.masked_invalid(x), np.ma.masked_invalid(y)
+    x[1, 0] = np.nan
+    res = stats.mannwhitneyu(x, y)
+    assert res.statistic.dtype == res.pvalue.dtype == np.result_type(x, y)
 
 
 def test_masked_stat_1d():

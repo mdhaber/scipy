@@ -224,7 +224,7 @@ def _masked_arrays_2_sentinel_arrays(samples):
     return out_samples, sentinel
 
 
-def _check_empty_inputs(samples, axis):
+def _check_empty_inputs(samples, axis, output_dtype):
     """
     Check for empty sample; return appropriate output for a vectorized hypotest
     """
@@ -234,7 +234,7 @@ def _check_empty_inputs(samples, axis):
     # otherwise, the statistic and p-value will be either empty arrays or
     # arrays with NaNs. Produce the appropriate array and return it.
     output_shape = _broadcast_array_shapes_remove_axis(samples, axis)
-    output = np.ones(output_shape) * np.nan
+    output = np.full(output_shape, np.nan, dtype=output_dtype)
     return output
 
 
@@ -459,6 +459,7 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
             nan_policy = kwds.pop('nan_policy', 'propagate')
             keepdims = kwds.pop("keepdims", False)
             del args  # avoid the possibility of passing both `args` and `kwds`
+            output_dtype = np.result_type(*samples) if samples else np.float64
 
             # convert masked arrays to regular arrays with sentinel values
             samples, sentinel = _masked_arrays_2_sentinel_arrays(samples)
@@ -501,7 +502,7 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
                 # Addresses nan_policy == "propagate"
                 if any(contains_nans) and (nan_policy == 'propagate'
                                            and override['nan_propagation']):
-                    res = np.full(n_out, np.nan)
+                    res = np.full(n_out, np.nan, dtype=output_dtype)
                     res = _add_reduced_axes(res, reduced_axes, keepdims)
                     return tuple_to_result(*res)
 
@@ -527,7 +528,7 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
             # ideally, move this to the top, but some existing functions raise
             # exceptions for empty input, so overriding it would break
             # backward compatibility.
-            empty_output = _check_empty_inputs(samples, axis)
+            empty_output = _check_empty_inputs(samples, axis, output_dtype)
             if empty_output is not None:
                 res = [empty_output.copy() for i in range(n_out)]
                 res = _add_reduced_axes(res, reduced_axes, keepdims)
@@ -556,7 +557,7 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
                     if sentinel:
                         samples = _remove_sentinel(samples, paired, sentinel)
                     if is_too_small(samples):
-                        return np.full(n_out, np.nan)
+                        return np.full(n_out, np.nan, dtype=output_dtype)
                     return result_to_tuple(hypotest_fun_out(*samples, **kwds))
 
             # Addresses nan_policy == "propagate"
@@ -564,13 +565,13 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
                   and override['nan_propagation']):
                 def hypotest_fun(x):
                     if np.isnan(x).any():
-                        return np.full(n_out, np.nan)
+                        return np.full(n_out, np.nan, dtype=output_dtype)
 
                     samples = np.split(x, split_indices)[:n_samp+n_kwd_samp]
                     if sentinel:
                         samples = _remove_sentinel(samples, paired, sentinel)
                     if is_too_small(samples):
-                        return np.full(n_out, np.nan)
+                        return np.full(n_out, np.nan, dtype=output_dtype)
                     return result_to_tuple(hypotest_fun_out(*samples, **kwds))
 
             else:
@@ -579,7 +580,7 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
                     if sentinel:
                         samples = _remove_sentinel(samples, paired, sentinel)
                     if is_too_small(samples):
-                        return np.full(n_out, np.nan)
+                        return np.full(n_out, np.nan, dtype=output_dtype)
                     return result_to_tuple(hypotest_fun_out(*samples, **kwds))
 
             x = np.moveaxis(x, axis, 0)
