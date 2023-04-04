@@ -313,8 +313,8 @@ class TestDunnett:
         assert res._ci is None
         assert res._ci_cl is None
         ci = res.confidence_interval(confidence_level=0.95)
-        assert_allclose(ci.low, ci_ref[0], rtol=5e-3, atol=1e-5)
-        assert_allclose(ci.high, ci_ref[1], rtol=5e-3, atol=1e-5)
+        assert_allclose(ci.low, ci_ref[0], rtol=1e-3, atol=1e-5)
+        assert_allclose(ci.high, ci_ref[1], rtol=1e-3, atol=1e-5)
 
         # re-run to use the cached value "is" to check id as same object
         assert res._ci is ci

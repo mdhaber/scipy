@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from scipy import stats
-from scipy.optimize import minimize_scalar
+from scipy.optimize import root_scalar
 from scipy.stats._common import ConfidenceInterval
 from scipy.stats._qmc import check_random_state
 from scipy.stats._stats_py import _var
@@ -97,16 +97,15 @@ class DunnettResult:
         allowance : float
             Allowance around the mean.
         """
-        alpha = 1 - confidence_level
+        if self._alternative == "two-sided":
+            confidence_level = (confidence_level + 1)/2
 
         def pvalue_from_stat(statistic):
             statistic = np.array(statistic)
-            sf = _pvalue_dunnett(
-                rho=self._rho, df=self._df,
-                statistic=statistic, alternative=self._alternative,
-                rng=self._rng
-            )
-            return abs(sf - alpha)/alpha
+            sf = _pvalue_dunnett(rho=self._rho, df=self._df,
+                                 statistic=statistic, alternative='less',
+                                 rng=self._rng)[0]
+            return np.diff(stats.t(df=self._df).ppf([sf, 1-confidence_level]))
 
         # Evaluation of `pvalue_from_stat` is noisy due to the use of RQMC to
         # evaluate `multivariate_t.cdf`. `minimize_scalar` is not designed
@@ -114,16 +113,19 @@ class DunnettResult:
         # minimum accurately. We mitigate this possibility with the validation
         # step below, but implementation of a noise-tolerant root finder or
         # minimizer would be a welcome enhancement. See gh-18150.
-        res = minimize_scalar(pvalue_from_stat, method='brent', tol=tol)
-        critical_value = res.x
+        dim = self._rho.shape[0]
+        bracket = stats.t(df=self._df).ppf([1-confidence_level, 1-confidence_level**(1/dim)])
+        res = root_scalar(pvalue_from_stat, bracket=bracket, method='bisect', rtol=tol/10)
+        critical_value = res.root
+        fun = pvalue_from_stat(critical_value)
 
         # validation
         # tol*10 because tol=1e-3 means we tolerate a 1% change at most
-        if res.success is False or res.fun >= tol*10:
+        if res.converged is False or fun >= tol*10:
             warnings.warn(
                 "Computation of the confidence interval did not converge to "
                 "the desired level. The confidence level corresponding with "
-                f"the returned interval is approximately {alpha*(1+res.fun)}.",
+                f"the returned interval is approximately {alpha*(1+fun)}.",
                 stacklevel=3
             )
 
