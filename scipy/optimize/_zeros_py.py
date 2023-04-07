@@ -1552,9 +1552,9 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
                                            abs(b - a) < delta))
         return term
 
-    termination_function = (termination_function1
+    termination_function = (termination_function2
                             if test_switch
-                            else termination_function2)
+                            else termination_function1)
 
     # Initialization
     b = x0
