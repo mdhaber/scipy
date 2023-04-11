@@ -107,10 +107,17 @@ class EmpiricalDistributionFunction:
         q = self.quantiles
         q = [q[0] - delta] + list(q) + [q[-1] + delta]
 
-        return ax.step(q, self.evaluate(q), **kwargs)
+        ax.step(q, self.evaluate(q), **kwargs)
+
+        ci = self.confidence_interval()
+        kwargs.pop('color', None)
+        ax.step(self.quantiles, ci.low, **kwargs, color='C1')
+        ax.step(self.quantiles, ci.high, **kwargs, color='C1')
+
+        return ax
 
     def confidence_interval(self, confidence_level=0.95, *, method='linear'):
-        """Compute a confidence interval around the CDF/SF point estimate
+        """Compute a confidence interval around the CDF/SF point estimate.
 
         Parameters
         ----------
@@ -148,11 +155,6 @@ class EmpiricalDistributionFunction:
                https://www.math.wustl.edu/~sawyer/handouts/greenwood.pdf
 
         """
-        message = ("Confidence interval bounds do not implement a "
-                   "`confidence_interval` method.")
-        if self._n is None:
-            raise NotImplementedError(message)
-
         methods = {'linear': self._linear_ci,
                    'log-log': self._loglog_ci}
 
@@ -175,10 +177,7 @@ class EmpiricalDistributionFunction:
             warnings.warn(message, RuntimeWarning, stacklevel=2)
 
         low, high = np.clip(low, 0, 1), np.clip(high, 0, 1)
-        low = EmpiricalDistributionFunction(self.quantiles, low, None, None,
-                                            self._kind)
-        high = EmpiricalDistributionFunction(self.quantiles, high, None, None,
-                                             self._kind)
+
         return ConfidenceInterval(low, high)
 
     def _linear_ci(self, confidence_level):
