@@ -33,9 +33,9 @@ This is an early example of a *permutation test*. Like *Monte Carlo tests* [@rob
 
 # Statement of need
 
-Scientists and engineers frequently analyze data by considering questions of the following forms.
+Scientists and engineers frequently analyze data by considering questions of the following forms, illustrated with examples based on Darwin's experiment [@darwin1877effects].
 
-1. Are the observations sampled from a hypothesized distribution? For instance, in Darwin's experiment [@darwin1877effects], are the differences in heights between paired plants normally distributed?
+1. Are the observations sampled from a hypothesized distribution? For instance, are the differences in heights between paired plants normally distributed?
 2. Are the samples drawn from the *same* distribution? For example, does the fertilization method have no effect on plant height?
 3. What can be inferred from the samples about the true value of a population statistic? For instance, what is the uncertainty in the true mean difference in heights between paired plants?
 
