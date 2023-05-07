@@ -131,6 +131,7 @@ Continuous distributions
    powernorm         -- Power normal
    rdist             -- R-distribution
    rayleigh          -- Rayleigh
+   rel_breitwigner   -- Relativistic Breit-Wigner
    rice              -- Rice
    recipinvgauss     -- Reciprocal Inverse Gaussian
    semicircular      -- Semicircular
@@ -186,6 +187,7 @@ Multivariate distributions
    multivariate_hypergeom -- Multivariate hypergeometric distribution
    random_table           -- Distribution of random tables with given marginals
    uniform_direction      -- Uniform distribution on S(N-1)
+   vonmises_fisher        -- Von Mises-Fisher distribution
 
 `scipy.stats.multivariate_normal` methods accept instances
 of the following class to represent the covariance.
@@ -394,6 +396,7 @@ Others are generalized to multiple samples.
 
    f_oneway
    tukey_hsd
+   dunnett
    kruskal
    alexandergovern
    fligner
@@ -417,6 +420,17 @@ at the cost of greater computational requirements and stochastic results.
    monte_carlo_test
    permutation_test
    bootstrap
+
+Instances of the following object can be passed into some hypothesis test
+functions to perform a resampling or Monte Carlo version of the hypothesis
+test.
+
+.. autosummary::
+   :toctree: generated/
+
+   MonteCarloMethod
+   PermutationMethod
+   BootstrapMethod
 
 Multiple Hypothesis Testing and Meta-Analysis
 ---------------------------------------------
@@ -513,13 +527,15 @@ Random variate generation / CDF Inversion
 
    rvs_ratio_uniforms
 
-Distribution Fitting
---------------------
+Fitting / Survival Analysis
+---------------------------
 
 .. autosummary::
    :toctree: generated/
 
    fit
+   ecdf
+   logrank
 
 Directional statistical functions
 ---------------------------------
@@ -593,6 +609,7 @@ from ._stats_py import *
 from ._variation import variation
 from .distributions import *
 from ._morestats import *
+from ._multicomp import *
 from ._binomtest import binomtest
 from ._binned_statistic import *
 from ._kde import gaussian_kde
@@ -602,7 +619,8 @@ from ._multivariate import *
 from . import contingency
 from .contingency import chi2_contingency
 from ._censored_data import CensoredData  # noqa
-from ._resampling import bootstrap, monte_carlo_test, permutation_test
+from ._resampling import (bootstrap, monte_carlo_test, permutation_test,
+                          MonteCarloMethod, PermutationMethod, BootstrapMethod)
 from ._entropy import *
 from ._hypotests import *
 from ._rvs_sampling import rvs_ratio_uniforms
@@ -611,6 +629,7 @@ from ._mannwhitneyu import mannwhitneyu
 from ._fit import fit, goodness_of_fit
 from ._covariance import Covariance
 from ._sensitivity_analysis import *
+from ._survival import *
 
 # Deprecated namespaces, to be removed in v2.0.0
 from . import (
