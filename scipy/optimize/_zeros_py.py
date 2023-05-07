@@ -1394,19 +1394,18 @@ def toms748(f, a, b, args=(), k=1,
     return _results_select(full_output, (x, function_calls, iterations, flag))
 
 
-def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
-                  xatol=_rtol, maxiter=_iter, ensure_scalar_x=False,
-                  callback=None, test_switch=False):
+def _chandrupatla(func, x1, x2, *, args=(), xrtol=_xtol, xatol=_rtol,
+                  maxiter=_iter, callback=None, test_switch=False):
     """Find the root of an elementwise function using Chandrupatla's algorithm.
 
-    This function allows for `x0`, `x1`, amd the output of `f` to be of any
+    This function allows for `x1`, `x2`, amd the output of `f` to be of any
     broadcastable shapes. For each element of the output of `f`, `chandrupatla`
     seeks the scalar root that makes the element 0.
 
     Parameters
     ----------
 
-    f : callable
+    func : callable
         The elementwise function whose root is wanted. The signature must be::
 
             f(x: ndarray, *args) -> ndarray
@@ -1415,11 +1414,11 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
          with an arbitrary number of components of any type(s).
          `chandrupatla` seeks an array ``x`` (or scalar) such that each
          corresponding element in the output array (or scalar) are zero.
-    x0 : float, sequence, or ndarray
+    x1 : float, sequence, or ndarray
         The lower bound of the root of the function. Follows normal
         broadcasting rules and will be broadcast against `x1`and `f` before
         being passed into `f`.
-    x1 : float, sequence, or ndarray
+    x2 : float, sequence, or ndarray
         The upper bound of the root of the function. Follows normal
         broadcasting rules and will be broadcast against `x0` and `f` before
         being passed into `f`.
@@ -1512,10 +1511,10 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
     >>> y.x
     2.6457513110645907
 
-    >>> x0 = np.zeros((2,1,1))
-    >>> x1 = np.full((1,2,1), 3)
+    >>> x1 = np.zeros((2,1,1))
+    >>> x2 = np.full((1,2,1), 3)
     >>> k = np.array([[[1, 2]]])
-    >>> res = optimize._chandrupatla(f,x0=x0,x1=x1,
+    >>> res = optimize._chandrupatla(f,x1=x1,x2=x2,
                               args=(k,),
                               maxiter=50)
     >>> res.x
@@ -1534,151 +1533,119 @@ def _chandrupatla(f, x0, x1, *, args=(), xrtol=_xtol,
     # which in turn is based on Chandrupatla's algorithm as described in
     # Scherer https://books.google.com/books?id=cC-8BAAAQBAJ&pg=PA95
 
-    # FOR TESTING ONLY
-    if ensure_scalar_x:
-        def f_wrapped(x, *args, **kwargs):
-            return np.asarray([f(x[0], *args, **kwargs)])
-    else:
-        f_wrapped = f
+    def check_convergence(x1, f1, x2, f2, flag, eps_r=1e-5, eps_a=1e-10):
+        # See Section 4
+        xmin, fmin = x2.copy(), f2.copy()
+        imin = np.abs(f1) < np.abs(f2)
+        xmin[imin], fmin[imin] = x1[imin], f1[imin]
 
-    # FOR TESTING ONLY
-    def termination_function1():
-        """chandrupatla termination per paper"""
-        term = np.logical_or(terminate,
-                             np.logical_or(fm == 0, tlim > 0.5))
-        return term
+        tol = 2 * eps_r * abs(xmin) + 0.5 * eps_a
+        itol = 0.5 * abs(x2 - x1) < tol
+        itol |= np.abs(fmin) < np.finfo(np.float64).smallest_normal
+        flag[itol] = _ECONVERGED
 
-    def termination_function2():
-        """termination like brent / bisect for testing"""
-        delta = (xatol + xrtol * abs(r))
-        term = np.logical_or(terminate,
-                             np.logical_or(fm == 0,
-                                           abs(b - a) < delta))
-        return term
+        j = (np.sign(f1) == np.sign(f2)) & ~itol
+        xmin[j], fmin[j], itol[j], flag[
+            j] = np.nan, np.nan, True, _ESIGNERR  # sign error
 
-    termination_function = (termination_function2
-                            if test_switch
-                            else termination_function1)
+        j = np.isfinite(x1) & np.isfinite(x2) & np.isfinite(f1) & np.isfinite(
+            f2)
+        itol[~j], flag[~j] = True, _EVALUEERR  # value error
 
-    # Initialization
-    b = x0
-    a = c = x1
-    fb = f_wrapped(b, *args)
-    fa = fc = f_wrapped(a, *args)
+        return xmin, fmin, np.all(itol), flag
+
+    def _wrapper(f):
+        def wrapped(x):
+            wrapped.fevals += 1
+            return f(x, *args)
+
+        wrapped.fevals = 0
+        return wrapped
+
+    # Input validation/standardization
+    func = _wrapper(func)
+
+    x1, x2 = np.broadcast_arrays(x1, x2)
+    xt = np.result_type(x1.dtype, x2.dtype, np.float16)  # at least float16
+    f1, f2 = func(x1), func(x2)
+    ft = np.result_type(f1.dtype, f2.dtype, np.float16)
+
+    # need to broadcast again; need different brackets for each output of func
+    x1, x2, f1, f2 = np.broadcast_arrays(x1, x2, f1, f2)
+    # and they need to be writable floats
+    x1, x2, f1, f2 = x1.astype(xt), x2.astype(xt), f1.astype(
+        ft), f2.astype(ft)
+
+    output_shape = x1.shape
+    x1, x2, f1, f2 = np.atleast_1d(x1, x2, f1, f2)
+    flag = np.full_like(x1, _EINPROGRESS)  # in progress
+
+    if not np.issubdtype(np.result_type(x1, x2, f1, f2), np.number):
+        message = "Bracket and function output must be numeric."
+        raise ValueError(message)
+
+    xmin, fmin, converged, flag = check_convergence(x1, f1, x2, f2, flag)
+    cb_terminate = False
+    if callback is not None:
+        cb_terminate = callback(x1, f1, x2, f2)
+
+    i = 0
     t = 0.5
-    iterations = 0
+    while i < maxiter and not converged and not cb_terminate:
+        # Flowchart 1
+        x = x1 + t * (x2 - x1)
+        f = func(x)
+        i += 1
 
-    a, b, fa, fb = np.broadcast_arrays(a, b, fa, fb)
-    intermediate_shape = a.shape
-    a, b, fa, fb = np.atleast_1d(a, b, fa, fb)
-    shape = a.shape
+        # # Flowchart 2 (flowchart is reversed; see code)
+        x3, f3 = x2.copy(), f2.copy()
+        j = np.sign(f) == np.sign(f1)
+        nj = ~j
+        x3[j], f3[j] = x1[j], f1[j]
+        x2[nj], f2[nj] = x1[nj], f1[nj]
+        x1, f1 = x.copy(), f.copy()
 
-    iterations = np.zeros_like(a)
-
-    # flag to check state of convergence
-    flag = np.full(shape, "in_progress")
-
-    funcalls = np.full(np.shape(flag), 0)
-    terminate = False
-
-    while iterations.any() < maxiter:
-        # use t to linearly interpolate between a and b,
-        # and evaluate this function as our newest estimate xt
-        xt = a + t * (b - a)
-        ft = f_wrapped(xt, *args)
-        funcalls += 1
-
-        # update our history of the last few points so that
-        # - a is the newest estimate (we're going to update it from xt)
-        # - c and b get the preceding two estimates
-        # - a and b maintain opposite signs for f(a) and f(b)
-        samesign = np.sign(ft) == np.sign(fa)
-        c = np.choose(samesign, [b, a])
-        b = np.choose(samesign, [a, b])
-        fc = np.choose(samesign, [fb, fa])
-        fb = np.choose(samesign, [fa, fb])
-        a = xt
-        fa = ft
-
-        # set r so that f(r) is the minimum magnitude of f(a) and f(b)
-        fa_is_smaller = np.abs(fa) < np.abs(fb)
-        r = np.choose(fa_is_smaller, [b, a])
-        fm = np.choose(fa_is_smaller, [fb, fa])
-
-        tol = 2 * xrtol * np.abs(r) + xatol
-        tlim = tol / np.abs(b - a)
-
-        terminate = termination_function()
-
-        # check convergence here, update flag if so
-        if np.all(terminate):
-            flag.fill(_status_message['success'])
+        # Flowchart 3
+        xmin, fmin, converged, flag = check_convergence(x1, f1, x2, f2, flag)
+        res = RootResults(root=xmin, function_calls=func.fevals,
+                          iterations=i, flag=None)
+        res.flag = flag
+        if _call_callback_maybe_halt(callback, res) or converged:
             break
 
-        iterations += 1 - terminate
+        # Flowchart 4
+        # Equation 1
+        xi1 = (x1 - x2) / (x3 - x2)
+        phi1 = (f1 - f2) / (f3 - f2)
+        alpha = (x3 - x1) / (x2 - x1)
+        j = ((1 - np.sqrt(1 - xi1)) < phi1) & (phi1 < np.sqrt(xi1))
 
-        # Figure out values xi and phi
-        # to determine which method we should use next
-        xi = (a - b) / (c - b)
-        phi = (fa - fb) / (fc - fb)
-        alpha = (c - a) / (b - a)
-        t = (fa / (fa - fb) * fc / (fc - fb) -
-             alpha * fa / (fc - fa) * fb / (fb - fc))
-        j = ((1-(np.sqrt(1-xi))) >= phi) | (phi >= np.sqrt(xi))
-        t[j] = 0.5
+        f1j, f2j, f3j, alphaj = f1[j], f2[j], f3[j], alpha[j]
+        t = np.full_like(alpha, 0.5)
+        t[j] = (f1j / (f1j - f2j) * f3j / (f3j - f2j)
+                - alphaj * f1j / (f3j - f1j) * f2j / (f2j - f3j))
 
-        # limit to the range (tlim, 1-tlim)
-        t = np.minimum(1 - tlim, np.maximum(tlim, t))
-
-        intermediate_result = RootResults(root=r,
-                                          function_calls=funcalls,
-                                          iterations=iterations,
-                                          flag=None)
-        if _call_callback_maybe_halt(callback, intermediate_result):
-            break
+    flag[flag == _EINPROGRESS] = _ECONVERR  # convergence error
 
     # reshape outputs
-    r = np.reshape(r, intermediate_shape)[()]
-    ft = np.reshape(ft, intermediate_shape)[()]
-    funcalls = np.reshape(funcalls, intermediate_shape)[()]
-    a = np.reshape(a, intermediate_shape)[()]
-    b = np.reshape(b, intermediate_shape)[()]
-    fa = np.reshape(fa, intermediate_shape)[()]
-    fb = np.reshape(fb, intermediate_shape)[()]
-    iterations = np.reshape(iterations, intermediate_shape)[()]
+    xmin = xmin.reshape(output_shape)[()]
+    fmin = fmin.reshape(output_shape)[()]
+    x1 = np.reshape(x1, output_shape)[()]
+    x2 = np.reshape(x2, output_shape)[()]
+    f1 = np.reshape(f1, output_shape)[()]
+    f2 = np.reshape(f2, output_shape)[()]
+    flag = flag.reshape(output_shape)[()]
 
-    # checks for convergence and conditions
-    if (iterations > maxiter).any():
-        mask = np.where(iterations > maxiter)
-        flag[mask] = 'maxiter'
-    elif not (np.sign(fa) * np.sign(fb) <= 0).all():
-        flag.fill('sign_error')
-    elif not ((np.isfinite(a).all() and np.isreal(a).all()) and
-              (np.isfinite(b).all() and np.isreal(b).all())):
-        flag.fill('value_error')
-    elif not (np.isreal(fa).all() and np.isreal(fb).all()):
-        flag.fill('value_error')
-    else:
-        flag.fill('success')
-
-    # iterate here to create the message since the scalar case has dimension ()
-    message_flag = flag.flatten()
-    message = {i: _status_message[i] for i in message_flag}
-    flag = np.reshape(flag, intermediate_shape)[()]
-
-    result = RootResults(root=r,
-                         function_calls=funcalls,
-                         iterations=iterations,
-                         flag=None)
+    res = RootResults(root=xmin, function_calls=func.fevals,
+                      iterations=i, flag=None)
 
     # add output specific to _chandrupatla
-    result.flag = flag
-    result.converged = flag == 'success'
-    result.fun = ft
-    result.message = message
-    result.lower_bracket = a
-    result.upper_bracket = b
-    result.lower_fun_value = fa
-    result.upper_fun_value = fb
+    res.flag = flag
+    res.converged = flag == 0
+    res.fun = fmin
+    res.lower_bracket = x1
+    res.upper_bracket = x2
+    res.lower_fun_value = f1
+    res.upper_fun_value = f2
 
-    return result
+    return res

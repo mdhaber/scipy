@@ -210,7 +210,7 @@ class TestChandrupatla(TestScalarRootFinders):
     def f(self, q, dist, p):
         return dist.cdf(q) - p
 
-    @pytest.mark.parametrize('p', [0.6, np.linspace(0.05, 0.95, 10)])
+    @pytest.mark.parametrize('p', [0.6, np.linspace(-0.05, 1.05, 10)])
     def test_basic(self, p):
         dist = stats.norm()
         with np.errstate(invalid='ignore'):
@@ -218,6 +218,36 @@ class TestChandrupatla(TestScalarRootFinders):
         ref = dist.ppf(p)
         np.testing.assert_allclose(res.root, ref)
         assert res.root.shape == ref.shape
+
+    def test_vectorization(self):
+        p = np.linspace(-0.05, 1.05, 10)
+        dist = stats.norm()        \
+
+        @np.vectorize
+        def chandrupatla_single(p):
+            return zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
+
+        with np.errstate(invalid='ignore'):
+            res = zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
+            refs = chandrupatla_single(p)
+
+        ref_fun = [ref.fun for ref in refs]
+        assert_allclose(res.fun, ref_fun, atol=1e-9)
+
+        ref_converged = [ref.converged for ref in refs]
+        assert_equal(res.converged, ref_converged)
+
+        ref_flag = [ref.flag for ref in refs]
+        assert_equal(res.flag, ref_flag)
+
+        ref_function_calls = [ref.function_calls for ref in refs]
+        assert_equal(res.function_calls, max(ref_function_calls))
+
+        ref_iterations = [ref.iterations for ref in refs]
+        assert_equal(res.iterations, max(ref_iterations))
+
+        ref_root = [ref.root for ref in refs]
+        assert_allclose(res.root, ref_root)
 
 
 class TestNewton(TestScalarRootFinders):
