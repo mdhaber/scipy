@@ -213,41 +213,106 @@ class TestChandrupatla(TestScalarRootFinders):
     @pytest.mark.parametrize('p', [0.6, np.linspace(-0.05, 1.05, 10)])
     def test_basic(self, p):
         dist = stats.norm()
-        with np.errstate(invalid='ignore'):
+        with np.errstate(invalid='ignore', divide='ignore'):
             res = zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
         ref = dist.ppf(p)
         np.testing.assert_allclose(res.root, ref)
         assert res.root.shape == ref.shape
 
-    def test_vectorization(self):
-        p = np.linspace(-0.05, 1.05, 10)
-        dist = stats.norm()        \
+    @pytest.mark.parametrize('shape', [(12,), (3, 4), (3, 2, 2)])
+    def test_vectorization(self, shape):
+        p = np.linspace(-0.05, 1.05, 12).reshape(shape)
+        dist = stats.norm()
 
         @np.vectorize
         def chandrupatla_single(p):
             return zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
 
-        with np.errstate(invalid='ignore'):
-            res = zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
-            refs = chandrupatla_single(p)
+        def f(*args, **kwargs):
+            f.f_evals += 1
+            return self.f(*args, **kwargs)
+        f.f_evals = 0
+
+        with np.errstate(invalid='ignore', divide='ignore'):
+            res = zeros._chandrupatla(f, -5, 5, args=(dist, p))
+            refs = chandrupatla_single(p).ravel()
 
         ref_fun = [ref.fun for ref in refs]
-        assert_allclose(res.fun, ref_fun, atol=1e-9)
+        assert_allclose(res.fun.ravel(), ref_fun, atol=1e-9)
+        assert_equal(res.fun.shape, shape)
 
         ref_converged = [ref.converged for ref in refs]
-        assert_equal(res.converged, ref_converged)
+        assert_equal(res.converged.ravel(), ref_converged)
+        assert_equal(res.converged.shape, shape)
 
         ref_flag = [ref.flag for ref in refs]
-        assert_equal(res.flag, ref_flag)
+        assert_equal(res.flag.ravel(), ref_flag)
+        assert_equal(res.flag.shape, shape)
 
         ref_function_calls = [ref.function_calls for ref in refs]
         assert_equal(res.function_calls, max(ref_function_calls))
+        assert_equal(res.function_calls, f.f_evals)
+        assert_equal(res.function_calls.shape, res.fun.shape)
 
         ref_iterations = [ref.iterations for ref in refs]
         assert_equal(res.iterations, max(ref_iterations))
+        assert_equal(res.iterations, f.f_evals-2)
+        assert_equal(res.iterations.shape, res.fun.shape)
 
         ref_root = [ref.root for ref in refs]
-        assert_allclose(res.root, ref_root)
+        assert_allclose(res.root.ravel(), ref_root)
+        assert_equal(res.root.shape, shape)
+
+    def test_flags(self):
+        def f(x):
+            return [x[0] - 2.5, x[1] - 10, np.cos(x[2]), np.nan]
+
+        with np.errstate(invalid='ignore', divide='ignore'):
+            res = zeros._chandrupatla(f, [0] * 4, [np.pi] * 4, maxiter=5)
+
+        ref_flags = np.array([zeros._ECONVERGED, zeros._ESIGNERR,
+                              zeros._ECONVERR, zeros._EVALUEERR])
+        assert_equal(res.flag, ref_flags)
+
+    def test_maxiter_callback(self):
+        p = 0.612814
+        dist = stats.norm()
+        bracket = (-5, 5)
+        maxiter = 5
+
+        with np.errstate(invalid='ignore', divide='ignore'):
+            res = zeros._chandrupatla(self.f, *bracket, args=(dist, p),
+                                      maxiter=maxiter)
+        assert np.all(res.converged == False)
+        assert np.all(res.function_calls == maxiter+2)
+        assert np.all(res.iterations == maxiter)
+
+        def callback(res):
+            callback.iter += 1
+            callback.res = res
+            assert hasattr(res, 'root')
+            if callback.iter == 0:
+                # callback is called once with initial bracket
+                assert res.lower_bracket, res.upper_bracket == bracket
+            assert res.flag == zeros._EINPROGRESS
+            if callback.iter == maxiter:
+                raise StopIteration
+        callback.iter = -1  # callback called once before first iteration
+        callback.res = None
+
+        with np.errstate(invalid='ignore'):
+            res2 = zeros._chandrupatla(self.f, *bracket, args=(dist, p),
+                                       callback=callback)
+
+        # terminating with callback is identical to terminating due to maxiter
+        # (except for `flag`)
+        for key in res.keys():
+            if key == 'flag':
+                assert res[key] == zeros._ECONVERR
+                assert callback.res[key] == zeros._EINPROGRESS
+                assert res2[key] == zeros._ECALLBACK
+            else:
+                assert res2[key] == callback.res[key] == res[key]
 
 
 class TestNewton(TestScalarRootFinders):
