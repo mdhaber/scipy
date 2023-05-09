@@ -1501,25 +1501,26 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
 
     """
 
-    def check_convergence(x1, f1, x2, f2, flag, eps_r=1e-5, eps_a=1e-10):
+    def check_convergence(x1, f1, x2, f2, flag, eps_r=1e-10, eps_a=1e-5):
         # See Section 4
         xmin, fmin = x2.copy(), f2.copy()
         imin = np.abs(f1) < np.abs(f2)
         xmin[imin], fmin[imin] = x1[imin], f1[imin]
 
         tol = 2 * eps_r * abs(xmin) + 0.5 * eps_a
+        tl = tol / abs(x2 - x1)
         itol = 0.5 * abs(x2 - x1) < tol
         itol |= np.abs(fmin) < np.finfo(np.float64).smallest_normal
         flag[itol] = _ECONVERGED
 
         j = np.sign(f1) == np.sign(f2)
-        xmin[j], fmin[j], itol[j], flag[j] = np.nan, np.nan, True, _ESIGNERR  # sign error
+        xmin[j], fmin[j], itol[j], flag[j] = np.nan, np.nan, True, _ESIGNERR
 
         j = (np.isfinite(x1) & np.isfinite(x2)
              & np.isfinite(f1) & np.isfinite(f2))
-        itol[~j], flag[~j] = True, _EVALUEERR  # value error
+        itol[~j], flag[~j] = True, _EVALUEERR
 
-        return xmin, fmin, np.all(itol), flag
+        return xmin, fmin, np.all(itol), flag, tl
 
     x1, x2 = np.broadcast_arrays(a, b)  # broadcast and rename
     f1, f2 = func(x1[()], *args), func(x2[()], *args)
@@ -1541,7 +1542,7 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
         message = "Bracket and function output must be numeric."
         raise ValueError(message)
 
-    xmin, fmin, converged, flag = check_convergence(x1, f1, x2, f2, flag)
+    xmin, fmin, converged, flag, tl = check_convergence(x1, f1, x2, f2, flag)
     if callback is not None:
         res = _prepare_result(xmin, fmin, x1, x2, f1, f2,
                               flag, f_evals, i, output_shape)
@@ -1565,7 +1566,8 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
 
         # Flowchart 3
         i += 1
-        xmin, fmin, converged, flag = check_convergence(x1, f1, x2, f2, flag)
+        xmin, fmin, converged, flag, tl = check_convergence(x1, f1, x2, f2,
+                                                            flag)
         if callback is not None:
             res = _prepare_result(xmin, fmin, x1, x2, f1, f2,
                                   flag, f_evals, i, output_shape)
@@ -1584,7 +1586,7 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
         t = np.full_like(alpha, 0.5)
         t[j] = (f1j / (f1j - f2j) * f3j / (f3j - f2j)
                 - alphaj * f1j / (f3j - f1j) * f2j / (f2j - f3j))
-        t = np.clip(t, 0, 1)
+        t = np.clip(t, tl, 1-tl)
 
     flag[flag == _EINPROGRESS] = _ECALLBACK if cb_terminate else _ECONVERR
 

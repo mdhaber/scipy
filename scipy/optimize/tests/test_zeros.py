@@ -10,7 +10,7 @@ from numpy.testing import (assert_warns, assert_,
 import numpy as np
 from numpy import finfo, power, nan, isclose, sqrt, exp, sin, cos
 
-from scipy import stats
+from scipy import stats, optimize
 from scipy.optimize import (_zeros_py as zeros, newton, root_scalar,
                             OptimizeResult)
 
@@ -216,7 +216,7 @@ class TestChandrupatla(TestScalarRootFinders):
         with np.errstate(invalid='ignore', divide='ignore'):
             res = zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
         ref = dist.ppf(p)
-        np.testing.assert_allclose(res.root, ref)
+        np.testing.assert_allclose(res.root, ref, rtol=1e-6)
         assert res.root.shape == ref.shape
 
     @pytest.mark.parametrize('shape', [(12,), (3, 4), (3, 2, 2)])
@@ -265,10 +265,10 @@ class TestChandrupatla(TestScalarRootFinders):
 
     def test_flags(self):
         def f(x):
-            return [x[0] - 2.5, x[1] - 10, np.cos(x[2]), np.nan]
+            return [x[0] - 2.5, x[1] - 10, (x[2]-0.1)**3, np.nan]
 
         with np.errstate(invalid='ignore', divide='ignore'):
-            res = zeros._chandrupatla(f, [0] * 4, [np.pi] * 4, maxiter=5)
+            res = zeros._chandrupatla(f, [0] * 4, [np.pi] * 4, maxiter=2)
 
         ref_flags = np.array([zeros._ECONVERGED, zeros._ESIGNERR,
                               zeros._ECONVERR, zeros._EVALUEERR])
@@ -314,6 +314,13 @@ class TestChandrupatla(TestScalarRootFinders):
             else:
                 assert res2[key] == callback.res[key] == res[key]
 
+    @pytest.mark.parametrize('case',
+                             optimize._tstutils._CHANDRUPATLA_TESTS)
+    def test_iterations_expected(self, case):
+        f, bracket, root, nfeval, id = case
+        res = zeros._chandrupatla(f, *bracket)
+        assert_allclose(res.fun, f(root), rtol=1e-8, atol=2e-3)
+        assert_equal(res.function_calls, nfeval)
 
 class TestNewton(TestScalarRootFinders):
     def test_newton_collections(self):
