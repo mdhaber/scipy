@@ -1395,13 +1395,13 @@ def toms748(f, a, b, args=(), k=1,
     return _results_select(full_output, (x, function_calls, iterations, flag))
 
 
-def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
-                  maxiter=_iter, callback=None, test_switch=False):
+def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
+                  fatol=None, frtol=0, maxiter=_iter, callback=None):
     """Find the root of an elementwise function using Chandrupatla's algorithm.
 
-    This function allows for `a`, `b`, amd the output of `f` to be of any
-    broadcastable shapes. For each element of the output of `f`, `chandrupatla`
-    seeks the scalar root that makes the element 0.
+    For each element of the output of `f`, `chandrupatla` seeks the scalar root
+    that makes the element 0. This function allows for `a`, `b`, and the output
+    of `f` to be of any broadcastable shapes.
 
     Parameters
     ----------
@@ -1421,12 +1421,9 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
         being passed into `func`.
     args : tuple, optional
         Additional positional arguments to be passed to `func`.
-    xatol : float, optional
-        Tolerance (absolute) for termination. Termination occurs if
-        `2*xatol*np.abs(r) + xrtol / np.abs(b - c) > 0.5`.
-    xrtol : float, optional
-        Tolerance (relative) for termination. Termination occurs if
-        `2*xatol*np.abs(r) + xrtol / np.abs(b - c) > 0.5`.
+    xatol, xrtol, fatol, frtol : float, optional
+        Absolute and relative x- and f- tolerances for termination. See Notes
+        for details.
     maxiter : int, optional
         The maximum number of iterations of the algorithm to perform.
     callback : callable, optional
@@ -1471,6 +1468,17 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
     -----
     Implemented based on Chandrupatla's original paper [1]_.
 
+    If ``xl`` and ``xr`` are the left and right ends of the bracket,
+    ``xmin = xl if abs(func(xl)) <= abs(func(xr)) else xr``,
+    and ``fmin0 = min(func(a), func(b))``, then the algorithm is considered to
+    have converged when ``abs(xr - xl) < xatol + abs(xmin) * xrtol`` or
+    ``fun(xmin) <= fatol + abs(fmin0) * frtol``. This is equivalent to the
+    termination condition described in [1]_ with ``xrtol = 4e-10``,
+    ``xatol = 1e-5``, and ``fatol = frtol = 0``. The default values are
+    ``xatol = 2e-12``, ``xrtol = 4 * np.finfo(float).eps``, ``frtol = 0``,
+    and ``fatol`` is the smallest normal number of the ``dtype`` returned
+    by ``func``.
+
     References
     ----------
 
@@ -1501,16 +1509,23 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
 
     """
 
-    def check_convergence(x1, f1, x2, f2, flag, eps_r=1e-10, eps_a=1e-5):
+    def check_convergence(x1, f1, x2, f2, flag, xatol, xrtol, fatol, frtol):
         # See Section 4
         xmin, fmin = x2.copy(), f2.copy()
         imin = np.abs(f1) < np.abs(f2)
         xmin[imin], fmin[imin] = x1[imin], f1[imin]
 
-        tol = 2 * eps_r * abs(xmin) + 0.5 * eps_a
-        tl = tol / abs(x2 - x1)
-        itol = 0.5 * abs(x2 - x1) < tol
-        itol |= np.abs(fmin) < np.finfo(np.float64).smallest_normal
+        # This is the criterion used in bisect. Chandrupatla's criterion
+        # is equivalent to abs(x2-x1) < 4*abs(xmin)*xrtol + xatol.
+        dx = abs(x2 - x1)
+        tol = abs(xmin)*xrtol + xatol
+        itol =  dx < tol
+        # Tolerance on function value. Note that `frtol` has been redefined as
+        # `frtol = frtol * np.minimum(f1, f2)`, where `f1` and `f2` are the
+        # function evaluated at the original ends of the bracket.
+        itol |= np.abs(fmin) <= fatol + frtol
+        if np.all(itol):
+            pass
         flag[itol] = _ECONVERGED
 
         j = np.sign(f1) == np.sign(f2)
@@ -1520,6 +1535,7 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
              & np.isfinite(f1) & np.isfinite(f2))
         itol[~j], flag[~j] = True, _EVALUEERR
 
+        tl = 0.5 * tol / dx
         return xmin, fmin, np.all(itol), flag, tl
 
     x1, x2 = np.broadcast_arrays(a, b)  # broadcast and rename
@@ -1537,12 +1553,17 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
     flag = np.full_like(x1, _EINPROGRESS, dtype=int)  # in progress
     i, f_evals = 0, 2  # two function evaluations performed above
     cb_terminate = False
+    fatol = fatol or np.finfo(ft).smallest_normal
+    frtol = frtol * np.minimum(np.abs(f1), np.abs(f2))
 
     if not np.issubdtype(np.result_type(x1, x2, f1, f2), np.number):
         message = "Bracket and function output must be numeric."
         raise ValueError(message)
 
-    xmin, fmin, converged, flag, tl = check_convergence(x1, f1, x2, f2, flag)
+    xmin, fmin, converged, flag, tl = (
+        check_convergence(x1, f1, x2, f2, flag,
+                          xatol=xatol, xrtol=xrtol, fatol=fatol, frtol=frtol))
+
     if callback is not None:
         res = _prepare_result(xmin, fmin, x1, x2, f1, f2,
                               flag, f_evals, i, output_shape)
@@ -1566,8 +1587,10 @@ def _chandrupatla(func, a, b, *, args=(), xrtol=_xtol, xatol=_rtol,
 
         # Flowchart 3
         i += 1
-        xmin, fmin, converged, flag, tl = check_convergence(x1, f1, x2, f2,
-                                                            flag)
+        xmin, fmin, converged, flag, tl = (
+            check_convergence(x1, f1, x2, f2, flag, xatol=xatol,
+                              xrtol=xrtol, fatol=fatol, frtol=frtol))
+
         if callback is not None:
             res = _prepare_result(xmin, fmin, x1, x2, f1, f2,
                                   flag, f_evals, i, output_shape)

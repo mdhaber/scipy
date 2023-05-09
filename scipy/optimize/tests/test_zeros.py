@@ -6,6 +6,7 @@ from numpy.testing import (assert_warns, assert_,
                            assert_allclose,
                            assert_equal,
                            assert_array_equal,
+                           assert_array_less,
                            suppress_warnings)
 import numpy as np
 from numpy import finfo, power, nan, isclose, sqrt, exp, sin, cos
@@ -216,7 +217,7 @@ class TestChandrupatla(TestScalarRootFinders):
         with np.errstate(invalid='ignore', divide='ignore'):
             res = zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
         ref = dist.ppf(p)
-        np.testing.assert_allclose(res.root, ref, rtol=1e-6)
+        np.testing.assert_allclose(res.root, ref)
         assert res.root.shape == ref.shape
 
     @pytest.mark.parametrize('shape', [(12,), (3, 4), (3, 2, 2)])
@@ -274,6 +275,59 @@ class TestChandrupatla(TestScalarRootFinders):
                               zeros._ECONVERR, zeros._EVALUEERR])
         assert_equal(res.flag, ref_flags)
 
+    def test_termination(self):
+        # make this work with size > 1
+        # make sure upper_bracket and lower_bracket are ordered
+        rng = np.random.default_rng()
+        p = rng.random()
+        dist = stats.norm()
+        bracket = (-5, 5)
+        args = (dist, p)
+        kwargs0 = dict(args=args, xatol=0, xrtol=0, fatol=0, frtol=0)
+
+        with np.errstate(invalid='ignore', divide='ignore'):
+            kwargs = kwargs0.copy()
+            kwargs['xatol'] = 1e-3
+            res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+            assert_array_less(np.abs(res1.upper_bracket - res1.lower_bracket), 1e-3)
+            kwargs['xatol'] = 1e-6
+            res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+            assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket), 1e-6)
+            assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
+                              np.abs(res1.upper_bracket - res1.lower_bracket))
+
+            kwargs = kwargs0.copy()
+            kwargs['xrtol'] = 1e-3
+            res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+            assert_array_less(np.abs(res1.upper_bracket - res1.lower_bracket),
+                              1e-3 * np.abs(res1.root))
+            kwargs['xrtol'] = 1e-6
+            res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+            assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
+                              1e-6 * np.abs(res2.root))
+            assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
+                              np.abs(res1.upper_bracket - res1.lower_bracket))
+
+            kwargs = kwargs0.copy()
+            kwargs['fatol'] = 1e-3
+            res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+            assert_array_less(np.abs(res1.fun), 1e-3)
+            kwargs['fatol'] = 1e-6
+            res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+            assert_array_less(np.abs(res2.fun), 1e-6)
+            assert_array_less(np.abs(res2.fun), np.abs(res1.fun))
+
+            kwargs = kwargs0.copy()
+            kwargs['frtol'] = 1e-3
+            x1, x2 = bracket
+            f0 = np.minimum(abs(self.f(x1, *args)), abs(self.f(x2, *args)))
+            res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+            assert_array_less(np.abs(res1.fun), 1e-3*f0)
+            kwargs['frtol'] = 1e-6
+            res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+            assert_array_less(np.abs(res2.fun), 1e-6*f0)
+            assert_array_less(np.abs(res2.fun), np.abs(res1.fun))
+
     def test_maxiter_callback(self):
         p = 0.612814
         dist = stats.norm()
@@ -314,11 +368,14 @@ class TestChandrupatla(TestScalarRootFinders):
             else:
                 assert res2[key] == callback.res[key] == res[key]
 
-    @pytest.mark.parametrize('case',
-                             optimize._tstutils._CHANDRUPATLA_TESTS)
+    @pytest.mark.parametrize('case', optimize._tstutils._CHANDRUPATLA_TESTS)
     def test_iterations_expected(self, case):
         f, bracket, root, nfeval, id = case
-        res = zeros._chandrupatla(f, *bracket)
+        # Chandrupatla's criterion is equivalent to
+        # abs(x2-x1) < 4*abs(xmin)*xrtol + xatol, but we use the more standard
+        # abs(x2-x1) < abs(xmin)*xrtol + xatol. Therefore, set xrtol to 4x
+        # that used by Chandrupatla in tests.
+        res = zeros._chandrupatla(f, *bracket, xrtol=4e-10, xatol=1e-5)
         assert_allclose(res.fun, f(root), rtol=1e-8, atol=2e-3)
         assert_equal(res.function_calls, nfeval)
 
