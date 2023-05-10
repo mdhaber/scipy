@@ -1672,9 +1672,11 @@ def _prepare_result(xmin, fmin, x1, f1, x2, f2,
     x2 = np.reshape(x2, shape)[()]
     f2 = np.reshape(f2, shape)[()]
     flag = flag.reshape(shape)[()]
+    function_calls = np.full_like(flag, f_evals)[()]
+    iterations = np.full_like(flag, i)[()]
 
-    res = RootResults(root=xmin, function_calls=np.full_like(flag, f_evals),
-                      iterations=np.full_like(flag, i), flag=None)
+    res = RootResults(root=xmin, function_calls=function_calls,
+                      iterations=iterations, flag=None)
 
     res.flag = flag
     res.converged = flag == 0

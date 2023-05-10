@@ -213,17 +213,21 @@ class TestChandrupatla(TestScalarRootFinders):
 
     @pytest.mark.parametrize('p', [0.6, np.linspace(-0.05, 1.05, 10)])
     def test_basic(self, p):
+        # Invert distribution CDF and compare against distrtibution `ppf`
         dist = stats.norm()
-        with np.errstate(invalid='ignore', divide='ignore'):
+        with np.errstate(invalid='ignore'):
             res = zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
         ref = dist.ppf(p)
         np.testing.assert_allclose(res.root, ref)
         assert res.root.shape == ref.shape
 
-    @pytest.mark.parametrize('shape', [(12,), (3, 4), (3, 2, 2)])
+    @pytest.mark.parametrize('shape', [tuple(), (12,), (3, 4), (3, 2, 2)])
     def test_vectorization(self, shape):
-        p = np.linspace(-0.05, 1.05, 12).reshape(shape)
+        # Test for correct functionality, output shapes, and dtypes for various
+        # input shapes.
+        p = np.linspace(-0.05, 1.05, 12).reshape(shape) if shape else 0.6
         dist = stats.norm()
+        args = (dist, p)
 
         @np.vectorize
         def chandrupatla_single(p):
@@ -234,13 +238,18 @@ class TestChandrupatla(TestScalarRootFinders):
             return self.f(*args, **kwargs)
         f.f_evals = 0
 
-        with np.errstate(invalid='ignore', divide='ignore'):
-            res = zeros._chandrupatla(f, -5, 5, args=(dist, p))
+        with np.errstate(invalid='ignore'):
+            res = zeros._chandrupatla(f, -5, 5, args=args)
             refs = chandrupatla_single(p).ravel()
+
+        ref_root = [ref.root for ref in refs]
+        assert_allclose(res.root.ravel(), ref_root)
+        assert_equal(res.root.shape, shape)
 
         ref_fun = [ref.fun for ref in refs]
         assert_allclose(res.fun.ravel(), ref_fun, atol=1e-9)
         assert_equal(res.fun.shape, shape)
+        assert_equal(res.fun, self.f(res.root, *args))
 
         ref_converged = [ref.converged for ref in refs]
         assert_equal(res.converged.ravel(), ref_converged)
@@ -264,24 +273,24 @@ class TestChandrupatla(TestScalarRootFinders):
         assert_equal(res.iterations.shape, res.fun.shape)
         assert np.issubdtype(res.iterations.dtype, np.integer)
 
-        ref_root = [ref.root for ref in refs]
-        assert_allclose(res.root.ravel(), ref_root)
-        assert_equal(res.root.shape, shape)
+        # test upper and lower bracket ends and function values
 
     def test_flags(self):
+        # Test cases that should produce different status flags; show that all
+        # can be produced simultaneously.
         def f(x):
             return [x[0] - 2.5, x[1] - 10, (x[2]-0.1)**3, np.nan]
 
-        with np.errstate(invalid='ignore', divide='ignore'):
-            res = zeros._chandrupatla(f, [0] * 4, [np.pi] * 4, maxiter=2)
+        res = zeros._chandrupatla(f, [0] * 4, [np.pi] * 4, maxiter=2)
 
         ref_flags = np.array([zeros._ECONVERGED, zeros._ESIGNERR,
                               zeros._ECONVERR, zeros._EVALUEERR])
         assert_equal(res.flag, ref_flags)
 
-    def test_termination(self):
-        # make this work with size > 1
-        # make sure upper_bracket and lower_bracket are ordered
+    def test_convergence(self):
+        # Test that the convergence tolerances behave as expected
+        # TODO: make this work with size > 1
+        # TODO: make sure upper_bracket and lower_bracket are ordered
         rng = np.random.default_rng()
         p = rng.random()
         dist = stats.norm()
@@ -289,58 +298,57 @@ class TestChandrupatla(TestScalarRootFinders):
         args = (dist, p)
         kwargs0 = dict(args=args, xatol=0, xrtol=0, fatol=0, frtol=0)
 
-        with np.errstate(invalid='ignore', divide='ignore'):
-            kwargs = kwargs0.copy()
-            kwargs['xatol'] = 1e-3
-            res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-            assert_array_less(np.abs(res1.upper_bracket - res1.lower_bracket), 1e-3)
-            kwargs['xatol'] = 1e-6
-            res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-            assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket), 1e-6)
-            assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
-                              np.abs(res1.upper_bracket - res1.lower_bracket))
+        kwargs = kwargs0.copy()
+        kwargs['xatol'] = 1e-3
+        res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+        assert_array_less(np.abs(res1.upper_bracket - res1.lower_bracket), 1e-3)
+        kwargs['xatol'] = 1e-6
+        res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+        assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket), 1e-6)
+        assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
+                          np.abs(res1.upper_bracket - res1.lower_bracket))
 
-            kwargs = kwargs0.copy()
-            kwargs['xrtol'] = 1e-3
-            res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-            assert_array_less(np.abs(res1.upper_bracket - res1.lower_bracket),
-                              1e-3 * np.abs(res1.root))
-            kwargs['xrtol'] = 1e-6
-            res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-            assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
-                              1e-6 * np.abs(res2.root))
-            assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
-                              np.abs(res1.upper_bracket - res1.lower_bracket))
+        kwargs = kwargs0.copy()
+        kwargs['xrtol'] = 1e-3
+        res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+        assert_array_less(np.abs(res1.upper_bracket - res1.lower_bracket),
+                          1e-3 * np.abs(res1.root))
+        kwargs['xrtol'] = 1e-6
+        res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+        assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
+                          1e-6 * np.abs(res2.root))
+        assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
+                          np.abs(res1.upper_bracket - res1.lower_bracket))
 
-            kwargs = kwargs0.copy()
-            kwargs['fatol'] = 1e-3
-            res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-            assert_array_less(np.abs(res1.fun), 1e-3)
-            kwargs['fatol'] = 1e-6
-            res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-            assert_array_less(np.abs(res2.fun), 1e-6)
-            assert_array_less(np.abs(res2.fun), np.abs(res1.fun))
+        kwargs = kwargs0.copy()
+        kwargs['fatol'] = 1e-3
+        res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+        assert_array_less(np.abs(res1.fun), 1e-3)
+        kwargs['fatol'] = 1e-6
+        res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+        assert_array_less(np.abs(res2.fun), 1e-6)
+        assert_array_less(np.abs(res2.fun), np.abs(res1.fun))
 
-            kwargs = kwargs0.copy()
-            kwargs['frtol'] = 1e-3
-            x1, x2 = bracket
-            f0 = np.minimum(abs(self.f(x1, *args)), abs(self.f(x2, *args)))
-            res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-            assert_array_less(np.abs(res1.fun), 1e-3*f0)
-            kwargs['frtol'] = 1e-6
-            res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-            assert_array_less(np.abs(res2.fun), 1e-6*f0)
-            assert_array_less(np.abs(res2.fun), np.abs(res1.fun))
+        kwargs = kwargs0.copy()
+        kwargs['frtol'] = 1e-3
+        x1, x2 = bracket
+        f0 = np.minimum(abs(self.f(x1, *args)), abs(self.f(x2, *args)))
+        res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+        assert_array_less(np.abs(res1.fun), 1e-3*f0)
+        kwargs['frtol'] = 1e-6
+        res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
+        assert_array_less(np.abs(res2.fun), 1e-6*f0)
+        assert_array_less(np.abs(res2.fun), np.abs(res1.fun))
 
     def test_maxiter_callback(self):
+        # Test behavior of `maxiter` parameter and `callback` interface
         p = 0.612814
         dist = stats.norm()
         bracket = (-5, 5)
         maxiter = 5
 
-        with np.errstate(invalid='ignore', divide='ignore'):
-            res = zeros._chandrupatla(self.f, *bracket, args=(dist, p),
-                                      maxiter=maxiter)
+        res = zeros._chandrupatla(self.f, *bracket, args=(dist, p),
+                                  maxiter=maxiter)
         assert np.all(res.converged == False)
         assert np.all(res.function_calls == maxiter+2)
         assert np.all(res.iterations == maxiter)
@@ -358,9 +366,8 @@ class TestChandrupatla(TestScalarRootFinders):
         callback.iter = -1  # callback called once before first iteration
         callback.res = None
 
-        with np.errstate(invalid='ignore'):
-            res2 = zeros._chandrupatla(self.f, *bracket, args=(dist, p),
-                                       callback=callback)
+        res2 = zeros._chandrupatla(self.f, *bracket, args=(dist, p),
+                                   callback=callback)
 
         # terminating with callback is identical to terminating due to maxiter
         # (except for `flag`)
@@ -374,6 +381,9 @@ class TestChandrupatla(TestScalarRootFinders):
 
     @pytest.mark.parametrize('case', optimize._tstutils._CHANDRUPATLA_TESTS)
     def test_iterations_expected(self, case):
+        # Test that `_chandrupatla` implements Chandrupatla's algorithm:
+        # in all 40 test cases, the number of iterations performed
+        # matches the number reported in the original paper.
         f, bracket, root, nfeval, id = case
         # Chandrupatla's criterion is equivalent to
         # abs(x2-x1) < 4*abs(xmin)*xrtol + xatol, but we use the more standard
@@ -385,6 +395,8 @@ class TestChandrupatla(TestScalarRootFinders):
 
     @pytest.mark.parametrize("dtype", (np.float16, np.float32, np.float64))
     def test_dtype(self, dtype):
+        # Test that dtypes are preserved
+
         root = 0.622
         def f(x):
             return ((x - root) ** 3).astype(dtype)
@@ -394,6 +406,8 @@ class TestChandrupatla(TestScalarRootFinders):
         assert_allclose(res.root, root, atol=1e-3)
 
     def test_input_validation(self):
+        # Test input validation for appropriate error messages
+
         message = '`func` must be callable.'
         with pytest.raises(ValueError, match=message):
             zeros._chandrupatla(None, -4, 4)
@@ -401,6 +415,13 @@ class TestChandrupatla(TestScalarRootFinders):
         message = 'Bracket and function output must be real numbers.'
         with pytest.raises(ValueError, match=message):
             zeros._chandrupatla(lambda x: x, -4+1j, 4)
+
+        message = "shape mismatch: objects cannot be broadcast"
+        # raised by `np.broadcast, but the traceback is readable IMO
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, [-2, -3], [3, 4, 5])
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: [x[0], x[1], x[1]], [-3, -3], [5, 5])
 
         message = 'Tolerances must be non-negative scalars.'
         with pytest.raises(ValueError, match=message):
@@ -423,6 +444,7 @@ class TestChandrupatla(TestScalarRootFinders):
             zeros._chandrupatla(lambda x: x, -4, 4, callback='shrubbery')
 
     def test_special_cases(self):
+        # Test edge cases and other special cases
 
         # Unless we're careful, integer arguments to large integer powers
         # can overflow
@@ -433,8 +455,8 @@ class TestChandrupatla(TestScalarRootFinders):
         assert res.converged
         assert_allclose(res.root, 1)
 
-        # # If the order of termination criteria is not right, this could look
-        # # like an invalid bracket
+        # TODO: If the order of termination criteria is not right, this could
+        # look like an invalid bracket
         # def f(x):
         #     return x**2 - 1
         #
@@ -442,11 +464,41 @@ class TestChandrupatla(TestScalarRootFinders):
         # assert res.converged
         # assert_allclose(res.root, 1)
 
-        # test zero tolerance
-        # test zero iterations
-        # test scalar arg (not in tuple)
-        # non-broadcastable a, b, f
+        # Test maxiter = 0. Should do nothing to bracket.
+        bracket = (-3, 5)
+        res = zeros._chandrupatla(f, *bracket, maxiter=0)
+        assert res.lower_bracket, res.upper_bracket == bracket
+        assert res.iterations == 0
+        assert res.function_calls == 2
+        assert res.flag == -2
+        assert res.root == -3  # best so far
 
+        # Test maxiter = 1
+        res = zeros._chandrupatla(f, *bracket, maxiter=1)
+        assert res.converged
+        assert res.flag == 0
+        assert res.iterations == 1
+        assert res.function_calls == 3
+        assert_allclose(res.root, 1)
+
+        # Test scalar `args` (not in tuple)
+        def f(x, c):
+            return c*x - 1
+
+        res = zeros._chandrupatla(f, -1, 1, args=3)
+        assert_allclose(res.root, 1/3)
+
+        # TODO: Test zero tolerance
+        # What's going on here - why are iterations repeated?
+        # def f(x):
+        #     return np.cos(x)
+        #
+        # res = zeros._chandrupatla(f, 0, np.pi, xatol=0, xrtol=0)
+        # assert res.iterations < 100
+        # xp = np.nextafter(res.root, np.inf)
+        # xm = np.nextafter(res.root, -np.inf)
+        # assert np.abs(res.fun) < np.abs(f(xp))
+        # assert np.abs(res.fun) < np.abs(f(xm))
 
 class TestNewton(TestScalarRootFinders):
     def test_newton_collections(self):
