@@ -1509,64 +1509,24 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
 
     """
 
-    def check_convergence(x1, f1, x2, f2, flag, xatol, xrtol, fatol, frtol):
-        # See Section 4
-        xmin, fmin = x2.copy(), f2.copy()
-        imin = np.abs(f1) < np.abs(f2)
-        xmin[imin], fmin[imin] = x1[imin], f1[imin]
+    res = _chandrupatla_iv(func, a, b, args, xatol, xrtol,
+                           fatol, frtol, maxiter, callback)
+    func, a, b, args, xatol, xrtol, fatol, frtol, maxiter, callback = res
 
-        # This is the criterion used in bisect. Chandrupatla's criterion
-        # is equivalent to abs(x2-x1) < 4*abs(xmin)*xrtol + xatol.
-        dx = abs(x2 - x1)
-        tol = abs(xmin)*xrtol + xatol
-        itol =  dx < tol
-        # Tolerance on function value. Note that `frtol` has been redefined as
-        # `frtol = frtol * np.minimum(f1, f2)`, where `f1` and `f2` are the
-        # function evaluated at the original ends of the bracket.
-        itol |= np.abs(fmin) <= fatol + frtol
-        if np.all(itol):
-            pass
-        flag[itol] = _ECONVERGED
-
-        j = np.sign(f1) == np.sign(f2)
-        xmin[j], fmin[j], itol[j], flag[j] = np.nan, np.nan, True, _ESIGNERR
-
-        j = (np.isfinite(x1) & np.isfinite(x2)
-             & np.isfinite(f1) & np.isfinite(f2))
-        itol[~j], flag[~j] = True, _EVALUEERR
-
-        tl = 0.5 * tol / dx
-        return xmin, fmin, np.all(itol), flag, tl
-
-    x1, x2 = np.broadcast_arrays(a, b)  # broadcast and rename
-    f1, f2 = func(x1[()], *args), func(x2[()], *args)
-
-    # need to broadcast again; need different brackets for each output of func
-    x1, x2, f1, f2 = np.broadcast_arrays(x1, x2, f1, f2)
-    # and they need to be writable floats
-    xt = np.result_type(x1.dtype, x2.dtype, np.float16)  # at least float16
-    ft = np.result_type(f1.dtype, f2.dtype, np.float16)
-    x1, x2, f1, f2 = x1.astype(xt), x2.astype(xt), f1.astype(ft), f2.astype(ft)
-
-    output_shape = x1.shape
-    x1, x2, f1, f2 = np.atleast_1d(x1, x2, f1, f2)
+    # Initialization
+    x1, f1, x2, f2, shape, dtype = _initialize_xf(func, a, b, args)
     flag = np.full_like(x1, _EINPROGRESS, dtype=int)  # in progress
     i, f_evals = 0, 2  # two function evaluations performed above
     cb_terminate = False
-    fatol = fatol or np.finfo(ft).smallest_normal
+    fatol = fatol or np.finfo(dtype).smallest_normal
     frtol = frtol * np.minimum(np.abs(f1), np.abs(f2))
+    tols = dict(xatol=xatol, xrtol=xrtol, fatol=fatol, frtol=frtol)
 
-    if not np.issubdtype(np.result_type(x1, x2, f1, f2), np.number):
-        message = "Bracket and function output must be numeric."
-        raise ValueError(message)
-
-    xmin, fmin, converged, flag, tl = (
-        check_convergence(x1, f1, x2, f2, flag,
-                          xatol=xatol, xrtol=xrtol, fatol=fatol, frtol=frtol))
-
+    xmin, fmin, converged, flag, tl = _check_termination(x1, f1, x2, f2, flag,
+                                                         **tols)
     if callback is not None:
-        res = _prepare_result(xmin, fmin, x1, x2, f1, f2,
-                              flag, f_evals, i, output_shape)
+        res = _prepare_result(xmin, fmin, x1, f1, x2, f2,
+                              flag, f_evals, i, shape)
         if _call_callback_maybe_halt(callback, res):
             cb_terminate == True
 
@@ -1574,7 +1534,7 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
     while np.all(i < maxiter) and not converged and not cb_terminate:
         # Flowchart 1
         x = x1 + t * (x2 - x1)
-        f = np.asarray(func(x, *args), dtype=ft)
+        f = np.asarray(func(x, *args), dtype=dtype)
         f_evals += 1
 
         # # Flowchart 2 (flowchart is reversed; see code)
@@ -1583,17 +1543,15 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
         nj = ~j
         x3[j], f3[j] = x1[j], f1[j]
         x2[nj], f2[nj] = x1[nj], f1[nj]
-        x1, f1 = x.copy(), f.copy()
+        x1, f1 = x, f
 
         # Flowchart 3
         i += 1
-        xmin, fmin, converged, flag, tl = (
-            check_convergence(x1, f1, x2, f2, flag, xatol=xatol,
-                              xrtol=xrtol, fatol=fatol, frtol=frtol))
-
+        xmin, fmin, converged, flag, tl = _check_termination(x1, f1, x2, f2,
+                                                             flag, **tols)
         if callback is not None:
-            res = _prepare_result(xmin, fmin, x1, x2, f1, f2,
-                                  flag, f_evals, i, output_shape)
+            res = _prepare_result(xmin, fmin, x1, f1, x2, f2,
+                                  flag, f_evals, i, shape)
             if _call_callback_maybe_halt(callback, res) or converged:
                 cb_terminate = True
                 break
@@ -1609,34 +1567,121 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
         t = np.full_like(alpha, 0.5)
         t[j] = (f1j / (f1j - f2j) * f3j / (f3j - f2j)
                 - alphaj * f1j / (f3j - f1j) * f2j / (f2j - f3j))
+
+        # See Appendix, "Adjust T Away from the Inverval Boundary"
         t = np.clip(t, tl, 1-tl)
 
     flag[flag == _EINPROGRESS] = _ECALLBACK if cb_terminate else _ECONVERR
 
-    return _prepare_result(xmin, fmin, x1, x2, f1, f2,
-                           flag, f_evals, i, output_shape)
+    return _prepare_result(xmin, fmin, x1, f1, x2, f2,
+                           flag, f_evals, i, shape)
 
-def _prepare_result(xmin, fmin, x1, x2, f1, f2,
-                    flag, f_evals, i, output_shape):
-    # reshape outputs
-    xmin = xmin.reshape(output_shape)[()]
-    fmin = fmin.reshape(output_shape)[()]
-    x1 = np.reshape(x1, output_shape)[()]
-    x2 = np.reshape(x2, output_shape)[()]
-    f1 = np.reshape(f1, output_shape)[()]
-    f2 = np.reshape(f2, output_shape)[()]
-    flag = flag.reshape(output_shape)[()]
+def _chandrupatla_iv(func, a, b, args, xatol, xrtol,
+                     fatol, frtol, maxiter, callback):
 
-    res = RootResults(root=xmin, function_calls=np.full_like(x1, f_evals),
-                      iterations=np.full_like(x1, i), flag=None)
+    if not callable(func):
+        raise ValueError('`func` must be callable.')
 
-    # add output specific to _chandrupatla
+    # a and b have more complex IV that is taken care of during initialization
+
+    if not np.iterable(args):
+        args = (args,)
+
+    # rudimentary, but enough IMO
+    tols = np.asarray([xatol, xrtol, fatol if fatol is not None else 1, frtol])
+    if (not np.issubdtype(tols.dtype, np.number)
+            or np.any(tols < 0)
+            or tols.shape != (4,)):
+        raise ValueError('Tolerances must be non-negative scalars.')
+
+    maxiter_int = int(maxiter)
+    if maxiter != maxiter_int or maxiter < 0:
+        raise ValueError('`maxiter` must be a non-negative integer.')
+
+    if callback is not None and not callable(callback):
+        raise ValueError('`callback` must be callable.')
+
+    return func, a, b, args, xatol, xrtol, fatol, frtol, maxiter, callback
+
+def _initialize_xf(func, a, b, args):
+    # initializing left and right bracket and function value arrays
+
+    # Try to preserve `dtype`, but we need to ensure that the arguments are at
+    # least floats before passing them into the function because integers
+    # can overflow and cause failure.
+    x1, x2 = np.broadcast_arrays(a, b)  # broadcast and rename
+    xt = np.result_type(x1.dtype, x2.dtype, np.float16)  # at least float16
+    x1, x2 = x1.astype(xt, copy=False)[()], x2.astype(xt, copy=False)[()]
+    f1, f2 = func(x1, *args), func(x2, *args)
+
+    # It's possible that the functions will return multiple outputs for each
+    # scalar input, so we need to broadcast again. All arrays need to be,
+    # writable, so we'll need to copy after broadcasting. Finally, we're going
+    # to be doing operations involving `x1`, `x2`, `f1`, and `f2` throughout,
+    # so figure out the right type from the outset.
+    x1, f1, x2, f2 = np.broadcast_arrays(x1, f1, x2, f2)
+    ft = np.result_type(x1.dtype, x2.dtype, f1.dtype, f2.dtype, np.float16)
+    if not np.issubdtype(np.result_type(x1, x2, f1, f2), np.floating):
+        raise ValueError("Bracket and function output must be real numbers.")
+    x1, f1, x2, f2 = x1.astype(ft), f1.astype(ft), x2.astype(ft), f2.astype(ft)
+
+    # To ensure that we can do indexing, we'll work with at least 1d arrays,
+    # but remember the appropriate shape of the output.
+    shape = x1.shape
+    x1, f1, x2, f2, = np.atleast_1d(x1, f1, x2, f2,)
+    return x1, f1, x2, f2, shape, ft
+
+
+def _check_termination(x1, f1, x2, f2, flag, xatol, xrtol, fatol, frtol):
+    # Check for all terminal conditions and record status flags.
+
+    # See [1] Section 4
+    xmin, fmin = x2.copy(), f2.copy()
+    imin = np.abs(f1) < np.abs(f2)
+    xmin[imin], fmin[imin] = x1[imin], f1[imin]
+    stop = np.zeros_like(x1, dtype=bool)
+
+    # This is the convergence criterion used in bisect. Chandrupatla's
+    # criterion is equivalent to abs(x2-x1) < 4*abs(xmin)*xrtol + xatol.
+    dx = abs(x2 - x1)
+    tol = abs(xmin)*xrtol + xatol
+    j = dx < tol
+    # Tolerance on function value. Note that `frtol` has been redefined as
+    # `frtol = frtol * np.minimum(f1, f2)`, where `f1` and `f2` are the
+    # function evaluated at the original ends of the bracket.
+    j |= np.abs(fmin) <= fatol + frtol
+    stop[j], flag[j] = True, _ECONVERGED
+
+    j = np.sign(f1) == np.sign(f2)
+    xmin[j], fmin[j], stop[j], flag[j] = np.nan, np.nan, True, _ESIGNERR
+
+    j = (np.isfinite(x1) & np.isfinite(x2)
+         & np.isfinite(f1) & np.isfinite(f2))
+    stop[~j], flag[~j] = True, _EVALUEERR
+
+    tl = 0.5 * tol / dx
+    return xmin, fmin, np.all(stop), flag, tl
+
+
+def _prepare_result(xmin, fmin, x1, f1, x2, f2,
+                    flag, f_evals, i, shape):
+    xmin = xmin.reshape(shape)[()]
+    fmin = fmin.reshape(shape)[()]
+    x1 = np.reshape(x1, shape)[()]
+    f1 = np.reshape(f1, shape)[()]
+    x2 = np.reshape(x2, shape)[()]
+    f2 = np.reshape(f2, shape)[()]
+    flag = flag.reshape(shape)[()]
+
+    res = RootResults(root=xmin, function_calls=np.full_like(flag, f_evals),
+                      iterations=np.full_like(flag, i), flag=None)
+
     res.flag = flag
     res.converged = flag == 0
     res.fun = fmin
     res.lower_bracket = x1
-    res.upper_bracket = x2
     res.lower_fun_value = f1
+    res.upper_bracket = x2
     res.upper_fun_value = f2
 
     return res

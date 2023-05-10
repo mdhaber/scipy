@@ -245,20 +245,24 @@ class TestChandrupatla(TestScalarRootFinders):
         ref_converged = [ref.converged for ref in refs]
         assert_equal(res.converged.ravel(), ref_converged)
         assert_equal(res.converged.shape, shape)
+        assert np.issubdtype(res.converged.dtype, np.bool_)
 
         ref_flag = [ref.flag for ref in refs]
         assert_equal(res.flag.ravel(), ref_flag)
         assert_equal(res.flag.shape, shape)
+        assert np.issubdtype(res.flag.dtype, np.integer)
 
         ref_function_calls = [ref.function_calls for ref in refs]
         assert_equal(res.function_calls, max(ref_function_calls))
         assert_equal(res.function_calls, f.f_evals)
         assert_equal(res.function_calls.shape, res.fun.shape)
+        assert np.issubdtype(res.function_calls.dtype, np.integer)
 
         ref_iterations = [ref.iterations for ref in refs]
         assert_equal(res.iterations, max(ref_iterations))
         assert_equal(res.iterations, f.f_evals-2)
         assert_equal(res.iterations.shape, res.fun.shape)
+        assert np.issubdtype(res.iterations.dtype, np.integer)
 
         ref_root = [ref.root for ref in refs]
         assert_allclose(res.root.ravel(), ref_root)
@@ -378,6 +382,71 @@ class TestChandrupatla(TestScalarRootFinders):
         res = zeros._chandrupatla(f, *bracket, xrtol=4e-10, xatol=1e-5)
         assert_allclose(res.fun, f(root), rtol=1e-8, atol=2e-3)
         assert_equal(res.function_calls, nfeval)
+
+    @pytest.mark.parametrize("dtype", (np.float16, np.float32, np.float64))
+    def test_dtype(self, dtype):
+        root = 0.622
+        def f(x):
+            return ((x - root) ** 3).astype(dtype)
+
+        res = zeros._chandrupatla(f, dtype(-3), dtype(5), xatol=1e-3)
+        assert res.root.dtype == dtype
+        assert_allclose(res.root, root, atol=1e-3)
+
+    def test_input_validation(self):
+        message = '`func` must be callable.'
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(None, -4, 4)
+
+        message = 'Bracket and function output must be real numbers.'
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, -4+1j, 4)
+
+        message = 'Tolerances must be non-negative scalars.'
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, -4, 4, xatol=-1)
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, -4, 4, xrtol=None)
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, -4, 4, fatol='ekki')
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, -4, 4, frtol=None)
+
+        message = '`maxiter` must be a non-negative integer.'
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, -4, 4, maxiter=1.5)
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, -4, 4, maxiter=-1)
+
+        message = '`callback` must be callable.'
+        with pytest.raises(ValueError, match=message):
+            zeros._chandrupatla(lambda x: x, -4, 4, callback='shrubbery')
+
+    def test_special_cases(self):
+
+        # Unless we're careful, integer arguments to large integer powers
+        # can overflow
+        def f(x):
+            return x ** 99 - 1
+
+        res = zeros._chandrupatla(f, -7, 5)
+        assert res.converged
+        assert_allclose(res.root, 1)
+
+        # # If the order of termination criteria is not right, this could look
+        # # like an invalid bracket
+        # def f(x):
+        #     return x**2 - 1
+        #
+        # res = zeros._chandrupatla(f, 1, 1)
+        # assert res.converged
+        # assert_allclose(res.root, 1)
+
+        # test zero tolerance
+        # test zero iterations
+        # test scalar arg (not in tuple)
+        # non-broadcastable a, b, f
+
 
 class TestNewton(TestScalarRootFinders):
     def test_newton_collections(self):
