@@ -1459,9 +1459,9 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
             ``True`` when the algorithm terminated successfully (flag ``0``).
         fun : float
             The function value evaluated at the root.
-        lower_bracket, upper_bracket : float
+        xl, xr : float
             The lower and upper ends of the bracket.
-        lower_fun_val, upper_fun_val : float
+        fl, fr : float
             The function value at the lower and upper ends of the bracket.
 
     Notes
@@ -1681,9 +1681,9 @@ def _prepare_result(xmin, fmin, x1, f1, x2, f2,
     res.flag = flag
     res.converged = flag == 0
     res.fun = fmin
-    res.lower_bracket = x1
-    res.lower_fun_value = f1
-    res.upper_bracket = x2
-    res.upper_fun_value = f2
+    res.xl = x1
+    res.fl = f1
+    res.xr = x2
+    res.fr = f2
 
     return res

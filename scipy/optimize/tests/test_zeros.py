@@ -290,7 +290,7 @@ class TestChandrupatla(TestScalarRootFinders):
     def test_convergence(self):
         # Test that the convergence tolerances behave as expected
         # TODO: make this work with size > 1
-        # TODO: make sure upper_bracket and lower_bracket are ordered
+        # TODO: make sure xr and xl are ordered
         rng = np.random.default_rng()
         p = rng.random()
         dist = stats.norm()
@@ -301,24 +301,24 @@ class TestChandrupatla(TestScalarRootFinders):
         kwargs = kwargs0.copy()
         kwargs['xatol'] = 1e-3
         res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-        assert_array_less(np.abs(res1.upper_bracket - res1.lower_bracket), 1e-3)
+        assert_array_less(np.abs(res1.xr - res1.xl), 1e-3)
         kwargs['xatol'] = 1e-6
         res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-        assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket), 1e-6)
-        assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
-                          np.abs(res1.upper_bracket - res1.lower_bracket))
+        assert_array_less(np.abs(res2.xr - res2.xl), 1e-6)
+        assert_array_less(np.abs(res2.xr - res2.xl),
+                          np.abs(res1.xr - res1.xl))
 
         kwargs = kwargs0.copy()
         kwargs['xrtol'] = 1e-3
         res1 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-        assert_array_less(np.abs(res1.upper_bracket - res1.lower_bracket),
+        assert_array_less(np.abs(res1.xr - res1.xl),
                           1e-3 * np.abs(res1.root))
         kwargs['xrtol'] = 1e-6
         res2 = zeros._chandrupatla(self.f, *bracket, **kwargs)
-        assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
+        assert_array_less(np.abs(res2.xr - res2.xl),
                           1e-6 * np.abs(res2.root))
-        assert_array_less(np.abs(res2.upper_bracket - res2.lower_bracket),
-                          np.abs(res1.upper_bracket - res1.lower_bracket))
+        assert_array_less(np.abs(res2.xr - res2.xl),
+                          np.abs(res1.xr - res1.xl))
 
         kwargs = kwargs0.copy()
         kwargs['fatol'] = 1e-3
@@ -359,7 +359,7 @@ class TestChandrupatla(TestScalarRootFinders):
             assert hasattr(res, 'root')
             if callback.iter == 0:
                 # callback is called once with initial bracket
-                assert res.lower_bracket, res.upper_bracket == bracket
+                assert res.xl, res.xr == bracket
             assert res.flag == zeros._EINPROGRESS
             if callback.iter == maxiter:
                 raise StopIteration
@@ -480,7 +480,7 @@ class TestChandrupatla(TestScalarRootFinders):
 
         bracket = (-3, 5)
         res = zeros._chandrupatla(f, *bracket, maxiter=0)
-        assert res.lower_bracket, res.upper_bracket == bracket
+        assert res.xl, res.xr == bracket
         assert res.iterations == 0
         assert res.function_calls == 2
         assert res.flag == -2
