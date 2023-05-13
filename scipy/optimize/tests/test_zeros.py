@@ -215,8 +215,7 @@ class TestChandrupatla(TestScalarRootFinders):
     def test_basic(self, p):
         # Invert distribution CDF and compare against distrtibution `ppf`
         dist = stats.norm()
-        with np.errstate(invalid='ignore'):
-            res = zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
+        res = zeros._chandrupatla(self.f, -5, 5, args=(dist, p))
         ref = dist.ppf(p)
         np.testing.assert_allclose(res.x, ref)
         assert res.x.shape == ref.shape
@@ -238,9 +237,8 @@ class TestChandrupatla(TestScalarRootFinders):
             return self.f(*args, **kwargs)
         f.f_evals = 0
 
-        with np.errstate(invalid='ignore'):
-            res = zeros._chandrupatla(f, -5, 5, args=args)
-            refs = chandrupatla_single(p).ravel()
+        res = zeros._chandrupatla(f, -5, 5, args=args)
+        refs = chandrupatla_single(p).ravel()
 
         ref_x = [ref.x for ref in refs]
         assert_allclose(res.x.ravel(), ref_x)
@@ -289,7 +287,7 @@ class TestChandrupatla(TestScalarRootFinders):
 
     def test_convergence(self):
         # Test that the convergence tolerances behave as expected
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(2585255913088665241)
         p = rng.random(size=3)
         dist = stats.norm()
         bracket = (-5, 5)
@@ -455,15 +453,14 @@ class TestChandrupatla(TestScalarRootFinders):
         def f(x):
             return x**2 - 1
 
-        with np.errstate(divide='ignore'):
-            res = zeros._chandrupatla(f, 1, 1)
+        res = zeros._chandrupatla(f, 1, 1)
         # assert res.success
         assert_equal(res.x, 1)
 
         def f(x):
             return 1/x
 
-        with np.errstate(invalid='ignore', divide='ignore'):
+        with np.errstate(invalid='ignore'):
             res = zeros._chandrupatla(f, np.inf, np.inf)
         assert res.success
         assert_equal(res.x, np.inf)
