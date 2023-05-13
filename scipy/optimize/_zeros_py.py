@@ -1545,11 +1545,21 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
     while nit < maxiter and active.size and not cb_terminate:
         # [1] Flowchart 1
         x = x1 + t * (x2 - x1)
-        X = res.x.copy()
-        X[active] = x
-        f = np.asarray(func(X.reshape(shape), *args), dtype=dtype).ravel()
-        f = f[active]
+
+        # For now, we assume that `func` requires arguments of the original
+        # shapes. However, `x` is compressed (contains only active elements).
+        # Therefore, we inflate `x` by creating a full-size array, copying the
+        # elements of `x` into it, and making it the expected shape.
+        # TODO: allow user to specify that `func` works with compressed input
+        x_full = res.x.copy()
+        x_full[active] = x
+        x_full = x_full.reshape(shape)
+        f = func(x_full, *args)
         nfev += 1
+        # Ensure that the outpuf of `func` is an array of the appropriate
+        # dtype, ravel it (because we work with 1D arrays for simplicity), and
+        # compress it to contain only active elements.
+        f = np.asarray(f, dtype=dtype).ravel()[active]
 
         # [1] Flowchart 2 (flowchart is reversed; see code)
         x3, f3 = x2.copy(), f2.copy()
