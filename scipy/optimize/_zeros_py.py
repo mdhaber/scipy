@@ -1442,21 +1442,21 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
         will be scalars; however, if `func` returns an array, the outputs will
         be arrays of the same shape.
 
-        root : float
+        x : float
             The root of the function.
-        function_calls : int
+        nfev : int
             The number of times the function was called to find the root.
-        iterations : int
+        nit : int
             The number of iterations of Chandrupatla's algorithm performed.
-        flag : int
+        status : int
             An integer representing the exit status of the algorithm.
             ``0`` : The algorithm converged to the specified tolerances.
             ``-1`` : The algorithm encountered an invalid bracket.
             ``-2`` : The maximum number of iterations was reached.
             ``-3`` : A non-finite value was encountered.
             ``1`` : The algorithm is proceeding normally (in `callback` only).
-        converged : bool
-            ``True`` when the algorithm terminated successfully (flag ``0``).
+        success : bool
+            ``True`` when the algorithm terminated successfully (status ``0``).
         fun : float
             The function value evaluated at the root.
         xl, xr : float
@@ -1499,12 +1499,12 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
     ...     return x**3 - 2*x - c
     >>> c = 5
     >>> res = optimize._zeros_py._chandrupatla(f, 0, 3, args=(c,))
-    >>> res.root
+    >>> res.x
     2.0945514818937463
 
     >>> c = [3, 4, 5]
     >>> res = optimize._zeros_py._chandrupatla(f, 0, 3, args=(c,))
-    >>> res.root
+    >>> res.x
     array([1.8932892 , 2.        , 2.09455148])
 
     """
@@ -1515,19 +1515,24 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
 
     # Initialization
     x1, f1, x2, f2, shape, dtype = _initialize_xf(func, a, b, args)
-    flag = np.full_like(x1, _EINPROGRESS, dtype=int)  # in progress
+    status = np.full_like(x1, _EINPROGRESS, dtype=int)  # in progress
     i, f_evals = 0, 2  # two function evaluations performed above
     cb_terminate = False
+    nfev = np.full_like(status, f_evals)[()]
+    nit = np.full_like(status, i)[()]
     fatol = fatol or np.finfo(dtype).smallest_normal
     frtol = frtol * np.minimum(np.abs(f1), np.abs(f2))
     tols = dict(xatol=xatol, xrtol=xrtol, fatol=fatol, frtol=frtol)
 
-    xmin, fmin, converged, flag, tl = _check_termination(x1, f1, x2, f2, flag,
-                                                         **tols)
+    xmin, fmin, converged, status, tl = _check_termination(x1, f1, x2, f2,
+                                                           status, **tols)
+
+    res = OptimizeResult(x=xmin, fun=fmin, nit=nit, nfev=nfev, status=status,
+                         success=(status==0), xl=x1, fl=f1, xr=x2, fr=f2)
+
     if callback is not None:
-        res = _prepare_result(xmin, fmin, x1, f1, x2, f2,
-                              flag, f_evals, i, shape)
-        if _call_callback_maybe_halt(callback, res):
+        temp_res = _prepare_result(shape, res)
+        if _call_callback_maybe_halt(callback, temp_res):
             cb_terminate == True
 
     t = 0.5
@@ -1547,12 +1552,12 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
 
         # Flowchart 3
         i += 1
-        xmin, fmin, converged, flag, tl = _check_termination(x1, f1, x2, f2,
-                                                             flag, **tols)
+        xmin, fmin, converged, status, tl = _check_termination(x1, f1, x2, f2,
+                                                               status, **tols)
+        res = _update_result(xmin, fmin, x1, f1, x2, f2, status, f_evals, i, res)
         if callback is not None:
-            res = _prepare_result(xmin, fmin, x1, f1, x2, f2,
-                                  flag, f_evals, i, shape)
-            if _call_callback_maybe_halt(callback, res) or converged:
+            temp_res = _prepare_result(shape, res)
+            if _call_callback_maybe_halt(callback, temp_res) or converged:
                 cb_terminate = True
                 break
 
@@ -1571,10 +1576,10 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
         # See Appendix, "Adjust T Away from the Inverval Boundary"
         t = np.clip(t, tl, 1-tl)
 
-    flag[flag == _EINPROGRESS] = _ECALLBACK if cb_terminate else _ECONVERR
+    status[status == _EINPROGRESS] = _ECALLBACK if cb_terminate else _ECONVERR
 
-    return _prepare_result(xmin, fmin, x1, f1, x2, f2,
-                           flag, f_evals, i, shape)
+    res = _update_result(xmin, fmin, x1, f1, x2, f2, status, f_evals, i, res)
+    return _prepare_result(shape, res)
 
 def _chandrupatla_iv(func, a, b, args, xatol, xrtol,
                      fatol, frtol, maxiter, callback):
@@ -1632,8 +1637,8 @@ def _initialize_xf(func, a, b, args):
     return x1, f1, x2, f2, shape, ft
 
 
-def _check_termination(x1, f1, x2, f2, flag, xatol, xrtol, fatol, frtol):
-    # Check for all terminal conditions and record status flags.
+def _check_termination(x1, f1, x2, f2, status, xatol, xrtol, fatol, frtol):
+    # Check for all terminal conditions and record statuses.
 
     # See [1] Section 4
     xmin, fmin = x2.copy(), f2.copy()
@@ -1650,40 +1655,34 @@ def _check_termination(x1, f1, x2, f2, flag, xatol, xrtol, fatol, frtol):
     # `frtol = frtol * np.minimum(f1, f2)`, where `f1` and `f2` are the
     # function evaluated at the original ends of the bracket.
     j |= np.abs(fmin) <= fatol + frtol
-    stop[j], flag[j] = True, _ECONVERGED
+    stop[j], status[j] = True, _ECONVERGED
 
     j = np.sign(f1) == np.sign(f2)
-    xmin[j], fmin[j], stop[j], flag[j] = np.nan, np.nan, True, _ESIGNERR
+    xmin[j], fmin[j], stop[j], status[j] = np.nan, np.nan, True, _ESIGNERR
 
     j = (np.isfinite(x1) & np.isfinite(x2)
          & np.isfinite(f1) & np.isfinite(f2))
-    stop[~j], flag[~j] = True, _EVALUEERR
+    stop[~j], status[~j] = True, _EVALUEERR
 
     tl = 0.5 * tol / dx
-    return xmin, fmin, np.all(stop), flag, tl
+    return xmin, fmin, np.all(stop), status, tl
 
 
-def _prepare_result(xmin, fmin, x1, f1, x2, f2,
-                    flag, f_evals, i, shape):
-    xmin = xmin.reshape(shape)[()]
-    fmin = fmin.reshape(shape)[()]
-    x1 = np.reshape(x1, shape)[()]
-    f1 = np.reshape(f1, shape)[()]
-    x2 = np.reshape(x2, shape)[()]
-    f2 = np.reshape(f2, shape)[()]
-    flag = flag.reshape(shape)[()]
-    function_calls = np.full_like(flag, f_evals)[()]
-    iterations = np.full_like(flag, i)[()]
-
-    res = RootResults(root=xmin, function_calls=function_calls,
-                      iterations=iterations, flag=None)
-
-    res.flag = flag
-    res.converged = flag == 0
-    res.fun = fmin
-    res.xl = x1
-    res.fl = f1
-    res.xr = x2
-    res.fr = f2
-
+def _update_result(xmin, fmin, x1, f1, x2, f2, status, f_evals, i, res):
+    nfev = np.full_like(status, f_evals)[()]
+    nit = np.full_like(status, i)[()]
+    res.update(x=xmin, fun=fmin, xl=x1, fl=f1, xr=x2, fr=f2, status=status,
+               nfev=nfev, nit=nit, success=status==0)
     return res
+
+def _prepare_result(shape, res):
+    res = res.copy()
+    xl, xr, fl, fr = res['xl'], res['xr'], res['fl'], res['fr']
+    i = res['xl'] < res['xr']
+    res['xl'] = np.choose(i, (xr, xl))
+    res['xr'] = np.choose(i, (xl, xr))
+    res['fl'] = np.choose(i, (fr, fl))
+    res['fr'] = np.choose(i, (fl, fr))
+    for key, val in res.items():
+        res[key] = np.reshape(val, shape)[()]
+    return OptimizeResult(**res)
