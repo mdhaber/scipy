@@ -1539,7 +1539,7 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
     while np.all(i < maxiter) and not converged and not cb_terminate:
         # Flowchart 1
         x = x1 + t * (x2 - x1)
-        f = np.asarray(func(x, *args), dtype=dtype)
+        f = np.asarray(func(x.reshape(shape), *args), dtype=dtype).ravel()
         f_evals += 1
 
         # # Flowchart 2 (flowchart is reversed; see code)
@@ -1633,7 +1633,7 @@ def _initialize_xf(func, a, b, args):
     # To ensure that we can do indexing, we'll work with at least 1d arrays,
     # but remember the appropriate shape of the output.
     shape = x1.shape
-    x1, f1, x2, f2, = np.atleast_1d(x1, f1, x2, f2,)
+    x1, f1, x2, f2, = x1.ravel(), f1.ravel(), x2.ravel(), f2.ravel()
     return x1, f1, x2, f2, shape, ft
 
 
