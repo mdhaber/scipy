@@ -446,25 +446,38 @@ class TestChandrupatla(TestScalarRootFinders):
     def test_special_cases(self):
         # Test edge cases and other special cases
 
-        # Unless we're careful, integer arguments to large integer powers
-        # can overflow
+        # Test that integers are not passed to `f`
+        # (otherwise this would overflow)
         def f(x):
+            # assert np.issubdtype(x.dtype, np.floating)
             return x ** 99 - 1
 
         res = zeros._chandrupatla(f, -7, 5)
         assert res.converged
         assert_allclose(res.root, 1)
 
-        # TODO: If the order of termination criteria is not right, this could
-        # look like an invalid bracket
+        # # Test that if both ends of bracket equal root, algorithm reports
+        # # convergence
         # def f(x):
         #     return x**2 - 1
         #
-        # res = zeros._chandrupatla(f, 1, 1)
+        # with np.errstate(divide='ignore'):
+        #     res = zeros._chandrupatla(f, 1, 1)
         # assert res.converged
-        # assert_allclose(res.root, 1)
+        # assert_equal(res.root, 1)
+
+        # def f(x):
+        #     return 1/x
+        #
+        # with np.errstate(invalid='ignore', divide='ignore'):
+        #     res = zeros._chandrupatla(f, np.inf, np.inf)
+        # assert res.converged
+        # assert_equal(res.root, np.inf)
 
         # Test maxiter = 0. Should do nothing to bracket.
+        def f(x):
+            return x**3 - 1
+
         bracket = (-3, 5)
         res = zeros._chandrupatla(f, *bracket, maxiter=0)
         assert res.lower_bracket, res.upper_bracket == bracket
