@@ -1516,36 +1516,36 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
     # Initialization
     x1, f1, x2, f2, active, shape, dtype = _initialize_xf(func, a, b, args)
     status = np.full_like(x1, _EINPROGRESS, dtype=int)  # in progress
-    i, f_evals = 0, 2  # two function evaluations performed above
+    nit, nfev = 0, 2  # two function evaluations performed above
     cb_terminate = False
-    nfev = np.full_like(status, f_evals)[()]
-    nit = np.full_like(status, i)[()]
     fatol = fatol or np.finfo(dtype).smallest_normal
     frtol = frtol * np.minimum(np.abs(f1), np.abs(f2))
     tols = dict(xatol=xatol, xrtol=xrtol, fatol=fatol, frtol=frtol)
 
-    res = OptimizeResult(x=x1.copy(), fun=x2.copy(), nit=nit, nfev=nfev,
+    res = OptimizeResult(x=x1.copy(), fun=x2.copy(),
+                         nit=np.full_like(status, nit)[()],
+                         nfev=np.full_like(status, nfev)[()],
                          status=status.copy(), success=(status==0),
                          xl=x1.copy(), fl=f1.copy(), xr=x2.copy(),
                          fr=f2.copy())
 
-    temp = _check_termination(x1, f1, x2, f2, x1, f1, res, active, status, f_evals, i, tols)
+    temp = _check_termination(x1, f1, x2, f2, x1, f1, res, active, status, nfev, nit, tols)
     xmin, fmin, x1, f1, x2, f2, x3, f3, converged, active, status, tl = temp
 
     if callback is not None:
-        temp_res = _prepare_result(shape, res)
+        temp_res = _prepare_result(shape, res, active, nit, nfev)
         if _call_callback_maybe_halt(callback, temp_res):
             cb_terminate == True
 
     t = 0.5
-    while np.all(i < maxiter) and not converged and not cb_terminate:
+    while nit < maxiter and not converged and not cb_terminate:
         # Flowchart 1
         x = x1 + t * (x2 - x1)
         X = res.x.copy()
         X[active] = x
         f = np.asarray(func(X.reshape(shape), *args), dtype=dtype).ravel()
         f = f[active]
-        f_evals += 1
+        nfev += 1
 
         # # Flowchart 2 (flowchart is reversed; see code)
         x3, f3 = x2.copy(), f2.copy()
@@ -1556,12 +1556,12 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
         x1, f1 = x, f
 
         # Flowchart 3
-        i += 1
-        temp = _check_termination(x1, f1, x2, f2, x3, f3, res, active, status, f_evals, i, tols)
+        nit += 1
+        temp = _check_termination(x1, f1, x2, f2, x3, f3, res, active, status, nfev, nit, tols)
         xmin, fmin, x1, f1, x2, f2, x3, f3, converged, active, status, tl = temp
 
         if callback is not None:
-            temp_res = _prepare_result(shape, res)
+            temp_res = _prepare_result(shape, res, active, nit, nfev)
             if _call_callback_maybe_halt(callback, temp_res) or converged:
                 cb_terminate = True
                 break
@@ -1583,10 +1583,8 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
         # See Appendix, "Adjust T Away from the Inverval Boundary"
         t = np.clip(t, tl, 1-tl)
 
-    res.nfev[active] = f_evals
-    res.nit[active] = i
     res.status[active] = _ECALLBACK if cb_terminate else _ECONVERR
-    return _prepare_result(shape, res)
+    return _prepare_result(shape, res, active, nit, nfev)
 
 def _chandrupatla_iv(func, a, b, args, xatol, xrtol,
                      fatol, frtol, maxiter, callback):
@@ -1645,7 +1643,7 @@ def _initialize_xf(func, a, b, args):
     return x1, f1, x2, f2, active, shape, ft
 
 
-def _check_termination(x1, f1, x2, f2, x3, f3, res, active, status, f_evals, i, tols):
+def _check_termination(x1, f1, x2, f2, x3, f3, res, active, status, nfev, nit, tols):
     # Check for all terminal conditions and record statuses.
 
     # See [1] Section 4
@@ -1665,16 +1663,15 @@ def _check_termination(x1, f1, x2, f2, x3, f3, res, active, status, f_evals, i, 
     j |= np.abs(fmin) <= tols['fatol'] + tols['frtol']
     stop[j], status[j] = True, _ECONVERGED
 
-    j = np.sign(f1) == np.sign(f2)
+    j = (np.sign(f1) == np.sign(f2)) & ~stop
     xmin[j], fmin[j], stop[j], status[j] = np.nan, np.nan, True, _ESIGNERR
 
     j = (np.isfinite(x1) & np.isfinite(x2)
-         & np.isfinite(f1) & np.isfinite(f2))
+         & np.isfinite(f1) & np.isfinite(f2)) | stop
     stop[~j], status[~j] = True, _EVALUEERR
 
-
     _update_result(active[stop], xmin[stop], fmin[stop], x1[stop], f1[stop],
-                   x2[stop], f2[stop], status[stop], f_evals, i, res)
+                   x2[stop], f2[stop], status[stop], nfev, nit, res)
     
     active = active[~stop]
     xmin = xmin[~stop]
@@ -1692,9 +1689,9 @@ def _check_termination(x1, f1, x2, f2, x3, f3, res, active, status, f_evals, i, 
     return xmin, fmin, x1, f1, x2, f2, x3, f3, np.all(stop), active, status, tl
 
 
-def _update_result(stop, xmin, fmin, x1, f1, x2, f2, status, f_evals, i, res):
-    # nfev = np.full_like(status, f_evals)[()]
-    # nit = np.full_like(status, i)[()]
+def _update_result(stop, xmin, fmin, x1, f1, x2, f2, status, nfev, nit, res):
+    # nfev = np.full_like(status, nfev)[()]
+    # nit = np.full_like(status, nit)[()]
     # res.update(x=xmin, fun=fmin, xl=x1, fl=f1, xr=x2, fr=f2, status=status,
     #            nfev=nfev, nit=nit, success=status==0)
     res.x[stop] = xmin
@@ -1704,12 +1701,12 @@ def _update_result(stop, xmin, fmin, x1, f1, x2, f2, status, f_evals, i, res):
     res.fl[stop] = f1
     res.fr[stop] = f2
     res.status[stop] = status
-    res.nfev[stop] = f_evals
-    res.nit[stop] = i
+    res.nfev[stop] = nfev
+    res.nit[stop] = nit
     res.success[stop] = status == 0
     return res
 
-def _prepare_result(shape, res):
+def _prepare_result(shape, res, active, nit, nfev):
     res = res.copy()
     xl, xr, fl, fr = res['xl'], res['xr'], res['fl'], res['fr']
     i = res['xl'] < res['xr']
@@ -1717,6 +1714,8 @@ def _prepare_result(shape, res):
     res['xr'] = np.choose(i, (xl, xr))
     res['fl'] = np.choose(i, (fr, fl))
     res['fr'] = np.choose(i, (fl, fr))
+    res['nit'][active] = nit
+    res['nfev'][active] = nfev
     for key, val in res.items():
         res[key] = np.reshape(val, shape)[()]
     return OptimizeResult(**res)

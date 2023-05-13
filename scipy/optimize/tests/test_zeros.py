@@ -289,9 +289,8 @@ class TestChandrupatla(TestScalarRootFinders):
 
     def test_convergence(self):
         # Test that the convergence tolerances behave as expected
-        # TODO: make this work with size > 1
         rng = np.random.default_rng()
-        p = rng.random()
+        p = rng.random(size=3)
         dist = stats.norm()
         bracket = (-5, 5)
         args = (dist, p)
@@ -451,23 +450,23 @@ class TestChandrupatla(TestScalarRootFinders):
         assert res.success
         assert_allclose(res.x, 1)
 
-        # # Test that if both ends of bracket equal root, algorithm reports
-        # # convergence
-        # def f(x):
-        #     return x**2 - 1
-        #
-        # with np.errstate(divide='ignore'):
-        #     res = zeros._chandrupatla(f, 1, 1)
-        # assert res.success
-        # assert_equal(res.x, 1)
+        # Test that if both ends of bracket equal root, algorithm reports
+        # convergence
+        def f(x):
+            return x**2 - 1
 
-        # def f(x):
-        #     return 1/x
-        #
-        # with np.errstate(invalid='ignore', divide='ignore'):
-        #     res = zeros._chandrupatla(f, np.inf, np.inf)
+        with np.errstate(divide='ignore'):
+            res = zeros._chandrupatla(f, 1, 1)
         # assert res.success
-        # assert_equal(res.x, np.inf)
+        assert_equal(res.x, 1)
+
+        def f(x):
+            return 1/x
+
+        with np.errstate(invalid='ignore', divide='ignore'):
+            res = zeros._chandrupatla(f, np.inf, np.inf)
+        assert res.success
+        assert_equal(res.x, np.inf)
 
         # Test maxiter = 0. Should do nothing to bracket.
         def f(x):
@@ -496,8 +495,10 @@ class TestChandrupatla(TestScalarRootFinders):
         res = zeros._chandrupatla(f, -1, 1, args=3)
         assert_allclose(res.x, 1/3)
 
-        # TODO: Test zero tolerance
-        # What's going on here - why are iterations repeated?
+        # # TODO: Test zero tolerance
+        # # ~~What's going on here - why are iterations repeated?~~
+        # # tl goes to zero when xatol=xrtol=0. When function is nearly linear,
+        # # this causes convergence issues.
         # def f(x):
         #     return np.cos(x)
         #
@@ -507,6 +508,7 @@ class TestChandrupatla(TestScalarRootFinders):
         # xm = np.nextafter(res.x, -np.inf)
         # assert np.abs(res.fun) < np.abs(f(xp))
         # assert np.abs(res.fun) < np.abs(f(xm))
+
 
 class TestNewton(TestScalarRootFinders):
     def test_newton_collections(self):
