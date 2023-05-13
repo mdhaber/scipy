@@ -262,14 +262,14 @@ class TestChandrupatla(TestScalarRootFinders):
         assert np.issubdtype(res.status.dtype, np.integer)
 
         ref_nfev = [ref.nfev for ref in refs]
-        assert_equal(res.nfev, max(ref_nfev))
-        assert_equal(res.nfev, f.f_evals)
+        assert_equal(res.nfev.ravel(), ref_nfev)
+        assert_equal(np.max(res.nfev), f.f_evals)
         assert_equal(res.nfev.shape, res.fun.shape)
         assert np.issubdtype(res.nfev.dtype, np.integer)
 
         ref_nit = [ref.nit for ref in refs]
-        assert_equal(res.nit, max(ref_nit))
-        assert_equal(res.nit, f.f_evals-2)
+        assert_equal(res.nit.ravel(), ref_nit)
+        assert_equal(np.max(res.nit), f.f_evals-2)
         assert_equal(res.nit.shape, res.fun.shape)
         assert np.issubdtype(res.nit.dtype, np.integer)
 
