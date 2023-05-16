@@ -1458,10 +1458,17 @@ def _bracket_root(f, a, b=None, *, min=None, max=None, factor=None, batch=100):
     if factor is None:
         factor = 1.61803398875  # golden ratio as suggested in gh-18348
 
-    a, b, factor = np.float64(a), np.float64(b), np.float64(factor)
+    a, b, factor = np.broadcast_arrays(a, b, factor)
+    shape = a.shape
+    a, b, factor = a.ravel(), b.ravel(), factor.ravel()
+    L, R = np.full_like(a, np.nan), np.full_like(a, np.nan)
+    n = len(a)
+
     d = b - a
-    i = np.arange(batch, dtype=np.float64)  # avoid int to negative int power
-    x, fx = np.array([]), np.array([])
+
+    # float avoids int to negative int power
+    i = np.arange(batch, dtype=np.float64)[:, np.newaxis]
+    x, fx = np.empty((0, n)), np.empty((0, n))
     left_stop = right_stop = False
 
     def _explore(t, v, i, limit, stop):
@@ -1471,26 +1478,28 @@ def _bracket_root(f, a, b=None, *, min=None, max=None, factor=None, batch=100):
         # endpoint reaching `limit`. Return candidate bracket endpoints and
         # corresponding function values.
         if stop:
-            w, fw = np.array([]), np.array([])
+            w, fw = np.empty((0, n)), np.empty((0, n))
 
         else:
             # See `_bracket` notes for explanation. For bracket growth to the
             # left, `t = a`, `v = b`, and `limit = min`. For bracket growth to
             # the right, `t = b`, `v = a`, and `limit = max`.
-            sign = 1 if t < v else -1  # positive grows to the left
+            sign = np.sign(v - t)  # positive grows to the left
             if limit is None:
                 w = v - sign * d * factor**i
             else:
                 w = limit + (t - limit) * factor**(-i)
 
-            w = w[np.isfinite(w)]
+            # w = w[np.isfinite(w).any(axis=-1)]
             fw = f(w)
 
-            jf = np.isfinite(fw)
-            w, fw = w[jf], fw[jf]
+            # jf = np.isfinite(fw)
+            # w, fw = w[jf], fw[jf]
 
-            if fw.size != i.size or w[-1] == limit:
-                stop = True
+            # if fw.size != i.size or w[-1] == limit:
+            #     stop = True
+
+            stop = w[-1] == limit
 
         return w, fw, stop
 
