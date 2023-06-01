@@ -29,8 +29,8 @@ Highlights of this release
 - Several `scipy.sparse` array API improvements, including a new public base
   class distinct from the older matrix class, proper 64-bit index support,
   and numerous deprecations paving the way to a modern sparse array experience.
-- Added three new statistical distributions, and wide-ranging performance and
-  precision improvements to several other statistical distributions.
+- `scipy.stats` added tools for survival analysis, multiple hypothesis testing,
+  sensitivity analysis, and working with censored data.
 - A new function was added for quasi-Monte Carlo integration, and linear
   algebra functions ``det`` and ``lu`` now accept nD-arrays.
 - An ``axes`` argument was added broadly to ``ndimage`` functions, facilitating
@@ -159,7 +159,7 @@ New Features
   experimental groups against the mean of a control group.
 - `scipy.stats.ecdf` for computing the empirical CDF and complementary
   CDF (survival function / SF) from uncensored or right-censored data. This
-  function is also useful for survival analysis / Kaplain-Meier estimation.
+  function is also useful for survival analysis / Kaplan-Meier estimation.
 - `scipy.stats.logrank` to compare survival functions underlying samples.
 - `scipy.stats.false_discovery_control` for adjusting p-values to control the
   false discovery rate of multiple hypothesis tests using the
@@ -170,7 +170,7 @@ New Features
 - Filliben's goodness of fit test as ``method='Filliben'`` of
   `scipy.stats.goodness_of_fit`.
 - `scipy.stats.ttest_ind` has a new method, ``confidence_interval`` for
-  computing confidence intervals.
+  computing a confidence interval of the difference between means.
 - `scipy.stats.MonteCarloMethod`, `scipy.stats.PermutationMethod`, and
   `scipy.stats.BootstrapMethod` are new classes to configure resampling and/or
   Monte Carlo versions of hypothesis tests. They can currently be used with
