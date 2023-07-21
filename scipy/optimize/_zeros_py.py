@@ -1525,7 +1525,6 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
     # Todo:
     # - check what happens when multiple brackets are found or if a bracket
     #   and a root is found
-    # - final pass through code, add comments
     # - find bracket with sign change in specified direction
     # - Add tolerance
     # - allow factor < 1?
@@ -1537,13 +1536,26 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
     xs = (a, b)
     temp = _scalar_optimization_initialize(func, xs, args)
     xs, fs, args, shape, dtype = temp  # line split for PEP8
+
+    n = len(xs[0])
+
+    # The approach is to treat the left and right searches as though they were
+    # (almost) totally independent one-sided bracket searches. (The interaction
+    # is considered when checking for termination and preparing the result
+    # object.)
+    # `x` is the "moving" end of the bracket
     x = np.concatenate(xs)
     f = np.concatenate(fs)
-    n = len(x) // 2
-
+    # `x_last` is the previous location of the moving end of the bracket. If
+    # the signs of `f` and `f_last` are different, `x` and `x_last` form a
+    # bracket.
     x_last = np.concatenate((x[n:], x[:n]))
     f_last = np.concatenate((f[n:], f[:n]))
+    # `x0` is the "fixed" end of the bracket.
     x0 = x_last
+    # We don't need to retain the corresponding function value, since the
+    # fixed end of the bracket is only needed to compute the new value of the
+    # moving end; it is never returned.
 
     min = np.broadcast_to(min, shape).astype(dtype, copy=False).ravel()
     max = np.broadcast_to(max, shape).astype(dtype, copy=False).ravel()
@@ -1554,13 +1566,21 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
 
     active = np.arange(2*n)
     args = [np.concatenate((arg, arg)) for arg in args]
+
+    # This is needed due to inner workings of `_scalar_optimization_loop`.
+    # We're abusing it a tiny bit.
     shape = shape + (2,)
 
+    # `d` is for "distance".
+    # For searches without a limit, the distance between the fixed end of the
+    # bracket `x0` and the moving end `x` will grow by `factor` each iteration.
+    # For searches with a limit, the distance between the `limit` and moving
+    # end of the bracket `x` will shrink by `factor` each iteration.
     i = np.isinf(limit)
     ni = ~i
     d = np.zeros_like(x)
-    d[i] = (x[i] - x0[i]) * factor[i]
-    d[ni] = (limit[ni] - x[ni]) / factor[ni]
+    d[i] = x[i] - x0[i]
+    d[ni] = limit[ni] - x[ni]
 
     status = np.full_like(x, _EINPROGRESS, dtype=int)  # in progress
     nit, nfev = 0, 1  # one function evaluation per side performed above
@@ -1575,59 +1595,80 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
                       ('x_last', 'x_last'), ('f_last', 'f_last')]
 
     def pre_func_eval(work):
-        work.x_last = work.x
-        work.f_last = work.f
-        i = np.isinf(work.limit)
+        # Initialize moving end of bracket
         x = np.zeros_like(work.x)
 
-        x[i] = work.x0[i] + work.d[i]
+        # Unlimited brackets grow by `factor` by increasing distance from fixed
+        # end to moving end.
+        i = np.isinf(work.limit)  # indices of unlimited brackets
         work.d[i] *= work.factor[i]
+        x[i] = work.x0[i] + work.d[i]
 
-        ni = ~i
-        x[ni] = work.limit[ni] - work.d[ni]
+        # Limited brackets grow by decreasing the distance from the limit to
+        # the moving end.
+        ni = ~i  # indices of limited brackets
         work.d[ni] /= work.factor[ni]
+        x[ni] = work.limit[ni] - work.d[ni]
 
         return x
 
     def post_func_eval(x, f, work):
+        # Keep track of the previous location of the moving end so that we can
+        # return a narrower bracket. (The alternative is to remember the
+        # original fixed end, but then the bracket would be wider than needed.)
+        work.x_last = work.x
+        work.f_last = work.f
         work.x = x
         work.f = f
 
     def check_termination(work):
-
         stop = np.zeros_like(work.x, dtype=bool)
 
+        # Condition 1: a valid bracket (or the root itself) has been found
         sf = np.sign(work.f)
         sf_last = np.sign(work.f_last)
-
         i = (sf_last == -sf) | (sf_last == 0) | (sf == 0)
         work.status[i] = _ECONVERGED
         stop[i] = True
 
-        # If we just found a bracket on the right, we can stop looking on the
-        # left, and vice-versa. This is a bit tricky.
+        # Condition 2: the other side's search found a valid bracket.
+        # (If we just found a bracket with the rightward search, we can stop
+        #  the leftward search, and vice-versa.)
+        # To do this, we need to set the status of the other side's search;
+        # this is tricky because `work.status` contains only the *active*
+        # elements, so we don't immediately know the index of the element we
+        # need to set - or even if it's still there. (That search may have
+        # terminated already, e.g. by reaching its `limit`.)
+        # To facilitate this, `work.active` contains a unit integer index of
+        # each search. Index `k` (`k < n)` and `k + n` correspond with a
+        # leftward and rightward search, respectively. Elements are removed
+        # from `work.active` just as they are removed from `work.status`, so
+        # we use `work.active` to help find the right location in
+        # `work.status`.
         # Get the integer indices of the elements that can also stop
         also_stop = (work.active[i] + work.n) % (2*work.n)
         # Check whether they are still active.
-        # To start, we need to find out whether they would be in `work.active`
-        # if they are indeed there.
+        # To start, we need to find out where in `work.active` they would
+        # appear if they are indeed there.
         j = np.searchsorted(work.active, also_stop)
         # If the location exceeds the length of the `work.active`, they are
         # not there.
         j = j[j < len(work.active)]
         # Check whether they are still there.
         j = j[also_stop == work.active[j]]
-        # Now convert these to boolean indices
+        # Now convert these to boolean indices to use with `work.status`.
         i = np.zeros_like(stop)
         i[j] = True  # boolean indices of elements that can also stop
         i = i & ~stop
         work.status[i] = _EOTHERCONVERGED
         stop[i] = True
 
+        # Condition 3: moving end of bracket reaches limit
         i = (work.x == work.limit) & ~stop
         work.status[i] = _ECONVERR
         stop[i] = True
 
+        # Condition 4: non-finite value encountered
         i = ~(np.isfinite(work.x) & np.isfinite(work.f)) & ~stop
         work.status[i] = _EVALUEERR
         stop[i] = True
@@ -1640,6 +1681,14 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
     def customize_result(res, shape):
         n = len(res['x']) // 2
 
+        # Because we treat the two one-sided searches as though they were
+        # independent, what we keep track of in `work` and what we want to
+        # return in `res` look quite different. Combine the results from the
+        # two one-sided searches before reporting the results to the user.
+        # - "a" refers to the leftward search (the moving end started at `a`)
+        # - "b" refers to the rightward search (the moving end started at `b`)
+        # - "l" refers to the left end of the bracket (closer to -oo)
+        # - "r" refers to the right end of the bracket (closer to +oo)
         xal = res['x'][:n]
         xar = res['x_last'][:n]
         xbl = res['x_last'][n:]
@@ -1650,6 +1699,25 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
         fbl = res['f_last'][n:]
         fbr = res['f'][n:]
 
+        # Initialize the brackets and corresponding function values to return
+        # to the user. Brackets may not be valid (e.g. there is no root,
+        # there weren't enough iterations, NaN encountered), but we still need
+        # to return something. One option would be all NaNs, but what I've
+        # chosen here is the left- and right-most points at which the function
+        # has been evaluated. This gives the user some information about what
+        # interval of the real line has been searched and shows that there is
+        # no sign change between the two ends.
+        xl = xal.copy()
+        fl = fal.copy()
+        xr = xbr.copy()
+        fr = fbr.copy()
+
+        # `status` indicates whether the bracket is valid or not. If so,
+        # we want to adjust the bracket we return to be the narrowest possible
+        # given the points at which we evaluated the function.
+        # For example if bracket "a" is valid and smaller than bracket "b" OR
+        # if bracket "a" is valid and bracket "b" is not valid, we want to
+        # return bracket "a" (and vice versa).
         sa = res['status'][:n]
         sb = res['status'][n:]
 
@@ -1659,16 +1727,12 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
         i1 = ((da <= db) & (sa == 0)) | ((sa == 0) & (sb != 0))
         i2 = ((db <= da) & (sb == 0)) | ((sb == 0) & (sa != 0))
 
-        xl = xal.copy()
-        fl = fal.copy()
-        xr = xbr.copy()
-        fr = fbr.copy()
-
         xr[i1] = xar[i1]
         fr[i1] = far[i1]
         xl[i2] = xbl[i2]
         fl[i2] = fbl[i2]
 
+        # Finish assembling the result object
         res['xl'] = xl
         res['xr'] = xr
         res['fl'] = fl
@@ -1676,12 +1740,21 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
 
         res['nit'] = np.maximum(res['nit'][:n], res['nit'][n:])
         res['nfev'] = res['nfev'][:n] + res['nfev'][n:]
+        # I was conflicted about what to return for `status` because in
+        # reality there are separate statuses for leftward and rightward
+        # search. Choosing the maximum of the two is somewhat arbitrary, but
+        # it ensures that 0 is reported if the bracket is valid. (Another
+        # option would be to return the two separately, but I don't know if
+        # it's really useful. The status of the other side's search can always
+        # be added later.)
         res['status'] = np.maximum(sa, sb)
         res['success'] = (res['status'] == 0)
+
         del res['x']
         del res['f']
         del res['x_last']
         del res['f_last']
+
         return shape[:-1]
 
     return _scalar_optimization_loop(work, callback, shape,
