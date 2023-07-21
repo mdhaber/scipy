@@ -16,6 +16,7 @@ __all__ = ['newton', 'bisect', 'ridder', 'brentq', 'brenth', 'toms748',
 # Must agree with CONVERGED, SIGNERR, CONVERR, ...  in zeros.h
 _ECONVERGED = 0
 _ESIGNERR = -1
+_EOTHERCONVERGED = -1
 _ECONVERR = -2
 _EVALUEERR = -3
 _ECALLBACK = -4
@@ -1452,53 +1453,79 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
     func : callable
         The function for which the root is to be bracketed.
     a, b : float
-        Starting guess of bracket, which need not contain a root. If `b` is
-        not provided, ``b = a + 1``. Must be broadcastable with one another.
+        Starting guess of bracket, which need not contain a root. Must be
+        broadcastable with one another. If `b` is not provided, ``b = a + 1``.
     min, max : float, optional
         Minimum and maximum allowable endpoints of the bracket, inclusive. Must
-        be braodcastable with `a` and `b`.
+        be broadcastable with `a` and `b`.
     factor : float, default: golden ratio
         The factor used to grow the bracket. See notes for details.
     args : tuple, optional
         Additional positional arguments to be passed to `func`.  Must be arrays
         broadcastable with `a`, `b`, `min`, and `max`. If the callable to be
-        differentiated requires arguments that are not broadcastable with the
-        other arrays, wrap that callable with `func` such that `func` accepts
+        bracketed requires arguments that are not broadcastable with these
+        arrays, wrap that callable with `func` such that `func` accepts
         only `x` and broadcastable arrays.
+    maxiter : int, optional
+        The maximum number of iterations of the algorithm to perform.
 
     Returns
     -------
-    l, r : float
-        The left and right endpoints of the bracket such that
-        ``func(l) < 0 < func(r)``.
+    res : OptimizeResult
+        An instance of `scipy.optimize.OptimizeResult` with the following
+        attributes. The descriptions are written as though the values will be
+        scalars; however, if `func` returns an array, the outputs will be
+        arrays of the same shape.
+
+        xl, xr : float
+            The lower and upper ends of the bracket, if the algorithm
+            terminated successfully.
+        nfev : int
+            The number of function evaluations required to find the bracket.
+            This is distinct from the number of times `func` is *called*
+            because the function may evaluated at multiple points in a single
+            call.
+        nit : int
+            The number of iterations of the algorithm that were performed.
+        status : int
+            An integer representing the exit status of the algorithm.
+            ``0`` : The algorithm found a bracket.
+            ``-2`` : The maximum number of iterations was reached.
+            ``-3`` : A non-finite value was encountered.
+        success : bool
+            ``True`` when the algorithm terminated successfully (status ``0``).
+        fl, fr : float
+            The function value at the lower and upper ends of the bracket.
 
     Notes
     -----
     This function generalizes an algorithm found in pieces throughout
     `scipy.stats`. The strategy is to iteratively grow the bracket `(l, r)`
-     until ``func(l) < 0 < func(r)``.
+     until ``func(l) < 0 < func(r)``. The bracket grows to the left as follows.
 
     - If `min` is not provided, the distance between `b` and `l` is iteratively
       increased by `factor`.
     - If `min` is provided, the distance between `min` and `l` is iteratively
-      decreased by `factor`. Note that this *increases* the bracket size.
+      decreased by `factor`. Note that this also *increases* the bracket size.
 
     Growth of the bracket to the right is analogous.
 
     Growth of the bracket in one direction stops when the endpoint is no longer
-    finite, the function value at the endpoint is no longer finite, or the
+    finite, the function value at the endpoint is no longer finite, the
     endpoint reaches its limiting value (`min` or `max`). Iteration terminates
     when the bracket stops growing in both directions, the bracket surrounds
     the root, or a root is found (accidentally).
 
-    If multiple brackets are found, only the leftmost one is returned.
+    If two brackets are found - that is, a bracket is found on both sides in
+    the same iteration, the smaller of the two is returned.
     If roots of the function are found, both `l` and `r` are set to the
     leftmost root.
 
     """
     # Todo:
-    # - update error codes
-    # - update documentation
+    # - check what happens when multiple brackets are found or if a bracket
+    #   and a root is found
+    # - final pass through code, add comments
     # - find bracket with sign change in specified direction
     # - Add tolerance
     # - allow factor < 1?
@@ -1594,7 +1621,7 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
         i = np.zeros_like(stop)
         i[j] = True  # boolean indices of elements that can also stop
         i = i & ~stop
-        work.status[i] = _ESIGNERR
+        work.status[i] = _EOTHERCONVERGED
         stop[i] = True
 
         i = (work.x == work.limit) & ~stop

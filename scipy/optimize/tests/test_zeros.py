@@ -1389,23 +1389,24 @@ class TestBracketRoot:
         assert_allclose(res.fl, self.f(res.xl, *args))
         assert_allclose(res.fr, self.f(res.xr, *args))
 
-    # def test_flags(self):
-    #     # Test cases that should produce different status flags; show that all
-    #     # can be produced simultaneously.
-    #     def f(xs, js):
-    #         funcs = [lambda x: x - 2.5,
-    #                  lambda x: x - 10,
-    #                  lambda x: (x - 0.1)**3,
-    #                  lambda x: np.nan]
-    #
-    #         return [funcs[j](x) for x, j in zip(xs, js)]
-    #
-    #     args = (np.arange(4, dtype=np.int64),)
-    #     res = zeros._chandrupatla(f, [0]*4, [np.pi]*4, args=args, maxiter=2)
-    #
-    #     ref_flags = np.array([zeros._ECONVERGED, zeros._ESIGNERR,
-    #                           zeros._ECONVERR, zeros._EVALUEERR])
-    #     assert_equal(res.status, ref_flags)
+    def test_flags(self):
+        # Test cases that should produce different status flags; show that all
+        # can be produced simultaneously. We don't need to test status -1
+        # because that is never returned. (It only occurs when there is a 0
+        # on the other side, and only the 0 gets returned.)
+        def f(xs, js):
+            funcs = [lambda x: x - 2.5,
+                     lambda x: x - 100,
+                     lambda x: np.nan]
+
+            return [funcs[j](x) for x, j in zip(xs, js)]
+
+        args = (np.arange(3, dtype=np.int64),)
+        res = zeros._bracket_root(f, [0]*3, [1]*3, args=args, maxiter=5)
+
+        ref_flags = np.array([zeros._ECONVERGED,
+                              zeros._ECONVERR, zeros._EVALUEERR])
+        assert_equal(res.status, ref_flags)
 
     @pytest.mark.parametrize("root", (0.622, [0.622, 0.623]))
     @pytest.mark.parametrize('min', [-5, None])
@@ -1534,3 +1535,13 @@ class TestBracketRoot:
         with np.errstate(over='ignore'):
             res = zeros._bracket_root(f, 5, 10, min=1)
         assert not res.success
+
+        # 5. infinite function values
+        def f(x):
+            x = np.atleast_1d(x)
+            x[x > 0] = np.inf
+            return x
+
+        res = zeros._bracket_root(f, -10, -9, factor=2)
+        assert res.success
+        assert res.nit == 4
