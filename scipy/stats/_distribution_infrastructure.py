@@ -14,24 +14,23 @@ class ContinuousDistribution:
             if parameterization.validate(set(shape_names)):
                 break
         else:
-            message = (f"The provided shapes {shape_names} "
+            message = (f"The provided shapes `{set(shape_names)}` "
                        "do not match a supported parameterization of the "
-                       f"{self.__class__.__name__} distribution family.")
+                       f"`{self.__class__.__name__}` distribution family.")
             raise ValueError(message)
+        self._parameterization = parameterization
 
-        # broadcast shapes
+        # broadcast shape arguments
         try:
             shape_vals = np.broadcast_arrays(*shape_vals)
         except ValueError as e:
-            message = (f"The shapes {shape_names} provided to the "
-                       f"{self.__class__.__name__} distribution family are "
-                       "not mutually broadcastable.")
+            message = (f"The shapes {set(shape_names)} provided to the "
+                       f"`{self.__class__.__name__}` distribution family cannot "
+                       "be broadcast to the same shape.")
             raise ValueError(message) from e
 
-        self._parameterization = parameterization
-
+        # Compress: remove invalid shapes and ravel
         shapes = dict(zip(shape_names, shape_vals))
-
         self._valid = parameterization.validate_shapes(shapes)
         shapes = self._compress(**shapes)
         self._shapes = shapes
@@ -51,14 +50,19 @@ class ContinuousDistribution:
     @cached_property
     def _support(self):
         a, b = self._variable.domain.endpoints
-        a = getattr(self, a, a)
-        b = getattr(self, b, b)
+        a = getattr(self, "_"+a, a)
+        b = getattr(self, "_"+b, b)
         return a, b
 
     @property
     def support(self):
         return self._decompress(*self._support)
 
+    @classmethod
+    def _draw(cls, sizes=None, rng=None, i_parameterization=0):
+        parameterization = cls._parameterizations[i_parameterization]
+        shapes = parameterization.draw(sizes, rng)
+        return cls(**shapes)
 
 
 class _Domain:
@@ -121,6 +125,10 @@ class _Parameter:
     def __str__(self):
         return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
 
+    def draw(self, size=None, rng=None):
+        rng = rng or np.random.default_rng()
+        return rng.uniform(*self.typical, size=size)
+
 
 class _RealParameter(_Parameter):
     def __init__(self, name, *, typical=None, symbol=None, domain=_RealDomain()):
@@ -171,18 +179,11 @@ class _IntegerParameter(_Parameter):
 class _Parameterization:
     def __init__(self, *parameters):
         self.parameters = {param.name: param for param in parameters}
-        # self.integer_parameters = {param.name: param for param in parameters
-        #                            if isinstance(param, _IntegerShape)}
-        # self.real_parameters = {param.name: param for param in parameters
-        #                         if isinstance(param, _RealShape)}
 
     def validate(self, shapes):
         return shapes == set(self.parameters.keys())
 
     def validate_shapes(self, shapes):
-        # should we broadcast from the outset, or later on?
-        # simpler to broadcast early, but could be more efficient to broadcast
-        # as late as possible.
         all_valid = True
         for name, arr in shapes.items():
             parameter = self.parameters[name]
@@ -197,6 +198,13 @@ class _Parameterization:
         messages = [str(param) for name, param in self.parameters.items()]
         return " ".join(messages)
 
+    def draw(self, sizes=None, rng=None):
+        shapes = {}
+        sizes = sizes if np.iterable(sizes) else [sizes]*len(self.parameters)
+        for size, param in zip(sizes, self.parameters.values()):
+            shapes[param.name] = param.draw(size, rng)
+        return shapes
+
 
 class LogUniform(ContinuousDistribution):
 
@@ -206,12 +214,12 @@ class LogUniform(ContinuousDistribution):
     _log_b_domain = _RealDomain(endpoints=('log_a', oo))
     _x_support = _RealDomain(endpoints=('a', 'b'))
 
-    _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 1e-2))
-    _b_param = _RealParameter('b', domain=_b_domain, typical=(1e2, 1e3))
+    _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 1))
+    _b_param = _RealParameter('b', domain=_b_domain, typical=(1, 1e3))
     _log_a_param = _RealParameter('log_a', symbol=r'\log(a)',
-                                  domain=_log_a_domain, typical=(-3, -2))
+                                  domain=_log_a_domain, typical=(-3, 0))
     _log_b_param = _RealParameter('log_b', symbol=r'\log(b)',
-                                  domain=_log_b_domain, typical=(2, 3))
+                                  domain=_log_b_domain, typical=(0, 3))
     _x_param = _RealParameter('x', domain=_x_support)
 
     _b_domain.define_parameters(_a_param)
@@ -225,21 +233,21 @@ class LogUniform(ContinuousDistribution):
         super().__init__(a=a, b=b, log_a=log_a, log_b=log_b)
 
     @cached_property
-    def a(self):
+    def _a(self):
         return (self._shapes['a'] if 'a' in self._shapes
                 else np.exp(self._shapes['log_a']))
 
     @cached_property
-    def b(self):
+    def _b(self):
         return (self._shapes['b'] if 'b' in self._shapes
                 else np.exp(self._shapes['log_b']))
 
     @cached_property
-    def log_a(self):
+    def _log_a(self):
         return (self._shapes['log_a'] if 'log_a' in self._shapes
                 else np.log(self._shapes['a']))
 
     @cached_property
-    def log_b(self):
+    def _log_b(self):
         return (self._shapes['log_b'] if 'log_b' in self._shapes
                 else np.log(self._shapes['b']))

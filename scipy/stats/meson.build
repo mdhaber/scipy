@@ -177,6 +177,7 @@ py3.install_sources([
     '_crosstab.py',
     '_discrete_distns.py',
     '_distn_infrastructure.py',
+    '_distribution_infrastructure.py',
     '_distr_params.py',
     '_entropy.py',
     '_fit.py',

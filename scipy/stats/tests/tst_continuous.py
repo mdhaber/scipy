@@ -15,6 +15,7 @@ a = [[-1], [1]]
 b = [0.5, 1.5]
 # dist = LogUniform(a=a, b=b)
 # dist = LogUniform(log_a=np.log(a), log_b=np.log(b))
+x = np.zeros((3, 0))
 dist = LogUniform(a=a, b=b)
 
 # print(dist.shapes['a'])
