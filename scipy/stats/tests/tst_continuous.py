@@ -11,11 +11,12 @@ from scipy.stats._distribution_infrastructure import oo, LogUniform
 #
 # parameterization = _Parameterization(_a_info, _b_info)
 #
-a = [[-1], [1]]
+a = [-1, 1]
 b = [0.5, 1.5]
+x = [[0.5], [1.25], [2]]
 # dist = LogUniform(a=a, b=b)
 # dist = LogUniform(log_a=np.log(a), log_b=np.log(b))
-x = np.zeros((3, 0))
+# x = np.zeros((3, 0))
 dist = LogUniform(a=a, b=b)
 
 # print(dist.shapes['a'])
@@ -25,3 +26,18 @@ print(dist._parameterization)
 a, b = dist.support
 print(a)
 print(b)
+#
+# dist.pdf(1)
+
+
+# from scipy import stats
+# stats.loguniform.pdf(-1, [-1, 1], [2, 3])
+
+# import numpy as np
+# from functools import cached_property
+#
+# class A:
+#     @cached_property
+#     def f(self):
+#         return np.zeros(3)
+#
