@@ -1,3 +1,4 @@
+from functools import cached_property
 import numpy as np
 _null = object()
 oo = np.inf
@@ -6,24 +7,64 @@ oo = np.inf
 class ContinuousDistribution:
     def __init__(self, **shapes):
 
-        # determine parameterization
-        shape_names = set((key for key, val in shapes.items()
-                           if val is not _null))
+        # identify parameterization
+        shapes = {key:val for key, val in shapes.items() if val is not _null}
+        shape_names, shape_vals = zip(*shapes.items())
         for parameterization in self._parameterizations:
-            if parameterization.validate(shape_names):
+            if parameterization.validate(set(shape_names)):
                 break
         else:
             message = (f"The provided shapes {shape_names} "
-                       "do not match a supported parameterization.")
+                       "do not match a supported parameterization of the "
+                       f"{self.__class__.__name__} distribution family.")
             raise ValueError(message)
 
-        original_shapes, standard_shapes, valid = parameterization.validate_shapes(shapes)
+        # broadcast shapes
+        try:
+            shape_vals = np.broadcast_arrays(*shape_vals)
+        except ValueError as e:
+            message = (f"The shapes {shape_names} provided to the "
+                       f"{self.__class__.__name__} distribution family are "
+                       "not mutually broadcastable.")
+            raise ValueError(message) from e
+
+        self._parameterization = parameterization
+
+        shapes = dict(zip(shape_names, shape_vals))
+
+        self._valid = parameterization.validate_shapes(shapes)
+        shapes = self._compress(**shapes)
+        self._shapes = shapes
+
+    def _compress(self, **shapes):
+        # return [array[self._valid] for array in arrays]
+        return {name: val[self._valid] for name, val in shapes.items()}
+
+    def _decompress(self, *arrays):
+        outs = []
+        for array in arrays:
+            out = np.full(self._valid.shape, np.nan, dtype=array.dtype)
+            out[self._valid] = array
+            outs.append(out[()])
+        return outs
+
+    @cached_property
+    def _support(self):
+        a, b = self._variable.domain.endpoints
+        a = getattr(self, a, a)
+        b = getattr(self, b, b)
+        return a, b
+
+    @property
+    def support(self):
+        return self._decompress(*self._support)
+
 
 
 class _Domain:
     symbols = {np.inf: "∞", -np.inf: "-∞", np.pi: "π", -np.pi: "-π"}
 
-    def __contains__(self, x):
+    def contains(self, x):
         raise NotImplementedError()
 
     def __str__(self):
@@ -31,13 +72,17 @@ class _Domain:
 
 
 class _SimpleDomain(_Domain):
-    def __init__(self, endpoints=(-oo, oo), inclusive=(False, False)):
-        self.endpoints = endpoints
-        self.includes = inclusive
 
-    def __contains__(self, item):
+    def define_parameters(self, *parameters):
+        new_symbols = {param.name: param.symbol for param in parameters}
+        self.symbols.update(new_symbols)
+
+    def contains(self, item, shapes={}):
         a, b = self.endpoints
         left_inclusive, right_inclusive = self.inclusive
+
+        a = shapes.get(a, a)
+        b = shapes.get(b, b)
 
         in_left = item >= a if left_inclusive else item > a
         in_right = item <= b if right_inclusive else item < b
@@ -45,6 +90,10 @@ class _SimpleDomain(_Domain):
 
 
 class _RealDomain(_SimpleDomain):
+
+    def __init__(self, endpoints=(-oo, oo), inclusive=(False, False)):
+        self.endpoints = endpoints
+        self.inclusive = inclusive
 
     def __str__(self):
         a, b = self.endpoints
@@ -69,8 +118,13 @@ class _Parameter:
         self.domain = domain
         self.typical = typical
 
+    def __str__(self):
+        return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
+
+
 class _RealParameter(_Parameter):
-    def __init__(self, name, *, typical, symbol=None, domain=_RealDomain()):
+    def __init__(self, name, *, typical=None, symbol=None, domain=_RealDomain()):
+        typical = typical or domain
         symbol = symbol or name
         super().__init__(name, symbol=symbol, domain=domain, typical=typical)
 
@@ -93,7 +147,8 @@ class _RealParameter(_Parameter):
         return arr, valid_dtype
 
 class _IntegerParameter(_Parameter):
-    def __init__(self, name, *, typical, symbol=None, domain=_IntegerDomain()):
+    def __init__(self, name, *, typical=None, symbol=None, domain=_IntegerDomain()):
+        typical = typical or domain
         symbol = symbol or name
         super().__init__(name, symbol=symbol, domain=domain, typical=typical)
 
@@ -110,7 +165,7 @@ class _IntegerParameter(_Parameter):
         else:
             message = f"Parameter {self.name} must be of integer dtype."
             raise ValueError(message)
-        return arr
+        return arr, valid_dtype
 
 
 class _Parameterization:
@@ -124,41 +179,67 @@ class _Parameterization:
     def validate(self, shapes):
         return shapes == set(self.parameters.keys())
 
-    def validate_shapes(self, **original_shapes):
-        # check dtypes
-        # check simple bounds
-        # convert to canonical parameterization
-        # broadcast and reshape
-
-        standard_shapes = {}
-        valid_shapes = {}
-        for name, arr in original_shapes.items():
+    def validate_shapes(self, shapes):
+        # should we broadcast from the outset, or later on?
+        # simpler to broadcast early, but could be more efficient to broadcast
+        # as late as possible.
+        all_valid = True
+        for name, arr in shapes.items():
             parameter = self.parameters[name]
             arr, valid = parameter.check_dtype(arr)
-            valid &= arr in parameter.domain
-            standard_shapes[name] = arr
-            valid_shapes[name] = valid
+            valid = valid & parameter.domain.contains(arr, shapes)
+            all_valid = all_valid & valid
+            shapes[name] = arr
 
-        standard_shapes = self.canonical_shapes(standard_shapes)
+        return all_valid
 
-        return original_shapes, standard_shapes, valid_shapes
-
-    def canonical_shapes(self, **shapes):
-        return shapes
-
-
-class _LogUniformStandard(_Parameterization):
-    def canonical_shapes(self, a, b):
-        return dict(a=np.log(a), b=np.log(b))
+    def __str__(self):
+        messages = [str(param) for name, param in self.parameters.items()]
+        return " ".join(messages)
 
 
 class LogUniform(ContinuousDistribution):
-    _a_info = _Parameter('a', domain=(0, oo), inclusive=(False, False), typical=(1e-3, 1e-2))
-    _b_info = _Parameter('b', domain=(0, oo), inclusive=(False, False), typical=(1e2, 1e3))
-    _log_a_info = _Parameter('log_a', symbol=r'\log(a)', inclusive=(False, False), typical=(-3, -2))
-    _log_b_info = _Parameter('log_b', symbol=r'\log(b)', inclusive=(False, False), typical=(2, -3))
-    _log_parameterization = _Parameterization(_log_a_info, _log_b_info)
-    _parameterizations = [_LogUniformStandard, _log_parameterization]
+
+    _a_domain = _RealDomain(endpoints=(0, oo))
+    _b_domain = _RealDomain(endpoints=('a', oo))
+    _log_a_domain = _RealDomain(endpoints=(-oo, oo))
+    _log_b_domain = _RealDomain(endpoints=('log_a', oo))
+    _x_support = _RealDomain(endpoints=('a', 'b'))
+
+    _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 1e-2))
+    _b_param = _RealParameter('b', domain=_b_domain, typical=(1e2, 1e3))
+    _log_a_param = _RealParameter('log_a', symbol=r'\log(a)',
+                                  domain=_log_a_domain, typical=(-3, -2))
+    _log_b_param = _RealParameter('log_b', symbol=r'\log(b)',
+                                  domain=_log_b_domain, typical=(2, 3))
+    _x_param = _RealParameter('x', domain=_x_support)
+
+    _b_domain.define_parameters(_a_param)
+    _log_b_domain.define_parameters(_log_a_param)
+
+    _parameterizations = [_Parameterization(_log_a_param, _log_b_param),
+                          _Parameterization(_a_param, _b_param)]
+    _variable = _x_param
 
     def __init__(self, *, a=_null, b=_null, log_a=_null, log_b=_null):
         super().__init__(a=a, b=b, log_a=log_a, log_b=log_b)
+
+    @cached_property
+    def a(self):
+        return (self._shapes['a'] if 'a' in self._shapes
+                else np.exp(self._shapes['log_a']))
+
+    @cached_property
+    def b(self):
+        return (self._shapes['b'] if 'b' in self._shapes
+                else np.exp(self._shapes['log_b']))
+
+    @cached_property
+    def log_a(self):
+        return (self._shapes['log_a'] if 'log_a' in self._shapes
+                else np.log(self._shapes['a']))
+
+    @cached_property
+    def log_b(self):
+        return (self._shapes['log_b'] if 'log_b' in self._shapes
+                else np.log(self._shapes['b']))
