@@ -10,23 +10,31 @@ from scipy.stats._distribution_infrastructure import oo, LogUniform
 #                      typical=(1e2, 1e3))
 #
 # parameterization = _Parameterization(_a_info, _b_info)
-#
-a = [-1, 1]
-b = [0.5, 1.5]
-x = [[0.5], [1.25], [2]]
+
+from scipy import stats
+
+rng = np.random.default_rng(652)
+
+a = rng.random(4)
+b = rng.random(4)
+
+x = rng.random(4)
 # dist = LogUniform(a=a, b=b)
 # dist = LogUniform(log_a=np.log(a), log_b=np.log(b))
 # x = np.zeros((3, 0))
 dist = LogUniform(a=a, b=b)
+dist.tol = 1
+print(dist.logcdf(x))
+# print(dist.logpdf(x))
 
 # print(dist.shapes['a'])
 # print(dist.shapes['b'])
 # print(dist.shapes_in_domain)
-print(dist._parameterization)
-a, b = dist.support
-print(a)
-print(b)
-#
+# print(dist._parameterization)
+# a, b = dist.support
+# print(a)
+# print(b)
+# #
 # dist.pdf(1)
 
 

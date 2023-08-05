@@ -1,4 +1,5 @@
 from functools import cached_property
+from scipy.integrate._tanhsinh import _tanhsinh
 import numpy as np
 _null = object()
 oo = np.inf
@@ -32,7 +33,7 @@ oo = np.inf
 #   broadcastable with these @cached_properties. In most cases, this is
 #   completely transparent to the author.
 
-def _filter_invalid(f):
+def _set_invalid_nan(f):
     # need to come back to this to think more about use of < vs <=
 
     use_support = {'logpdf', 'logcdf', 'logccdf', 'pdf', 'cdf', 'ccdf'}
@@ -63,7 +64,9 @@ def _filter_invalid(f):
         mask_low = x <= low  # check implications of <, <=
         mask_high = x >= high
         x_invalid = mask_low | mask_high
-        x[x_invalid] = np.nan
+        if np.any(x_invalid):
+            x = np.copy(x)
+            x[x_invalid] = np.nan
         out = f(self, x, *args, **kwargs)
         out[mask_low] = replace_low
         out[mask_high] = replace_high
@@ -72,10 +75,36 @@ def _filter_invalid(f):
     return filtered
 
 
+def kwargs2args(f, args=[], kwargs={}):
+    # this is a temporary workaround until the scalar algorithms `_tanhsinh`,
+    # `_chandrupatla`, etc., accept `kwargs` or can operate with compressing
+    # arguments to the callable
+    names = list(kwargs.keys())
+    n_args = len(args)
+
+    def wrapped(x, *args):
+        return f(x, *args[:n_args], **dict(zip(names, args[n_args:])))
+
+    args = list(args) + list(kwargs.values())
+
+    return wrapped, args
+
+
 class ContinuousDistribution:
-    def __init__(self, **shapes):
+    not_implemented_message = (
+
+    )
+
+    def __init__(self, *, tol=_null, **shapes):
+        self.tol = tol
+        self._not_implemented = (
+            f"`{self.__class__.__name__}` does not provide an accurate "
+            "implementation of the required method. Leave `tol` unspecified "
+            "to use the default implementation."
+        )
 
         # identify parameterization
+        all_shape_names = list(shapes)
         shapes = {key:val for key, val in shapes.items() if val is not _null}
         shape_names, shape_vals = zip(*shapes.items())
         for parameterization in self._parameterizations:
@@ -107,25 +136,88 @@ class ContinuousDistribution:
                 shapes[shape_name][self._invalid] = np.nan
 
         self._shapes = shapes
+        self._all_shape_names = all_shape_names
+
+    def _get_shapes(self, shape_names=None):
+        shape_names = shape_names or self._all_shape_names
+        return {name: getattr(self, name) for name in shape_names}
 
     @cached_property
-    def _support(self):
-        a, b = self._variable.domain.endpoints
-        a = getattr(self, "_"+a, a)
-        b = getattr(self, "_"+b, b)
-        return a, b
+    def _all_shapes(self):
+        # It would be better if we could pass to private methods (e.g. _pdf)
+        # only the shapes that it wants. We could do this with inspection,
+        # but it is probably faster to remember the names of the shapes needed
+        # by each method.
+        return self._get_shapes()
 
     @property
+    def tol(self):
+        return self._tol
+
+    @tol.setter
+    def tol(self, tol):
+        if not (tol is _null or np.isscalar(tol)):
+            message = (f"Parameter `tol` of {self.__class__.__name__} must be "
+                       "a scalar, if specified.")
+            raise ValueError(message)
+        self._tol = tol
+
+    @cached_property
     def support(self):
-        return self._support
+        a, b = self._variable.domain.endpoints
+        a = getattr(self, a, a)
+        b = getattr(self, b, b)
+        return a, b
 
-    @_filter_invalid
+    def _overrides(self, method_name):
+        method = getattr(self.__class__, method_name, None)
+        super_method = getattr(self.__class__.__base__, method_name, None)
+        return method is not super_method
+
+    @_set_invalid_nan
     def logpdf(self, x):
-        return self._logpdf(x)
+        if self._overrides('_logpdf'):
+            return self._logpdf(x, **self._all_shapes)
+        elif self.tol is _null:
+            return np.log(self._pdf(x, **self._all_shapes))
+        else:
+            return self._logpdf(x, **self._all_shapes)
 
-    @_filter_invalid
+    @_set_invalid_nan
+    def logcdf(self, x):
+        if self._overrides('_logcdf'):
+            return self._logcdf(x, **self._all_shapes)
+        elif self.tol is _null and self._overrides('_cdf'):
+            return np.log(self._cdf(x, **self._all_shapes))
+        else:
+            a, b = self.support
+            f, args = kwargs2args(self._logpdf, kwargs=self._all_shapes)
+            res = _tanhsinh(f, a, x, args=args, log=True)
+            return res.integral
+
+    @_set_invalid_nan
     def pdf(self, x):
-        return self._pdf(x)
+        if self._overrides('_pdf'):
+            return self._pdf(x, **self._all_shapes)
+        elif self._overrides('_logpdf'):
+            return np.exp(self._logpdf(x), **self._all_shapes)
+        else:
+            return self._pdf(x, **self._all_shapes)
+
+    @_set_invalid_nan
+    def cdf(self, x):
+        if self._overrides('_cdf'):
+            return self._cdf(x, **self._all_shapes)
+        elif self._overrides('_logcdf'):
+            return np.exp(self._logcdf(x), **self._all_shapes)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logpdf(self, x, **kwargs):
+        raise NotImplementedError(self._not_implemented)
+
+    def _pdf(self, x, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=0):
@@ -302,27 +394,30 @@ class LogUniform(ContinuousDistribution):
         super().__init__(a=a, b=b, log_a=log_a, log_b=log_b)
 
     @cached_property
-    def _a(self):
+    def a(self):
         return (self._shapes['a'] if 'a' in self._shapes
                 else np.exp(self._shapes['log_a']))
 
     @cached_property
-    def _b(self):
+    def b(self):
         return (self._shapes['b'] if 'b' in self._shapes
                 else np.exp(self._shapes['log_b']))
 
     @cached_property
-    def _log_a(self):
+    def log_a(self):
         return (self._shapes['log_a'] if 'log_a' in self._shapes
                 else np.log(self._shapes['a']))
 
     @cached_property
-    def _log_b(self):
+    def log_b(self):
         return (self._shapes['log_b'] if 'log_b' in self._shapes
                 else np.log(self._shapes['b']))
 
-    def _logpdf(self, x):
-        return -np.log(x) - np.log(self._log_b - self._log_a)
+    def _logpdf(self, x, *, log_a, log_b, **kwargs):
+        return -np.log(x) - np.log(log_b - log_a)
 
-    def _pdf(self, x):
-        return ((self._log_b - self._log_a)*x)**-1
+    def _pdf(self, x, *, log_a, log_b, **kwargs):
+        return ((log_b - log_a)*x)**-1
+
+    def _cdf(self, x, *, log_a, log_b, **kwargs):
+        return (np.log(x) - log_a)/(log_b - log_a)
