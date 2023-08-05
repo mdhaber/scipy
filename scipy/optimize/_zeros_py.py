@@ -16,6 +16,7 @@ __all__ = ['newton', 'bisect', 'ridder', 'brentq', 'brenth', 'toms748',
 # Must agree with CONVERGED, SIGNERR, CONVERR, ...  in zeros.h
 _ECONVERGED = 0
 _ESIGNERR = -1
+_EOTHERCONVERGED = -1
 _ECONVERR = -2
 _EVALUEERR = -3
 _ECALLBACK = -4
@@ -1396,6 +1397,374 @@ def toms748(f, a, b, args=(), k=1,
     return _results_select(full_output, (x, function_calls, iterations, flag))
 
 
+def _bracket_root_iv(func, a, b, min, max, factor, args, maxiter):
+
+    if not callable(func):
+        raise ValueError('`func` must be callable.')
+
+    if not np.iterable(args):
+        args = (args,)
+
+    a = np.asarray(a)[()]
+    if not np.issubdtype(a.dtype, np.number) or np.iscomplex(a).any():
+        raise ValueError('`a` must be numeric and real.')
+
+    b = a + 1 if b is None else b
+    min = -np.inf if min is None else min
+    max = np.inf if max is None else max
+    # golden ratio as suggested in gh-18348, but higher values are faster.
+    factor = .5 + .5*5**.5 if factor is None else factor
+    a, b, min, max, factor = np.broadcast_arrays(a, b, min, max, factor)
+
+    if not np.issubdtype(b.dtype, np.number) or np.iscomplex(b).any():
+        raise ValueError('`b` must be numeric and real.')
+
+    if not np.issubdtype(min.dtype, np.number) or np.iscomplex(min).any():
+        raise ValueError('`min` must be numeric and real.')
+
+    if not np.issubdtype(max.dtype, np.number) or np.iscomplex(max).any():
+        raise ValueError('`max` must be numeric and real.')
+
+    if not np.issubdtype(factor.dtype, np.number) or np.iscomplex(factor).any():
+        raise ValueError('`factor` must be numeric and real.')
+    if not np.all(factor > 1):
+        raise ValueError('All elements of `factor` must be greater than 1.')
+
+    maxiter = np.asarray(maxiter)
+    message = '`maxiter` must be a non-negative integer.'
+    if (not np.issubdtype(maxiter.dtype, np.number) or maxiter.shape != tuple()
+            or np.iscomplex(maxiter)):
+        raise ValueError(message)
+    maxiter_int = int(maxiter[()])
+    if not maxiter == maxiter_int or maxiter < 0:
+        raise ValueError(message)
+
+    if not np.all((min <= a) & (a < b) & (b <= max)):
+        raise ValueError('`min <= a < b <= max` must be True (elementwise).')
+
+    return func, a, b, min, max, factor, args, maxiter
+
+
+def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
+                  args=(), maxiter=1000):
+    """Bracket the root of a monotonic scalar function of one variable
+
+    Parameters
+    ----------
+    func : callable
+        The function for which the root is to be bracketed.
+    a, b : float
+        Starting guess of bracket, which need not contain a root. Must be
+        broadcastable with one another. If `b` is not provided, ``b = a + 1``.
+    min, max : float, optional
+        Minimum and maximum allowable endpoints of the bracket, inclusive. Must
+        be broadcastable with `a` and `b`.
+    factor : float, default: golden ratio
+        The factor used to grow the bracket. See notes for details.
+    args : tuple, optional
+        Additional positional arguments to be passed to `func`.  Must be arrays
+        broadcastable with `a`, `b`, `min`, and `max`. If the callable to be
+        bracketed requires arguments that are not broadcastable with these
+        arrays, wrap that callable with `func` such that `func` accepts
+        only `x` and broadcastable arrays.
+    maxiter : int, optional
+        The maximum number of iterations of the algorithm to perform.
+
+    Returns
+    -------
+    res : OptimizeResult
+        An instance of `scipy.optimize.OptimizeResult` with the following
+        attributes. The descriptions are written as though the values will be
+        scalars; however, if `func` returns an array, the outputs will be
+        arrays of the same shape.
+
+        xl, xr : float
+            The lower and upper ends of the bracket, if the algorithm
+            terminated successfully.
+        nfev : int
+            The number of function evaluations required to find the bracket.
+            This is distinct from the number of times `func` is *called*
+            because the function may evaluated at multiple points in a single
+            call.
+        nit : int
+            The number of iterations of the algorithm that were performed.
+        status : int
+            An integer representing the exit status of the algorithm.
+            ``0`` : The algorithm found a bracket.
+            ``-2`` : The maximum number of iterations was reached.
+            ``-3`` : A non-finite value was encountered.
+        success : bool
+            ``True`` when the algorithm terminated successfully (status ``0``).
+        fl, fr : float
+            The function value at the lower and upper ends of the bracket.
+
+    Notes
+    -----
+    This function generalizes an algorithm found in pieces throughout
+    `scipy.stats`. The strategy is to iteratively grow the bracket `(l, r)`
+     until ``func(l) < 0 < func(r)``. The bracket grows to the left as follows.
+
+    - If `min` is not provided, the distance between `b` and `l` is iteratively
+      increased by `factor`.
+    - If `min` is provided, the distance between `min` and `l` is iteratively
+      decreased by `factor`. Note that this also *increases* the bracket size.
+
+    Growth of the bracket to the right is analogous.
+
+    Growth of the bracket in one direction stops when the endpoint is no longer
+    finite, the function value at the endpoint is no longer finite, the
+    endpoint reaches its limiting value (`min` or `max`). Iteration terminates
+    when the bracket stops growing in both directions, the bracket surrounds
+    the root, or a root is found (accidentally).
+
+    If two brackets are found - that is, a bracket is found on both sides in
+    the same iteration, the smaller of the two is returned.
+    If roots of the function are found, both `l` and `r` are set to the
+    leftmost root.
+
+    """
+    # Todo:
+    # - check what happens when multiple brackets are found or if a bracket
+    #   and a root is found
+    # - find bracket with sign change in specified direction
+    # - Add tolerance
+    # - allow factor < 1?
+
+    callback = None  # works; I just don't want to test it
+    temp = _bracket_root_iv(func, a, b, min, max, factor, args, maxiter)
+    func, a, b, min, max, factor, args, maxiter = temp
+
+    xs = (a, b)
+    temp = _scalar_optimization_initialize(func, xs, args)
+    xs, fs, args, shape, dtype = temp  # line split for PEP8
+
+    n = len(xs[0])
+
+    # The approach is to treat the left and right searches as though they were
+    # (almost) totally independent one-sided bracket searches. (The interaction
+    # is considered when checking for termination and preparing the result
+    # object.)
+    # `x` is the "moving" end of the bracket
+    x = np.concatenate(xs)
+    f = np.concatenate(fs)
+    # `x_last` is the previous location of the moving end of the bracket. If
+    # the signs of `f` and `f_last` are different, `x` and `x_last` form a
+    # bracket.
+    x_last = np.concatenate((x[n:], x[:n]))
+    f_last = np.concatenate((f[n:], f[:n]))
+    # `x0` is the "fixed" end of the bracket.
+    x0 = x_last
+    # We don't need to retain the corresponding function value, since the
+    # fixed end of the bracket is only needed to compute the new value of the
+    # moving end; it is never returned.
+
+    min = np.broadcast_to(min, shape).astype(dtype, copy=False).ravel()
+    max = np.broadcast_to(max, shape).astype(dtype, copy=False).ravel()
+    limit = np.concatenate((min, max))
+
+    factor = np.broadcast_to(factor, shape).astype(dtype, copy=False).ravel()
+    factor = np.concatenate((factor, factor))
+
+    active = np.arange(2*n)
+    args = [np.concatenate((arg, arg)) for arg in args]
+
+    # This is needed due to inner workings of `_scalar_optimization_loop`.
+    # We're abusing it a tiny bit.
+    shape = shape + (2,)
+
+    # `d` is for "distance".
+    # For searches without a limit, the distance between the fixed end of the
+    # bracket `x0` and the moving end `x` will grow by `factor` each iteration.
+    # For searches with a limit, the distance between the `limit` and moving
+    # end of the bracket `x` will shrink by `factor` each iteration.
+    i = np.isinf(limit)
+    ni = ~i
+    d = np.zeros_like(x)
+    d[i] = x[i] - x0[i]
+    d[ni] = limit[ni] - x[ni]
+
+    status = np.full_like(x, _EINPROGRESS, dtype=int)  # in progress
+    nit, nfev = 0, 1  # one function evaluation per side performed above
+
+    work = OptimizeResult(x=x, x0=x0, f=f, limit=limit, factor=factor,
+                          active=active, d=d, x_last=x_last, f_last=f_last,
+                          nit=nit, nfev=nfev, status=status, args=args,
+                          xl=None, xr=None, fl=None, fr=None, n=n)
+    res_work_pairs = [('status', 'status'), ('xl', 'xl'), ('xr', 'xr'),
+                      ('nit', 'nit'), ('nfev', 'nfev'), ('fl', 'fl'),
+                      ('fr', 'fr'), ('x', 'x'), ('f', 'f'),
+                      ('x_last', 'x_last'), ('f_last', 'f_last')]
+
+    def pre_func_eval(work):
+        # Initialize moving end of bracket
+        x = np.zeros_like(work.x)
+
+        # Unlimited brackets grow by `factor` by increasing distance from fixed
+        # end to moving end.
+        i = np.isinf(work.limit)  # indices of unlimited brackets
+        work.d[i] *= work.factor[i]
+        x[i] = work.x0[i] + work.d[i]
+
+        # Limited brackets grow by decreasing the distance from the limit to
+        # the moving end.
+        ni = ~i  # indices of limited brackets
+        work.d[ni] /= work.factor[ni]
+        x[ni] = work.limit[ni] - work.d[ni]
+
+        return x
+
+    def post_func_eval(x, f, work):
+        # Keep track of the previous location of the moving end so that we can
+        # return a narrower bracket. (The alternative is to remember the
+        # original fixed end, but then the bracket would be wider than needed.)
+        work.x_last = work.x
+        work.f_last = work.f
+        work.x = x
+        work.f = f
+
+    def check_termination(work):
+        stop = np.zeros_like(work.x, dtype=bool)
+
+        # Condition 1: a valid bracket (or the root itself) has been found
+        sf = np.sign(work.f)
+        sf_last = np.sign(work.f_last)
+        i = (sf_last == -sf) | (sf_last == 0) | (sf == 0)
+        work.status[i] = _ECONVERGED
+        stop[i] = True
+
+        # Condition 2: the other side's search found a valid bracket.
+        # (If we just found a bracket with the rightward search, we can stop
+        #  the leftward search, and vice-versa.)
+        # To do this, we need to set the status of the other side's search;
+        # this is tricky because `work.status` contains only the *active*
+        # elements, so we don't immediately know the index of the element we
+        # need to set - or even if it's still there. (That search may have
+        # terminated already, e.g. by reaching its `limit`.)
+        # To facilitate this, `work.active` contains a unit integer index of
+        # each search. Index `k` (`k < n)` and `k + n` correspond with a
+        # leftward and rightward search, respectively. Elements are removed
+        # from `work.active` just as they are removed from `work.status`, so
+        # we use `work.active` to help find the right location in
+        # `work.status`.
+        # Get the integer indices of the elements that can also stop
+        also_stop = (work.active[i] + work.n) % (2*work.n)
+        # Check whether they are still active.
+        # To start, we need to find out where in `work.active` they would
+        # appear if they are indeed there.
+        j = np.searchsorted(work.active, also_stop)
+        # If the location exceeds the length of the `work.active`, they are
+        # not there.
+        j = j[j < len(work.active)]
+        # Check whether they are still there.
+        j = j[also_stop == work.active[j]]
+        # Now convert these to boolean indices to use with `work.status`.
+        i = np.zeros_like(stop)
+        i[j] = True  # boolean indices of elements that can also stop
+        i = i & ~stop
+        work.status[i] = _EOTHERCONVERGED
+        stop[i] = True
+
+        # Condition 3: moving end of bracket reaches limit
+        i = (work.x == work.limit) & ~stop
+        work.status[i] = _ECONVERR
+        stop[i] = True
+
+        # Condition 4: non-finite value encountered
+        i = ~(np.isfinite(work.x) & np.isfinite(work.f)) & ~stop
+        work.status[i] = _EVALUEERR
+        stop[i] = True
+
+        return stop
+
+    def post_termination_check(work):
+        pass
+
+    def customize_result(res, shape):
+        n = len(res['x']) // 2
+
+        # Because we treat the two one-sided searches as though they were
+        # independent, what we keep track of in `work` and what we want to
+        # return in `res` look quite different. Combine the results from the
+        # two one-sided searches before reporting the results to the user.
+        # - "a" refers to the leftward search (the moving end started at `a`)
+        # - "b" refers to the rightward search (the moving end started at `b`)
+        # - "l" refers to the left end of the bracket (closer to -oo)
+        # - "r" refers to the right end of the bracket (closer to +oo)
+        xal = res['x'][:n]
+        xar = res['x_last'][:n]
+        xbl = res['x_last'][n:]
+        xbr = res['x'][n:]
+
+        fal = res['f'][:n]
+        far = res['f_last'][:n]
+        fbl = res['f_last'][n:]
+        fbr = res['f'][n:]
+
+        # Initialize the brackets and corresponding function values to return
+        # to the user. Brackets may not be valid (e.g. there is no root,
+        # there weren't enough iterations, NaN encountered), but we still need
+        # to return something. One option would be all NaNs, but what I've
+        # chosen here is the left- and right-most points at which the function
+        # has been evaluated. This gives the user some information about what
+        # interval of the real line has been searched and shows that there is
+        # no sign change between the two ends.
+        xl = xal.copy()
+        fl = fal.copy()
+        xr = xbr.copy()
+        fr = fbr.copy()
+
+        # `status` indicates whether the bracket is valid or not. If so,
+        # we want to adjust the bracket we return to be the narrowest possible
+        # given the points at which we evaluated the function.
+        # For example if bracket "a" is valid and smaller than bracket "b" OR
+        # if bracket "a" is valid and bracket "b" is not valid, we want to
+        # return bracket "a" (and vice versa).
+        sa = res['status'][:n]
+        sb = res['status'][n:]
+
+        da = xar - xal
+        db = xbr - xbl
+
+        i1 = ((da <= db) & (sa == 0)) | ((sa == 0) & (sb != 0))
+        i2 = ((db <= da) & (sb == 0)) | ((sb == 0) & (sa != 0))
+
+        xr[i1] = xar[i1]
+        fr[i1] = far[i1]
+        xl[i2] = xbl[i2]
+        fl[i2] = fbl[i2]
+
+        # Finish assembling the result object
+        res['xl'] = xl
+        res['xr'] = xr
+        res['fl'] = fl
+        res['fr'] = fr
+
+        res['nit'] = np.maximum(res['nit'][:n], res['nit'][n:])
+        res['nfev'] = res['nfev'][:n] + res['nfev'][n:]
+        # I was conflicted about what to return for `status` because in
+        # reality there are separate statuses for leftward and rightward
+        # search. Choosing the maximum of the two is somewhat arbitrary, but
+        # it ensures that 0 is reported if the bracket is valid. (Another
+        # option would be to return the two separately, but I don't know if
+        # it's really useful. The status of the other side's search can always
+        # be added later.)
+        res['status'] = np.maximum(sa, sb)
+        res['success'] = (res['status'] == 0)
+
+        del res['x']
+        del res['f']
+        del res['x_last']
+        del res['f_last']
+
+        return shape[:-1]
+
+    return _scalar_optimization_loop(work, callback, shape,
+                                     maxiter, func, args, dtype,
+                                     pre_func_eval, post_func_eval,
+                                     check_termination, post_termination_check,
+                                     customize_result, res_work_pairs)
+
+
 def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
                   fatol=None, frtol=0, maxiter=_iter, callback=None):
     """Find the root of an elementwise function using Chandrupatla's algorithm.
@@ -1598,13 +1967,14 @@ def _chandrupatla(func, a, b, *, args=(), xatol=_xtol, xrtol=_rtol,
         tl = 0.5 * work.tol / work.dx
         work.t = np.clip(t, tl, 1 - tl)
 
-    def customize_result(res):
+    def customize_result(res, shape):
         xl, xr, fl, fr = res['xl'], res['xr'], res['fl'], res['fr']
         i = res['xl'] < res['xr']
         res['xl'] = np.choose(i, (xr, xl))
         res['xr'] = np.choose(i, (xl, xr))
         res['fl'] = np.choose(i, (fr, fl))
         res['fr'] = np.choose(i, (fl, fr))
+        return shape
 
     return _scalar_optimization_loop(work, callback, shape,
                                      maxiter, func, args, dtype,
@@ -1655,8 +2025,9 @@ def _scalar_optimization_loop(work, callback, shape, maxiter,
         steps that need to happen after the termination check and before the
         end of the iteration.
     customize_result : callable
-        A function that accepts `res`. May modify `res` according to
-        preferences (e.g. rearrange elements between attributes).
+        A function that accepts `res` and `shape` and returns `shape`. May
+        modify `res` (in-place) according to preferences (e.g. rearrange
+        elements between attributes) and modify `shape` if needed.
     res_work_pairs : list of (str, str)
         Identifies correspondence between attributes of `res` and attributes
         of `work`; i.e., attributes of active elements of `work` will be
@@ -1895,7 +2266,7 @@ def _scalar_optimization_prepare_result(work, res, res_work_pairs, active,
     res = res.copy()
     _scalar_optimization_update_active(work, res, res_work_pairs, active)
 
-    customize_result(res)
+    shape = customize_result(res, shape)
 
     for key, val in res.items():
         res[key] = np.reshape(val, shape)[()]
@@ -2345,8 +2716,8 @@ def _differentiate(func, x, *, args=(), atol=None, rtol=None, maxiter=10,
     def post_termination_check(work):
         return
 
-    def customize_result(res):
-        return
+    def customize_result(res, shape):
+        return shape
 
     return _scalar_optimization_loop(work, callback, shape,
                                      maxiter, func, args, dtype,
