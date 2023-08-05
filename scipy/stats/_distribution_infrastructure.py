@@ -1,4 +1,6 @@
 from functools import cached_property
+from scipy._lib._util import _lazywhere
+from scipy import special
 from scipy.integrate._tanhsinh import _tanhsinh
 import numpy as np
 _null = object()
@@ -9,6 +11,9 @@ oo = np.inf
 #  figure out method call graph
 #  tests
 #  add methods
+#  figure out caching - methods that don't accept shape parameters can be
+#   cached, but then we couldn't change tolerance
+#  pass shape parameters to methods that don't accept additional args?
 #  pass atol, rtol to methods
 #  profile/optimize
 #  add array API support
@@ -79,10 +84,11 @@ def _set_invalid_nan(f):
         if np.any(x_invalid):
             x = np.copy(x)
             x[x_invalid] = np.nan
-        out = f(self, x, *args, **kwargs)
+        # TODO: ensure dtype is at least float
+        out = np.asarray(f(self, x, *args, **kwargs))
         out[mask_low] = replace_low
         out[mask_high] = replace_high
-        return out
+        return out[()]
 
     return filtered
 
@@ -184,8 +190,8 @@ class ContinuousDistribution:
     @cached_property
     def support(self):
         a, b = self._variable.domain.endpoints
-        a = getattr(self, a, a)
-        b = getattr(self, b, b)
+        a = getattr(self, a, a)[()]
+        b = getattr(self, b, b)[()]
         return a, b
 
     def _overrides(self, method_name):
@@ -195,48 +201,190 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logpdf(self, x):
-        if self._overrides('_logpdf'):
-            return self._logpdf(x, **self._all_shapes)
-        elif self.tol is _null:
-            return np.log(self._pdf(x, **self._all_shapes))
-        else:
-            return self._logpdf(x, **self._all_shapes)
+        return self._logpdf(x, **self._all_shapes)
 
     @_set_invalid_nan
     def logcdf(self, x):
-        if self._overrides('_logcdf'):
-            return self._logcdf(x, **self._all_shapes)
-        elif self.tol is _null and self._overrides('_cdf'):
-            return np.log(self._cdf(x, **self._all_shapes))
-        else:
-            a, b = self.support
-            f, args = kwargs2args(self._logpdf, kwargs=self._all_shapes)
-            res = _tanhsinh(f, a, x, args=args, log=True)
-            return res.integral
+        return self._logcdf(x, **self._all_shapes)
+
+    @_set_invalid_nan
+    def logccdf(self, x):
+        return self._logccdf(x, **self._all_shapes)
+
+    def logentropy(self):
+        return self._logentropy(**self._all_shapes)
 
     @_set_invalid_nan
     def pdf(self, x):
-        if self._overrides('_pdf'):
-            return self._pdf(x, **self._all_shapes)
-        elif self._overrides('_logpdf'):
-            return np.exp(self._logpdf(x), **self._all_shapes)
-        else:
-            return self._pdf(x, **self._all_shapes)
+        return self._pdf(x, **self._all_shapes)
 
     @_set_invalid_nan
     def cdf(self, x):
-        if self._overrides('_cdf'):
-            return self._cdf(x, **self._all_shapes)
-        elif self._overrides('_logcdf'):
-            return np.exp(self._logcdf(x), **self._all_shapes)
+        return self._cdf(x, **self._all_shapes)
+
+    @_set_invalid_nan
+    def ccdf(self, x):
+        return self._ccdf(x, **self._all_shapes)
+
+    def entropy(self):
+        return self._entropy(**self._all_shapes)
+
+    def _logpdf(self, x, **kwargs):
+        if self.tol is _null:
+            return np.log(self._pdf(x, **kwargs))
         else:
             raise NotImplementedError(self._not_implemented)
 
-    def _logpdf(self, x, **kwargs):
-        raise NotImplementedError(self._not_implemented)
-
     def _pdf(self, x, **kwargs):
-        raise NotImplementedError(self._not_implemented)
+        if self._overrides('_logpdf'):
+            return np.exp(self._logpdf(x, **kwargs))
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logcdf(self, x, **kwargs):
+        if self.tol is _null and self._overrides('_cdf'):
+            return np.log(self._cdf(x, **kwargs))
+        elif self._overrides('_logccdf'):
+            return self._logcdf_log1mexpccdf(x, **kwargs)
+        else:
+            return self._logcdf_integrate_logpdf(x, **kwargs)
+
+    def _cdf(self, x, **kwargs):
+        if self._overrides('_logcdf'):
+            return np.exp(self._logcdf(x, **kwargs))
+        elif self._tol is _null and self._overrides('_ccdf'):
+            return self._cdf_1mccdf(x, **kwargs)
+        else:
+            return self._cdf_integrate_pdf(x, **kwargs)
+
+    def _logccdf(self, x, **kwargs):
+        if self.tol is _null and self._overrides('_cdf'):
+            return np.log(self._ccdf(x, **kwargs))
+        elif self._overrides('_logcdf'):
+            return self._logccdf_log1mexpcdf(x, **kwargs)
+        else:
+            return self._logccdf_integrate_logpdf(x, **kwargs)
+
+    def _ccdf(self, x, **kwargs):
+        if self._overrides('_logccdf'):
+            return np.exp(self._logccdf(x, **kwargs))
+        elif self._tol is _null and self._overrides('_cdf'):
+            return self._ccdf_1mcdf(x, **kwargs)
+        else:
+            return self._ccdf_integrate_pdf(x, **kwargs)
+
+    def _logentropy(self, **kwargs):
+        if self.tol is _null and self._overrides('_entropy'):
+            return np.log(self._entropy(**kwargs))
+        else:
+            return self._logentropy_integrate_logpdf(**kwargs)
+
+    def _entropy(self, **kwargs):
+        if self._overrides('_logentropy'):
+            return np.exp(self._logentropy(**kwargs))
+        else:
+            return self._entropy_integrate_pdf(**kwargs)
+
+    # Distribution functions via exp of log distribution functions
+    def _entropy_exp_logentropy(self, **kwargs):
+        return np.exp(self._logentropy(**kwargs))
+
+    def _pdf_exp_logpdf(self, x, **kwargs):
+        return np.exp(self._logpdf(x, **kwargs))
+
+    def _cdf_exp_logcdf(self, x, **kwargs):
+        return np.exp(self._logcdf(x, **kwargs))
+
+    def _ccdf_exp_logccdf(self, x, **kwargs):
+        return np.exp(self._logccdf(x, **kwargs))
+
+    # Log distribution functions as log of distribution functions
+
+    def _logentropy_log_entropy(self, **kwargs):
+        return np.log(self._entropy(**kwargs))
+
+    def _logpdf_log_pdf(self, x, **kwargs):
+        return np.log(self._pdf(x, **kwargs))
+
+    def _logcdf_log_cdf(self, x, **kwargs):
+        return np.log(self._cdf(x, **kwargs))
+
+    def _logccdf_log_logcdf(self, x, **kwargs):
+        return np.log(self._ccdf(x, **kwargs))
+
+    # Distribution functions via numerical integration
+
+    def _logcdf_integrate_logpdf(self, x, **kwargs):
+        a, b = self.support
+        f, args = kwargs2args(self._logpdf, kwargs=self._all_shapes)
+        res = _tanhsinh(f, a, x, args=args, log=True)
+        return res.integral
+
+    def _cdf_integrate_pdf(self, x, **kwargs):
+        a, b = self.support
+        f, args = kwargs2args(self._pdf, kwargs=self._all_shapes)
+        res = _tanhsinh(f, a, x, args=args)
+        return res.integral
+
+    def _logccdf_integrate_logpdf(self, x, **kwargs):
+        a, b = self.support
+        f, args = kwargs2args(self._logpdf, kwargs=self._all_shapes)
+        res = _tanhsinh(f, x, b, args=args, log=True)
+        return res.integral
+
+    def _ccdf_integrate_pdf(self, x, **kwargs):
+        a, b = self.support
+        f, args = kwargs2args(self._pdf, kwargs=self._all_shapes)
+        res = _tanhsinh(f, x, b, args=args)
+        return res.integral
+
+    def _logentropy_integrate_logpdf(self, **kwargs):
+        a, b = self.support
+        f, args = kwargs2args(self._logpdf, kwargs=self._all_shapes)
+        def integrand(x, *args):
+            logpdf = f(x, *args)
+            return logpdf + np.log(0j+logpdf)
+        res = _tanhsinh(integrand, a, b, args=args, log=True)
+        return res.integral + np.pi*1j
+
+    def _entropy_integrate_pdf(self, **kwargs):
+        a, b = self.support
+        f, args = kwargs2args(self._pdf, kwargs=self._all_shapes)
+        def integrand(x, *args):
+            pdf = f(x, *args)
+            return np.log(pdf)*pdf
+        res = _tanhsinh(integrand, a, b, args=args)
+        return -res.integral
+
+    # Distribution functions as complement of other distribution functions
+
+    def _cdf_1mccdf(self, x, **kwargs):
+        return 1 - self._ccdf(x, **kwargs)
+
+    def _ccdf_1mcdf(self, x, **kwargs):
+        return 1 - self._cdf(x, **kwargs)
+
+    def _logcdf_log1mexpccdf(self, x, **kwargs):
+        logccdf = self._logccdf(x, **kwargs)
+
+        def f1(x):
+            return np.log1p(-np.exp(x))
+
+        def f2(x):
+            return np.real(np.log(-special.expm1(x + 0j)))
+
+        return _lazywhere(logccdf < -1, (logccdf,), f=f1, f2=f2)
+
+    def _logccdf_log1mexpcdf(self, x, **kwargs):
+        logcdf = self._logcdf(x, **kwargs)
+
+        def f1(x):
+            return np.log1p(-np.exp(x))
+
+        def f2(x):
+            return np.real(np.log(-special.expm1(x + 0j)))
+
+        return _lazywhere(logcdf < -1, (logcdf,), f=f1, f2=f2)
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=0):
@@ -434,9 +582,9 @@ class LogUniform(ContinuousDistribution):
 
     def _logpdf(self, x, *, log_a, log_b, **kwargs):
         return -np.log(x) - np.log(log_b - log_a)
-
-    def _pdf(self, x, *, log_a, log_b, **kwargs):
-        return ((log_b - log_a)*x)**-1
-
-    def _cdf(self, x, *, log_a, log_b, **kwargs):
-        return (np.log(x) - log_a)/(log_b - log_a)
+    #
+    # def _pdf(self, x, *, log_a, log_b, **kwargs):
+    #     return ((log_b - log_a)*x)**-1
+    #
+    # def _cdf(self, x, *, log_a, log_b, **kwargs):
+    #     return (np.log(x) - log_a)/(log_b - log_a)
