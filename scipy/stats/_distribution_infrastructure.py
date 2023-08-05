@@ -4,6 +4,15 @@ import numpy as np
 _null = object()
 oo = np.inf
 
+# TODO:
+#  documentation
+#  figure out method call graph
+#  tests
+#  add methods
+#  pass atol, rtol to methods
+#  profile/optimize
+#  add array API support
+
 # Originally, I planned to filter out invalid shape parameters for the
 # author of the distribution; they would always work with "compressed",
 # 1D arrays containing only valid shape parameters. There are two problems
@@ -44,7 +53,10 @@ def _set_invalid_nan(f):
                     'pdf': 0, 'cdf': 1, 'ccdf': 0,
                     'icdf': np.nan, 'iccdf': np.nan}
 
-    def filtered(self, x, *args, **kwargs):
+    def filtered(self, x, *args, skip_iv=False, **kwargs):
+        if self.skip_iv or skip_iv:
+            return f(self, x, *args, **kwargs)
+
         method_name = f.__name__
         if method_name in use_support:
             low, high = self.support
@@ -95,8 +107,10 @@ class ContinuousDistribution:
 
     )
 
-    def __init__(self, *, tol=_null, **shapes):
+    def __init__(self, *, tol=_null, skip_iv=False, **shapes):
         self.tol = tol
+        self.skip_iv = skip_iv
+
         self._not_implemented = (
             f"`{self.__class__.__name__}` does not provide an accurate "
             "implementation of the required method. Leave `tol` unspecified "
@@ -116,6 +130,11 @@ class ContinuousDistribution:
                        f"`{self.__class__.__name__}` distribution family.")
             raise ValueError(message)
         self._parameterization = parameterization
+
+        if skip_iv:
+            self._shapes = shapes
+            self._all_shape_names = all_shape_names
+            return
 
         # broadcast shape arguments
         try:
@@ -390,8 +409,8 @@ class LogUniform(ContinuousDistribution):
                           _Parameterization(_a_param, _b_param)]
     _variable = _x_param
 
-    def __init__(self, *, a=_null, b=_null, log_a=_null, log_b=_null):
-        super().__init__(a=a, b=b, log_a=log_a, log_b=log_b)
+    def __init__(self, *, a=_null, b=_null, log_a=_null, log_b=_null, **kwargs):
+        super().__init__(a=a, b=b, log_a=log_a, log_b=log_b, **kwargs)
 
     @cached_property
     def a(self):
