@@ -2,6 +2,7 @@ from functools import cached_property
 from scipy._lib._util import _lazywhere
 from scipy import special
 from scipy.integrate._tanhsinh import _tanhsinh
+from scipy.optimize._zeros_py import _chandrupatla, _bracket_root
 import numpy as np
 _null = object()
 oo = np.inf
@@ -11,6 +12,8 @@ oo = np.inf
 #  figure out method call graph
 #  tests
 #  add methods
+#  be more careful about passing **kwargs vs **self._all_shapes. For private
+#   functions, it should always be the latter.
 #  figure out caching - methods that don't accept shape parameters can be
 #   cached, but then we couldn't change tolerance
 #  pass shape parameters to methods that don't accept additional args?
@@ -49,14 +52,17 @@ oo = np.inf
 
 def _set_invalid_nan(f):
     # need to come back to this to think more about use of < vs <=
-
+    # update this
     use_support = {'logpdf', 'logcdf', 'logccdf', 'pdf', 'cdf', 'ccdf'}
+    use_01 = {'icdf', 'iccdf'}
     replace_lows = {'logpdf': -oo, 'logcdf': -oo, 'logccdf': 0,
                    'pdf': 0, 'cdf': 0, 'ccdf': 1,
-                   'icdf': np.nan, 'iccdf': np.nan}
+                   'icdf': np.nan, 'iccdf': np.nan,
+                   'ilogcdf': np.nan, 'ilogccdf': np.nan}
     replace_highs = {'logpdf': -oo, 'logcdf': 0, 'logccdf': -oo,
                     'pdf': 0, 'cdf': 1, 'ccdf': 0,
-                    'icdf': np.nan, 'iccdf': np.nan}
+                    'icdf': np.nan, 'iccdf': np.nan,
+                    'ilogcdf': np.nan, 'ilogccdf': np.nan}
 
     def filtered(self, x, *args, skip_iv=False, **kwargs):
         if self.skip_iv or skip_iv:
@@ -65,8 +71,10 @@ def _set_invalid_nan(f):
         method_name = f.__name__
         if method_name in use_support:
             low, high = self.support
-        else:
+        elif method_name in use_01:
             low, high = 0, 1
+        else:
+            low, high = -np.inf, 0
         replace_low = replace_lows[method_name]
         replace_high = replace_highs[method_name]
         try:
@@ -106,6 +114,39 @@ def kwargs2args(f, args=[], kwargs={}):
     args = list(args) + list(kwargs.values())
 
     return wrapped, args
+
+
+def _solve_bounded(f, p, *, min, max, kwargs):
+    # should modify _bracket_root and _chandrupatla so we don't need all this
+    def f2(x, p, **kwargs):
+        return f(x, **kwargs) - p
+    f3, args = kwargs2args(f2, args=[p], kwargs=kwargs)
+    # If we know the median or mean, should use it
+    if np.isfinite(min) and np.isfinite(max):
+        d = max - min
+        a = min + 0.25 * d
+        b = max - 0.25 * d
+    elif np.isfinite(min):
+        a = min + 1
+        b = min + 2
+    elif np.isfinite(max):
+        a = max - 2
+        b = max - 1
+    else:
+        a = -1
+        b = 1
+    res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
+    return _chandrupatla(f3, a=res.xl, b=res.xr, args=args)
+
+
+def _log1mexp(x):
+    def f1(x):
+        return np.log1p(-np.exp(x))
+
+    def f2(x):
+        return np.real(np.log(-special.expm1(x + 0j)))
+
+    return _lazywhere(x < -1, (x,), f=f1, f2=f2)
 
 
 class ContinuousDistribution:
@@ -215,6 +256,14 @@ class ContinuousDistribution:
         return self._logentropy(**self._all_shapes)
 
     @_set_invalid_nan
+    def ilogcdf(self, x):
+        return self._ilogcdf(x, **self._all_shapes)
+
+    @_set_invalid_nan
+    def ilogccdf(self, x):
+        return self._ilogccdf(x, **self._all_shapes)
+
+    @_set_invalid_nan
     def pdf(self, x):
         return self._pdf(x, **self._all_shapes)
 
@@ -228,6 +277,14 @@ class ContinuousDistribution:
 
     def entropy(self):
         return self._entropy(**self._all_shapes)
+
+    @_set_invalid_nan
+    def icdf(self, x):
+        return self._icdf(x, **self._all_shapes)
+
+    @_set_invalid_nan
+    def iccdf(self, x):
+        return self._iccdf(x, **self._all_shapes)
 
     def _logpdf(self, x, **kwargs):
         if self.tol is _null:
@@ -284,6 +341,30 @@ class ContinuousDistribution:
             return np.exp(self._logentropy(**kwargs))
         else:
             return self._entropy_integrate_pdf(**kwargs)
+
+    def _icdf(self, x, **kwargs):
+        if self.tol is _null and self._overrides('_iccdf'):
+            return self._icdf_iccdf1m(x, **kwargs)
+        else:
+            return self._icdf_solve_cdf(x, **kwargs)
+
+    def _iccdf(self, x, **kwargs):
+        if self.tol is _null and self._overrides('_icdf'):
+            return self._iccdf_icdf1m(x, **kwargs)
+        else:
+            return self._iccdf_solve_ccdf(x, **kwargs)
+
+    def _ilogcdf(self, x, **kwargs):
+        if self._overrides('_ilogccdf'):
+            return self._ilogcdf_ilogccdf1m(x, **kwargs)
+        else:
+            return self._ilogcdf_solve_logcdf(x, **kwargs)
+
+    def _ilogccdf(self, x, **kwargs):
+        if self._overrides('_ilogcdf'):
+            return self._ilogccdf_ilogcdf1m(x, **kwargs)
+        else:
+            return self._ilogccdf_solve_logccdf(x, **kwargs)
 
     # Distribution functions via exp of log distribution functions
     def _entropy_exp_logentropy(self, **kwargs):
@@ -365,26 +446,45 @@ class ContinuousDistribution:
         return 1 - self._cdf(x, **kwargs)
 
     def _logcdf_log1mexpccdf(self, x, **kwargs):
-        logccdf = self._logccdf(x, **kwargs)
-
-        def f1(x):
-            return np.log1p(-np.exp(x))
-
-        def f2(x):
-            return np.real(np.log(-special.expm1(x + 0j)))
-
-        return _lazywhere(logccdf < -1, (logccdf,), f=f1, f2=f2)
+        return _log1mexp(self._logccdf(x, **kwargs))
 
     def _logccdf_log1mexpcdf(self, x, **kwargs):
-        logcdf = self._logcdf(x, **kwargs)
+        return _log1mexp(self._logcdf(x, **kwargs))
 
-        def f1(x):
-            return np.log1p(-np.exp(x))
+    def _icdf_iccdf1m(self, x, **kwargs):
+        return self._iccdf(1-x, **kwargs)
 
-        def f2(x):
-            return np.real(np.log(-special.expm1(x + 0j)))
+    def _iccdf_icdf1m(self, x, **kwargs):
+        return self._icdf(1-x, **kwargs)
 
-        return _lazywhere(logcdf < -1, (logcdf,), f=f1, f2=f2)
+    def _ilogcdf_ilogccdf1m(self, x, **kwargs):
+        return self._ilogccdf(_log1mexp(x), **kwargs)
+
+    def _ilogccdf_ilogcdf1m(self, x, **kwargs):
+        return self._ilogcdf(_log1mexp(x), **kwargs)
+
+    # Inverse distribution functions via rootfinding
+    def _icdf_solve_cdf(self, x, **kwargs):
+        a, b = self.support
+        res = _solve_bounded(self._cdf, x, min=a, max=b, kwargs=self._all_shapes)
+        return res.x
+
+    def _iccdf_solve_ccdf(self, x, **kwargs):
+        a, b = self.support
+        res = _solve_bounded(self._ccdf, x, min=a, max=b, kwargs=self._all_shapes)
+        return res.x
+
+    def _ilogcdf_solve_logcdf(self, x, **kwargs):
+        a, b = self.support
+        res = _solve_bounded(self._logcdf, x, min=a, max=b,
+                             kwargs=self._all_shapes)
+        return res.x
+
+    def _ilogccdf_solve_logccdf(self, x, **kwargs):
+        a, b = self.support
+        res = _solve_bounded(self._logccdf, x, min=a, max=b,
+                             kwargs=self._all_shapes)
+        return res.x
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=0):
