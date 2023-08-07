@@ -20,6 +20,7 @@ oo = np.inf
 #  pass atol, rtol to methods
 #  profile/optimize
 #  add array API support
+#  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
 
 # Originally, I planned to filter out invalid shape parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -51,10 +52,14 @@ oo = np.inf
 #   completely transparent to the author.
 
 def _set_invalid_nan(f):
+    # improve structure
     # need to come back to this to think more about use of < vs <=
     # update this
     use_support = {'logpdf', 'logcdf', 'logccdf', 'pdf', 'cdf', 'ccdf'}
     use_01 = {'icdf', 'iccdf'}
+    replace_strict = {'pdf', 'logpdf'}
+    replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
+
     replace_lows = {'logpdf': -oo, 'logcdf': -oo, 'logccdf': 0,
                    'pdf': 0, 'cdf': 0, 'ccdf': 1,
                    'icdf': np.nan, 'iccdf': np.nan,
@@ -88,8 +93,15 @@ def _set_invalid_nan(f):
 
         # check implications of <, <=
         x, valid = self._variable.check_dtype(x)
-        mask_low = x < low if method_name == "pdf" else x <= low
-        mask_high = x > high if method_name == "pdf" else x >= high
+        mask_low = x < low if method_name in replace_strict else x <= low
+        mask_high = x > high if method_name in replace_strict else x >= high
+        if method_name in replace_exact:
+            x, a, b = np.broadcast_arrays(x, *self.support)
+            mask_low_exact = (x == low) & valid
+            replace_low_exact = b[mask_low_exact] if method_name.endswith('ccdf') else a[mask_low_exact]
+            mask_high_exact = (x == high) & valid
+            replace_high_exact = a[mask_high_exact] if method_name.endswith('ccdf') else b[mask_high_exact]
+
         x_invalid = (mask_low | mask_high | ~valid)
         if np.any(x_invalid):
             x = np.copy(x)
@@ -98,6 +110,10 @@ def _set_invalid_nan(f):
         out = np.asarray(f(self, x, *args, **kwargs))
         out[mask_low] = replace_low
         out[mask_high] = replace_high
+        if method_name in replace_exact:
+            out[mask_low_exact] = replace_low_exact
+            out[mask_high_exact] = replace_high_exact
+
         return out[()]
 
     return filtered
@@ -354,6 +370,13 @@ class ContinuousDistribution:
         full_shape = shape + self._invalid.shape
         uniform = rng.uniform(size=full_shape)
         return self._icdf(uniform, **kwargs)
+
+    @cached_property
+    def median(self):
+        return self._median(**self._all_shapes)
+
+    def _median(self, **kwargs):
+        return self._icdf(0.5, **self._all_shapes)
 
     def moment(self, order, center=None, standardized=False):
         # Come back to this. Still needs a lot of work.
