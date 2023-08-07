@@ -92,7 +92,7 @@ def _set_invalid_nan(f):
         if np.any(x_invalid):
             x = np.copy(x)
             x[x_invalid] = np.nan
-        # TODO: ensure dtype is at least float
+        # TODO: ensure dtype is at least float and that output shape is correct
         out = np.asarray(f(self, x, *args, **kwargs))
         out[mask_low] = replace_low
         out[mask_high] = replace_high
@@ -149,10 +149,12 @@ def _log1mexp(x):
     return _lazywhere(x < -1, (x,), f=f1, f2=f2)
 
 
-class ContinuousDistribution:
-    not_implemented_message = (
+def _logexpxmexpy(x, y):
+    x, y = np.broadcast_arrays(x, y)
+    return special.logsumexp([x, y+np.pi*1j], axis=0)
 
-    )
+
+class ContinuousDistribution:
 
     def __init__(self, *, tol=_null, skip_iv=False, **shapes):
         self.tol = tol
@@ -263,6 +265,44 @@ class ContinuousDistribution:
     def ilogccdf(self, x):
         return self._ilogccdf(x, **self._all_shapes)
 
+    def logmoment(self, order, logcenter=None, standardized=False):
+        # input validation
+        logcenter = self.logmean if logcenter is None else logcenter
+        raw = self._logmoment(order, logcenter, **self._all_shapes)
+        res = raw - self.logvar*order/2 if standardized else raw
+        return res
+
+    @cached_property
+    def logmean(self):
+        return np.real(self._logmoment(1, -np.inf, **self._all_shapes))
+
+    @cached_property
+    def logvar(self):
+        return self._logvar(logmean=self.logmean, **self._all_shapes)
+
+    def _logvar(self, logmean, **kwargs):
+        return np.real(self._logmoment(2, logmean, **kwargs))
+
+    @cached_property
+    def logstd(self):
+        return self.logvar/2
+
+    @cached_property
+    def logskewness(self):
+        return self._logskewness(logmean=self.logmean, logvar=self.logvar,
+                                 **self._all_shapes)
+
+    def _logskewness(self, logmean, logvar, **kwargs):
+        return (np.real(self._logmoment(3, logmean, **kwargs)) - 1.5 * logvar)
+
+    @cached_property
+    def logkurtosis(self):
+        return self._logkurtosis(logmean=self.logmean, logvar=self.logvar,
+                                 **self._all_shapes)
+
+    def _logkurtosis(self, logmean, logvar, **kwargs):
+        return (np.real(self._logmoment(4, logmean, **kwargs)) - 2 * logvar)
+
     @_set_invalid_nan
     def pdf(self, x):
         return self._pdf(x, **self._all_shapes)
@@ -285,6 +325,77 @@ class ContinuousDistribution:
     @_set_invalid_nan
     def iccdf(self, x):
         return self._iccdf(x, **self._all_shapes)
+
+    def moment(self, order, center=None, standardized=None):
+        # input validation / standardization
+        # add special cases like 0th moment, standardized 1st moment, etc.
+
+        # This function is currently broken
+        
+        center = self.mean if center is None else center
+        standardized = order >= 3 if standardized is None else standardized
+
+        if order == 1:
+            standard = self.mean  # not actually standard
+        elif order == 2:
+            standard = self.var
+        elif order == 3:
+            standard = self.skewness
+        elif order == 4:
+            standard = self.kurtosis
+
+        if order <= 4:  # can skip if center is mean
+            raw = self._moment_transform_center(order, standard,
+                                                self.mean, center)
+        else:
+            raw = self._moment(order, center, **self._all_shapes)
+
+        return raw / self.var ** (order / 2) if standardized else raw
+
+    def _moment_transform_center(self, order, moment_a, a, b):
+        # a and b should be broadcasted before getting here
+        # this is wrong - it's not just moment_a of order `order`; all lower
+        # moments are needed, too
+        n = order
+        i = np.arange(n+1).reshape([-1]+[1]*a.ndim)  # orthogonal to other axes
+        n_choose_i = special.binom(n, i)
+        moment_b = np.sum(n_choose_i*moment_a*(a-b)**(n-i), axis=0)
+        return moment_b
+
+    @cached_property
+    def mean(self):
+        return self._mean(**self._all_shapes)
+
+    def _mean(self, **kwargs):
+        return self._moment(1, 0, **kwargs)
+
+    @cached_property
+    def std(self):
+        return self.var**0.5
+
+    @cached_property
+    def var(self):
+        # not Fisher kurtosis
+        return self._var(mean=self.mean, **self._all_shapes)
+
+    def _var(self, mean, **kwargs):
+        return self._moment(2, mean, **kwargs)
+
+    @cached_property
+    def skewness(self):
+        # not Fisher kurtosis
+        return self._skewness(mean=self.mean, var=self.var, **self._all_shapes)
+
+    def _skewness(self, mean, var, **kwargs):
+        return self._moment(3, mean, **kwargs) / var ** 1.5
+
+    @cached_property
+    def kurtosis(self):
+        # not Fisher kurtosis
+        return self._kurtosis(mean=self.mean, var=self.var, **self._all_shapes)
+
+    def _kurtosis(self, mean, var, **kwargs):
+        return self._moment(4, mean, **kwargs)/var**2
 
     def _logpdf(self, x, **kwargs):
         if self.tol is _null:
@@ -336,6 +447,9 @@ class ContinuousDistribution:
         else:
             return self._logentropy_integrate_logpdf(**kwargs)
 
+    def _logmoment(self, order, logcenter, **kwargs):
+        return self._logmoment_integrate_logpdf(order, logcenter, **kwargs)
+
     def _entropy(self, **kwargs):
         if self._overrides('_logentropy'):
             return np.exp(self._logentropy(**kwargs))
@@ -365,6 +479,9 @@ class ContinuousDistribution:
             return self._ilogccdf_ilogcdf1m(x, **kwargs)
         else:
             return self._ilogccdf_solve_logccdf(x, **kwargs)
+
+    def _moment(self, order, center, **kwargs):
+        return self._moment_integrate_pdf(order, center, **kwargs)
 
     # Distribution functions via exp of log distribution functions
     def _entropy_exp_logentropy(self, **kwargs):
@@ -397,31 +514,31 @@ class ContinuousDistribution:
 
     def _logcdf_integrate_logpdf(self, x, **kwargs):
         a, b = self.support
-        f, args = kwargs2args(self._logpdf, kwargs=self._all_shapes)
+        f, args = kwargs2args(self._logpdf, kwargs=kwargs)
         res = _tanhsinh(f, a, x, args=args, log=True)
         return res.integral
 
     def _cdf_integrate_pdf(self, x, **kwargs):
         a, b = self.support
-        f, args = kwargs2args(self._pdf, kwargs=self._all_shapes)
+        f, args = kwargs2args(self._pdf, kwargs=kwargs)
         res = _tanhsinh(f, a, x, args=args)
         return res.integral
 
     def _logccdf_integrate_logpdf(self, x, **kwargs):
         a, b = self.support
-        f, args = kwargs2args(self._logpdf, kwargs=self._all_shapes)
+        f, args = kwargs2args(self._logpdf, kwargs=kwargs)
         res = _tanhsinh(f, x, b, args=args, log=True)
         return res.integral
 
     def _ccdf_integrate_pdf(self, x, **kwargs):
         a, b = self.support
-        f, args = kwargs2args(self._pdf, kwargs=self._all_shapes)
+        f, args = kwargs2args(self._pdf, kwargs=kwargs)
         res = _tanhsinh(f, x, b, args=args)
         return res.integral
 
     def _logentropy_integrate_logpdf(self, **kwargs):
         a, b = self.support
-        f, args = kwargs2args(self._logpdf, kwargs=self._all_shapes)
+        f, args = kwargs2args(self._logpdf, kwargs=kwargs)
         def integrand(x, *args):
             logpdf = f(x, *args)
             return logpdf + np.log(0j+logpdf)
@@ -430,12 +547,30 @@ class ContinuousDistribution:
 
     def _entropy_integrate_pdf(self, **kwargs):
         a, b = self.support
-        f, args = kwargs2args(self._pdf, kwargs=self._all_shapes)
+        f, args = kwargs2args(self._pdf, kwargs=kwargs)
         def integrand(x, *args):
             pdf = f(x, *args)
             return np.log(pdf)*pdf
         res = _tanhsinh(integrand, a, b, args=args)
         return -res.integral
+
+    def _logmoment_integrate_logpdf(self, order, logcenter, **kwargs):
+        a, b = self.support
+        def logintegrand(x, order, logcenter, **kwargs):
+            logpdf = self._logpdf(x, **kwargs)
+            return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)
+        f, args = kwargs2args(logintegrand, args=(order, logcenter), kwargs=kwargs)
+        res = _tanhsinh(f, a, b, args=args, log=True)
+        return res.integral
+
+    def _moment_integrate_pdf(self, order, center, **kwargs):
+        a, b = self.support
+        def integrand(x, order, center, **kwargs):
+            pdf = self._pdf(x, **kwargs)
+            return pdf*(x-center)**order
+        f, args = kwargs2args(integrand, args=(order, center), kwargs=kwargs)
+        res = _tanhsinh(f, a, b, args=args)
+        return res.integral
 
     # Distribution functions as complement of other distribution functions
 
