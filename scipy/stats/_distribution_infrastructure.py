@@ -326,40 +326,49 @@ class ContinuousDistribution:
     def iccdf(self, x):
         return self._iccdf(x, **self._all_shapes)
 
-    def moment(self, order, center=None, standardized=None):
+    def moment(self, order, center=None, standardized=False):
         # input validation / standardization
-        # add special cases like 0th moment, standardized 1st moment, etc.
-
-        # This function is currently broken
-        
-        center = self.mean if center is None else center
-        standardized = order >= 3 if standardized is None else standardized
-
-        if order == 1:
-            standard = self.mean  # not actually standard
+        # clean this up
+        # ensure NaN pattern and array/scalar output
+        if order == 0:
+            # replace with `np.ones` of correct shape/dtype and NaN pattern
+            central = np.ones_like(self.mean)
+        elif order == 1:
+            central = np.zeros_like(self.mean)
         elif order == 2:
-            standard = self.var
+            central = self.var
         elif order == 3:
-            standard = self.skewness
+            central = self.skewness*self.var**1.5
         elif order == 4:
-            standard = self.kurtosis
+            central = self.kurtosis*self.var**2.
 
-        if order <= 4:  # can skip if center is mean
-            raw = self._moment_transform_center(order, standard,
-                                                self.mean, center)
+        if order == 0:
+            return central
+        elif (order <= 3 or (order == 4 and self._overrides('_skewness'))):
+            if center is not None:
+                centrals = [self.moment(order=i) for i in range(order)] + [central]
+                nonstandard = self._moment_transform_center(order, centrals,
+                                                            self.mean, center)
+            else:
+                nonstandard = central
         else:
-            raw = self._moment(order, center, **self._all_shapes)
+            center = self.mean if center is None else center
+            nonstandard = self._moment(order, center, **self._all_shapes)
 
-        return raw / self.var ** (order / 2) if standardized else raw
+        moment = nonstandard / self.var ** (order / 2) if standardized else nonstandard
 
-    def _moment_transform_center(self, order, moment_a, a, b):
+        moment = np.asarray(moment)
+        moment[self._invalid] = np.nan
+        return moment[()]
+
+    def _moment_transform_center(self, order, moment_as, a, b):
         # a and b should be broadcasted before getting here
         # this is wrong - it's not just moment_a of order `order`; all lower
         # moments are needed, too
         n = order
         i = np.arange(n+1).reshape([-1]+[1]*a.ndim)  # orthogonal to other axes
         n_choose_i = special.binom(n, i)
-        moment_b = np.sum(n_choose_i*moment_a*(a-b)**(n-i), axis=0)
+        moment_b = np.sum(n_choose_i*moment_as*(a-b)**(n-i), axis=0)
         return moment_b
 
     @cached_property
@@ -375,7 +384,6 @@ class ContinuousDistribution:
 
     @cached_property
     def var(self):
-        # not Fisher kurtosis
         return self._var(mean=self.mean, **self._all_shapes)
 
     def _var(self, mean, **kwargs):
@@ -383,7 +391,6 @@ class ContinuousDistribution:
 
     @cached_property
     def skewness(self):
-        # not Fisher kurtosis
         return self._skewness(mean=self.mean, var=self.var, **self._all_shapes)
 
     def _skewness(self, mean, var, **kwargs):
