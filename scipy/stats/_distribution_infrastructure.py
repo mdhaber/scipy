@@ -86,9 +86,11 @@ def _set_invalid_nan(f):
                        "parameters.")
             raise ValueError(message) from e
 
-        mask_low = x <= low  # check implications of <, <=
-        mask_high = x >= high
-        x_invalid = mask_low | mask_high
+        # check implications of <, <=
+        x, valid = self._variable.check_dtype(x)
+        mask_low = x < low if method_name == "pdf" else x <= low
+        mask_high = x > high if method_name == "pdf" else x >= high
+        x_invalid = (mask_low | mask_high | ~valid)
         if np.any(x_invalid):
             x = np.copy(x)
             x[x_invalid] = np.nan
@@ -118,23 +120,37 @@ def kwargs2args(f, args=[], kwargs={}):
 
 def _solve_bounded(f, p, *, min, max, kwargs):
     # should modify _bracket_root and _chandrupatla so we don't need all this
+    p, min, max = np.broadcast_arrays(p, min, max)
     def f2(x, p, **kwargs):
         return f(x, **kwargs) - p
     f3, args = kwargs2args(f2, args=[p], kwargs=kwargs)
     # If we know the median or mean, should use it
-    if np.isfinite(min) and np.isfinite(max):
-        d = max - min
-        a = min + 0.25 * d
-        b = max - 0.25 * d
-    elif np.isfinite(min):
-        a = min + 1
-        b = min + 2
-    elif np.isfinite(max):
-        a = max - 2
-        b = max - 1
-    else:
-        a = -1
-        b = 1
+
+    # Any operations between 0d array and a scalar produces a scalar, so...
+    shape = min.shape
+    min, max = np.atleast_1d(min, max)
+
+    a = -np.ones_like(min)
+    b = np.ones_like(max)
+    d = max - min
+
+    i = np.isfinite(min) & np.isfinite(max)
+    a[i] = min[i] + 0.25 * d[i]
+    b[i] = max[i] - 0.25 * d[i]
+
+    i = np.isfinite(min) & ~np.isfinite(max)
+    a[i] = min[i] + 1
+    b[i] = min[i] + 2
+
+    i = np.isfinite(max) & ~np.isfinite(min)
+    a[i] = max[i] - 2
+    b[i] = max[i] - 1
+
+    min = min.reshape(shape)
+    max = max.reshape(shape)
+    a = a.reshape(shape)
+    b = b.reshape(shape)
+
     res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
     return _chandrupatla(f3, a=res.xl, b=res.xr, args=args)
 
@@ -232,9 +248,12 @@ class ContinuousDistribution:
 
     @cached_property
     def support(self):
+        return self._support(**self._all_shapes)
+
+    def _support(self, **kwargs):
         a, b = self._variable.domain.endpoints
-        a = getattr(self, a, a)[()]
-        b = getattr(self, b, b)[()]
+        a = kwargs.get(a, a)[()]
+        b = kwargs.get(b, b)[()]
         return a, b
 
     def _overrides(self, method_name):
@@ -325,6 +344,16 @@ class ContinuousDistribution:
     @_set_invalid_nan
     def iccdf(self, x):
         return self._iccdf(x, **self._all_shapes)
+
+    def sample(self, shape=(), rng=None):
+        shape = (shape,) if not np.iterable(shape) else tuple(shape)
+        rng = np.random.default_rng() if rng is None else rng
+        return self._sample(shape, rng, **self._all_shapes)
+
+    def _sample(self, shape, rng, **kwargs):
+        full_shape = shape + self._invalid.shape
+        uniform = rng.uniform(size=full_shape)
+        return self._icdf(uniform, **kwargs)
 
     def moment(self, order, center=None, standardized=False):
         # Come back to this. Still needs a lot of work.
@@ -524,25 +553,25 @@ class ContinuousDistribution:
     # Distribution functions via numerical integration
 
     def _logcdf_integrate_logpdf(self, x, **kwargs):
-        a, b = self.support
+        a, b = self._support(**kwargs)
         f, args = kwargs2args(self._logpdf, kwargs=kwargs)
         res = _tanhsinh(f, a, x, args=args, log=True)
         return res.integral
 
     def _cdf_integrate_pdf(self, x, **kwargs):
-        a, b = self.support
+        a, b = self._support(**kwargs)
         f, args = kwargs2args(self._pdf, kwargs=kwargs)
         res = _tanhsinh(f, a, x, args=args)
         return res.integral
 
     def _logccdf_integrate_logpdf(self, x, **kwargs):
-        a, b = self.support
+        a, b = self._support(**kwargs)
         f, args = kwargs2args(self._logpdf, kwargs=kwargs)
         res = _tanhsinh(f, x, b, args=args, log=True)
         return res.integral
 
     def _ccdf_integrate_pdf(self, x, **kwargs):
-        a, b = self.support
+        a, b = self._support(**kwargs)
         f, args = kwargs2args(self._pdf, kwargs=kwargs)
         res = _tanhsinh(f, x, b, args=args)
         return res.integral
@@ -612,24 +641,22 @@ class ContinuousDistribution:
     # Inverse distribution functions via rootfinding
     def _icdf_solve_cdf(self, x, **kwargs):
         a, b = self.support
-        res = _solve_bounded(self._cdf, x, min=a, max=b, kwargs=self._all_shapes)
+        res = _solve_bounded(self._cdf, x, min=a, max=b, kwargs=kwargs)
         return res.x
 
     def _iccdf_solve_ccdf(self, x, **kwargs):
         a, b = self.support
-        res = _solve_bounded(self._ccdf, x, min=a, max=b, kwargs=self._all_shapes)
+        res = _solve_bounded(self._ccdf, x, min=a, max=b, kwargs=kwargs)
         return res.x
 
     def _ilogcdf_solve_logcdf(self, x, **kwargs):
         a, b = self.support
-        res = _solve_bounded(self._logcdf, x, min=a, max=b,
-                             kwargs=self._all_shapes)
+        res = _solve_bounded(self._logcdf, x, min=a, max=b, kwargs=kwargs)
         return res.x
 
     def _ilogccdf_solve_logccdf(self, x, **kwargs):
         a, b = self.support
-        res = _solve_bounded(self._logccdf, x, min=a, max=b,
-                             kwargs=self._all_shapes)
+        res = _solve_bounded(self._logccdf, x, min=a, max=b, kwargs=kwargs)
         return res.x
 
     @classmethod
@@ -786,7 +813,7 @@ class LogUniform(ContinuousDistribution):
     _b_domain = _RealDomain(endpoints=('a', oo))
     _log_a_domain = _RealDomain(endpoints=(-oo, oo))
     _log_b_domain = _RealDomain(endpoints=('log_a', oo))
-    _x_support = _RealDomain(endpoints=('a', 'b'))
+    _x_support = _RealDomain(endpoints=('a', 'b'), inclusive=(True, True))
 
     _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 1))
     _b_param = _RealParameter('b', domain=_b_domain, typical=(1, 1e3))
