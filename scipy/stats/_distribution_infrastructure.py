@@ -327,12 +327,18 @@ class ContinuousDistribution:
         return self._iccdf(x, **self._all_shapes)
 
     def moment(self, order, center=None, standardized=False):
+        # Come back to this. Still needs a lot of work.
         # input validation / standardization
         # clean this up
         # ensure NaN pattern and array/scalar output
+        # make sure we're using cache or override when possible and just
+        # compute from scratch otherwise. I'm thinking there should be a
+        # `_standard_moment` function that the developer can override, and we'd
+        # manually cache results for all orders. `var`, `skewness`, etc., would
+        # call this function. Too much logic is in `moment` itself.
         if order == 0:
             # replace with `np.ones` of correct shape/dtype and NaN pattern
-            central = np.ones_like(self.mean)
+            return np.ones_like(self.mean)[()]
         elif order == 1:
             central = np.zeros_like(self.mean)
         elif order == 2:
@@ -342,9 +348,7 @@ class ContinuousDistribution:
         elif order == 4:
             central = self.kurtosis*self.var**2.
 
-        if order == 0:
-            return central
-        elif (order <= 3 or (order == 4 and self._overrides('_skewness'))):
+        if (order <= 3 or (order == 4 and self._overrides('_skewness'))):
             if center is not None:
                 centrals = [self.moment(order=i) for i in range(order)] + [central]
                 nonstandard = self._moment_transform_center(order, centrals,
