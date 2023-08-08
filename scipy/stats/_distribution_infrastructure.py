@@ -454,7 +454,7 @@ class ContinuousDistribution:
             return self._logcdf(x, **kwargs)
         elif (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
             return self._logcdf_log_cdf(x, **kwargs)
-        elif (self._overrides('_logccdf') and method is None) or method=='complement':
+        elif (self._overrides('_logccdf') and method is None) or method=='complementarity':
             return self._logcdf_log1mexpccdf(x, **kwargs)
         elif method in {'quadrature', None}:
             return self._logcdf_integrate_logpdf(x, **kwargs)
@@ -482,7 +482,7 @@ class ContinuousDistribution:
             return self._cdf(x, **kwargs)
         elif (self._overrides('_logcdf') and method is None) or method=='log/exp':
             return self._cdf_exp_logcdf(x, **kwargs)
-        elif (self._tol is _null and self._overrides('_ccdf') and method is None) or method=='complement':
+        elif (self._tol is _null and self._overrides('_ccdf') and method is None) or method=='complementarity':
             return self._cdf_1mccdf(x, **kwargs)
         elif method in {'quadrature', None}:
             return self._cdf_integrate_pdf(x, **kwargs)
@@ -509,7 +509,7 @@ class ContinuousDistribution:
             return self._logccdf(x, **kwargs)
         if (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
             return self._logccdf_log_ccdf(x, **kwargs)
-        elif (self._overrides('_logcdf') and method is None) or method=='complement':
+        elif (self._overrides('_logcdf') and method is None) or method=='complementarity':
             return self._logccdf_log1mexpcdf(x, **kwargs)
         elif method in {'quadrature', None}:
             return self._logccdf_integrate_logpdf(x, **kwargs)
@@ -536,7 +536,7 @@ class ContinuousDistribution:
             return self._ccdf(x, **kwargs)
         elif (self._overrides('_logccdf') and method is None) or method=='log/exp':
             return self._ccdf_exp_logccdf(x, **kwargs)
-        elif (self._tol is _null and self._overrides('_cdf') and method is None) or method=='complement':
+        elif (self._tol is _null and self._overrides('_cdf') and method is None) or method=='complementarity':
             return self._ccdf_1mcdf(x, **kwargs)
         elif method in {'quadrature', None}:
             return self._ccdf_integrate_pdf(x, **kwargs)
@@ -561,7 +561,7 @@ class ContinuousDistribution:
     def _ilogcdf_dispatch(self, x, method=None, **kwargs):
         if method in {None, 'direct'} and self._overrides('_ilogcdf'):
             return self._ilogcdf(x, **kwargs)
-        elif (self._overrides('_ilogccdf') and method is None) or method=='complement':
+        elif (self._overrides('_ilogccdf') and method is None) or method=='complementarity':
             return self._ilogcdf_ilogccdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
             return self._ilogcdf_solve_logcdf(x, **kwargs)

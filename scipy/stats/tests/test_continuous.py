@@ -98,6 +98,8 @@ class TestDistributions:
         # inject bad parameters and x-values, check NaN pattern
         rng = np.random.default_rng(4826584632856)
 
+        # If the distribution has parameters, choose a parameterization and
+        # draw broadcastable shapes for the parameter arrays.
         n_parameterizations = len(family._parameterizations)
         if n_parameterizations > 0:
             i_parameterization = data.draw(strategies.integers(min_value=0, max_value=n_parameterizations-1))
@@ -108,120 +110,47 @@ class TestDistributions:
             dist = family._draw(rng=rng)
             result_shape = tuple()
 
-        params = dist._all_shapes
-
-        methods = {'log/exp', 'quadrature'}
-        if dist._overrides('_logentropy'):
-            methods.add('direct')
-        ref = dist.logentropy()
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.logentropy(method=method)
-            np.testing.assert_allclose(res, ref)
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
-
-        methods = {'log/exp', 'quadrature'}
-        if dist._overrides('_entropy'):
-            methods.add('direct')
-        ref = dist.entropy()
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.entropy(method=method)
-            np.testing.assert_allclose(res, ref)
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
-
-        shape = data.draw(npst.broadcastable_shapes(result_shape))
-        x = dist._variable.draw(shape, shapes=dist._all_shapes)
-        result_shape = np.broadcast_shapes(shape, result_shape)
-
-        methods = {'log/exp'}
-        if dist._overrides('_logpdf'):
-            methods.add('direct')
-        ref = dist.logpdf(x)
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.logpdf(x, method=method)
-            np.testing.assert_allclose(res, ref)
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
-
-        methods = {'log/exp'}
-        if dist._overrides('_pdf'):
-            methods.add('direct')
-        ref = dist.pdf(x)
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.pdf(x, method=method)
-            np.testing.assert_allclose(res, ref)
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
-
-        methods = {'log/exp', 'complement', 'quadrature'}
-        if dist._overrides('_logcdf'):
-            methods.add('direct')
-        ref = dist.logcdf(x)
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.logcdf(x, method=method)
-            # the error of the CDF - not the logcdf - is controlled
-            np.testing.assert_allclose(np.exp(res), np.exp(ref))
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
-
-        methods = {'log/exp', 'complement', 'quadrature'}
-        if dist._overrides('_cdf'):
-            methods.add('direct')
-        ref = dist.cdf(x)
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.cdf(x, method=method)
-            np.testing.assert_allclose(res, ref)
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
-
-        methods = {'log/exp', 'complement', 'quadrature'}
-        if dist._overrides('_logccdf'):
-            methods.add('direct')
-        ref = dist.logccdf(x)
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.logccdf(x, method=method)
-            np.testing.assert_allclose(np.exp(res), np.exp(ref))
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
-
-        methods = {'log/exp', 'complement', 'quadrature'}
-        if dist._overrides('_ccdf'):
-            methods.add('direct')
-        ref = dist.ccdf(x)
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.ccdf(x, method=method)
-            np.testing.assert_allclose(res, ref)
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
-
-        p = rng.uniform(size=shape)
+        # Draw a broadcastable shape for the arguments, and draw values for the
+        # arguments.
+        x_shape = data.draw(npst.broadcastable_shapes(result_shape))
+        x = dist._variable.draw(x_shape, shapes=dist._all_shapes)
+        x_result_shape = np.broadcast_shapes(x_shape, result_shape)
+        p = rng.uniform(size=x_shape)
         logp = np.log(p)
 
-        methods = {'complement', 'inversion'}
-        if dist._overrides('_ilogcdf'):
-            methods.add('direct')
-        ref = dist.ilogcdf(logp)
-        np.testing.assert_equal(ref.shape, result_shape)
-        for method in methods:
-            res = dist.ilogcdf(logp, method=method)
+        methods = {'log/exp', 'quadrature'}
+        check_dist_func(dist, 'entropy', None, result_shape, methods)
+        check_dist_func(dist, 'logentropy', None, result_shape, methods)
+
+        methods = {'log/exp'}
+        check_dist_func(dist, 'pdf', x, x_result_shape, methods)
+        check_dist_func(dist, 'logpdf', x, x_result_shape, methods)
+
+        methods = {'log/exp', 'complementarity', 'quadrature'}
+        check_dist_func(dist, 'logcdf', x, x_result_shape, methods)
+        check_dist_func(dist, 'cdf', x, x_result_shape, methods)
+        check_dist_func(dist, 'logccdf', x, x_result_shape, methods)
+        check_dist_func(dist, 'ccdf', x, x_result_shape, methods)
+
+        methods = {'complementarity', 'inversion'}
+        check_dist_func(dist, 'ilogcdf', logp, x_result_shape, methods)
+
+
+def check_dist_func(dist, fname, arg, result_shape, methods):
+    # Compare all the method arguments of a distribution function against one
+    # another. For
+    args = tuple() if arg is None else (arg,)
+    methods = methods.copy()
+    if dist._overrides(f'_{fname}'):
+        methods.add('direct')
+    ref = getattr(dist, fname)(*args)
+    assert np.isfinite(ref).all()
+    np.testing.assert_equal(ref.shape, result_shape)
+    for method in methods:
+        res = getattr(dist, fname)(*args, method=method)
+        if 'log' in fname:
+            np.testing.assert_allclose(np.exp(res), np.exp(ref))
+        else:
             np.testing.assert_allclose(res, ref)
-            assert np.isfinite(res).all()
-            assert np.isfinite(ref).all()
-            np.testing.assert_equal(res.shape, result_shape)
+        assert np.isfinite(res).all()
+        np.testing.assert_equal(res.shape, result_shape)
