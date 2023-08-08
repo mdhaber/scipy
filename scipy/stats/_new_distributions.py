@@ -61,11 +61,20 @@ class Normal(ContinuousDistribution):
     def _mean(self, **kwargs):
         return 0
 
+    def _logvar(self, **kwargs):
+        return 0
+
     def _var(self, **kwargs):
         return 1
 
+    def _logskewness(self, **kwargs):
+        return -np.inf
+
     def _skewness(self, **kwargs):
         return 0
+
+    def _logkurtosis(self, **kwargs):
+        return np.log(3)
 
     def _kurtosis(self, **kwargs):
         return 3

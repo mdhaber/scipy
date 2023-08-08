@@ -21,6 +21,7 @@ oo = np.inf
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
 #  add lower limit to cdf
 #  ensure that user override return correct shape and dtype
+#  consider adding std back
 
 # Originally, I planned to filter out invalid shape parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -431,6 +432,13 @@ class ContinuousDistribution:
         res = np.log(self._entropy_dispatch(**kwargs) + 0j)
         return _log_real_standardize(res)
 
+    def _logentropy_integrate_logpdf(self, **kwargs):
+        def logintegrand(x, **kwargs):
+            logpdf = self._logpdf_dispatch(x, **kwargs)
+            return logpdf + np.log(0j+logpdf)
+        res = self._quadrature(logintegrand, kwargs=kwargs, log=True)
+        return _log_real_standardize(res + np.pi*1j)
+
     def entropy(self, method=None):
         return self._entropy_dispatch(method=method, **self._all_shapes)
 
@@ -446,6 +454,12 @@ class ContinuousDistribution:
 
     def _entropy_exp_logentropy(self, **kwargs):
         return np.exp(self._logentropy_dispatch(**kwargs))
+
+    def _entropy_integrate_pdf(self, **kwargs):
+        def integrand(x, **kwargs):
+            pdf = self._pdf_dispatch(x, **kwargs)
+            return np.log(pdf)*pdf
+        return -self._quadrature(integrand, kwargs=kwargs)
 
     def median(self, method=None):
         return self._median_dispatch(method=method, **self._all_shapes)
@@ -475,10 +489,161 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logmean_log_mean(self, **kwargs):
-        return np.log(self._mean(**kwargs))
+        return np.log(self._mean_dispatch(**kwargs))
 
     def _logmean_logmoment(self, **kwargs):
         return self._logmoment(1, -np.inf, **kwargs)
+
+    def mean(self, method=None):
+        return self._mean_dispatch(method=method, **self._all_shapes)
+
+    def _mean_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_mean'):
+            return np.asarray(self._mean(**kwargs))[()]
+        elif (self._overrides('_logmean') and method is None) or method=='log/exp':
+            return self._mean_exp_logmean(**kwargs)
+        elif method in {None, 'moment'}:
+            return self._mean_moment(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _mean_exp_logmean(self, **kwargs):
+        return np.exp(self._logmean_dispatch(**kwargs))
+
+    def _mean_moment(self, **kwargs):
+        return self._moment(1, 0, **kwargs)
+
+    def logvar(self, method=None):
+        return self._logvar_dispatch(method=method, **self._all_shapes)
+
+    def _logvar_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logvar'):
+            return np.asarray(self._logvar(**kwargs))[()]
+        elif (self.tol is _null and self._overrides('_var') and method is None) or method=='log/exp':
+            return self._logvar_log_var(**kwargs)
+        elif method in {None, 'logmoment'}:
+            return self._logvar_logmoment(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logvar_log_var(self, **kwargs):
+        return np.log(self._var_dispatch(**kwargs))
+
+    def _logvar_logmoment(self, **kwargs):
+        return self._logmoment(2, -np.inf, **kwargs)
+
+    def var(self, method=None):
+        return self._var_dispatch(method=method, **self._all_shapes)
+
+    def _var_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_var'):
+            return np.asarray(self._var(**kwargs))[()]
+        elif (self._overrides('_logvar') and method is None) or method=='log/exp':
+            return self._var_exp_logvar(**kwargs)
+        elif method in {None, 'moment'}:
+            return self._var_moment(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _var_exp_logvar(self, **kwargs):
+        return np.exp(self._logvar_dispatch(**kwargs))
+
+    def _var_moment(self, **kwargs):
+        return self._moment(2, 0, **kwargs)
+
+    def logskewness(self, method=None):
+        return self._logskewness_dispatch(method=method, logmean=self.logmean(),
+                                          logvar=self.logvar(),**self._all_shapes)
+
+    def _logskewness_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logskewness'):
+            return np.asarray(self._logskewness(**kwargs))[()]
+        elif (self.tol is _null and self._overrides(
+                '_skewness') and method is None) or method == 'log/exp':
+            return self._logskewness_log_skewness(**kwargs)
+        elif method in {None, 'logmoment'}:
+            return self._logskewness_logmoment(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logskewness_log_skewness(self, **kwargs):
+        return np.log(self._skewness_dispatch(**kwargs))
+
+    def _logskewness_logmoment(self, logmean=None, logvar=None, mean=None,
+                               var=None, **kwargs):
+        logmean = np.log(mean+0j) if logmean is None else logmean
+        logvar = np.log(var) if logvar is None else logvar
+        return self._logmoment(3, logmean, **kwargs) - 1.5 * logvar
+
+    def skewness(self, method=None):
+        return self._skewness_dispatch(method=method, mean=self.mean(),
+                                       var=self.var(), **self._all_shapes)
+
+    def _skewness_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_skewness'):
+            return np.asarray(self._skewness(**kwargs))[()]
+        elif (self._overrides('_logskewness') and method is None) or method == 'log/exp':
+            return self._skewness_exp_logskewness(**kwargs)
+        elif method in {None, 'moment'}:
+            return self._skewness_moment(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _skewness_exp_logskewness(self, **kwargs):
+        return np.exp(self._logskewness_dispatch(**kwargs))
+
+    def _skewness_moment(self, mean=None, var=None, logmean=None, logvar=None,
+                         **kwargs):
+        mean = np.exp(logmean) if mean is None else mean
+        var = np.exp(logvar) if var is None else var
+        return self._moment(3, mean, **kwargs) / var ** 1.5
+
+    def logkurtosis(self, method=None):
+        return self._logkurtosis_dispatch(method=method, logmean=self.logmean(),
+                                          logvar=self.logvar(),**self._all_shapes)
+
+    def _logkurtosis_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logkurtosis'):
+            return np.asarray(self._logkurtosis(**kwargs))[()]
+        elif (self.tol is _null and self._overrides(
+                '_kurtosis') and method is None) or method == 'log/exp':
+            return self._logkurtosis_log_kurtosis(**kwargs)
+        elif method in {None, 'logmoment'}:
+            return self._logkurtosis_logmoment(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logkurtosis_log_kurtosis(self, **kwargs):
+        return np.log(self._kurtosis_dispatch(**kwargs))
+
+    def _logkurtosis_logmoment(self, logmean=None, logvar=None, mean=None,
+                               var=None, **kwargs):
+        logmean = np.log(mean+0j) if logmean is None else logmean
+        logvar = np.log(var) if logvar is None else logvar
+        return self._logmoment(4, logmean, **kwargs) - 2 * logvar
+
+    def kurtosis(self, method=None):
+        return self._kurtosis_dispatch(method=method, mean=self.mean(),
+                                       var=self.var(), **self._all_shapes)
+
+    def _kurtosis_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_kurtosis'):
+            return np.asarray(self._kurtosis(**kwargs))[()]
+        elif (self._overrides('_logkurtosis') and method is None) or method == 'log/exp':
+            return self._kurtosis_exp_logkurtosis(**kwargs)
+        elif method in {None, 'moment'}:
+            return self._kurtosis_moment(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _kurtosis_exp_logkurtosis(self, **kwargs):
+        return np.exp(self._logkurtosis_dispatch(**kwargs))
+
+    def _kurtosis_moment(self, mean=None, var=None, logmean=None, logvar=None,
+                         **kwargs):
+        mean = np.exp(logmean) if mean is None else mean
+        var = np.exp(logvar) if var is None else var
+        return self._moment(4, mean, **kwargs) / var ** 2
 
     @_set_invalid_nan
     def logpdf(self, x, method=None):
@@ -699,66 +864,6 @@ class ContinuousDistribution:
     def _iccdf_solve_ccdf(self, x, **kwargs):
         return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
-    @cached_property
-    def mean(self):
-        return self._mean(**self._all_shapes)
-
-    def _mean(self, **kwargs):
-        return self._moment(1, 0, **kwargs)
-
-    @cached_property
-    def logvar(self):
-        return self._logvar(logmean=self.logmean, **self._all_shapes)
-
-    def _logvar(self, logmean, **kwargs):
-        return np.real(self._logmoment(2, logmean, **kwargs))
-
-    @cached_property
-    def var(self):
-        return self._var(mean=self.mean, **self._all_shapes)
-
-    def _var(self, mean, **kwargs):
-        return self._moment(2, mean, **kwargs)
-
-    @cached_property
-    def logstd(self):
-        return self.logvar/2
-
-    @cached_property
-    def std(self):
-        return self.var**0.5
-
-    @cached_property
-    def logskewness(self):
-        return self._logskewness(logmean=self.logmean, logvar=self.logvar,
-                                 **self._all_shapes)
-
-    def _logskewness(self, logmean, logvar, **kwargs):
-        return (np.real(self._logmoment(3, logmean, **kwargs)) - 1.5 * logvar)
-
-    @cached_property
-    def skewness(self):
-        return self._skewness(mean=self.mean, var=self.var, **self._all_shapes)
-
-    def _skewness(self, mean, var, **kwargs):
-        return self._moment(3, mean, **kwargs) / var ** 1.5
-
-    @cached_property
-    def logkurtosis(self):
-        return self._logkurtosis(logmean=self.logmean, logvar=self.logvar,
-                                 **self._all_shapes)
-
-    def _logkurtosis(self, logmean, logvar, **kwargs):
-        return (np.real(self._logmoment(4, logmean, **kwargs)) - 2 * logvar)
-
-    @cached_property
-    def kurtosis(self):
-        # not Fisher kurtosis
-        return self._kurtosis(mean=self.mean, var=self.var, **self._all_shapes)
-
-    def _kurtosis(self, mean, var, **kwargs):
-        return self._moment(4, mean, **kwargs)/var**2
-
     def sample(self, shape=(), rng=None):
         shape = (shape,) if not np.iterable(shape) else tuple(shape)
         rng = np.random.default_rng() if rng is None else rng
@@ -778,6 +883,13 @@ class ContinuousDistribution:
 
     def _logmoment(self, order, logcenter, **kwargs):
         return self._logmoment_integrate_logpdf(order, logcenter, **kwargs)
+
+    def _logmoment_integrate_logpdf(self, order, logcenter, **kwargs):
+        def logintegrand(x, order, logcenter, **kwargs):
+            logpdf = self._logpdf_dispatch(x, **kwargs)
+            return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)
+        return self._quadrature(logintegrand, args=(order, logcenter),
+                                kwargs=kwargs, log=True)
 
     def moment(self, order, center=None, standardized=False):
         # Come back to this. Still needs a lot of work.
@@ -821,6 +933,13 @@ class ContinuousDistribution:
     def _moment(self, order, center, **kwargs):
         return self._moment_integrate_pdf(order, center, **kwargs)
 
+    def _moment_integrate_pdf(self, order, center, **kwargs):
+        # a, b = self.support
+        def integrand(x, order, center, **kwargs):
+            pdf = self._pdf_dispatch(x, **kwargs)
+            return pdf*(x-center)**order
+        return self._quadrature(integrand, args=(order, center), kwargs=kwargs)
+
     def _moment_transform_center(self, order, moment_as, a, b):
         # a and b should be broadcasted before getting here
         # this is wrong - it's not just moment_a of order `order`; all lower
@@ -831,10 +950,6 @@ class ContinuousDistribution:
         moment_b = np.sum(n_choose_i*moment_as*(a-b)**(n-i), axis=0)
         return moment_b
 
-    # Distribution functions via numerical integration
-    # before moving these with the functions they support, let's extract out
-    # a helpfer function to reduce duplication
-
     def _quadrature(self, integrand, limits=None, args=None, kwargs=None, log=False):
         a, b = self._support(**kwargs) if limits is None else limits
         args = [] if args is None else args
@@ -842,44 +957,6 @@ class ContinuousDistribution:
         f, args = kwargs2args(integrand, args=args, kwargs=kwargs)
         res = _tanhsinh(f, a, b, args=args, log=log)
         return res.integral
-
-    def _logentropy_integrate_logpdf(self, **kwargs):
-        a, b = self.support
-        f, args = kwargs2args(self._logpdf_dispatch, kwargs=kwargs)
-        def integrand(x, *args):
-            logpdf = f(x, *args)
-            return logpdf + np.log(0j+logpdf)
-        res = _tanhsinh(integrand, a, b, args=args, log=True)
-        return _log_real_standardize(res.integral + np.pi*1j)
-
-    def _entropy_integrate_pdf(self, **kwargs):
-        a, b = self.support
-        f, args = kwargs2args(self._pdf_dispatch, kwargs=kwargs)
-        def integrand(x, *args):
-            pdf = f(x, *args)
-            return np.log(pdf)*pdf
-        res = _tanhsinh(integrand, a, b, args=args)
-        return -res.integral
-
-    def _logmoment_integrate_logpdf(self, order, logcenter, **kwargs):
-        a, b = self.support
-        def logintegrand(x, order, logcenter, **kwargs):
-            logpdf = self._logpdf_dispatch(x, **kwargs)
-            return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)
-        f, args = kwargs2args(logintegrand, args=(order, logcenter), kwargs=kwargs)
-        res = _tanhsinh(f, a, b, args=args, log=True)
-        return res.integral
-
-    def _moment_integrate_pdf(self, order, center, **kwargs):
-        a, b = self.support
-        def integrand(x, order, center, **kwargs):
-            pdf = self._pdf_dispatch(x, **kwargs)
-            return pdf*(x-center)**order
-        f, args = kwargs2args(integrand, args=(order, center), kwargs=kwargs)
-        res = _tanhsinh(f, a, b, args=args)
-        return res.integral
-
-    # Inverse distribution functions via rootfinding
 
     def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
         # should modify _bracket_root and _chandrupatla so we don't need all this

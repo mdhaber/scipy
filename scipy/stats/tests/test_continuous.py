@@ -90,7 +90,7 @@ class Test_RealDomain:
 
 class TestDistributions:
     @pytest.mark.filterwarnings('ignore')
-    @pytest.mark.parametrize('family', (Normal, LogUniform))
+    @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data())
     def test_distribution(self, family, data):
         # strengthen this test by letting min_side=0 for both broadcasted shapes
@@ -127,6 +127,15 @@ class TestDistributions:
 
         methods = {'log/exp', 'logmoment'}
         check_dist_func(dist, 'logmean', None, result_shape, methods)
+        check_dist_func(dist, 'logvar', None, result_shape, methods)
+        check_dist_func(dist, 'logskewness', None, result_shape, methods)
+        check_dist_func(dist, 'logkurtosis', None, result_shape, methods)
+
+        methods = {'log/exp', 'moment'}
+        check_dist_func(dist, 'mean', None, result_shape, methods)
+        check_dist_func(dist, 'var', None, result_shape, methods)
+        check_dist_func(dist, 'skewness', None, result_shape, methods)
+        check_dist_func(dist, 'kurtosis', None, result_shape, methods)
 
         methods = {'log/exp'}
         check_dist_func(dist, 'pdf', x, x_result_shape, methods)
@@ -146,8 +155,10 @@ class TestDistributions:
 
 
 def check_dist_func(dist, fname, arg, result_shape, methods):
-    # Compare all the method arguments of a distribution function against one
-    # another. For
+    # Check that all computation methods of all distribution functions agree
+    # with one another, effectively testing the correctness of the generic
+    # computation methods and confirming the consistency of specific
+    # distributions with their pdf/logpdf.
     args = tuple() if arg is None else (arg,)
     ref = getattr(dist, fname)(*args)
 
@@ -159,8 +170,9 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
         methods.add('direct')
 
         # Mean can be 0, which makes logmean -oo.
-        if fname in {'logmean'}:
-            tol_override = {'atol': 1e-16}
+        if (fname in {'logmean', 'mean', 'logskewness', 'skewness'}
+                and np.any(ref == 0) or np.any(np.isinf(ref))):
+            tol_override = {'atol': 1e-15}
         else:
             assert np.isfinite(ref).all()
 
@@ -172,6 +184,6 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
             np.testing.assert_allclose(np.exp(res), np.exp(ref),
                                        **tol_override)
         else:
-            np.testing.assert_allclose(res, ref)
+            np.testing.assert_allclose(res, ref, **tol_override)
 
         np.testing.assert_equal(res.shape, result_shape)
