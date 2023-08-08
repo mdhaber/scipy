@@ -52,6 +52,153 @@ oo = np.inf
 #   broadcastable with these @cached_properties. In most cases, this is
 #   completely transparent to the author.
 
+
+class _Domain:
+    symbols = {np.inf: "∞", -np.inf: "-∞", np.pi: "π", -np.pi: "-π"}
+
+    def contains(self, x):
+        raise NotImplementedError()
+
+    def __str__(self):
+        raise NotImplementedError()
+
+
+class _SimpleDomain(_Domain):
+
+    def define_parameters(self, *parameters):
+        new_symbols = {param.name: param.symbol for param in parameters}
+        self.symbols.update(new_symbols)
+
+    def contains(self, item, shapes={}):
+        a, b = self.endpoints
+        left_inclusive, right_inclusive = self.inclusive
+
+        a = shapes.get(a, a)
+        b = shapes.get(b, b)
+
+        in_left = item >= a if left_inclusive else item > a
+        in_right = item <= b if right_inclusive else item < b
+        return in_left & in_right
+
+
+class _RealDomain(_SimpleDomain):
+
+    def __init__(self, endpoints=(-oo, oo), inclusive=(False, False)):
+        a, b = endpoints
+        self.endpoints = np.asarray(a)[()], np.asarray(b)[()]
+        self.inclusive = inclusive
+
+    def __str__(self):
+        a, b = self.endpoints
+        left_inclusive, right_inclusive = self.inclusive
+
+        left = "[" if left_inclusive else "("
+        a = self.symbols.get(a, f"{a}")
+        right = "]" if right_inclusive else ")"
+        b = self.symbols.get(b, f"{b}")
+
+        return f"{left}{a}, {b}{right}"
+
+
+class _IntegerDomain(_SimpleDomain):
+    pass
+
+
+class _Parameter:
+    def __init__(self, name, *, symbol, domain, typical):
+        self.name = name
+        self.symbol = symbol or name
+        self.domain = domain
+        self.typical = typical
+
+    def __str__(self):
+        return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
+
+    def draw(self, size=None, rng=None, shapes={}):
+        rng = rng or np.random.default_rng()
+        a, b = self.typical
+        a = shapes.get(a, a)
+        b = shapes.get(b, b)
+        return rng.uniform(a, b, size=np.broadcast_shapes(size, np.shape(a)))
+
+
+class _RealParameter(_Parameter):
+    def __init__(self, name, *, typical=None, symbol=None, domain=_RealDomain()):
+        typical = typical or domain.endpoints
+        symbol = symbol or name
+        super().__init__(name, symbol=symbol, domain=domain, typical=typical)
+
+    def check_dtype(self, arr):
+        arr = np.asarray(arr)
+        dtype = arr.dtype
+        valid_dtype = np.ones_like(arr, dtype=bool)
+        if np.issubdtype(dtype, np.floating):
+            pass
+        elif np.issubdtype(dtype, np.integer):
+            dtype = np.float64
+            arr = np.asarray(arr, dtype=dtype)
+        elif np.issubdtype(dtype, np.complexfloating):
+            real_arr = np.real(arr)
+            valid_dtype = (real_arr == arr)
+            arr = real_arr
+        else:
+            message = f"Parameter {self.name} must be of real dtype."
+            raise ValueError(message)
+        return arr, valid_dtype
+
+
+class _IntegerParameter(_Parameter):
+    def __init__(self, name, *, typical=None, symbol=None, domain=_IntegerDomain()):
+        typical = typical or domain
+        symbol = symbol or name
+        super().__init__(name, symbol=symbol, domain=domain, typical=typical)
+
+    def check_dtype(self, arr):
+        arr = np.asarray(arr)
+        dtype = arr.dtype
+        valid_dtype = np.ones_like(arr, dtype=bool)
+        if np.issubdtype(dtype, np.integer):
+            pass
+        elif np.issubdtype(dtype, np.inexact):
+            integral_arr = np.round(arr)
+            valid_dtype = (integral_arr == arr)
+            arr = integral_arr
+        else:
+            message = f"Parameter {self.name} must be of integer dtype."
+            raise ValueError(message)
+        return arr, valid_dtype
+
+
+class _Parameterization:
+    def __init__(self, *parameters):
+        self.parameters = {param.name: param for param in parameters}
+
+    def validate(self, shapes):
+        return shapes == set(self.parameters.keys())
+
+    def validate_shapes(self, shapes):
+        all_valid = True
+        for name, arr in shapes.items():
+            parameter = self.parameters[name]
+            arr, valid = parameter.check_dtype(arr)
+            valid = valid & parameter.domain.contains(arr, shapes)
+            all_valid = all_valid & valid
+            shapes[name] = arr
+
+        return all_valid
+
+    def __str__(self):
+        messages = [str(param) for name, param in self.parameters.items()]
+        return " ".join(messages)
+
+    def draw(self, sizes=None, rng=None):
+        shapes = {}
+        sizes = sizes if np.iterable(sizes) else [sizes]*len(self.parameters)
+        for size, param in zip(sizes, self.parameters.values()):
+            shapes[param.name] = param.draw(size, rng)
+        return shapes
+
+
 def _set_invalid_nan(f):
     # improve structure
     # need to come back to this to think more about use of < vs <=
@@ -135,8 +282,9 @@ def kwargs2args(f, args=[], kwargs={}):
     return wrapped, args
 
 
-def _solve_bounded(f, p, *, min, max, kwargs):
+def _solve_bounded(f, p, bounds, *, kwargs):
     # should modify _bracket_root and _chandrupatla so we don't need all this
+    a, b = bounds
     p, min, max = np.broadcast_arrays(p, min, max)
     def f2(x, p, **kwargs):
         return f(x, **kwargs) - p
@@ -257,6 +405,15 @@ class ContinuousDistribution:
         self._shapes = shapes
         self._all_shape_names = all_shape_names
 
+    @classmethod
+    def _draw(cls, sizes=None, rng=None, i_parameterization=0):
+        if len(cls._parameterizations) == 0:
+            return cls()
+
+        parameterization = cls._parameterizations[i_parameterization]
+        shapes = parameterization.draw(sizes, rng)
+        return cls(**shapes)
+
     def _get_shapes(self, shape_names=None):
         shape_names = shape_names or self._all_shape_names
         return {name: getattr(self, name) for name in shape_names}
@@ -268,6 +425,11 @@ class ContinuousDistribution:
         # but it is probably faster to remember the names of the shapes needed
         # by each method.
         return self._get_shapes()
+
+    def _overrides(self, method_name):
+        method = getattr(self.__class__, method_name, None)
+        super_method = getattr(self.__class__.__base__, method_name, None)
+        return method is not super_method
 
     @property
     def tol(self):
@@ -291,44 +453,226 @@ class ContinuousDistribution:
         b = kwargs.get(b, b)[()]
         return a, b
 
-    def _overrides(self, method_name):
-        method = getattr(self.__class__, method_name, None)
-        super_method = getattr(self.__class__.__base__, method_name, None)
-        return method is not super_method
-
     @_set_invalid_nan
     def logpdf(self, x, method=None):
         return self._logpdf_dispatch(x, method=method, **self._all_shapes)
+
+    def _logpdf_dispatch(self, x, *, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logpdf'):
+            return self._logpdf(x, **kwargs)
+        elif (self.tol is _null and method is None) or method == 'log/exp':
+            return self._logpdf_log_pdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logpdf_log_pdf(self, x, **kwargs):
+        return np.log(self._pdf_dispatch(x, **kwargs))
+
+    @_set_invalid_nan
+    def pdf(self, x, method=None):
+        return self._pdf_dispatch(x, method=method, **self._all_shapes)
+
+    def _pdf_dispatch(self, x, *, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_pdf'):
+            return self._pdf(x, **kwargs)
+        if (self._overrides('_logpdf') and method is None) or method == 'log/exp':
+            return self._pdf_exp_logpdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _pdf_exp_logpdf(self, x, **kwargs):
+        return np.exp(self._logpdf_dispatch(x, **kwargs))
 
     @_set_invalid_nan
     def logcdf(self, x, method=None):
         return self._logcdf_dispatch(x, method=method, **self._all_shapes)
 
+    def _logcdf_dispatch(self, x, *, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logcdf'):
+            return self._logcdf(x, **kwargs)
+        elif (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
+            return self._logcdf_log_cdf(x, **kwargs)
+        elif (self._overrides('_logccdf') and method is None) or method=='complement':
+            return self._logcdf_log1mexpccdf(x, **kwargs)
+        elif method in {'quadrature', None}:
+            return self._logcdf_integrate_logpdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logcdf_log_cdf(self, x, **kwargs):
+        return np.log(self._cdf_dispatch(x, **kwargs))
+
+    def _logcdf_log1mexpccdf(self, x, **kwargs):
+        return _log1mexp(self._logccdf_dispatch(x, **kwargs))
+
+    @_set_invalid_nan
+    def cdf(self, x, method=None):
+        return self._cdf_dispatch(x, method=method, **self._all_shapes)
+
+    def _cdf_dispatch(self, x, *, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_cdf'):
+            return self._cdf(x, **kwargs)
+        elif (self._overrides('_logcdf') and method is None) or method=='log/exp':
+            return self._cdf_exp_logcdf(x, **kwargs)
+        elif (self._tol is _null and self._overrides('_ccdf') and method is None) or method=='complement':
+            return self._cdf_1mccdf(x, **kwargs)
+        elif method in {'quadrature', None}:
+            return self._cdf_integrate_pdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _cdf_exp_logcdf(self, x, **kwargs):
+        return np.exp(self._logcdf_dispatch(x, **kwargs))
+
+    def _cdf_1mccdf(self, x, **kwargs):
+        return 1 - self._ccdf_dispatch(x, **kwargs)
+
     @_set_invalid_nan
     def logccdf(self, x, method=None):
         return self._logccdf_dispatch(x, method=method, **self._all_shapes)
 
-    def logentropy(self, method=None):
-        return self._logentropy_dispatch(method=method, **self._all_shapes)
+    def _logccdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logccdf'):
+            return self._logccdf(x, **kwargs)
+        if (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
+            return self._logccdf_log_ccdf(x, **kwargs)
+        elif (self._overrides('_logcdf') and method is None) or method=='complement':
+            return self._logccdf_log1mexpcdf(x, **kwargs)
+        elif method in {'quadrature', None}:
+            return self._logccdf_integrate_logpdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logccdf_log_ccdf(self, x, **kwargs):
+        return np.log(self._ccdf_dispatch(x, **kwargs))
+
+    def _logccdf_log1mexpcdf(self, x, **kwargs):
+        return _log1mexp(self._logcdf_dispatch(x, **kwargs))
+
+    @_set_invalid_nan
+    def ccdf(self, x, method=None):
+        return self._ccdf_dispatch(x, method=method, **self._all_shapes)
+
+    def _ccdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_ccdf'):
+            return self._ccdf(x, **kwargs)
+        elif (self._overrides('_logccdf') and method is None) or method=='log/exp':
+            return self._ccdf_exp_logccdf(x, **kwargs)
+        elif (self._tol is _null and self._overrides('_cdf') and method is None) or method=='complement':
+            return self._ccdf_1mcdf(x, **kwargs)
+        elif method in {'quadrature', None}:
+            return self._ccdf_integrate_pdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _ccdf_exp_logccdf(self, x, **kwargs):
+        return np.exp(self._logccdf_dispatch(x, **kwargs))
+
+    def _ccdf_1mcdf(self, x, **kwargs):
+        return 1 - self._cdf_dispatch(x, **kwargs)
 
     @_set_invalid_nan
     def ilogcdf(self, x):
         return self._ilogcdf(x, **self._all_shapes)
 
+    def _ilogcdf(self, x, **kwargs):
+        if self._overrides('_ilogccdf'):
+            return self._ilogcdf_ilogccdf1m(x, **kwargs)
+        else:
+            return self._ilogcdf_solve_logcdf(x, **kwargs)
+
+    def _ilogcdf_ilogccdf1m(self, x, **kwargs):
+        return self._ilogccdf(_log1mexp(x), **kwargs)
+
+    @_set_invalid_nan
+    def icdf(self, x):
+        return self._icdf(x, **self._all_shapes)
+
+    def _icdf(self, x, **kwargs):
+        if self.tol is _null and self._overrides('_iccdf'):
+            return self._icdf_iccdf1m(x, **kwargs)
+        else:
+            return self._icdf_solve_cdf(x, **kwargs)
+
+    def _icdf_iccdf1m(self, x, **kwargs):
+        return self._iccdf(1 - x, **kwargs)
+
     @_set_invalid_nan
     def ilogccdf(self, x):
         return self._ilogccdf(x, **self._all_shapes)
 
-    def logmoment(self, order, logcenter=None, standardized=False):
-        # input validation
-        logcenter = self.logmean if logcenter is None else logcenter
-        raw = self._logmoment(order, logcenter, **self._all_shapes)
-        res = raw - self.logvar*order/2 if standardized else raw
-        return res
+    def _ilogccdf(self, x, **kwargs):
+        if self._overrides('_ilogcdf'):
+            return self._ilogccdf_ilogcdf1m(x, **kwargs)
+        else:
+            return self._ilogccdf_solve_logccdf(x, **kwargs)
+
+    def _ilogccdf_ilogcdf1m(self, x, **kwargs):
+        return self._ilogcdf(_log1mexp(x), **kwargs)
+
+    @_set_invalid_nan
+    def iccdf(self, x):
+        return self._iccdf(x, **self._all_shapes)
+
+    def _iccdf(self, x, **kwargs):
+        if self.tol is _null and self._overrides('_icdf'):
+            return self._iccdf_icdf1m(x, **kwargs)
+        else:
+            return self._iccdf_solve_ccdf(x, **kwargs)
+
+    def _iccdf_icdf1m(self, x, **kwargs):
+        return self._icdf(1 - x, **kwargs)
+
+    def logentropy(self, method=None):
+        return self._logentropy_dispatch(method=method, **self._all_shapes)
+
+    def _logentropy_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logentropy'):
+            return self._logentropy(**kwargs)
+        elif (self.tol is _null and self._overrides('_entropy') and method is None) or method=='log/exp':
+            return self._logentropy_log_entropy(**kwargs)
+        elif method in {'quadrature', None}:
+            return self._logentropy_integrate_logpdf(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logentropy_log_entropy(self, **kwargs):
+        res = np.log(self._entropy_dispatch(**kwargs) + 0j)
+        return _log_real_standardize(res)
+
+    def entropy(self, method=None):
+        return self._entropy_dispatch(method=method, **self._all_shapes)
+
+    def _entropy_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_entropy'):
+            return self._entropy(**kwargs)
+        elif (self._overrides('_logentropy') and method is None) or method=='log/exp':
+            return self._entropy_exp_logentropy(**kwargs)
+        elif method in {'quadrature', None}:
+            return self._entropy_integrate_pdf(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _entropy_exp_logentropy(self, **kwargs):
+        return np.exp(self._logentropy_dispatch(**kwargs))
+
+    @cached_property
+    def median(self):
+        return self._median(**self._all_shapes)
+
+    def _median(self, **kwargs):
+        return self._icdf(0.5, **self._all_shapes)
 
     @cached_property
     def logmean(self):
         return np.real(self._logmoment(1, -np.inf, **self._all_shapes))
+
+    @cached_property
+    def mean(self):
+        return self._mean(**self._all_shapes)
+
+    def _mean(self, **kwargs):
+        return self._moment(1, 0, **kwargs)
 
     @cached_property
     def logvar(self):
@@ -338,8 +682,19 @@ class ContinuousDistribution:
         return np.real(self._logmoment(2, logmean, **kwargs))
 
     @cached_property
+    def var(self):
+        return self._var(mean=self.mean, **self._all_shapes)
+
+    def _var(self, mean, **kwargs):
+        return self._moment(2, mean, **kwargs)
+
+    @cached_property
     def logstd(self):
         return self.logvar/2
+
+    @cached_property
+    def std(self):
+        return self.var**0.5
 
     @cached_property
     def logskewness(self):
@@ -350,6 +705,13 @@ class ContinuousDistribution:
         return (np.real(self._logmoment(3, logmean, **kwargs)) - 1.5 * logvar)
 
     @cached_property
+    def skewness(self):
+        return self._skewness(mean=self.mean, var=self.var, **self._all_shapes)
+
+    def _skewness(self, mean, var, **kwargs):
+        return self._moment(3, mean, **kwargs) / var ** 1.5
+
+    @cached_property
     def logkurtosis(self):
         return self._logkurtosis(logmean=self.logmean, logvar=self.logvar,
                                  **self._all_shapes)
@@ -357,28 +719,13 @@ class ContinuousDistribution:
     def _logkurtosis(self, logmean, logvar, **kwargs):
         return (np.real(self._logmoment(4, logmean, **kwargs)) - 2 * logvar)
 
-    @_set_invalid_nan
-    def pdf(self, x, method=None):
-        return self._pdf_dispatch(x, method=method, **self._all_shapes)
+    @cached_property
+    def kurtosis(self):
+        # not Fisher kurtosis
+        return self._kurtosis(mean=self.mean, var=self.var, **self._all_shapes)
 
-    @_set_invalid_nan
-    def cdf(self, x, method=None):
-        return self._cdf_dispatch(x, method=method, **self._all_shapes)
-
-    @_set_invalid_nan
-    def ccdf(self, x, method=None):
-        return self._ccdf_dispatch(x, method=method, **self._all_shapes)
-
-    def entropy(self, method=None):
-        return self._entropy_dispatch(method=method, **self._all_shapes)
-
-    @_set_invalid_nan
-    def icdf(self, x):
-        return self._icdf(x, **self._all_shapes)
-
-    @_set_invalid_nan
-    def iccdf(self, x):
-        return self._iccdf(x, **self._all_shapes)
+    def _kurtosis(self, mean, var, **kwargs):
+        return self._moment(4, mean, **kwargs)/var**2
 
     def sample(self, shape=(), rng=None):
         shape = (shape,) if not np.iterable(shape) else tuple(shape)
@@ -390,12 +737,15 @@ class ContinuousDistribution:
         uniform = rng.uniform(size=full_shape)
         return self._icdf(uniform, **kwargs)
 
-    @cached_property
-    def median(self):
-        return self._median(**self._all_shapes)
+    def logmoment(self, order, logcenter=None, standardized=False):
+        # input validation
+        logcenter = self.logmean if logcenter is None else logcenter
+        raw = self._logmoment(order, logcenter, **self._all_shapes)
+        res = raw - self.logvar * order / 2 if standardized else raw
+        return res
 
-    def _median(self, **kwargs):
-        return self._icdf(0.5, **self._all_shapes)
+    def _logmoment(self, order, logcenter, **kwargs):
+        return self._logmoment_integrate_logpdf(order, logcenter, **kwargs)
 
     def moment(self, order, center=None, standardized=False):
         # Come back to this. Still needs a lot of work.
@@ -436,6 +786,9 @@ class ContinuousDistribution:
         moment[self._invalid] = np.nan
         return moment[()]
 
+    def _moment(self, order, center, **kwargs):
+        return self._moment_integrate_pdf(order, center, **kwargs)
+
     def _moment_transform_center(self, order, moment_as, a, b):
         # a and b should be broadcasted before getting here
         # this is wrong - it's not just moment_a of order `order`; all lower
@@ -446,183 +799,9 @@ class ContinuousDistribution:
         moment_b = np.sum(n_choose_i*moment_as*(a-b)**(n-i), axis=0)
         return moment_b
 
-    @cached_property
-    def mean(self):
-        return self._mean(**self._all_shapes)
-
-    def _mean(self, **kwargs):
-        return self._moment(1, 0, **kwargs)
-
-    @cached_property
-    def std(self):
-        return self.var**0.5
-
-    @cached_property
-    def var(self):
-        return self._var(mean=self.mean, **self._all_shapes)
-
-    def _var(self, mean, **kwargs):
-        return self._moment(2, mean, **kwargs)
-
-    @cached_property
-    def skewness(self):
-        return self._skewness(mean=self.mean, var=self.var, **self._all_shapes)
-
-    def _skewness(self, mean, var, **kwargs):
-        return self._moment(3, mean, **kwargs) / var ** 1.5
-
-    @cached_property
-    def kurtosis(self):
-        # not Fisher kurtosis
-        return self._kurtosis(mean=self.mean, var=self.var, **self._all_shapes)
-
-    def _kurtosis(self, mean, var, **kwargs):
-        return self._moment(4, mean, **kwargs)/var**2
-
-    def _logpdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logpdf'):
-            return self._logpdf(x, **kwargs)
-        elif (self.tol is _null and method is None) or method == 'log/exp':
-            return self._logpdf_log_pdf(x, **kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _pdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_pdf'):
-            return self._pdf(x, **kwargs)
-        if (self._overrides('_logpdf') and method is None) or method == 'log/exp':
-            return self._pdf_exp_logpdf(x, **kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logcdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logcdf'):
-            return self._logcdf(x, **kwargs)
-        elif (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
-            return self._logcdf_log_cdf(x, **kwargs)
-        elif (self._overrides('_logccdf') and method is None) or method=='complement':
-            return self._logcdf_log1mexpccdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return self._logcdf_integrate_logpdf(x, **kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _cdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_cdf'):
-            return self._cdf(x, **kwargs)
-        elif (self._overrides('_logcdf') and method is None) or method=='log/exp':
-            return self._cdf_exp_logcdf(x, **kwargs)
-        elif (self._tol is _null and self._overrides('_ccdf') and method is None) or method=='complement':
-            return self._cdf_1mccdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return self._cdf_integrate_pdf(x, **kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logccdf'):
-            return self._logccdf(x, **kwargs)
-        if (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
-            return self._logccdf_log_ccdf(x, **kwargs)
-        elif (self._overrides('_logcdf') and method is None) or method=='complement':
-            return self._logccdf_log1mexpcdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return self._logccdf_integrate_logpdf(x, **kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _ccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_ccdf'):
-            return self._ccdf(x, **kwargs)
-        elif (self._overrides('_logccdf') and method is None) or method=='log/exp':
-            return self._ccdf_exp_logccdf(x, **kwargs)
-        elif (self._tol is _null and self._overrides('_cdf') and method is None) or method=='complement':
-            return self._ccdf_1mcdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return self._ccdf_integrate_pdf(x, **kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logentropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logentropy'):
-            return self._logentropy(**kwargs)
-        elif (self.tol is _null and self._overrides('_entropy') and method is None) or method=='log/exp':
-            return self._logentropy_log_entropy(**kwargs)
-        elif method in {'quadrature', None}:
-            return self._logentropy_integrate_logpdf(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logmoment(self, order, logcenter, **kwargs):
-        return self._logmoment_integrate_logpdf(order, logcenter, **kwargs)
-
-    def _entropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_entropy'):
-            return self._entropy(**kwargs)
-        elif (self._overrides('_logentropy') and method is None) or method=='log/exp':
-            return self._entropy_exp_logentropy(**kwargs)
-        elif method in {'quadrature', None}:
-            return self._entropy_integrate_pdf(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _icdf(self, x, **kwargs):
-        if self.tol is _null and self._overrides('_iccdf'):
-            return self._icdf_iccdf1m(x, **kwargs)
-        else:
-            return self._icdf_solve_cdf(x, **kwargs)
-
-    def _iccdf(self, x, **kwargs):
-        if self.tol is _null and self._overrides('_icdf'):
-            return self._iccdf_icdf1m(x, **kwargs)
-        else:
-            return self._iccdf_solve_ccdf(x, **kwargs)
-
-    def _ilogcdf(self, x, **kwargs):
-        if self._overrides('_ilogccdf'):
-            return self._ilogcdf_ilogccdf1m(x, **kwargs)
-        else:
-            return self._ilogcdf_solve_logcdf(x, **kwargs)
-
-    def _ilogccdf(self, x, **kwargs):
-        if self._overrides('_ilogcdf'):
-            return self._ilogccdf_ilogcdf1m(x, **kwargs)
-        else:
-            return self._ilogccdf_solve_logccdf(x, **kwargs)
-
-    def _moment(self, order, center, **kwargs):
-        return self._moment_integrate_pdf(order, center, **kwargs)
-
-    # Distribution functions via exp of log distribution functions
-    def _entropy_exp_logentropy(self, **kwargs):
-        return np.exp(self._logentropy_dispatch(**kwargs))
-
-    def _pdf_exp_logpdf(self, x, **kwargs):
-        return np.exp(self._logpdf_dispatch(x, **kwargs))
-
-    def _cdf_exp_logcdf(self, x, **kwargs):
-        return np.exp(self._logcdf_dispatch(x, **kwargs))
-
-    def _ccdf_exp_logccdf(self, x, **kwargs):
-        return np.exp(self._logccdf_dispatch(x, **kwargs))
-
-    # Log distribution functions as log of distribution functions
-
-    def _logentropy_log_entropy(self, **kwargs):
-        res = np.log(self._entropy_dispatch(**kwargs) + 0j)
-        return _log_real_standardize(res)
-
-    def _logpdf_log_pdf(self, x, **kwargs):
-        return np.log(self._pdf_dispatch(x, **kwargs))
-
-    def _logcdf_log_cdf(self, x, **kwargs):
-        return np.log(self._cdf_dispatch(x, **kwargs))
-
-    def _logccdf_log_ccdf(self, x, **kwargs):
-        return np.log(self._ccdf_dispatch(x, **kwargs))
-
     # Distribution functions via numerical integration
-
+    # before moving these with the functions they support, let's extract out
+    # a helpfer function to reduce duplication
     def _logcdf_integrate_logpdf(self, x, **kwargs):
         a, b = self._support(**kwargs)
         f, args = kwargs2args(self._logpdf_dispatch, kwargs=kwargs)
@@ -683,257 +862,26 @@ class ContinuousDistribution:
         res = _tanhsinh(f, a, b, args=args)
         return res.integral
 
-    # Distribution functions as complement of other distribution functions
-
-    def _cdf_1mccdf(self, x, **kwargs):
-        return 1 - self._ccdf_dispatch(x, **kwargs)
-
-    def _ccdf_1mcdf(self, x, **kwargs):
-        return 1 - self._cdf_dispatch(x, **kwargs)
-
-    def _logcdf_log1mexpccdf(self, x, **kwargs):
-        return _log1mexp(self._logccdf_dispatch(x, **kwargs))
-
-    def _logccdf_log1mexpcdf(self, x, **kwargs):
-        return _log1mexp(self._logcdf_dispatch(x, **kwargs))
-
-    def _icdf_iccdf1m(self, x, **kwargs):
-        return self._iccdf(1-x, **kwargs)
-
-    def _iccdf_icdf1m(self, x, **kwargs):
-        return self._icdf(1-x, **kwargs)
-
-    def _ilogcdf_ilogccdf1m(self, x, **kwargs):
-        return self._ilogccdf(_log1mexp(x), **kwargs)
-
-    def _ilogccdf_ilogcdf1m(self, x, **kwargs):
-        return self._ilogcdf(_log1mexp(x), **kwargs)
-
     # Inverse distribution functions via rootfinding
     def _icdf_solve_cdf(self, x, **kwargs):
-        a, b = self.support
-        res = _solve_bounded(self._cdf_dispatch, x, min=a, max=b, kwargs=kwargs)
+        res = _solve_bounded(self._cdf_dispatch, x, self.support, kwargs=kwargs)
         return res.x
 
     def _iccdf_solve_ccdf(self, x, **kwargs):
         a, b = self.support
-        res = _solve_bounded(self._ccdf_dispatch, x, min=a, max=b, kwargs=kwargs)
+        res = _solve_bounded(self._ccdf_dispatch, x, self.support, kwargs=kwargs)
         return res.x
 
     def _ilogcdf_solve_logcdf(self, x, **kwargs):
         a, b = self.support
-        res = _solve_bounded(self._logcdf_dispatch, x, min=a, max=b, kwargs=kwargs)
+        res = _solve_bounded(self._logcdf_dispatch, x, self.support, kwargs=kwargs)
         return res.x
 
     def _ilogccdf_solve_logccdf(self, x, **kwargs):
         a, b = self.support
-        res = _solve_bounded(self._logccdf_dispatch, x, min=a, max=b, kwargs=kwargs)
+        res = _solve_bounded(self._logccdf_dispatch, x, self.support, kwargs=kwargs)
         return res.x
 
-    @classmethod
-    def _draw(cls, sizes=None, rng=None, i_parameterization=0):
-        if len(cls._parameterizations) == 0:
-            return cls()
-
-        parameterization = cls._parameterizations[i_parameterization]
-        shapes = parameterization.draw(sizes, rng)
-        return cls(**shapes)
-
-
-class _Domain:
-    symbols = {np.inf: "∞", -np.inf: "-∞", np.pi: "π", -np.pi: "-π"}
-
-    def contains(self, x):
-        raise NotImplementedError()
-
-    def __str__(self):
-        raise NotImplementedError()
-
-
-class _SimpleDomain(_Domain):
-
-    def define_parameters(self, *parameters):
-        new_symbols = {param.name: param.symbol for param in parameters}
-        self.symbols.update(new_symbols)
-
-    def contains(self, item, shapes={}):
-        a, b = self.endpoints
-        left_inclusive, right_inclusive = self.inclusive
-
-        a = shapes.get(a, a)
-        b = shapes.get(b, b)
-
-        in_left = item >= a if left_inclusive else item > a
-        in_right = item <= b if right_inclusive else item < b
-        return in_left & in_right
-
-
-class _RealDomain(_SimpleDomain):
-
-    def __init__(self, endpoints=(-oo, oo), inclusive=(False, False)):
-        a, b = endpoints
-        self.endpoints = np.asarray(a)[()], np.asarray(b)[()]
-        self.inclusive = inclusive
-
-    def __str__(self):
-        a, b = self.endpoints
-        left_inclusive, right_inclusive = self.inclusive
-
-        left = "[" if left_inclusive else "("
-        a = self.symbols.get(a, f"{a}")
-        right = "]" if right_inclusive else ")"
-        b = self.symbols.get(b, f"{b}")
-
-        return f"{left}{a}, {b}{right}"
-
-
-class _IntegerDomain(_SimpleDomain):
-    pass
-
-
-class _Parameter:
-    def __init__(self, name, *, symbol, domain, typical):
-        self.name = name
-        self.symbol = symbol or name
-        self.domain = domain
-        self.typical = typical
-
-    def __str__(self):
-        return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
-
-    def draw(self, size=None, rng=None, shapes={}):
-        rng = rng or np.random.default_rng()
-        a, b = self.typical
-        a = shapes.get(a, a)
-        b = shapes.get(b, b)
-        return rng.uniform(a, b, size=np.broadcast_shapes(size, np.shape(a)))
-
-
-class _RealParameter(_Parameter):
-    def __init__(self, name, *, typical=None, symbol=None, domain=_RealDomain()):
-        typical = typical or domain.endpoints
-        symbol = symbol or name
-        super().__init__(name, symbol=symbol, domain=domain, typical=typical)
-
-    def check_dtype(self, arr):
-        arr = np.asarray(arr)
-        dtype = arr.dtype
-        valid_dtype = np.ones_like(arr, dtype=bool)
-        if np.issubdtype(dtype, np.floating):
-            pass
-        elif np.issubdtype(dtype, np.integer):
-            dtype = np.float64
-            arr = np.asarray(arr, dtype=dtype)
-        elif np.issubdtype(dtype, np.complexfloating):
-            real_arr = np.real(arr)
-            valid_dtype = (real_arr == arr)
-            arr = real_arr
-        else:
-            message = f"Parameter {self.name} must be of real dtype."
-            raise ValueError(message)
-        return arr, valid_dtype
-
-class _IntegerParameter(_Parameter):
-    def __init__(self, name, *, typical=None, symbol=None, domain=_IntegerDomain()):
-        typical = typical or domain
-        symbol = symbol or name
-        super().__init__(name, symbol=symbol, domain=domain, typical=typical)
-
-    def check_dtype(self, arr):
-        arr = np.asarray(arr)
-        dtype = arr.dtype
-        valid_dtype = np.ones_like(arr, dtype=bool)
-        if np.issubdtype(dtype, np.integer):
-            pass
-        elif np.issubdtype(dtype, np.inexact):
-            integral_arr = np.round(arr)
-            valid_dtype = (integral_arr == arr)
-            arr = integral_arr
-        else:
-            message = f"Parameter {self.name} must be of integer dtype."
-            raise ValueError(message)
-        return arr, valid_dtype
-
-
-class _Parameterization:
-    def __init__(self, *parameters):
-        self.parameters = {param.name: param for param in parameters}
-
-    def validate(self, shapes):
-        return shapes == set(self.parameters.keys())
-
-    def validate_shapes(self, shapes):
-        all_valid = True
-        for name, arr in shapes.items():
-            parameter = self.parameters[name]
-            arr, valid = parameter.check_dtype(arr)
-            valid = valid & parameter.domain.contains(arr, shapes)
-            all_valid = all_valid & valid
-            shapes[name] = arr
-
-        return all_valid
-
-    def __str__(self):
-        messages = [str(param) for name, param in self.parameters.items()]
-        return " ".join(messages)
-
-    def draw(self, sizes=None, rng=None):
-        shapes = {}
-        sizes = sizes if np.iterable(sizes) else [sizes]*len(self.parameters)
-        for size, param in zip(sizes, self.parameters.values()):
-            shapes[param.name] = param.draw(size, rng)
-        return shapes
-
-
-class LogUniform(ContinuousDistribution):
-
-    _a_domain = _RealDomain(endpoints=(0, oo))
-    _b_domain = _RealDomain(endpoints=('a', oo))
-    _log_a_domain = _RealDomain(endpoints=(-oo, oo))
-    _log_b_domain = _RealDomain(endpoints=('log_a', oo))
-    _x_support = _RealDomain(endpoints=('a', 'b'), inclusive=(True, True))
-
-    _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 1))
-    _b_param = _RealParameter('b', domain=_b_domain, typical=(1, 1e3))
-    _log_a_param = _RealParameter('log_a', symbol=r'\log(a)',
-                                  domain=_log_a_domain, typical=(-3, 0))
-    _log_b_param = _RealParameter('log_b', symbol=r'\log(b)',
-                                  domain=_log_b_domain, typical=(0, 3))
-    _x_param = _RealParameter('x', domain=_x_support, typical=('a', 'b'))
-
-    _b_domain.define_parameters(_a_param)
-    _log_b_domain.define_parameters(_log_a_param)
-    _x_support.define_parameters(_a_param, _b_param)
-
-    _parameterizations = [_Parameterization(_log_a_param, _log_b_param),
-                          _Parameterization(_a_param, _b_param)]
-    _variable = _x_param
-
-    def __init__(self, *, a=_null, b=_null, log_a=_null, log_b=_null, **kwargs):
-        super().__init__(a=a, b=b, log_a=log_a, log_b=log_b, **kwargs)
-
-    @cached_property
-    def a(self):
-        return (self._shapes['a'] if 'a' in self._shapes
-                else np.exp(self._shapes['log_a']))
-
-    @cached_property
-    def b(self):
-        return (self._shapes['b'] if 'b' in self._shapes
-                else np.exp(self._shapes['log_b']))
-
-    @cached_property
-    def log_a(self):
-        return (self._shapes['log_a'] if 'log_a' in self._shapes
-                else np.log(self._shapes['a']))
-
-    @cached_property
-    def log_b(self):
-        return (self._shapes['log_b'] if 'log_b' in self._shapes
-                else np.log(self._shapes['b']))
-
-    def _logpdf(self, x, *, log_a, log_b, **kwargs):
-        return -np.log(x) - np.log(log_b - log_a)
     #
     # def _pdf(self, x, *, log_a, log_b, **kwargs):
     #     return ((log_b - log_a)*x)**-1
@@ -941,64 +889,3 @@ class LogUniform(ContinuousDistribution):
     # def _cdf(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
 
-
-class Normal(ContinuousDistribution):
-
-    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
-    _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
-    _parameterizations = []
-    _variable = _x_param
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def _logpdf(self, x, **kwargs):
-        return -(np.log(2*np.pi)/2 + x**2/2)
-
-    def _pdf(self, x, **kwargs):
-        return 1/np.sqrt(2*np.pi) * np.exp(-x**2/2)
-
-    def _logcdf(self, x, **kwargs):
-        return special.log_ndtr(x)
-
-    def _cdf(self, x, **kwargs):
-        return special.ndtr(x)
-
-    def _logccdf(self, x, **kwargs):
-        return special.log_ndtr(-x)
-
-    def _ccdf(self, x, **kwargs):
-        return special.ndtr(-x)
-
-    def _icdf(self, x, **kwargs):
-        return special.ndtri(x)
-
-    def _ilogcdf(self, x, **kwargs):
-        return special.ndtri_exp(x)
-
-    def _iccdf(self, x, **kwargs):
-        return -special.ndtri(x)
-
-    def _ilogccdf(self, x, **kwargs):
-        return -special.ndtri_exp(x)
-
-    def _entropy(self, **kwargs):
-        return (1 + np.log(2*np.pi))/2
-
-    def _logentropy(self, **kwargs):
-        return np.log1p(np.log(2*np.pi)) - np.log(2)
-
-    def _median(self, **kwargs):
-        return 0
-
-    def _mean(self, **kwargs):
-        return 0
-
-    def _var(self, **kwargs):
-        return 1
-
-    def _skewness(self, **kwargs):
-        return 0
-
-    def _kurtosis(self, **kwargs):
-        return 3

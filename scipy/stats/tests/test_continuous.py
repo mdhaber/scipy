@@ -9,8 +9,8 @@ import hypothesis.extra.numpy as npst
 from numpy import ComplexWarning
 
 from scipy.stats._distribution_infrastructure import (
-    _Domain, _RealDomain, _RealParameter, LogUniform, Normal)
-
+    _Domain, _RealDomain, _RealParameter)
+from scipy.stats._new_distributions import LogUniform, Normal
 
 class Test_RealDomain:
     rng = np.random.default_rng(349849812549824)
@@ -93,6 +93,9 @@ class TestDistributions:
     @pytest.mark.parametrize('family', (Normal, LogUniform))
     @given(data=strategies.data())
     def test_distribution(self, family, data):
+        # strengthen this test by letting min_side=0 for both broadcasted shapes
+        # check for scalar output if all inputs are scalar
+        # inject bad parameters and x-values, check NaN pattern
         rng = np.random.default_rng(4826584632856)
 
         n_parameterizations = len(family._parameterizations)
