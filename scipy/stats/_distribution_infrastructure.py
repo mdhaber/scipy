@@ -12,16 +12,15 @@ oo = np.inf
 #  document method call graph
 #  tests
 #  add methods
-#  be more careful about passing **kwargs vs **self._all_shapes. For private
-#   functions, it should always be the latter.
-#  figure out caching - methods that don't accept shape parameters can be
-#   cached, but then we couldn't change tolerance
+#  use caching other than cached_properties - maybe lru_check if it doesn't
+#   the overhead is not bad
 #  pass shape parameters to methods that don't accept additional args?
 #  pass atol, rtol to methods
 #  profile/optimize
 #  add array API support
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
 #  add lower limit to cdf
+#  ensure that user override return correct shape and dtype
 
 # Originally, I planned to filter out invalid shape parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -415,6 +414,72 @@ class ContinuousDistribution:
         b = kwargs.get(b, b)[()]
         return a, b
 
+    def logentropy(self, method=None):
+        return self._logentropy_dispatch(method=method, **self._all_shapes)
+
+    def _logentropy_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logentropy'):
+            return self._logentropy(**kwargs)
+        elif (self.tol is _null and self._overrides('_entropy') and method is None) or method=='log/exp':
+            return self._logentropy_log_entropy(**kwargs)
+        elif method in {'quadrature', None}:
+            return self._logentropy_integrate_logpdf(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logentropy_log_entropy(self, **kwargs):
+        res = np.log(self._entropy_dispatch(**kwargs) + 0j)
+        return _log_real_standardize(res)
+
+    def entropy(self, method=None):
+        return self._entropy_dispatch(method=method, **self._all_shapes)
+
+    def _entropy_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_entropy'):
+            return self._entropy(**kwargs)
+        elif (self._overrides('_logentropy') and method is None) or method=='log/exp':
+            return self._entropy_exp_logentropy(**kwargs)
+        elif method in {'quadrature', None}:
+            return self._entropy_integrate_pdf(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _entropy_exp_logentropy(self, **kwargs):
+        return np.exp(self._logentropy_dispatch(**kwargs))
+
+    def median(self, method=None):
+        return self._median_dispatch(method=method, **self._all_shapes)
+
+    def _median_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_median'):
+            return np.asarray(self._median(**kwargs))[()]
+        elif method in {None, 'icdf'}:
+            return self._median_icdf(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _median_icdf(self, **kwargs):
+        return self._icdf_dispatch(0.5, **kwargs)
+
+    def logmean(self, method=None):
+        return self._logmean_dispatch(method=method, **self._all_shapes)
+
+    def _logmean_dispatch(self, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_logmean'):
+            return np.asarray(self._logmean(**kwargs))[()]
+        elif (self.tol is _null and self._overrides('_mean') and method is None) or method=='log/exp':
+            return self._logmean_log_mean(**kwargs)
+        elif method in {None, 'logmoment'}:
+            return self._logmean_logmoment(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _logmean_log_mean(self, **kwargs):
+        return np.log(self._mean(**kwargs))
+
+    def _logmean_logmoment(self, **kwargs):
+        return self._logmoment(1, -np.inf, **kwargs)
+
     @_set_invalid_nan
     def logpdf(self, x, method=None):
         return self._logpdf_dispatch(x, method=method, **self._all_shapes)
@@ -569,102 +634,70 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _ilogcdf_ilogccdf1m(self, x, **kwargs):
-        return self._ilogccdf(_log1mexp(x), **kwargs)
+        return self._ilogccdf_dispatch(_log1mexp(x), **kwargs)
 
     def _ilogcdf_solve_logcdf(self, x, **kwargs):
         return self._solve_bounded(self._logcdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def icdf(self, x):
-        return self._icdf(x, **self._all_shapes)
+    def icdf(self, x, method=None):
+        return self._icdf_dispatch(x, method=method, **self._all_shapes)
 
-    def _icdf(self, x, **kwargs):
-        if self.tol is _null and self._overrides('_iccdf'):
+    def _icdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_icdf'):
+            return self._icdf(x, **kwargs)
+        elif (self.tol is _null and self._overrides('_iccdf') and method is None) or method=='complementarity':
             return self._icdf_iccdf1m(x, **kwargs)
-        else:
+        elif method in {None, 'inversion'}:
             return self._icdf_solve_cdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
 
     def _icdf_iccdf1m(self, x, **kwargs):
-        return self._iccdf(1 - x, **kwargs)
+        return self._iccdf_dispatch(1 - x, **kwargs)
 
     def _icdf_solve_cdf(self, x, **kwargs):
         return self._solve_bounded(self._cdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def ilogccdf(self, x):
-        return self._ilogccdf(x, **self._all_shapes)
+    def ilogccdf(self, x, method=None):
+        return self._ilogccdf_dispatch(x, method=method, **self._all_shapes)
 
-    def _ilogccdf(self, x, **kwargs):
-        if self._overrides('_ilogcdf'):
+    def _ilogccdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_ilogccdf'):
+            return self._ilogccdf(x, **kwargs)
+        elif (self._overrides('_ilogcdf') and method is None) or method=='complementarity':
             return self._ilogccdf_ilogcdf1m(x, **kwargs)
-        else:
+        elif method in {None, 'inversion'}:
             return self._ilogccdf_solve_logccdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
 
     def _ilogccdf_ilogcdf1m(self, x, **kwargs):
-        return self._ilogcdf(_log1mexp(x), **kwargs)
+        return self._ilogcdf_dispatch(_log1mexp(x), **kwargs)
 
     def _ilogccdf_solve_logccdf(self, x, **kwargs):
         return self._solve_bounded(self._logccdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def iccdf(self, x):
-        return self._iccdf(x, **self._all_shapes)
+    def iccdf(self, x, method=None):
+        return self._iccdf_dispatch(x, method=method, **self._all_shapes)
 
-    def _iccdf(self, x, **kwargs):
-        if self.tol is _null and self._overrides('_icdf'):
+    def _iccdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_iccdf'):
+            return self._iccdf(x, **kwargs)
+        elif (self.tol is _null and self._overrides('_icdf') and method is None) or method=='complementarity':
             return self._iccdf_icdf1m(x, **kwargs)
-        else:
+        elif method in {None, 'inversion'}:
             return self._iccdf_solve_ccdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
 
     def _iccdf_icdf1m(self, x, **kwargs):
-        return self._icdf(1 - x, **kwargs)
+        return self._icdf_dispatch(1 - x, **kwargs)
 
     def _iccdf_solve_ccdf(self, x, **kwargs):
         return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
-
-    def logentropy(self, method=None):
-        return self._logentropy_dispatch(method=method, **self._all_shapes)
-
-    def _logentropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logentropy'):
-            return self._logentropy(**kwargs)
-        elif (self.tol is _null and self._overrides('_entropy') and method is None) or method=='log/exp':
-            return self._logentropy_log_entropy(**kwargs)
-        elif method in {'quadrature', None}:
-            return self._logentropy_integrate_logpdf(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logentropy_log_entropy(self, **kwargs):
-        res = np.log(self._entropy_dispatch(**kwargs) + 0j)
-        return _log_real_standardize(res)
-
-    def entropy(self, method=None):
-        return self._entropy_dispatch(method=method, **self._all_shapes)
-
-    def _entropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_entropy'):
-            return self._entropy(**kwargs)
-        elif (self._overrides('_logentropy') and method is None) or method=='log/exp':
-            return self._entropy_exp_logentropy(**kwargs)
-        elif method in {'quadrature', None}:
-            return self._entropy_integrate_pdf(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _entropy_exp_logentropy(self, **kwargs):
-        return np.exp(self._logentropy_dispatch(**kwargs))
-
-    @cached_property
-    def median(self):
-        return self._median(**self._all_shapes)
-
-    def _median(self, **kwargs):
-        return self._icdf(0.5, **self._all_shapes)
-
-    @cached_property
-    def logmean(self):
-        return np.real(self._logmoment(1, -np.inf, **self._all_shapes))
 
     @cached_property
     def mean(self):
@@ -734,7 +767,7 @@ class ContinuousDistribution:
     def _sample(self, shape, rng, **kwargs):
         full_shape = shape + self._invalid.shape
         uniform = rng.uniform(size=full_shape)
-        return self._icdf(uniform, **kwargs)
+        return self._icdf_dispatch(uniform, **kwargs)
 
     def logmoment(self, order, logcenter=None, standardized=False):
         # input validation

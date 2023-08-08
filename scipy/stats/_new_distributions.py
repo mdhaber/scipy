@@ -55,6 +55,9 @@ class Normal(ContinuousDistribution):
     def _median(self, **kwargs):
         return 0
 
+    def _logmean(self, **kwargs):
+        return -np.inf
+
     def _mean(self, **kwargs):
         return 0
 

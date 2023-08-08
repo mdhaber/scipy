@@ -90,7 +90,7 @@ class Test_RealDomain:
 
 class TestDistributions:
     @pytest.mark.filterwarnings('ignore')
-    @pytest.mark.parametrize('family', (LogUniform, Normal))
+    @pytest.mark.parametrize('family', (Normal, LogUniform))
     @given(data=strategies.data())
     def test_distribution(self, family, data):
         # strengthen this test by letting min_side=0 for both broadcasted shapes
@@ -122,6 +122,12 @@ class TestDistributions:
         check_dist_func(dist, 'entropy', None, result_shape, methods)
         check_dist_func(dist, 'logentropy', None, result_shape, methods)
 
+        methods = {'icdf'}
+        check_dist_func(dist, 'median', None, result_shape, methods)
+
+        methods = {'log/exp', 'logmoment'}
+        check_dist_func(dist, 'logmean', None, result_shape, methods)
+
         methods = {'log/exp'}
         check_dist_func(dist, 'pdf', x, x_result_shape, methods)
         check_dist_func(dist, 'logpdf', x, x_result_shape, methods)
@@ -134,23 +140,38 @@ class TestDistributions:
 
         methods = {'complementarity', 'inversion'}
         check_dist_func(dist, 'ilogcdf', logp, x_result_shape, methods)
+        check_dist_func(dist, 'icdf', p, x_result_shape, methods)
+        check_dist_func(dist, 'ilogccdf', logp, x_result_shape, methods)
+        check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
 
 
 def check_dist_func(dist, fname, arg, result_shape, methods):
     # Compare all the method arguments of a distribution function against one
     # another. For
     args = tuple() if arg is None else (arg,)
+    ref = getattr(dist, fname)(*args)
+
     methods = methods.copy()
+
+    tol_override = {}
+
     if dist._overrides(f'_{fname}'):
         methods.add('direct')
-    ref = getattr(dist, fname)(*args)
-    assert np.isfinite(ref).all()
+
+        # Mean can be 0, which makes logmean -oo.
+        if fname in {'logmean'}:
+            tol_override = {'atol': 1e-16}
+        else:
+            assert np.isfinite(ref).all()
+
     np.testing.assert_equal(ref.shape, result_shape)
+
     for method in methods:
         res = getattr(dist, fname)(*args, method=method)
         if 'log' in fname:
-            np.testing.assert_allclose(np.exp(res), np.exp(ref))
+            np.testing.assert_allclose(np.exp(res), np.exp(ref),
+                                       **tol_override)
         else:
             np.testing.assert_allclose(res, ref)
-        assert np.isfinite(res).all()
+
         np.testing.assert_equal(res.shape, result_shape)
