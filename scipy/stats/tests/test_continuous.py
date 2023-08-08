@@ -90,7 +90,7 @@ class Test_RealDomain:
 
 class TestDistributions:
     @pytest.mark.filterwarnings('ignore')
-    @pytest.mark.parametrize('family', (Normal, LogUniform))
+    @pytest.mark.parametrize('family', (LogUniform, Normal))
     @given(data=strategies.data())
     def test_distribution(self, family, data):
         # strengthen this test by letting min_side=0 for both broadcasted shapes
@@ -206,6 +206,21 @@ class TestDistributions:
         np.testing.assert_equal(ref.shape, result_shape)
         for method in methods:
             res = dist.ccdf(x, method=method)
+            np.testing.assert_allclose(res, ref)
+            assert np.isfinite(res).all()
+            assert np.isfinite(ref).all()
+            np.testing.assert_equal(res.shape, result_shape)
+
+        p = rng.uniform(size=shape)
+        logp = np.log(p)
+
+        methods = {'complement', 'inversion'}
+        if dist._overrides('_ilogcdf'):
+            methods.add('direct')
+        ref = dist.ilogcdf(logp)
+        np.testing.assert_equal(ref.shape, result_shape)
+        for method in methods:
+            res = dist.ilogcdf(logp, method=method)
             np.testing.assert_allclose(res, ref)
             assert np.isfinite(res).all()
             assert np.isfinite(ref).all()

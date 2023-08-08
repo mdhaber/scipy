@@ -555,17 +555,24 @@ class ContinuousDistribution:
                                 kwargs=kwargs)
 
     @_set_invalid_nan
-    def ilogcdf(self, x):
-        return self._ilogcdf(x, **self._all_shapes)
+    def ilogcdf(self, x, method=None):
+        return self._ilogcdf_dispatch(x, method=method, **self._all_shapes)
 
-    def _ilogcdf(self, x, **kwargs):
-        if self._overrides('_ilogccdf'):
+    def _ilogcdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'direct'} and self._overrides('_ilogcdf'):
+            return self._ilogcdf(x, **kwargs)
+        elif (self._overrides('_ilogccdf') and method is None) or method=='complement':
             return self._ilogcdf_ilogccdf1m(x, **kwargs)
-        else:
+        elif method in {None, 'inversion'}:
             return self._ilogcdf_solve_logcdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
 
     def _ilogcdf_ilogccdf1m(self, x, **kwargs):
         return self._ilogccdf(_log1mexp(x), **kwargs)
+
+    def _ilogcdf_solve_logcdf(self, x, **kwargs):
+        return self._solve_bounded(self._logcdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
     def icdf(self, x):
@@ -580,6 +587,9 @@ class ContinuousDistribution:
     def _icdf_iccdf1m(self, x, **kwargs):
         return self._iccdf(1 - x, **kwargs)
 
+    def _icdf_solve_cdf(self, x, **kwargs):
+        return self._solve_bounded(self._cdf_dispatch, x, kwargs=kwargs)
+
     @_set_invalid_nan
     def ilogccdf(self, x):
         return self._ilogccdf(x, **self._all_shapes)
@@ -593,6 +603,9 @@ class ContinuousDistribution:
     def _ilogccdf_ilogcdf1m(self, x, **kwargs):
         return self._ilogcdf(_log1mexp(x), **kwargs)
 
+    def _ilogccdf_solve_logccdf(self, x, **kwargs):
+        return self._solve_bounded(self._logccdf_dispatch, x, kwargs=kwargs)
+
     @_set_invalid_nan
     def iccdf(self, x):
         return self._iccdf(x, **self._all_shapes)
@@ -605,6 +618,9 @@ class ContinuousDistribution:
 
     def _iccdf_icdf1m(self, x, **kwargs):
         return self._icdf(1 - x, **kwargs)
+
+    def _iccdf_solve_ccdf(self, x, **kwargs):
+        return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
     def logentropy(self, method=None):
         return self._logentropy_dispatch(method=method, **self._all_shapes)
@@ -872,15 +888,3 @@ class ContinuousDistribution:
 
         res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
         return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
-
-    def _icdf_solve_cdf(self, x, **kwargs):
-        return self._solve_bounded(self._cdf_dispatch, x, kwargs=kwargs)
-
-    def _iccdf_solve_ccdf(self, x, **kwargs):
-        return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
-
-    def _ilogcdf_solve_logcdf(self, x, **kwargs):
-        return self._solve_bounded(self._logcdf_dispatch, x, kwargs=kwargs)
-
-    def _ilogccdf_solve_logccdf(self, x, **kwargs):
-        return self._solve_bounded(self._logccdf_dispatch, x, kwargs=kwargs)
