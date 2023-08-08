@@ -282,44 +282,6 @@ def kwargs2args(f, args=[], kwargs={}):
     return wrapped, args
 
 
-def _solve_bounded(f, p, bounds, *, kwargs):
-    # should modify _bracket_root and _chandrupatla so we don't need all this
-    a, b = bounds
-    p, min, max = np.broadcast_arrays(p, min, max)
-    def f2(x, p, **kwargs):
-        return f(x, **kwargs) - p
-    f3, args = kwargs2args(f2, args=[p], kwargs=kwargs)
-    # If we know the median or mean, should use it
-
-    # Any operations between 0d array and a scalar produces a scalar, so...
-    shape = min.shape
-    min, max = np.atleast_1d(min, max)
-
-    a = -np.ones_like(min)
-    b = np.ones_like(max)
-    d = max - min
-
-    i = np.isfinite(min) & np.isfinite(max)
-    a[i] = min[i] + 0.25 * d[i]
-    b[i] = max[i] - 0.25 * d[i]
-
-    i = np.isfinite(min) & ~np.isfinite(max)
-    a[i] = min[i] + 1
-    b[i] = min[i] + 2
-
-    i = np.isfinite(max) & ~np.isfinite(min)
-    a[i] = max[i] - 2
-    b[i] = max[i] - 1
-
-    min = min.reshape(shape)
-    max = max.reshape(shape)
-    a = a.reshape(shape)
-    b = b.reshape(shape)
-
-    res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
-    return _chandrupatla(f3, a=res.xl, b=res.xr, args=args)
-
-
 def _log1mexp(x):
     def f1(x):
         return np.log1p(-np.exp(x))
@@ -505,6 +467,12 @@ class ContinuousDistribution:
     def _logcdf_log1mexpccdf(self, x, **kwargs):
         return _log1mexp(self._logccdf_dispatch(x, **kwargs))
 
+
+    def _logcdf_integrate_logpdf(self, x, **kwargs):
+        a, _ = self._support(**kwargs)
+        return self._quadrature(self._logpdf_dispatch, limits=(a, x),
+                                kwargs=kwargs, log=True)
+
     @_set_invalid_nan
     def cdf(self, x, method=None):
         return self._cdf_dispatch(x, method=method, **self._all_shapes)
@@ -526,6 +494,11 @@ class ContinuousDistribution:
 
     def _cdf_1mccdf(self, x, **kwargs):
         return 1 - self._ccdf_dispatch(x, **kwargs)
+
+    def _cdf_integrate_pdf(self, x, **kwargs):
+        a, _ = self._support(**kwargs)
+        return self._quadrature(self._pdf_dispatch, limits=(a, x),
+                                kwargs=kwargs)
 
     @_set_invalid_nan
     def logccdf(self, x, method=None):
@@ -549,6 +522,11 @@ class ContinuousDistribution:
     def _logccdf_log1mexpcdf(self, x, **kwargs):
         return _log1mexp(self._logcdf_dispatch(x, **kwargs))
 
+    def _logccdf_integrate_logpdf(self, x, **kwargs):
+        _, b = self._support(**kwargs)
+        return self._quadrature(self._logpdf_dispatch, limits=(x, b),
+                                kwargs=kwargs, log=True)
+
     @_set_invalid_nan
     def ccdf(self, x, method=None):
         return self._ccdf_dispatch(x, method=method, **self._all_shapes)
@@ -570,6 +548,11 @@ class ContinuousDistribution:
 
     def _ccdf_1mcdf(self, x, **kwargs):
         return 1 - self._cdf_dispatch(x, **kwargs)
+
+    def _ccdf_integrate_pdf(self, x, **kwargs):
+        _, b = self._support(**kwargs)
+        return self._quadrature(self._pdf_dispatch, limits=(x, b),
+                                kwargs=kwargs)
 
     @_set_invalid_nan
     def ilogcdf(self, x):
@@ -802,28 +785,13 @@ class ContinuousDistribution:
     # Distribution functions via numerical integration
     # before moving these with the functions they support, let's extract out
     # a helpfer function to reduce duplication
-    def _logcdf_integrate_logpdf(self, x, **kwargs):
-        a, b = self._support(**kwargs)
-        f, args = kwargs2args(self._logpdf_dispatch, kwargs=kwargs)
-        res = _tanhsinh(f, a, x, args=args, log=True)
-        return res.integral
 
-    def _cdf_integrate_pdf(self, x, **kwargs):
-        a, b = self._support(**kwargs)
-        f, args = kwargs2args(self._pdf_dispatch, kwargs=kwargs)
-        res = _tanhsinh(f, a, x, args=args)
-        return res.integral
-
-    def _logccdf_integrate_logpdf(self, x, **kwargs):
-        a, b = self._support(**kwargs)
-        f, args = kwargs2args(self._logpdf_dispatch, kwargs=kwargs)
-        res = _tanhsinh(f, x, b, args=args, log=True)
-        return res.integral
-
-    def _ccdf_integrate_pdf(self, x, **kwargs):
-        a, b = self._support(**kwargs)
-        f, args = kwargs2args(self._pdf_dispatch, kwargs=kwargs)
-        res = _tanhsinh(f, x, b, args=args)
+    def _quadrature(self, integrand, limits=None, args=None, kwargs=None, log=False):
+        a, b = self._support(**kwargs) if limits is None else limits
+        args = [] if args is None else args
+        kwargs = {} if kwargs is None else kwargs
+        f, args = kwargs2args(integrand, args=args, kwargs=kwargs)
+        res = _tanhsinh(f, a, b, args=args, log=log)
         return res.integral
 
     def _logentropy_integrate_logpdf(self, **kwargs):
@@ -863,29 +831,56 @@ class ContinuousDistribution:
         return res.integral
 
     # Inverse distribution functions via rootfinding
+
+    def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
+        # should modify _bracket_root and _chandrupatla so we don't need all this
+        min, max = self._support(**kwargs) if bounds is None else bounds
+        kwargs = {} if kwargs is None else kwargs
+
+        p, min, max = np.broadcast_arrays(p, min, max)
+
+        def f2(x, p, **kwargs):
+            return f(x, **kwargs) - p
+
+        f3, args = kwargs2args(f2, args=[p], kwargs=kwargs)
+        # If we know the median or mean, should use it
+
+        # Any operations between 0d array and a scalar produces a scalar, so...
+        shape = min.shape
+        min, max = np.atleast_1d(min, max)
+
+        a = -np.ones_like(min)
+        b = np.ones_like(max)
+        d = max - min
+
+        i = np.isfinite(min) & np.isfinite(max)
+        a[i] = min[i] + 0.25 * d[i]
+        b[i] = max[i] - 0.25 * d[i]
+
+        i = np.isfinite(min) & ~np.isfinite(max)
+        a[i] = min[i] + 1
+        b[i] = min[i] + 2
+
+        i = np.isfinite(max) & ~np.isfinite(min)
+        a[i] = max[i] - 2
+        b[i] = max[i] - 1
+
+        min = min.reshape(shape)
+        max = max.reshape(shape)
+        a = a.reshape(shape)
+        b = b.reshape(shape)
+
+        res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
+        return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
+
     def _icdf_solve_cdf(self, x, **kwargs):
-        res = _solve_bounded(self._cdf_dispatch, x, self.support, kwargs=kwargs)
-        return res.x
+        return self._solve_bounded(self._cdf_dispatch, x, kwargs=kwargs)
 
     def _iccdf_solve_ccdf(self, x, **kwargs):
-        a, b = self.support
-        res = _solve_bounded(self._ccdf_dispatch, x, self.support, kwargs=kwargs)
-        return res.x
+        return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
     def _ilogcdf_solve_logcdf(self, x, **kwargs):
-        a, b = self.support
-        res = _solve_bounded(self._logcdf_dispatch, x, self.support, kwargs=kwargs)
-        return res.x
+        return self._solve_bounded(self._logcdf_dispatch, x, kwargs=kwargs)
 
     def _ilogccdf_solve_logccdf(self, x, **kwargs):
-        a, b = self.support
-        res = _solve_bounded(self._logccdf_dispatch, x, self.support, kwargs=kwargs)
-        return res.x
-
-    #
-    # def _pdf(self, x, *, log_a, log_b, **kwargs):
-    #     return ((log_b - log_a)*x)**-1
-    #
-    # def _cdf(self, x, *, log_a, log_b, **kwargs):
-    #     return (np.log(x) - log_a)/(log_b - log_a)
-
+        return self._solve_bounded(self._logccdf_dispatch, x, kwargs=kwargs)

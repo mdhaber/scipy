@@ -117,3 +117,9 @@ class LogUniform(ContinuousDistribution):
 
     def _logpdf(self, x, *, log_a, log_b, **kwargs):
         return -np.log(x) - np.log(log_b - log_a)
+
+    # def _pdf(self, x, *, log_a, log_b, **kwargs):
+    #     return ((log_b - log_a)*x)**-1
+    #
+    # def _cdf(self, x, *, log_a, log_b, **kwargs):
+    #     return (np.log(x) - log_a)/(log_b - log_a)
