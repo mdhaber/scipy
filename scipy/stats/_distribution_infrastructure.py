@@ -1,3 +1,4 @@
+import sys
 from functools import cached_property
 from scipy._lib._util import _lazywhere
 from scipy import special
@@ -178,14 +179,17 @@ class _Parameterization:
 
     def validate_shapes(self, shapes):
         all_valid = True
+        dtypes = []
         for name, arr in shapes.items():
             parameter = self.parameters[name]
             arr, valid = parameter.check_dtype(arr)
+            dtypes.append(arr.dtype)
             valid = valid & parameter.domain.contains(arr, shapes)
             all_valid = all_valid & valid
             shapes[name] = arr
+        dtype = np.result_type(*dtypes)
 
-        return all_valid
+        return all_valid, dtype
 
     def __str__(self):
         messages = [str(param) for name, param in self.parameters.items()]
@@ -255,6 +259,7 @@ def _set_invalid_nan(f):
             x = np.copy(x)
             x[x_invalid] = np.nan
         # TODO: ensure dtype is at least float and that output shape is correct
+        # see _set_invalid_nan_property below
         out = np.asarray(f(self, x, *args, **kwargs))
         out[mask_low] = replace_low
         out[mask_high] = replace_high
@@ -266,6 +271,23 @@ def _set_invalid_nan(f):
 
     return filtered
 
+def _set_invalid_nan_property(f):
+    # maybe implement the cache here
+    def filtered(self, *args, method=None, skip_iv=False, **kwargs):
+        if self.skip_iv or skip_iv:
+            return f(self, *args, method=method, **kwargs)
+
+        res = f(self, *args, method=method, **kwargs)
+        res = np.broadcast_to(res, self._shape_shape)
+        dtype = np.result_type(res.dtype, self._dtype)
+        if self._any_invalid or dtype != self._dtype:
+            res = res.astype(dtype, copy=True)
+            res[self._invalid] = np.nan
+        return res[()]
+    filtered._cache = {'method': None}
+
+    return filtered
+            
 
 def kwargs2args(f, args=[], kwargs={}):
     # this is a temporary workaround until the scalar algorithms `_tanhsinh`,
@@ -317,7 +339,11 @@ class ContinuousDistribution:
     def __init__(self, *, tol=_null, skip_iv=False, **shapes):
         self.tol = tol
         self.skip_iv = skip_iv
+        self._dtype = np.float64  # default; may change depending on shapes
         all_shape_names = list(shapes)
+        self._moment_raw_cache = {}
+        self._moment_central_cache = {}
+        self._moment_standard_cache = {}
         shapes = {key: val for key, val in shapes.items() if val is not _null}
 
         self._not_implemented = (
@@ -330,6 +356,8 @@ class ContinuousDistribution:
             self._shapes = shapes
             self._all_shape_names = all_shape_names
             self._invalid = np.asarray(False)  # FIXME: needs the right ndim
+            self._any_invalid = False
+            self._shape_shape = tuple()
             return
 
         # identify parameterization
@@ -357,9 +385,12 @@ class ContinuousDistribution:
 
         # Replace invalid shapes with `np.nan`
         shapes = dict(zip(shape_names, shape_vals))
-        self._invalid = ~parameterization.validate_shapes(shapes)
+        valid, self._dtype = parameterization.validate_shapes(shapes)
+        self._invalid = ~valid
+        self._any_invalid = np.any(self._invalid)
+        self._shape_shape = valid.shape  # broadcasted shape of shapes
         # If necessary, make the arrays contiguous and replace invalid with NaN
-        if np.any(self._invalid):
+        if self._any_invalid:
             for shape_name in shapes:
                 shapes[shape_name] = np.copy(shapes[shape_name])
                 shapes[shape_name][self._invalid] = np.nan
@@ -514,7 +545,8 @@ class ContinuousDistribution:
         return self._moment(1, 0, **kwargs)
 
     def logvar(self, method=None):
-        return self._logvar_dispatch(method=method, **self._all_shapes)
+        return self._logvar_dispatch(method=method, logmean=self.logmean(),
+                                     **self._all_shapes)
 
     def _logvar_dispatch(self, method=None, **kwargs):
         if method in {None, 'direct'} and self._overrides('_logvar'):
@@ -529,11 +561,13 @@ class ContinuousDistribution:
     def _logvar_log_var(self, **kwargs):
         return np.log(self._var_dispatch(**kwargs))
 
-    def _logvar_logmoment(self, **kwargs):
+    def _logvar_logmoment(self, mean=None, logmean=None, **kwargs):
+        logmean = np.log(mean + 0j) if logmean is None else logmean
         return self._logmoment(2, -np.inf, **kwargs)
 
     def var(self, method=None):
-        return self._var_dispatch(method=method, **self._all_shapes)
+        return self._var_dispatch(method=method, mean=self.mean(),
+                                  **self._all_shapes)
 
     def _var_dispatch(self, method=None, **kwargs):
         if method in {None, 'direct'} and self._overrides('_var'):
@@ -548,8 +582,9 @@ class ContinuousDistribution:
     def _var_exp_logvar(self, **kwargs):
         return np.exp(self._logvar_dispatch(**kwargs))
 
-    def _var_moment(self, **kwargs):
-        return self._moment(2, 0, **kwargs)
+    def _var_moment(self, mean=None, logmean=None, **kwargs):
+        mean = np.exp(logmean) if mean is None else mean
+        return self._moment(2, mean, **kwargs)
 
     def logskewness(self, method=None):
         return self._logskewness_dispatch(method=method, logmean=self.logmean(),
@@ -891,27 +926,208 @@ class ContinuousDistribution:
         return self._quadrature(logintegrand, args=(order, logcenter),
                                 kwargs=kwargs, log=True)
 
+    def _validate_order(self, order, skip_iv = False):
+        if self.skip_iv or skip_iv:
+            return order
+
+        order = np.asarray(order, dtype=self._dtype)[()]
+        order_int = np.round(order)
+        if (order_int.size != 1 or order_int != order
+                or order < 0 or not np.isfinite(order)):
+            message = '`order` must be a positive, finite integer.'
+            raise ValueError(message)
+        return order_int
+
+    @cached_property
+    def _all_moment_methods(self):
+        return {'cache', 'direct', 'transform',
+                'normalize', 'general', 'quadrature'}
+
+    @_set_invalid_nan_property
+    def moment_raw(self, order=1, method=None):
+        order = self._validate_order(order)
+        methods = self._all_moment_methods if method is None else {method}
+        return self._moment_raw_dispatch(order, methods=methods,
+                                         **self._all_shapes)
+
+    def _moment_raw_dispatch(self, order, *, methods, **kwargs):
+        # How to indicate to the user if the requested methods could not be used?
+        # Rather than returning None when a moment is not available, raise?
+        moment = None
+
+        if 'cache' in methods:
+            moment = self._moment_raw_cache.get(order, None)
+
+        if moment is None and 'direct' in methods:
+            moment = self._moment_raw(order, **kwargs)
+
+        if moment is None and 'transform' in methods and order > 1:
+            moment = self._moment_raw_transform(order, **kwargs)
+
+        if moment is None and 'general' in methods:
+            moment = self._moment_raw_general(order, **kwargs)
+
+        if moment is None and 'quadrature' in methods:
+            moment = self._moment_integrate_pdf(order, center=0, **kwargs)
+
+        if moment is not None:
+            self._moment_raw_cache[order] = moment
+
+        return (moment if moment is None else
+                np.broadcast_to(moment, self._shape_shape))
+
+    def _moment_raw(self, order, **kwargs):
+        return None
+
+    def _moment_raw_transform(self, order, **kwargs):
+        # Doesn't make sense to get the mean by "transform", since that's
+        # how we got here. Questionable whether 'quadrature' should be here.
+
+        central_moments = []
+        for i in range(int(order) + 1):
+            methods = {'cache', 'direct', 'normalize', 'general'}
+            moment_i = self._moment_central_dispatch(order=i,
+                                                     methods=methods, **kwargs)
+            if moment_i is None:
+                return None
+            central_moments.append(moment_i)
+
+        mean_methods = {'cache', 'direct', 'quadrature'}
+        mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
+        if mean is None:
+            return None
+
+        moment = self._moment_transform_center(order, central_moments, mean, 0)
+        return moment
+
+    def _moment_raw_general(self, order, **kwargs):
+        # This is the only general formula for a raw moment of a probability
+        # distribution
+        return 1 if order == 0 else None
+
+    @_set_invalid_nan_property
+    def moment_central(self, order=1, method=None):
+        order = self._validate_order(order)
+        methods = self._all_moment_methods if method is None else {method}
+        return self._moment_central_dispatch(order, methods=methods,
+                                             **self._all_shapes)
+
+    def _moment_central_dispatch(self, order, *, methods, **kwargs):
+        moment = None
+
+        if 'cache' in methods:
+            moment = self._moment_central_cache.get(order, None)
+
+        if moment is None and 'direct' in methods:
+            moment = self._moment_central(order, **kwargs)
+
+        if moment is None and 'transform' in methods:
+            moment = self._moment_central_transform(order, **kwargs)
+
+        if moment is None and 'normalize' in methods and order > 2:
+            moment = self._moment_central_normalize(order, **kwargs)
+
+        if moment is None and 'general' in methods:
+            moment = self._moment_central_general(order, **kwargs)
+
+        if moment is None and 'quadrature' in methods:
+            mean = self._moment_raw_dispatch(1, **kwargs,
+                                             methods=self._all_moment_methods)
+            moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
+
+        if moment is not None:
+            self._moment_central_cache[order] = moment
+
+        return (moment if moment is None else
+                np.broadcast_to(moment, self._shape_shape))
+
+    def _moment_central(self, order, **kwargs):
+        return None
+
+    def _moment_central_transform(self, order, **kwargs):
+
+        raw_moments = []
+        for i in range(int(order) + 1):
+            methods = {'cache', 'direct', 'general'}
+            moment_i = self._moment_raw_dispatch(order=i, methods=methods,
+                                                 **kwargs)
+            if moment_i is None:
+                return None
+            raw_moments.append(moment_i)
+
+        mean_methods = self._all_moment_methods
+        mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
+
+        moment = self._moment_transform_center(order, raw_moments, 0, mean)
+        return moment
+
+    def _moment_central_normalize(self, order, **kwargs):
+        methods = {'cache', 'direct', 'general'}
+        standard_moment = self._moment_standard_dispatch(order, **kwargs,
+                                                         methods=methods)
+        if standard_moment is None:
+            return None
+        var = self._moment_central_dispatch(2, methods=self._all_moment_methods,
+                                            **kwargs)
+        return standard_moment*var**(order/2)
+
+    def _moment_central_general(self, order, **kwargs):
+        general_central_moments = {0: 1, 1: 0}
+        return general_central_moments.get(order, None)
+
+    @_set_invalid_nan_property
+    def moment_standard(self, order=1, method=None):
+        order = self._validate_order(order)
+        methods = self._all_moment_methods if method is None else {method}
+        return self._moment_standard_dispatch(order, methods=methods,
+                                              **self._all_shapes)
+
+    def _moment_standard_dispatch(self, order, *, methods, **kwargs):
+        moment = None
+
+        if 'cache' in methods:
+            moment = self._moment_standard_cache.get(order, None)
+
+        if moment is None and 'direct' in methods:
+            moment = self._moment_standard(order, **kwargs)
+
+        if moment is None and 'normalize' in methods:
+            moment = self._moment_standard_transform(order, **kwargs)
+
+        if moment is None and 'general' in methods:
+            moment = self._moment_standard_general(order, **kwargs)
+
+        return (moment if moment is None else
+                np.broadcast_to(moment, self._shape_shape))
+
+    def _moment_standard(self, order, **kwargs):
+        return None
+
+    def _moment_standard_transform(self, order, **kwargs):
+        methods = {'cache', 'direct', 'transform', 'quadrature'}
+        central_moment = self._moment_central_dispatch(order, **kwargs,
+                                                       methods=methods)
+        if central_moment is None:
+            return None
+        var = self._moment_central_dispatch(2, methods=self._all_moment_methods,
+                                            **kwargs)
+        return central_moment/var**(order/2)
+
+    def _moment_standard_general(self, order, **kwargs):
+        general_standard_moments = {0: 1, 1: 0, 2: 1}
+        return general_standard_moments.get(order, None)
+
     def moment(self, order, center=None, standardized=False):
-        # Come back to this. Still needs a lot of work.
-        # input validation / standardization
-        # clean this up
-        # ensure NaN pattern and array/scalar output
-        # make sure we're using cache or override when possible and just
-        # compute from scratch otherwise. I'm thinking there should be a
-        # `_standard_moment` function that the developer can override, and we'd
-        # manually cache results for all orders. `var`, `skewness`, etc., would
-        # call this function. Too much logic is in `moment` itself.
         if order == 0:
-            # replace with `np.ones` of correct shape/dtype and NaN pattern
             return np.ones_like(self.mean)[()]
         elif order == 1:
             central = np.zeros_like(self.mean)
         elif order == 2:
             central = self.var
         elif order == 3:
-            central = self.skewness*self.var**1.5
+            central = self.skewness * self.var ** 1.5
         elif order == 4:
-            central = self.kurtosis*self.var**2.
+            central = self.kurtosis * self.var ** 2.
 
         if (order <= 3 or (order == 4 and self._overrides('_skewness'))):
             if center is not None:
@@ -925,7 +1141,6 @@ class ContinuousDistribution:
             nonstandard = self._moment(order, center, **self._all_shapes)
 
         moment = nonstandard / self.var ** (order / 2) if standardized else nonstandard
-
         moment = np.asarray(moment)
         moment[self._invalid] = np.nan
         return moment[()]
@@ -934,16 +1149,13 @@ class ContinuousDistribution:
         return self._moment_integrate_pdf(order, center, **kwargs)
 
     def _moment_integrate_pdf(self, order, center, **kwargs):
-        # a, b = self.support
         def integrand(x, order, center, **kwargs):
             pdf = self._pdf_dispatch(x, **kwargs)
             return pdf*(x-center)**order
         return self._quadrature(integrand, args=(order, center), kwargs=kwargs)
 
     def _moment_transform_center(self, order, moment_as, a, b):
-        # a and b should be broadcasted before getting here
-        # this is wrong - it's not just moment_a of order `order`; all lower
-        # moments are needed, too
+        a, b = np.broadcast_arrays(a, b)
         n = order
         i = np.arange(n+1).reshape([-1]+[1]*a.ndim)  # orthogonal to other axes
         n_choose_i = special.binom(n, i)

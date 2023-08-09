@@ -80,6 +80,10 @@ class Normal(ContinuousDistribution):
         return 3
 
 
+from scipy import special
+def _log_diff(log_p, log_q):
+    return special.logsumexp([log_p, log_q+np.pi*1j], axis=0)
+
 class LogUniform(ContinuousDistribution):
 
     _a_domain = _RealDomain(endpoints=(0, oo))
@@ -127,11 +131,22 @@ class LogUniform(ContinuousDistribution):
         return (self._shapes['log_b'] if 'log_b' in self._shapes
                 else np.log(self._shapes['b']))
 
-    def _logpdf(self, x, *, log_a, log_b, **kwargs):
-        return -np.log(x) - np.log(log_b - log_a)
+    # def _logpdf(self, x, *, log_a, log_b, **kwargs):
+    #     return -np.log(x) - np.log(log_b - log_a)
 
-    # def _pdf(self, x, *, log_a, log_b, **kwargs):
-    #     return ((log_b - log_a)*x)**-1
+    # def _moment_raw(self, order, **kwargs):
+    #     if order == 0:
+    #         return np.nan
+    #     else:
+    #         return None
+
+    def _pdf(self, x, *, log_a, log_b, **kwargs):
+        return ((log_b - log_a)*x)**-1
+
+    def _moment_raw(self, order, log_a, log_b, **kwargs):
+        t1 = 1 / (log_b - log_a) / order
+        t2 = np.real(np.exp(_log_diff(order * log_b, order * log_a)))
+        return t1 * t2
     #
     # def _cdf(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
