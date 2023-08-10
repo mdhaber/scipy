@@ -122,6 +122,7 @@ class TestDistributions:
         methods = {'log/exp', 'quadrature'}
         check_dist_func(dist, 'entropy', None, result_shape, methods)
         check_dist_func(dist, 'logentropy', None, result_shape, methods)
+        check_moment_funcs(dist, result_shape)
 
         methods = {'icdf'}
         check_dist_func(dist, 'median', None, result_shape, methods)
@@ -153,6 +154,8 @@ class TestDistributions:
         check_dist_func(dist, 'icdf', p, x_result_shape, methods)
         check_dist_func(dist, 'ilogccdf', logp, x_result_shape, methods)
         check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
+
+
 
 
 def check_dist_func(dist, fname, arg, result_shape, methods):
@@ -187,3 +190,102 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
             np.testing.assert_allclose(res, ref, **tol_override)
 
         np.testing.assert_equal(res.shape, result_shape)
+
+
+def check_moment_funcs(dist, result_shape):
+    # Check that all computation methods of all distribution functions agree
+    # with one another, effectively testing the correctness of the generic
+    # computation methods and confirming the consistency of specific
+    # distributions with their pdf/logpdf.
+
+    def check(moment, order, method=None, ref=None, success=True):
+        if success:
+            res = moment(order, method=method)
+            assert_allclose(res, ref, atol=1e-13)
+            assert res.shape == ref.shape
+        else:
+            with pytest.raises(NotImplementedError):
+                moment(order, method=method)
+
+    formula_raw = dist._overrides('_moment_raw')
+    formula_central = dist._overrides('_moment_central')
+    formula_standard = dist._overrides('_moment_standard')
+
+    ### Check Raw Moments ###
+    for i in range(6):
+        check(dist.moment_raw, i, 'cache', success=False)  # not cached yet
+        ref = dist.moment_raw(i, method='quadrature')
+        assert ref.shape == result_shape
+        check(dist.moment_raw, i, 'cache', ref, success=True)  # cached now
+        check(dist.moment_raw, i, 'formula', ref, success=formula_raw)
+        check(dist.moment_raw, i, 'general', ref, i == 0)
+
+    # Clearing caches to better check their behavior
+    dist._moment_raw_cache = {}
+    dist._moment_central_cache = {}
+    dist._moment_standard_cache = {}
+
+    # If we have central or standard moment formulas, or if there are
+    # values in their cache, we can use method='transform'
+    dist.moment_central(0)  # build up the cache
+    dist.moment_central(1)
+    for i in range(2, 6):
+        ref = dist.moment_raw(i, method='quadrature')
+        check(dist.moment_raw, i, 'transform', ref,
+              success=formula_central or formula_standard)
+        dist.moment_central(i)  # build up the cache
+        check(dist.moment_raw, i, 'transform', ref)
+
+    dist._moment_raw_cache = {}
+    dist._moment_central_cache = {}
+    dist._moment_standard_cache = {}
+
+    ### Check Central Moments ###
+
+    for i in range(6):
+        check(dist.moment_central, i, 'cache', success=False)
+        ref = dist.moment_central(i, method='quadrature')
+        assert ref.shape == result_shape
+        check(dist.moment_central, i, 'cache', ref, success=True)
+        check(dist.moment_central, i, 'formula', ref, success=formula_central)
+        check(dist.moment_central, i, 'general', ref, success=i <= 1)
+        check(dist.moment_central, i, 'transform', ref, success=formula_raw)
+        if not formula_raw:
+            dist.moment_raw(i)
+            check(dist.moment_central, i, 'transform', ref)
+
+    dist._moment_raw_cache = {}
+    dist._moment_central_cache = {}
+    dist._moment_standard_cache = {}
+
+    # If we have standard moment formulas, or if there are
+    # values in their cache, we can use method='normalize'
+    dist.moment_standard(0)  # build up the cache
+    dist.moment_standard(1)
+    dist.moment_standard(2)
+    for i in range(3, 6):
+        ref = dist.moment_central(i, method='quadrature')
+        check(dist.moment_central, i, 'normalize', ref,
+              success=formula_standard)
+        dist.moment_standard(i)  # build up the cache
+        check(dist.moment_central, i, 'normalize', ref)
+
+    dist._moment_raw_cache = {}
+    dist._moment_central_cache = {}
+    dist._moment_standard_cache = {}
+
+    ### Check Standard Moments ###
+
+    var = dist.moment_central(2, method='quadrature')
+    del dist._moment_central_cache[2]
+
+    for i in range(6):
+        print(i)
+        check(dist.moment_standard, i, 'cache', success=False)
+        ref = dist.moment_central(i, method='quadrature') / var ** (i / 2)
+        del dist._moment_central_cache[i]
+        assert ref.shape == result_shape
+        check(dist.moment_standard, i, 'formula', ref,
+              success=formula_standard)
+        check(dist.moment_standard, i, 'general', ref, success=i <= 2)
+        check(dist.moment_standard, i, 'normalize', ref)

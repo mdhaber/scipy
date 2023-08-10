@@ -13,7 +13,6 @@ oo = np.inf
 #  documentation
 #  document method call graph
 #  check NaN / inf behavior of moment methods
-#  have moment methods raise instead of returning None?
 #  test `moment`
 #  test `sample`
 #  add lower limit to cdf
@@ -497,13 +496,25 @@ def _set_invalid_nan_property(f):
             return f(self, *args, method=method, **kwargs)
 
         res = f(self, *args, method=method, **kwargs)
-        res = np.broadcast_to(res, self._shape_shape)
+        if res is None:
+            # message could be more appropriate
+            raise NotImplementedError(self._not_implemented)
+
+        res = np.asarray(res)
         dtype = np.result_type(res.dtype, self._dtype)
-        if self._any_invalid or dtype != self._dtype:
+
+        if dtype != self._dtype:  # this won't work for logmoments (complex)
             res = res.astype(dtype, copy=True)
-            res[self._invalid] = np.nan
+
+        if res.shape != self._shape_shape:  # faster to check first
+            res = np.broadcast_to(res, self._shape_shape)
+
+        # Does the right thing happen without explicitly adding NaNs?
+        # if self._any_invalid or dtype != self._dtype:
+        #     res = res.astype(dtype, copy=True)
+        #     res[self._invalid] = np.nan  # might be redundant
+
         return res[()]
-    filtered._cache = {'method': None}
 
     return filtered
             
@@ -745,6 +756,7 @@ class ContinuousDistribution:
     def _logmean_logmoment(self, **kwargs):
         return self._logmoment(1, -np.inf, **kwargs)
 
+    @_set_invalid_nan_property
     def mean(self, method=None):
         methods = {method} if method is not None else self._all_moment_methods
         return self._moment_raw_dispatch(1, methods=methods, **self._all_shapes)
@@ -770,6 +782,7 @@ class ContinuousDistribution:
         logmean = np.log(mean + 0j) if logmean is None else logmean
         return self._logmoment(2, logmean, **kwargs)
 
+    @_set_invalid_nan_property
     def var(self, method=None):
         methods = {method} if method is not None else self._all_moment_methods
         return self._moment_central_dispatch(2, methods=methods, **self._all_shapes)
@@ -798,6 +811,7 @@ class ContinuousDistribution:
         logvar = np.log(var) if logvar is None else logvar
         return self._logmoment(3, logmean, **kwargs) - 1.5 * logvar
 
+    @_set_invalid_nan_property
     def skewness(self, method=None):
         methods = {method} if method is not None else self._all_moment_methods
         return self._moment_standard_dispatch(3, methods=methods, **self._all_shapes)
@@ -826,6 +840,7 @@ class ContinuousDistribution:
         logvar = np.log(var) if logvar is None else logvar
         return self._logmoment(4, logmean, **kwargs) - 2 * logvar
 
+    @_set_invalid_nan_property
     def kurtosis(self, method=None):
         methods = {method} if method is not None else self._all_moment_methods
         return self._moment_standard_dispatch(4, methods=methods, **self._all_shapes)
@@ -1110,6 +1125,8 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_raw(order, **kwargs)
+            if moment is not None and getattr(moment, 'shape', None) != self._shape_shape:
+                moment = np.broadcast_to(moment, self._shape_shape)
 
         if moment is None and 'transform' in methods and order > 1:
             moment = self._moment_raw_transform(order, **kwargs)
@@ -1123,8 +1140,7 @@ class ContinuousDistribution:
         if moment is not None:
             self._moment_raw_cache[order] = moment
 
-        return (moment if moment is None else
-                np.broadcast_to(moment, self._shape_shape))
+        return moment
 
     def _moment_raw(self, order, **kwargs):
         return None
@@ -1170,6 +1186,8 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_central(order, **kwargs)
+            if moment is not None and getattr(moment, 'shape', None) != self._shape_shape:
+                moment = np.broadcast_to(moment, self._shape_shape)
 
         if moment is None and 'transform' in methods:
             moment = self._moment_central_transform(order, **kwargs)
@@ -1188,8 +1206,7 @@ class ContinuousDistribution:
         if moment is not None:
             self._moment_central_cache[order] = moment
 
-        return (moment if moment is None else
-                np.broadcast_to(moment, self._shape_shape))
+        return moment
 
     def _moment_central(self, order, **kwargs):
         return None
@@ -1240,6 +1257,8 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_standard(order, **kwargs)
+            if moment is not None and getattr(moment, 'shape', None) != self._shape_shape:
+                moment = np.broadcast_to(moment, self._shape_shape)
 
         if moment is None and 'normalize' in methods:
             moment = self._moment_standard_transform(order, **kwargs)
@@ -1250,8 +1269,7 @@ class ContinuousDistribution:
         if moment is not None:
             self._moment_standard_cache[order] = moment
 
-        return (moment if moment is None else
-                np.broadcast_to(moment, self._shape_shape))
+        return moment
 
     def _moment_standard(self, order, **kwargs):
         return None
@@ -1277,7 +1295,7 @@ class ContinuousDistribution:
         return self._quadrature(integrand, args=(order, center), kwargs=kwargs)
 
     def _moment_transform_center(self, order, moment_as, a, b):
-        a, b = np.broadcast_arrays(a, b)
+        a, b, *moment_as = np.broadcast_arrays(a, b, *moment_as)
         n = order
         i = np.arange(n+1).reshape([-1]+[1]*a.ndim)  # orthogonal to other axes
         n_choose_i = special.binom(n, i)

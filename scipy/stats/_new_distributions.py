@@ -56,7 +56,7 @@ class Normal(ContinuousDistribution):
         return 0
 
     def _moment_raw(self, order, **kwargs):
-        raw_moments = {0: 1, 1: 0, 2: 1, 3: 0, 4: 3}
+        raw_moments = {0: 1, 1: 0, 2: 1, 3: 0, 4: 3, 5: 0}
         return raw_moments.get(order, None)
 
     def _moment_central(self, order, **kwargs):
@@ -130,9 +130,11 @@ class LogUniform(ContinuousDistribution):
         return ((log_b - log_a)*x)**-1
 
     def _moment_raw(self, order, log_a, log_b, **kwargs):
+        if order == 0:
+            return 1
         t1 = 1 / (log_b - log_a) / order
         t2 = np.real(np.exp(_log_diff(order * log_b, order * log_a)))
-        return t1 * t2 if order > 0 else 1
+        return t1 * t2
     #
     # def _cdf(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
