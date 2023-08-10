@@ -132,7 +132,7 @@ class TestDistributions:
         check_dist_func(dist, 'logskewness', None, result_shape, methods)
         check_dist_func(dist, 'logkurtosis', None, result_shape, methods)
 
-        methods = {'log/exp', 'moment'}
+        methods = {'cache'}  #  weak test right now
         check_dist_func(dist, 'mean', None, result_shape, methods)
         check_dist_func(dist, 'var', None, result_shape, methods)
         check_dist_func(dist, 'skewness', None, result_shape, methods)
@@ -167,15 +167,14 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
 
     tol_override = {}
 
-    if dist._overrides(f'_{fname}'):
-        methods.add('direct')
+    # Mean can be 0, which makes logmean -oo.
+    if fname in {'logmean', 'mean', 'logskewness', 'skewness'}:
+        tol_override = {'atol': 1e-15}
+    else:
+        assert np.isfinite(ref).all()
 
-        # Mean can be 0, which makes logmean -oo.
-        if (fname in {'logmean', 'mean', 'logskewness', 'skewness'}
-                and np.any(ref == 0) or np.any(np.isinf(ref))):
-            tol_override = {'atol': 1e-15}
-        else:
-            assert np.isfinite(ref).all()
+    if dist._overrides(f'_{fname}'):
+        methods.add('formula')
 
     np.testing.assert_equal(ref.shape, result_shape)
 

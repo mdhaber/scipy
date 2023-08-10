@@ -55,29 +55,15 @@ class Normal(ContinuousDistribution):
     def _median(self, **kwargs):
         return 0
 
-    def _logmean(self, **kwargs):
-        return -np.inf
+    def _moment_raw(self, order, **kwargs):
+        raw_moments = {0: 1, 1: 0, 2: 1, 3: 0, 4: 3}
+        return raw_moments.get(order, None)
 
-    def _mean(self, **kwargs):
-        return 0
+    def _moment_central(self, order, **kwargs):
+        return self._moment_raw(order, **kwargs)
 
-    def _logvar(self, **kwargs):
-        return 0
-
-    def _var(self, **kwargs):
-        return 1
-
-    def _logskewness(self, **kwargs):
-        return -np.inf
-
-    def _skewness(self, **kwargs):
-        return 0
-
-    def _logkurtosis(self, **kwargs):
-        return np.log(3)
-
-    def _kurtosis(self, **kwargs):
-        return 3
+    def _moment_standard(self, order, **kwargs):
+        return self._moment_raw(order, **kwargs)
 
 
 from scipy import special

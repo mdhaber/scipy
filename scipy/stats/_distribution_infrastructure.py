@@ -1,3 +1,4 @@
+import functools
 import sys
 from functools import cached_property
 from scipy._lib._util import _lazywhere
@@ -11,7 +12,6 @@ oo = np.inf
 # TODO:
 #  documentation
 #  document method call graph
-#  Refactor `mean`, `var`, etc. based on new moment methods
 #  check NaN / inf behavior of moment methods
 #  have moment methods raise instead of returning None?
 #  test `moment`
@@ -30,7 +30,7 @@ oo = np.inf
 #  Should `typical` attribute of _Parameter be a `_Domain`?
 #  why not have the _Parameter `check_dtype` also check whether argument is
 #    within the domain? Should also have a closer look at _Parameterization.
-#  use caching other than cached_properties - maybe lru_check if it doesn't
+#  use caching other than cached_properties - maybe lru_cache if it doesn't
 #   the overhead is not bad
 #  pass shape parameters to methods that don't accept additional args?
 #  pass atol, rtol to methods
@@ -489,6 +489,7 @@ def _set_invalid_nan(f):
 
     return filtered
 
+
 def _set_invalid_nan_property(f):
     # maybe implement the cache here
     def filtered(self, *args, method=None, skip_iv=False, **kwargs):
@@ -669,7 +670,7 @@ class ContinuousDistribution:
         return self._logentropy_dispatch(method=method, **self._all_shapes)
 
     def _logentropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logentropy'):
+        if method in {None, 'formula'} and self._overrides('_logentropy'):
             return self._logentropy(**kwargs)
         elif (self.tol is _null and self._overrides('_entropy') and method is None) or method=='log/exp':
             return self._logentropy_log_entropy(**kwargs)
@@ -693,7 +694,7 @@ class ContinuousDistribution:
         return self._entropy_dispatch(method=method, **self._all_shapes)
 
     def _entropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_entropy'):
+        if method in {None, 'formula'} and self._overrides('_entropy'):
             return self._entropy(**kwargs)
         elif (self._overrides('_logentropy') and method is None) or method=='log/exp':
             return self._entropy_exp_logentropy(**kwargs)
@@ -715,7 +716,7 @@ class ContinuousDistribution:
         return self._median_dispatch(method=method, **self._all_shapes)
 
     def _median_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_median'):
+        if method in {None, 'formula'} and self._overrides('_median'):
             return np.asarray(self._median(**kwargs))[()]
         elif method in {None, 'icdf'}:
             return self._median_icdf(**kwargs)
@@ -729,7 +730,7 @@ class ContinuousDistribution:
         return self._logmean_dispatch(method=method, **self._all_shapes)
 
     def _logmean_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logmean'):
+        if method in {None, 'formula'} and self._overrides('_logmean'):
             return np.asarray(self._logmean(**kwargs))[()]
         elif (self.tol is _null and self._overrides('_mean') and method is None) or method=='log/exp':
             return self._logmean_log_mean(**kwargs)
@@ -739,36 +740,21 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logmean_log_mean(self, **kwargs):
-        return np.log(self._mean_dispatch(**kwargs))
+        return np.log(self._moment_raw_dispatch(1, methods=self._all_moment_methods, **kwargs))
 
     def _logmean_logmoment(self, **kwargs):
         return self._logmoment(1, -np.inf, **kwargs)
 
     def mean(self, method=None):
-        return self._mean_dispatch(method=method, **self._all_shapes)
-
-    def _mean_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_mean'):
-            return np.asarray(self._mean(**kwargs))[()]
-        elif (self._overrides('_logmean') and method is None) or method=='log/exp':
-            return self._mean_exp_logmean(**kwargs)
-        elif method in {None, 'moment'}:
-            return self._mean_moment(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _mean_exp_logmean(self, **kwargs):
-        return np.exp(self._logmean_dispatch(**kwargs))
-
-    def _mean_moment(self, **kwargs):
-        return self._moment(1, 0, **kwargs)
+        methods = {method} if method is not None else self._all_moment_methods
+        return self._moment_raw_dispatch(1, methods=methods, **self._all_shapes)
 
     def logvar(self, method=None):
         return self._logvar_dispatch(method=method, logmean=self.logmean(),
                                      **self._all_shapes)
 
     def _logvar_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logvar'):
+        if method in {None, 'formula'} and self._overrides('_logvar'):
             return np.asarray(self._logvar(**kwargs))[()]
         elif (self.tol is _null and self._overrides('_var') and method is None) or method=='log/exp':
             return self._logvar_log_var(**kwargs)
@@ -778,39 +764,22 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logvar_log_var(self, **kwargs):
-        return np.log(self._var_dispatch(**kwargs))
+        return np.log(self._moment_central_dispatch(2, methods=self._all_moment_methods, **kwargs))
 
     def _logvar_logmoment(self, mean=None, logmean=None, **kwargs):
         logmean = np.log(mean + 0j) if logmean is None else logmean
-        return self._logmoment(2, -np.inf, **kwargs)
+        return self._logmoment(2, logmean, **kwargs)
 
     def var(self, method=None):
-        return self._var_dispatch(method=method, mean=self.mean(),
-                                  **self._all_shapes)
-
-    def _var_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_var'):
-            return np.asarray(self._var(**kwargs))[()]
-        elif (self._overrides('_logvar') and method is None) or method=='log/exp':
-            return self._var_exp_logvar(**kwargs)
-        elif method in {None, 'moment'}:
-            return self._var_moment(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _var_exp_logvar(self, **kwargs):
-        return np.exp(self._logvar_dispatch(**kwargs))
-
-    def _var_moment(self, mean=None, logmean=None, **kwargs):
-        mean = np.exp(logmean) if mean is None else mean
-        return self._moment(2, mean, **kwargs)
+        methods = {method} if method is not None else self._all_moment_methods
+        return self._moment_central_dispatch(2, methods=methods, **self._all_shapes)
 
     def logskewness(self, method=None):
         return self._logskewness_dispatch(method=method, logmean=self.logmean(),
                                           logvar=self.logvar(),**self._all_shapes)
 
     def _logskewness_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logskewness'):
+        if method in {None, 'formula'} and self._overrides('_logskewness'):
             return np.asarray(self._logskewness(**kwargs))[()]
         elif (self.tol is _null and self._overrides(
                 '_skewness') and method is None) or method == 'log/exp':
@@ -821,7 +790,7 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logskewness_log_skewness(self, **kwargs):
-        return np.log(self._skewness_dispatch(**kwargs))
+        return np.log(self._moment_standard_dispatch(3, methods=self._all_moment_methods, **kwargs))
 
     def _logskewness_logmoment(self, logmean=None, logvar=None, mean=None,
                                var=None, **kwargs):
@@ -830,34 +799,15 @@ class ContinuousDistribution:
         return self._logmoment(3, logmean, **kwargs) - 1.5 * logvar
 
     def skewness(self, method=None):
-        return self._skewness_dispatch(method=method, mean=self.mean(),
-                                       var=self.var(), **self._all_shapes)
-
-    def _skewness_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_skewness'):
-            return np.asarray(self._skewness(**kwargs))[()]
-        elif (self._overrides('_logskewness') and method is None) or method == 'log/exp':
-            return self._skewness_exp_logskewness(**kwargs)
-        elif method in {None, 'moment'}:
-            return self._skewness_moment(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _skewness_exp_logskewness(self, **kwargs):
-        return np.exp(self._logskewness_dispatch(**kwargs))
-
-    def _skewness_moment(self, mean=None, var=None, logmean=None, logvar=None,
-                         **kwargs):
-        mean = np.exp(logmean) if mean is None else mean
-        var = np.exp(logvar) if var is None else var
-        return self._moment(3, mean, **kwargs) / var ** 1.5
+        methods = {method} if method is not None else self._all_moment_methods
+        return self._moment_standard_dispatch(3, methods=methods, **self._all_shapes)
 
     def logkurtosis(self, method=None):
         return self._logkurtosis_dispatch(method=method, logmean=self.logmean(),
                                           logvar=self.logvar(),**self._all_shapes)
 
     def _logkurtosis_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logkurtosis'):
+        if method in {None, 'formula'} and self._overrides('_logkurtosis'):
             return np.asarray(self._logkurtosis(**kwargs))[()]
         elif (self.tol is _null and self._overrides(
                 '_kurtosis') and method is None) or method == 'log/exp':
@@ -868,7 +818,7 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logkurtosis_log_kurtosis(self, **kwargs):
-        return np.log(self._kurtosis_dispatch(**kwargs))
+        return np.log(self._moment_standard_dispatch(4, methods=self._all_moment_methods, **kwargs))
 
     def _logkurtosis_logmoment(self, logmean=None, logvar=None, mean=None,
                                var=None, **kwargs):
@@ -877,34 +827,15 @@ class ContinuousDistribution:
         return self._logmoment(4, logmean, **kwargs) - 2 * logvar
 
     def kurtosis(self, method=None):
-        return self._kurtosis_dispatch(method=method, mean=self.mean(),
-                                       var=self.var(), **self._all_shapes)
-
-    def _kurtosis_dispatch(self, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_kurtosis'):
-            return np.asarray(self._kurtosis(**kwargs))[()]
-        elif (self._overrides('_logkurtosis') and method is None) or method == 'log/exp':
-            return self._kurtosis_exp_logkurtosis(**kwargs)
-        elif method in {None, 'moment'}:
-            return self._kurtosis_moment(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _kurtosis_exp_logkurtosis(self, **kwargs):
-        return np.exp(self._logkurtosis_dispatch(**kwargs))
-
-    def _kurtosis_moment(self, mean=None, var=None, logmean=None, logvar=None,
-                         **kwargs):
-        mean = np.exp(logmean) if mean is None else mean
-        var = np.exp(logvar) if var is None else var
-        return self._moment(4, mean, **kwargs) / var ** 2
+        methods = {method} if method is not None else self._all_moment_methods
+        return self._moment_standard_dispatch(4, methods=methods, **self._all_shapes)
 
     @_set_invalid_nan
     def logpdf(self, x, method=None):
         return self._logpdf_dispatch(x, method=method, **self._all_shapes)
 
     def _logpdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logpdf'):
+        if method in {None, 'formula'} and self._overrides('_logpdf'):
             return self._logpdf(x, **kwargs)
         elif (self.tol is _null and method is None) or method == 'log/exp':
             return self._logpdf_log_pdf(x, **kwargs)
@@ -919,7 +850,7 @@ class ContinuousDistribution:
         return self._pdf_dispatch(x, method=method, **self._all_shapes)
 
     def _pdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_pdf'):
+        if method in {None, 'formula'} and self._overrides('_pdf'):
             return self._pdf(x, **kwargs)
         if (self._overrides('_logpdf') and method is None) or method == 'log/exp':
             return self._pdf_exp_logpdf(x, **kwargs)
@@ -934,7 +865,7 @@ class ContinuousDistribution:
         return self._logcdf_dispatch(x, method=method, **self._all_shapes)
 
     def _logcdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logcdf'):
+        if method in {None, 'formula'} and self._overrides('_logcdf'):
             return self._logcdf(x, **kwargs)
         elif (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
             return self._logcdf_log_cdf(x, **kwargs)
@@ -962,7 +893,7 @@ class ContinuousDistribution:
         return self._cdf_dispatch(x, method=method, **self._all_shapes)
 
     def _cdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_cdf'):
+        if method in {None, 'formula'} and self._overrides('_cdf'):
             return self._cdf(x, **kwargs)
         elif (self._overrides('_logcdf') and method is None) or method=='log/exp':
             return self._cdf_exp_logcdf(x, **kwargs)
@@ -989,7 +920,7 @@ class ContinuousDistribution:
         return self._logccdf_dispatch(x, method=method, **self._all_shapes)
 
     def _logccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_logccdf'):
+        if method in {None, 'formula'} and self._overrides('_logccdf'):
             return self._logccdf(x, **kwargs)
         if (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
             return self._logccdf_log_ccdf(x, **kwargs)
@@ -1016,7 +947,7 @@ class ContinuousDistribution:
         return self._ccdf_dispatch(x, method=method, **self._all_shapes)
 
     def _ccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_ccdf'):
+        if method in {None, 'formula'} and self._overrides('_ccdf'):
             return self._ccdf(x, **kwargs)
         elif (self._overrides('_logccdf') and method is None) or method=='log/exp':
             return self._ccdf_exp_logccdf(x, **kwargs)
@@ -1043,7 +974,7 @@ class ContinuousDistribution:
         return self._ilogcdf_dispatch(x, method=method, **self._all_shapes)
 
     def _ilogcdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_ilogcdf'):
+        if method in {None, 'formula'} and self._overrides('_ilogcdf'):
             return self._ilogcdf(x, **kwargs)
         elif (self._overrides('_ilogccdf') and method is None) or method=='complementarity':
             return self._ilogcdf_ilogccdf1m(x, **kwargs)
@@ -1063,7 +994,7 @@ class ContinuousDistribution:
         return self._icdf_dispatch(x, method=method, **self._all_shapes)
 
     def _icdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_icdf'):
+        if method in {None, 'formula'} and self._overrides('_icdf'):
             return self._icdf(x, **kwargs)
         elif (self.tol is _null and self._overrides('_iccdf') and method is None) or method=='complementarity':
             return self._icdf_iccdf1m(x, **kwargs)
@@ -1083,7 +1014,7 @@ class ContinuousDistribution:
         return self._ilogccdf_dispatch(x, method=method, **self._all_shapes)
 
     def _ilogccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_ilogccdf'):
+        if method in {None, 'formula'} and self._overrides('_ilogccdf'):
             return self._ilogccdf(x, **kwargs)
         elif (self._overrides('_ilogcdf') and method is None) or method=='complementarity':
             return self._ilogccdf_ilogcdf1m(x, **kwargs)
@@ -1103,7 +1034,7 @@ class ContinuousDistribution:
         return self._iccdf_dispatch(x, method=method, **self._all_shapes)
 
     def _iccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'direct'} and self._overrides('_iccdf'):
+        if method in {None, 'formula'} and self._overrides('_iccdf'):
             return self._iccdf(x, **kwargs)
         elif (self.tol is _null and self._overrides('_icdf') and method is None) or method=='complementarity':
             return self._iccdf_icdf1m(x, **kwargs)
@@ -1159,7 +1090,7 @@ class ContinuousDistribution:
 
     @cached_property
     def _all_moment_methods(self):
-        return {'cache', 'direct', 'transform',
+        return {'cache', 'formula', 'transform',
                 'normalize', 'general', 'quadrature'}
 
     @_set_invalid_nan_property
@@ -1177,7 +1108,7 @@ class ContinuousDistribution:
         if 'cache' in methods:
             moment = self._moment_raw_cache.get(order, None)
 
-        if moment is None and 'direct' in methods:
+        if moment is None and 'formula' in methods:
             moment = self._moment_raw(order, **kwargs)
 
         if moment is None and 'transform' in methods and order > 1:
@@ -1204,14 +1135,14 @@ class ContinuousDistribution:
 
         central_moments = []
         for i in range(int(order) + 1):
-            methods = {'cache', 'direct', 'normalize', 'general'}
+            methods = {'cache', 'formula', 'normalize', 'general'}
             moment_i = self._moment_central_dispatch(order=i,
                                                      methods=methods, **kwargs)
             if moment_i is None:
                 return None
             central_moments.append(moment_i)
 
-        mean_methods = {'cache', 'direct', 'quadrature'}
+        mean_methods = {'cache', 'formula', 'quadrature'}
         mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
         if mean is None:
             return None
@@ -1237,7 +1168,7 @@ class ContinuousDistribution:
         if 'cache' in methods:
             moment = self._moment_central_cache.get(order, None)
 
-        if moment is None and 'direct' in methods:
+        if moment is None and 'formula' in methods:
             moment = self._moment_central(order, **kwargs)
 
         if moment is None and 'transform' in methods:
@@ -1267,7 +1198,7 @@ class ContinuousDistribution:
 
         raw_moments = []
         for i in range(int(order) + 1):
-            methods = {'cache', 'direct', 'general'}
+            methods = {'cache', 'formula', 'general'}
             moment_i = self._moment_raw_dispatch(order=i, methods=methods,
                                                  **kwargs)
             if moment_i is None:
@@ -1281,7 +1212,7 @@ class ContinuousDistribution:
         return moment
 
     def _moment_central_normalize(self, order, **kwargs):
-        methods = {'cache', 'direct', 'general'}
+        methods = {'cache', 'formula', 'general'}
         standard_moment = self._moment_standard_dispatch(order, **kwargs,
                                                          methods=methods)
         if standard_moment is None:
@@ -1307,7 +1238,7 @@ class ContinuousDistribution:
         if 'cache' in methods:
             moment = self._moment_standard_cache.get(order, None)
 
-        if moment is None and 'direct' in methods:
+        if moment is None and 'formula' in methods:
             moment = self._moment_standard(order, **kwargs)
 
         if moment is None and 'normalize' in methods:
@@ -1316,6 +1247,9 @@ class ContinuousDistribution:
         if moment is None and 'general' in methods:
             moment = self._moment_standard_general(order, **kwargs)
 
+        if moment is not None:
+            self._moment_standard_cache[order] = moment
+
         return (moment if moment is None else
                 np.broadcast_to(moment, self._shape_shape))
 
@@ -1323,7 +1257,7 @@ class ContinuousDistribution:
         return None
 
     def _moment_standard_transform(self, order, **kwargs):
-        methods = {'cache', 'direct', 'transform', 'quadrature'}
+        methods = {'cache', 'formula', 'transform', 'quadrature'}
         central_moment = self._moment_central_dispatch(order, **kwargs,
                                                        methods=methods)
         if central_moment is None:
@@ -1335,37 +1269,6 @@ class ContinuousDistribution:
     def _moment_standard_general(self, order, **kwargs):
         general_standard_moments = {0: 1, 1: 0, 2: 1}
         return general_standard_moments.get(order, None)
-
-    def moment(self, order, center=None, standardized=False):
-        if order == 0:
-            return np.ones_like(self.mean)[()]
-        elif order == 1:
-            central = np.zeros_like(self.mean)
-        elif order == 2:
-            central = self.var
-        elif order == 3:
-            central = self.skewness * self.var ** 1.5
-        elif order == 4:
-            central = self.kurtosis * self.var ** 2.
-
-        if (order <= 3 or (order == 4 and self._overrides('_skewness'))):
-            if center is not None:
-                centrals = [self.moment(order=i) for i in range(order)] + [central]
-                nonstandard = self._moment_transform_center(order, centrals,
-                                                            self.mean, center)
-            else:
-                nonstandard = central
-        else:
-            center = self.mean if center is None else center
-            nonstandard = self._moment(order, center, **self._all_shapes)
-
-        moment = nonstandard / self.var ** (order / 2) if standardized else nonstandard
-        moment = np.asarray(moment)
-        moment[self._invalid] = np.nan
-        return moment[()]
-
-    def _moment(self, order, center, **kwargs):
-        return self._moment_integrate_pdf(order, center, **kwargs)
 
     def _moment_integrate_pdf(self, order, center, **kwargs):
         def integrand(x, order, center, **kwargs):
