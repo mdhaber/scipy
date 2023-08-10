@@ -146,7 +146,7 @@ class LogUniform(ContinuousDistribution):
     def _moment_raw(self, order, log_a, log_b, **kwargs):
         t1 = 1 / (log_b - log_a) / order
         t2 = np.real(np.exp(_log_diff(order * log_b, order * log_a)))
-        return t1 * t2
+        return t1 * t2 if order > 0 else 1
     #
     # def _cdf(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
