@@ -11,8 +11,25 @@ oo = np.inf
 # TODO:
 #  documentation
 #  document method call graph
-#  tests
-#  add methods
+#  Refactor `mean`, `var`, etc. based on new moment methods
+#  check NaN / inf behavior of moment methods
+#  have moment methods raise instead of returning None?
+#  test `moment`
+#  test `sample`
+#  add lower limit to cdf
+#  implement `logmoment`?
+#  add `mode` method
+#  use `median` information to improve integration?
+#  implement symmetric distribution
+#  Add loc/scale transformation
+#  Add operators for loc/scale transformation
+#  Write `fit` method
+#  parameters should be able to draw random samples that straddle the endpoints
+#   so we can check NaN patterns
+#  Should _Domain do the random sampling of values instead of _Parameter?
+#  Should `typical` attribute of _Parameter be a `_Domain`?
+#  why not have the _Parameter `check_dtype` also check whether argument is
+#    within the domain? Should also have a closer look at _Parameterization.
 #  use caching other than cached_properties - maybe lru_check if it doesn't
 #   the overhead is not bad
 #  pass shape parameters to methods that don't accept additional args?
@@ -20,7 +37,6 @@ oo = np.inf
 #  profile/optimize
 #  add array API support
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
-#  add lower limit to cdf
 #  ensure that user override return correct shape and dtype
 #  consider adding std back
 
@@ -55,6 +71,31 @@ oo = np.inf
 
 
 class _Domain:
+    """ Representation of the applicable domain of a parameter or variable
+
+    A `_Domain` object is responsible for storing information about the
+    domain of a parameter or variable, determining whether a value is within
+    the domain (`contains`), and providing a text/mathematical representation
+    of itself (`__str__`). Because the domain of a parameter/variable can have
+    a complicated relationship with other parameters and variables of a
+    distribution, `_Domain` itself does not try to represent all possibilities;
+    in fact, it has no implementation and is meant for subclassing.
+
+    Attributes
+    ----------
+    symbols : dict
+        A map from special numerical values to symbols for use in `__str__`
+
+    Methods
+    -------
+    contains(x)
+        Determine whether the argument is contained within the domain (True)
+        or not (False). Used for input validation.
+    __str__()
+        Returns a text representation of the domain (e.g. `[-π, ∞)`).
+        Used for generating documentation.
+
+    """
     symbols = {np.inf: "∞", -np.inf: "-∞", np.pi: "π", -np.pi: "-π"}
 
     def contains(self, x):
@@ -65,15 +106,84 @@ class _Domain:
 
 
 class _SimpleDomain(_Domain):
+    """ Representation of a simply-connected domain defined by two endpoints
+
+    Each endpoint may be a finite scalar, positive or negative infinity, or
+    be given by a single parameter. The domain may include the endpoints or
+    not.
+
+    This class still does not provide an implementation of the __str__ method,
+    so it is meant for subclassing (e.g. a subclass for domains on the real
+    line).
+
+    Attributes
+    ----------
+    symbols : dict
+        Inherited. A map from special values to symbols for use in `__str__`.
+    endpoints : 2-tuple of float(s) and/or str(s)
+        A tuple with two values. Each may be either a float (the numerical
+        value of the endpoints of the domain) or a string (the name of the
+        parameters that will define the endpoint).
+    inclusive : 2-tuple of bools
+        A tuple with two boolean values; each indicates whether the
+        corresponding endpoint is included within the domain or not.
+
+    Methods
+    -------
+    define_parameters(*parameters)
+        Records any parameters used to define the endpoints of the domain
+    contains(item, shapes)
+        Determines whether the argument is contained within the domain
+
+    """
 
     def define_parameters(self, *parameters):
+        r""" Records any parameters used to define the endpoints of the domain
+
+        Adds the keyword name of each parameter and its text representation
+        to the  `symbols` attribute as key:value pairs.
+        For instance, a parameter may be passed into to a distribution's
+        initializer using the keyword `log_a`, and the corresponding
+        string representation may be '\log(a)'. To form the text
+        representation of the domain for use in documentation, the
+        _Domain object needs to map from the keyword name used in the code
+        to the string representation.
+
+        Returns None, but updates the `symbols` attribute.
+
+        Parameters
+        ----------
+        *parameters : _Parameter objects
+            Parameters that may define the endpoints of the domain.
+
+        """
         new_symbols = {param.name: param.symbol for param in parameters}
         self.symbols.update(new_symbols)
 
     def contains(self, item, shapes={}):
+        """Determine whether the argument is contained within the domain
+
+        Parameters
+        ----------
+        item : ndarray
+            The argument
+        shapes : dict
+            A dictionary that maps between string variable names and numerical
+            values of parameters, which may define the endpoints.
+
+        Returns
+        -------
+        out : bool
+            True if `item` is within the domain; False otherwise.
+
+        """
         a, b = self.endpoints
         left_inclusive, right_inclusive = self.inclusive
 
+        # If `a` (`b`) is a string - the name of the parameter that defines
+        # the endpoint of the domain - then corresponding numerical values
+        # will be found in the `shapes` dictionary. Otherwise, it is itself
+        # the array of numerical values of the endpoint.
         a = shapes.get(a, a)
         b = shapes.get(b, b)
 
@@ -83,7 +193,12 @@ class _SimpleDomain(_Domain):
 
 
 class _RealDomain(_SimpleDomain):
+    """ Represents a simply-connected subset of the real line
 
+    Completes the implementation of the `_SimpleDomain` class for simple
+    domains on the real line.
+
+    """
     def __init__(self, endpoints=(-oo, oo), inclusive=(False, False)):
         a, b = endpoints
         self.endpoints = np.asarray(a)[()], np.asarray(b)[()]
@@ -102,82 +217,185 @@ class _RealDomain(_SimpleDomain):
 
 
 class _IntegerDomain(_SimpleDomain):
+    """ Represents a domain of consecutive integers.
+
+    Completes the implementation of the `_SimpleDomain` class for domains
+    composed of consecutive integer values.
+
+    To be completed.
+    """
     pass
 
 
 class _Parameter:
-    def __init__(self, name, *, symbol, domain, typical):
+    """ Representation of a distribution parameter or variable
+
+    A `_Parameter` object is responsible for storing information about a
+    parameter or variable, providing input validation/standardization of
+    values passed for that parameter, providing a text/mathematical
+    representation of the parameter for the documentation (`__str__`), and
+    drawing random values of itself for testing and benchmarking. It does
+    not provide a complete implementation of this functionality and is meant
+    for subclassing.
+
+    Attributes
+    ----------
+    name : str
+        The keyword used to pass numerical values of the parameter into the
+        initializer of the distribution
+    symbol : str
+        The text representation of the variable in the documentation. May
+        include LaTeX.
+    domain : _Domain
+        The domain of the parameter for which the distribution is valid.
+    typical : 2-tuple of floats or strings (consider making a _Domain)
+        Defines the endpoints of a typical range of values of the parameter.
+        Used for sampling.
+
+   """
+    def __init__(self, name, *, domain, symbol=None, typical=None):
         self.name = name
         self.symbol = symbol or name
         self.domain = domain
-        self.typical = typical
+        self.typical = typical or domain.endpoints
 
     def __str__(self):
+        """ String representation of the parameter for use in documentation """
         return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
 
     def draw(self, size=None, rng=None, shapes={}):
+        """ Draw random values of the parameter for use in testing
+
+        Parameters
+        ----------
+        size : tuple of ints
+            The shape of the array of valid values to be drawn. For now,
+            all values are uniformly sampled from within the `typical` range,
+            but we should add options for picking more challenging values (e.g.
+            including endpoints; out-of-bounds values; extreme values).
+        rng : np.Generator
+            The Generator used for drawing random values.
+        shapes : dict
+            Map between the names of parameters (that define the endpoints of
+            `typical`) and numerical values (arrays).
+
+        """
         rng = rng or np.random.default_rng()
         a, b = self.typical
+
+        # If `a` (`b`) is a string - the name of the parameter that defines
+        # the endpoint of the domain - then corresponding numerical values
+        # will be found in the `shapes` dictionary. Otherwise, it is itself
+        # the array of numerical values of the endpoint.
         a = shapes.get(a, a)
         b = shapes.get(b, b)
+
         return rng.uniform(a, b, size=np.broadcast_shapes(size, np.shape(a)))
 
 
 class _RealParameter(_Parameter):
-    def __init__(self, name, *, typical=None, symbol=None, domain=_RealDomain()):
-        typical = typical or domain.endpoints
-        symbol = symbol or name
-        super().__init__(name, symbol=symbol, domain=domain, typical=typical)
+    """ Represents a real-valued parameter
 
+    Implements the remaining methods of _Parameter for real parameters.
+    All attributes are inherited.
+
+    """
     def check_dtype(self, arr):
+        """ Input validation/standardization of numerical values of a parameter
+
+        Checks whether elements of the argument `arr` are reals, ensuring that
+        the dtype reflects this. Also produces a logical array that indicates
+        which elements meet the requirements.
+
+        Parameters
+        ----------
+        arr : ndarray
+            The argument array to be validated and standardized.
+
+        Returns
+        -------
+        arr : ndarray
+            The argument array that has been validated and standardized
+            (converted to an appropriate dtype, if necessary).
+        valid_dtype : boolean ndarray
+            Logical array indicating which elements are valid reals (True) and
+            which are not (False). The arrays of all distribution parameters
+            will be broadcasted, and elements for which any parameter value
+            does not meet the requirements will be replaced with NaN.
+
+        """
         arr = np.asarray(arr)
-        dtype = arr.dtype
-        valid_dtype = np.ones_like(arr, dtype=bool)
-        if np.issubdtype(dtype, np.floating):
-            pass
-        elif np.issubdtype(dtype, np.integer):
-            dtype = np.float64
-            arr = np.asarray(arr, dtype=dtype)
-        elif np.issubdtype(dtype, np.complexfloating):
+
+        if np.issubdtype(arr.dtype, np.floating):
+            valid_dtype = np.ones_like(arr, dtype=bool)
+        elif np.issubdtype(arr.dtype, np.integer):
+            valid_dtype = np.ones_like(arr, dtype=bool)
+            arr = np.asarray(arr, dtype=np.float64)
+        elif np.issubdtype(arr.dtype, np.complexfloating):
             real_arr = np.real(arr)
             valid_dtype = (real_arr == arr)
             arr = real_arr
         else:
             message = f"Parameter {self.name} must be of real dtype."
             raise ValueError(message)
-        return arr, valid_dtype
 
-
-class _IntegerParameter(_Parameter):
-    def __init__(self, name, *, typical=None, symbol=None, domain=_IntegerDomain()):
-        typical = typical or domain
-        symbol = symbol or name
-        super().__init__(name, symbol=symbol, domain=domain, typical=typical)
-
-    def check_dtype(self, arr):
-        arr = np.asarray(arr)
-        dtype = arr.dtype
-        valid_dtype = np.ones_like(arr, dtype=bool)
-        if np.issubdtype(dtype, np.integer):
-            pass
-        elif np.issubdtype(dtype, np.inexact):
-            integral_arr = np.round(arr)
-            valid_dtype = (integral_arr == arr)
-            arr = integral_arr
-        else:
-            message = f"Parameter {self.name} must be of integer dtype."
-            raise ValueError(message)
         return arr, valid_dtype
 
 
 class _Parameterization:
+    """ Represents a parameterization of a distribution
+
+    Distributions can have multiple parameterizations. A `_Parameterization`
+    object is responsible for recording the parameters used by the
+    parameterization, checking whether keyword arguments passed to the
+    distribution match the parameterization, and performing input validation
+    of the numerical values of these parameters.
+
+    Attributes
+    ----------
+    parameters : dict
+        String names (of keyword arguments) and the corresponding _Parameter
+        values.
+
+    """
     def __init__(self, *parameters):
         self.parameters = {param.name: param for param in parameters}
 
     def validate(self, shapes):
+        """ Checks whether the keyword arguments match the parameterization
+
+        Parameters
+        ----------
+        shapes : set
+            Set of names of parameters passed into the distribution as keyword
+            arguments.
+
+        Returns
+        -------
+        out : bool
+            True if the keyword arguments names match the names of the
+            parameters of this parameterization.
+        """
         return shapes == set(self.parameters.keys())
 
     def validate_shapes(self, shapes):
+        """ Input validation / standardization of parameterization
+
+        Parameters
+        ----------
+        shapes : dict
+            The keyword arguments passed as shape parameters to the
+            distribution.
+
+        Returns
+        -------
+        all_valid : ndarray
+            Logical array indicating the elements of the broadcasted shapes
+            for which all parameters are valid.
+        dtype : dtype
+            The common dtype of the parameter arrays. This will determine
+            the dtype of the output of distribution methods.
+        """
         all_valid = True
         dtypes = []
         for name, arr in shapes.items():
@@ -364,11 +582,12 @@ class ContinuousDistribution:
         shape_names_vals = tuple(zip(*shapes.items()))
         shape_names_vals = shape_names_vals or ([], [])
         shape_names, shape_vals = shape_names_vals
+        shape_names_set = set(shape_names)
         for parameterization in self._parameterizations:
-            if parameterization.validate(set(shape_names)):
+            if parameterization.validate(shape_names_set):
                 break
         else:
-            message = (f"The provided shapes `{set(shape_names)}` "
+            message = (f"The provided shapes `{shape_names_set}` "
                        "do not match a supported parameterization of the "
                        f"`{self.__class__.__name__}` distribution family.")
             raise ValueError(message)
@@ -378,7 +597,7 @@ class ContinuousDistribution:
         try:
             shape_vals = np.broadcast_arrays(*shape_vals)
         except ValueError as e:
-            message = (f"The shapes {set(shape_names)} provided to the "
+            message = (f"The shapes {shape_names_set} provided to the "
                        f"`{self.__class__.__name__}` distribution family "
                        "cannot be broadcast to the same shape.")
             raise ValueError(message) from e

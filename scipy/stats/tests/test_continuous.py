@@ -51,7 +51,8 @@ class Test_RealDomain:
         # Domain is defined by two parameters, 'a' and 'b'
         domain = _RealDomain(endpoints=('a', 'b'),
                              inclusive=(inclusive_a, inclusive_b))
-        domain.define_parameters(_RealParameter('a'), _RealParameter('b'))
+        domain.define_parameters(_RealParameter('a', domain=_RealDomain()),
+                                 _RealParameter('b', domain=_RealDomain()))
         # Check that domain and string evaluation give the same result
         res = domain.contains(x, dict(a=a, b=b))
         left_comparison = '<=' if inclusive_a else '<'
