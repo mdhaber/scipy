@@ -11,7 +11,6 @@ oo = np.inf
 
 # TODO:
 #  add options for drawing parameters: include endpoints/invalid, log-spacing
-#  figure out what to do about logmoment - preserve code, but remove?
 #  add `mode` method (can draft without automatic bounding)
 #  use `median` information to improve integration?
 #  add lower limit to cdf
@@ -609,6 +608,11 @@ def _log1mexp(x):
 
 
 def _logexpxmexpy(x, y):
+    # TODO: properly avoid NaN when y is negative infinity
+    i = np.isneginf(np.real(y))
+    if np.any(i):
+        y = y.copy()
+        y[i] = np.finfo(y.dtype).min
     x, y = np.broadcast_arrays(x, y)
     return special.logsumexp([x, y+np.pi*1j], axis=0)
 
@@ -811,56 +815,10 @@ class ContinuousDistribution:
     def _median_icdf(self, **kwargs):
         return self._icdf_dispatch(0.5, **kwargs)
 
-    def logmean(self, *, method=None):
-        return self._logmean_dispatch(method=method, **self._all_parameters)
-
-    def _logmean_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logmean'):
-            return np.asarray(self._logmean(**kwargs))[()]
-        elif (self.tol is _null and self._overrides('_mean') and method is None) or method=='log/exp':
-            return self._logmean_log_mean(**kwargs)
-        elif method in {None, 'logmoment'}:
-            return self._logmean_logmoment(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logmean_log_mean(self, **kwargs):
-        mean = self._moment_raw_dispatch(1, methods=self._moment_methods, **kwargs)
-        with np.errstate(divide='ignore'):
-            logmean = np.log(mean+0j)
-        return logmean
-
-    def _logmean_logmoment(self, **kwargs):
-        return self._logmoment(1, -np.inf, **kwargs)
-
     @_set_invalid_nan_property
     def mean(self, *, method=None):
         methods = {method} if method is not None else self._moment_methods
         return self._moment_raw_dispatch(1, methods=methods, **self._all_parameters)
-
-    def logvar(self, *, method=None):
-        return self._logvar_dispatch(method=method, logmean=self.logmean(),
-                                     **self._all_parameters)
-
-    def _logvar_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logvar'):
-            return np.asarray(self._logvar(**kwargs))[()]
-        elif (self.tol is _null and self._overrides('_var') and method is None) or method=='log/exp':
-            return self._logvar_log_var(**kwargs)
-        elif method in {None, 'logmoment'}:
-            return self._logvar_logmoment(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logvar_log_var(self, **kwargs):
-        return np.log(self._moment_central_dispatch(2, methods=self._moment_methods, **kwargs))
-
-    def _logvar_logmoment(self, mean=None, logmean=None, **kwargs):
-        logmean = np.log(mean + 0j) if logmean is None else logmean
-        return self._logmoment(2, logmean, **kwargs)
-
-    def logstd(self, *, method=None):
-        return self.var(method=method)/2
 
     @_set_invalid_nan_property
     def var(self, *, method=None):
@@ -870,62 +828,10 @@ class ContinuousDistribution:
     def std(self, *, method=None):
         return np.sqrt(self.var(method=method))
 
-    def logskewness(self, *, method=None):
-        return self._logskewness_dispatch(method=method, logmean=self.logmean(),
-                                          logvar=self.logvar(),**self._all_parameters)
-
-    def _logskewness_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logskewness'):
-            return np.asarray(self._logskewness(**kwargs))[()]
-        elif (self.tol is _null and self._overrides(
-                '_skewness') and method is None) or method == 'log/exp':
-            return self._logskewness_log_skewness(**kwargs)
-        elif method in {None, 'logmoment'}:
-            return self._logskewness_logmoment(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logskewness_log_skewness(self, **kwargs):
-        skew = self._moment_standard_dispatch(3, methods=self._moment_methods,
-                                              **kwargs)
-        with np.errstate(divide='ignore'):
-            logskew = np.log(skew + 0j)
-        return logskew
-
-    def _logskewness_logmoment(self, logmean=None, logvar=None, mean=None,
-                               var=None, **kwargs):
-        logmean = np.log(mean+0j) if logmean is None else logmean
-        logvar = np.log(var) if logvar is None else logvar
-        return self._logmoment(3, logmean, **kwargs) - 1.5 * logvar
-
     @_set_invalid_nan_property
     def skewness(self, *, method=None):
         methods = {method} if method is not None else self._moment_methods
         return self._moment_standard_dispatch(3, methods=methods, **self._all_parameters)
-
-    def logkurtosis(self, *, method=None):
-        return self._logkurtosis_dispatch(method=method, logmean=self.logmean(),
-                                          logvar=self.logvar(),**self._all_parameters)
-
-    def _logkurtosis_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logkurtosis'):
-            return np.asarray(self._logkurtosis(**kwargs))[()]
-        elif (self.tol is _null and self._overrides(
-                '_kurtosis') and method is None) or method == 'log/exp':
-            return self._logkurtosis_log_kurtosis(**kwargs)
-        elif method in {None, 'logmoment'}:
-            return self._logkurtosis_logmoment(**kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
-
-    def _logkurtosis_log_kurtosis(self, **kwargs):
-        return np.log(self._moment_standard_dispatch(4, methods=self._moment_methods, **kwargs))
-
-    def _logkurtosis_logmoment(self, logmean=None, logvar=None, mean=None,
-                               var=None, **kwargs):
-        logmean = np.log(mean+0j) if logmean is None else logmean
-        logvar = np.log(var) if logvar is None else logvar
-        return self._logmoment(4, logmean, **kwargs) - 2 * logvar
 
     @_set_invalid_nan_property
     def kurtosis(self, *, method=None):
@@ -1161,17 +1067,21 @@ class ContinuousDistribution:
         uniform = rng.uniform(size=full_shape)
         return self._icdf_dispatch(uniform, **kwargs)
 
-    def logmoment(self, order=1, *, logcenter=None, standardized=False):
-        # input validation
-        logcenter = self.logmean if logcenter is None else logcenter
-        raw = self._logmoment(order, logcenter, **self._all_parameters)
-        res = raw - self.logvar * order / 2 if standardized else raw
+    def _logmoment(self, order=1, *, logcenter=None, standardized=False):
+        # make this private until it is worked into moment
+        if logcenter is None or standardized is True:
+            logmean = self._logmoment_quad(1, -np.inf, **self._all_parameters)
+        else:
+            logmean = None
+
+        logcenter = logmean if logcenter is None else logcenter
+        res = self._logmoment_quad(order, logcenter, **self._all_parameters)
+        if standardized:
+            logvar = self._logmoment_quad(2, logmean, **self._all_parameters)
+            res = res - logvar * (order/2)
         return res
 
-    def _logmoment(self, order, logcenter, **kwargs):
-        return self._logmoment_integrate_logpdf(order, logcenter, **kwargs)
-
-    def _logmoment_integrate_logpdf(self, order, logcenter, **kwargs):
+    def _logmoment_quad(self, order, logcenter, **kwargs):
         def logintegrand(x, order, logcenter, **kwargs):
             logpdf = self._logpdf_dispatch(x, **kwargs)
             return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)

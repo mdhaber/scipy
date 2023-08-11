@@ -108,17 +108,8 @@ class TestDistributions:
         check_dist_func(dist, 'entropy', None, result_shape, methods)
         check_dist_func(dist, 'logentropy', None, result_shape, methods)
 
-        check_moment_funcs(dist, result_shape)
-
         methods = {'icdf'}
         check_dist_func(dist, 'median', None, result_shape, methods)
-
-        methods = {'log/exp', 'logmoment'}
-        check_dist_func(dist, 'logmean', None, result_shape, methods)
-        check_dist_func(dist, 'logvar', None, result_shape, methods)
-        check_dist_func(dist, 'logskewness', None, result_shape, methods)
-        check_dist_func(dist, 'logkurtosis', None, result_shape, methods)
-        assert_allclose(dist.logstd()*2, dist.var())
 
         methods = {'cache'}  #  weak test right now
         check_dist_func(dist, 'mean', None, result_shape, methods)
@@ -126,6 +117,8 @@ class TestDistributions:
         check_dist_func(dist, 'skewness', None, result_shape, methods)
         check_dist_func(dist, 'kurtosis', None, result_shape, methods)
         assert_allclose(dist.std()**2, dist.var())
+
+        check_moment_funcs(dist, result_shape)
 
         methods = {'log/exp'}
         check_dist_func(dist, 'pdf', x, x_result_shape, methods)
@@ -173,9 +166,15 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
     # computation methods and confirming the consistency of specific
     # distributions with their pdf/logpdf.
     args = tuple() if arg is None else (arg,)
-    ref = getattr(dist, fname)(*args)
-
     methods = methods.copy()
+
+    if "cache" in methods:
+        # If "cache" is specified before the value has been evaluated, it
+        # raises an error. After the value is evaluated, it will succeed.
+        with pytest.raises(NotImplementedError):
+            getattr(dist, fname)(*args, method="cache")
+
+    ref = getattr(dist, fname)(*args)
 
     tol_override = {}
 
@@ -224,6 +223,10 @@ def check_moment_funcs(dist, result_shape):
     formula_raw = dist._overrides('_moment_raw')
     formula_central = dist._overrides('_moment_central')
     formula_standard = dist._overrides('_moment_standard')
+
+    dist._moment_raw_cache = {}
+    dist._moment_central_cache = {}
+    dist._moment_standard_cache = {}
 
     ### Check Raw Moments ###
     for i in range(6):
@@ -302,6 +305,18 @@ def check_moment_funcs(dist, result_shape):
               success=formula_standard)
         check(dist.moment_standard, i, 'general', ref, success=i <= 2)
         check(dist.moment_standard, i, 'normalize', ref)
+
+    ### Check Against _logmoment ###
+    logmean = dist._logmoment(1, logcenter=-np.inf)
+    for i in range(6):
+        ref = np.exp(dist._logmoment(i, logcenter=-np.inf))
+        assert_allclose(dist.moment_raw(i), ref, atol=1e-14)
+
+        ref = np.exp(dist._logmoment(i, logcenter=logmean))
+        assert_allclose(dist.moment_central(i), ref, atol=1e-14)
+
+        ref = np.exp(dist._logmoment(i, logcenter=logmean, standardized=True))
+        assert_allclose(dist.moment_standard(i), ref, atol=1e-14)
 
 
 @pytest.mark.parametrize('family', (LogUniform, Normal))
