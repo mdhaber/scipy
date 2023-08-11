@@ -92,7 +92,7 @@ class Test_RealDomain:
 
 
 class TestDistributions:
-    @pytest.mark.filterwarnings('ignore')  # remove this
+    # @pytest.mark.filterwarnings('ignore')  # remove this
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data())
     def test_basic(self, family, data):

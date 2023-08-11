@@ -11,8 +11,6 @@ oo = np.inf
 
 # TODO:
 #  add options for drawing parameters: include endpoints/invalid, log-spacing
-#  add std back
-#  don't ignore warnings in tests
 #  figure out what to do about logmoment - preserve code, but remove?
 #  add `mode` method (can draft without automatic bounding)
 #  use `median` information to improve integration?
@@ -26,6 +24,7 @@ oo = np.inf
 #  Add operators for loc/scale transformation
 #  Be consistent about options passed to distributions/methods: tols, skip_iv, cache
 #  profile/optimize
+#  general cleanup (choose keyword-only parameters)
 #  documentation
 #  make video
 #  add array API support
@@ -826,14 +825,17 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logmean_log_mean(self, **kwargs):
-        return np.log(self._moment_raw_dispatch(1, methods=self._all_moment_methods, **kwargs))
+        mean = self._moment_raw_dispatch(1, methods=self._moment_methods, **kwargs)
+        with np.errstate(divide='ignore'):
+            logmean = np.log(mean+0j)
+        return logmean
 
     def _logmean_logmoment(self, **kwargs):
         return self._logmoment(1, -np.inf, **kwargs)
 
     @_set_invalid_nan_property
     def mean(self, *, method=None):
-        methods = {method} if method is not None else self._all_moment_methods
+        methods = {method} if method is not None else self._moment_methods
         return self._moment_raw_dispatch(1, methods=methods, **self._all_parameters)
 
     def logvar(self, *, method=None):
@@ -851,7 +853,7 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logvar_log_var(self, **kwargs):
-        return np.log(self._moment_central_dispatch(2, methods=self._all_moment_methods, **kwargs))
+        return np.log(self._moment_central_dispatch(2, methods=self._moment_methods, **kwargs))
 
     def _logvar_logmoment(self, mean=None, logmean=None, **kwargs):
         logmean = np.log(mean + 0j) if logmean is None else logmean
@@ -862,7 +864,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def var(self, *, method=None):
-        methods = {method} if method is not None else self._all_moment_methods
+        methods = {method} if method is not None else self._moment_methods
         return self._moment_central_dispatch(2, methods=methods, **self._all_parameters)
 
     def std(self, *, method=None):
@@ -884,7 +886,11 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logskewness_log_skewness(self, **kwargs):
-        return np.log(self._moment_standard_dispatch(3, methods=self._all_moment_methods, **kwargs))
+        skew = self._moment_standard_dispatch(3, methods=self._moment_methods,
+                                              **kwargs)
+        with np.errstate(divide='ignore'):
+            logskew = np.log(skew + 0j)
+        return logskew
 
     def _logskewness_logmoment(self, logmean=None, logvar=None, mean=None,
                                var=None, **kwargs):
@@ -894,7 +900,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def skewness(self, *, method=None):
-        methods = {method} if method is not None else self._all_moment_methods
+        methods = {method} if method is not None else self._moment_methods
         return self._moment_standard_dispatch(3, methods=methods, **self._all_parameters)
 
     def logkurtosis(self, *, method=None):
@@ -913,7 +919,7 @@ class ContinuousDistribution:
             raise NotImplementedError(self._not_implemented)
 
     def _logkurtosis_log_kurtosis(self, **kwargs):
-        return np.log(self._moment_standard_dispatch(4, methods=self._all_moment_methods, **kwargs))
+        return np.log(self._moment_standard_dispatch(4, methods=self._moment_methods, **kwargs))
 
     def _logkurtosis_logmoment(self, logmean=None, logvar=None, mean=None,
                                var=None, **kwargs):
@@ -923,7 +929,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def kurtosis(self, *, method=None):
-        methods = {method} if method is not None else self._all_moment_methods
+        methods = {method} if method is not None else self._moment_methods
         return self._moment_standard_dispatch(4, methods=methods, **self._all_parameters)
 
     @_set_invalid_nan
@@ -1185,14 +1191,14 @@ class ContinuousDistribution:
         return order_int
 
     @cached_property
-    def _all_moment_methods(self):
+    def _moment_methods(self):
         return {'cache', 'formula', 'transform',
                 'normalize', 'general', 'quadrature'}
 
     @_set_invalid_nan_property
     def moment_raw(self, order=1, *, method=None):
         order = self._validate_order(order)
-        methods = self._all_moment_methods if method is None else {method}
+        methods = self._moment_methods if method is None else {method}
         return self._moment_raw_dispatch(order, methods=methods,
                                          **self._all_parameters)
 
@@ -1255,7 +1261,7 @@ class ContinuousDistribution:
     @_set_invalid_nan_property
     def moment_central(self, order=1, *, method=None):
         order = self._validate_order(order)
-        methods = self._all_moment_methods if method is None else {method}
+        methods = self._moment_methods if method is None else {method}
         return self._moment_central_dispatch(order, methods=methods,
                                              **self._all_parameters)
 
@@ -1281,7 +1287,7 @@ class ContinuousDistribution:
 
         if moment is None and 'quadrature' in methods:
             mean = self._moment_raw_dispatch(1, **kwargs,
-                                             methods=self._all_moment_methods)
+                                             methods=self._moment_methods)
             moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
 
         if moment is not None:
@@ -1303,7 +1309,7 @@ class ContinuousDistribution:
                 return None
             raw_moments.append(moment_i)
 
-        mean_methods = self._all_moment_methods
+        mean_methods = self._moment_methods
         mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
 
         moment = self._moment_transform_center(order, raw_moments, 0, mean)
@@ -1315,7 +1321,7 @@ class ContinuousDistribution:
                                                          methods=methods)
         if standard_moment is None:
             return None
-        var = self._moment_central_dispatch(2, methods=self._all_moment_methods,
+        var = self._moment_central_dispatch(2, methods=self._moment_methods,
                                             **kwargs)
         return standard_moment*var**(order/2)
 
@@ -1326,7 +1332,7 @@ class ContinuousDistribution:
     @_set_invalid_nan_property
     def moment_standard(self, order=1, *, method=None):
         order = self._validate_order(order)
-        methods = self._all_moment_methods if method is None else {method}
+        methods = self._moment_methods if method is None else {method}
         return self._moment_standard_dispatch(order, methods=methods,
                                               **self._all_parameters)
 
@@ -1365,7 +1371,7 @@ class ContinuousDistribution:
                                                        methods=methods)
         if central_moment is None:
             return None
-        var = self._moment_central_dispatch(2, methods=self._all_moment_methods,
+        var = self._moment_central_dispatch(2, methods=self._moment_methods,
                                             **kwargs)
         return central_moment/var**(order/2)
 
