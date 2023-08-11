@@ -190,6 +190,7 @@ class _SimpleDomain(_Domain):
             Numerical values of the endpoints
 
         """
+        # TODO: ensure outputs are floats
         a, b = self.endpoints
         # If `a` (`b`) is a string - the name of the parameter that defines
         # the endpoint of the domain - then corresponding numerical values
@@ -266,6 +267,8 @@ class _RealDomain(_SimpleDomain):
         """
         rng = rng or np.random.default_rng()
         a, b = self.get_numerical_endpoints(parameter_values)
+        a = np.minimum(a, np.finfo(a).max) if np.any(np.isinf(a)) else a
+        b = np.maximum(b, np.finfo(b).max) if np.any(np.isinf(b)) else b
 
         size = np.broadcast_shapes(size, np.shape(a), np.shape(b))  # needed?
         return rng.uniform(a, b, size=size)
@@ -471,10 +474,14 @@ class _Parameterization:
         # depend on others. If the relationshp is simple (e.g. a < b < c),
         # we could just draw values in order a, b, c.
         parameter_values = {}
-        sizes = sizes if np.iterable(sizes) else [sizes]*len(self.parameters)
+
+        if not len(sizes) or not np.iterable(sizes[0]):
+            sizes = [sizes]*len(self.parameters)
+
         for size, param in zip(sizes, self.parameters.values()):
             parameter_values[param.name] = param.draw(size, rng,
                                                       parameter_values)
+
         return parameter_values
 
 
@@ -688,9 +695,12 @@ class ContinuousDistribution:
         self._all_parameter_names = all_parameter_names
 
     @classmethod
-    def _draw(cls, sizes=None, rng=None, i_parameterization=0):
+    def _draw(cls, sizes=None, rng=None, i_parameterization=None):
         if len(cls._parameterizations) == 0:
             return cls()
+        if i_parameterization is None:
+            n = cls._num_parameterizations()
+            i_parameterization = rng.integers(0, max(0, n - 1), endpoint=True)
 
         parameterization = cls._parameterizations[i_parameterization]
         parameters = parameterization.draw(sizes, rng)

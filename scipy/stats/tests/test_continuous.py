@@ -145,17 +145,11 @@ class TestDistributions:
 def draw_distribution_from_family(family, data, rng):
     # If the distribution has parameters, choose a parameterization and
     # draw broadcastable shapes for the parameter arrays.
-    n_parameterizations = len(family._parameterizations)
-    if n_parameterizations > 0:
-        i_parameterization = (
-            data.draw(strategies.integers(min_value=0,
-                                          max_value=n_parameterizations - 1)))
-        n_parameters = len(
-            family._parameterizations[i_parameterization].parameters)
+    n_parameters = family._num_parameters()
+    if n_parameters > 0:
         shapes, result_shape = data.draw(
             npst.mutually_broadcastable_shapes(num_shapes=n_parameters))
-        dist = family._draw(shapes, rng=rng,
-                            i_parameterization=i_parameterization)
+        dist = family._draw(shapes, rng=rng)
     else:
         dist = family._draw(rng=rng)
         result_shape = tuple()
@@ -313,14 +307,12 @@ def check_moment_funcs(dist, result_shape):
 @pytest.mark.parametrize('dist_shape', [tuple(), (4, 1)])
 def test_sample(family, dist_shape, x_shape):
     rng = np.random.default_rng(842582438235635)
-    num_parameterizations = family._num_parameterizations()
     num_parameters = family._num_parameters()
 
     if dist_shape and num_parameters == 0:
         pytest.skip("Distribution can't have a shape without parameters.")
 
-    i = rng.integers(0, max(0, num_parameterizations-1), endpoint=True)
-    dist = family._draw([dist_shape]*num_parameters, rng, i_parameterization=i)
+    dist = family._draw(dist_shape, rng)
 
     n = 1000
     sample_size = (n,) + x_shape
