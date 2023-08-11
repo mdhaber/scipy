@@ -23,8 +23,6 @@ oo = np.inf
 #  Write `fit` method
 #  parameters should be able to draw random samples that straddle the endpoints
 #   so we can check NaN patterns
-#  Should _Domain do the random sampling of values instead of _Parameter?
-#  Should `typical` attribute of _Parameter be a `_Domain`?
 #  pass atol, rtol to methods
 #  profile/optimize
 #  add array API support
@@ -174,6 +172,33 @@ class _SimpleDomain(_Domain):
         new_symbols = {param.name: param.symbol for param in parameters}
         self.symbols.update(new_symbols)
 
+    def get_numerical_endpoints(self, parameter_values):
+        """ Get the numerical values of the domain endpoints
+
+        Domain endpoints may be defined symbolically. This returns numerical
+        values of the endpoints given numerical values for any variables.
+
+        Parameters
+        ----------
+        parameter_values : dict
+            A dictionary that maps between string variable names and numerical
+            values of parameters, which may define the endpoints.
+
+        Returns
+        -------
+        a, b : ndarray
+            Numerical values of the endpoints
+
+        """
+        a, b = self.endpoints
+        # If `a` (`b`) is a string - the name of the parameter that defines
+        # the endpoint of the domain - then corresponding numerical values
+        # will be found in the `parameter_values` dictionary. Otherwise, it is
+        # itself the array of numerical values of the endpoint.
+        a = parameter_values.get(a, a)[()]
+        b = parameter_values.get(b, b)[()]
+        return a, b
+
     def contains(self, item, parameter_values={}):
         """Determine whether the argument is contained within the domain
 
@@ -191,15 +216,8 @@ class _SimpleDomain(_Domain):
             True if `item` is within the domain; False otherwise.
 
         """
-        a, b = self.endpoints
+        a, b = self.get_numerical_endpoints(parameter_values)
         left_inclusive, right_inclusive = self.inclusive
-
-        # If `a` (`b`) is a string - the name of the parameter that defines
-        # the endpoint of the domain - then corresponding numerical values
-        # will be found in the `parameter_values` dictionary. Otherwise, it is
-        # itself the array of numerical values of the endpoint.
-        a = parameter_values.get(a, a)
-        b = parameter_values.get(b, b)
 
         in_left = item >= a if left_inclusive else item > a
         in_right = item <= b if right_inclusive else item < b
@@ -229,6 +247,28 @@ class _RealDomain(_SimpleDomain):
 
         return f"{left}{a}, {b}{right}"
 
+    def draw(self, size=None, rng=None, parameter_values={}):
+        """ Draw random values from the domain
+
+        Parameters
+        ----------
+        size : tuple of ints
+            The shape of the array of valid values to be drawn. For now,
+            all values are uniformly sampled, but we should add options for
+            picking more challenging values (e.g. including endpoints if the
+            domain is inclusive; out-of-bounds values; extreme values).
+        rng : np.Generator
+            The Generator used for drawing random values.
+        parameter_values : dict
+            Map between the names of parameters (that define the endpoints)
+            and numerical values (arrays).
+
+        """
+        rng = rng or np.random.default_rng()
+        a, b = self.get_numerical_endpoints(parameter_values)
+
+        size = np.broadcast_shapes(size, np.shape(a), np.shape(b))  # needed?
+        return rng.uniform(a, b, size=size)
 
 class _IntegerDomain(_SimpleDomain):
     """ Represents a domain of consecutive integers.
@@ -271,7 +311,9 @@ class _Parameter:
         self.name = name
         self.symbol = symbol or name
         self.domain = domain
-        self.typical = typical or domain.endpoints
+        if typical is not None and not isinstance(typical, _Domain):
+            typical = _RealDomain(typical)
+        self.typical = typical or domain
 
     def __str__(self):
         """ String representation of the parameter for use in documentation """
@@ -294,17 +336,8 @@ class _Parameter:
             `typical`) and numerical values (arrays).
 
         """
-        rng = rng or np.random.default_rng()
-        a, b = self.typical
-
-        # If `a` (`b`) is a string - the name of the parameter that defines
-        # the endpoint of the domain - then corresponding numerical values
-        # will be found in the `parameter_values` dictionary. Otherwise, it is
-        # itself the array of numerical values of the endpoint.
-        a = parameter_values.get(a, a)
-        b = parameter_values.get(b, b)
-
-        return rng.uniform(a, b, size=np.broadcast_shapes(size, np.shape(a)))
+        return self.typical.draw(size=size, rng=rng,
+                                 parameter_values=parameter_values)
 
 
 class _RealParameter(_Parameter):
@@ -325,6 +358,8 @@ class _RealParameter(_Parameter):
         ----------
         arr : ndarray
             The argument array to be validated and standardized.
+        parameter_values : dict
+            Map of parameter names to parameter value arrays.
 
         Returns
         -------
@@ -432,10 +467,14 @@ class _Parameterization:
         return " ".join(messages)
 
     def draw(self, sizes=None, rng=None):
+        # ENH: be smart about the order. The domains of some parameters
+        # depend on others. If the relationshp is simple (e.g. a < b < c),
+        # we could just draw values in order a, b, c.
         parameter_values = {}
         sizes = sizes if np.iterable(sizes) else [sizes]*len(self.parameters)
         for size, param in zip(sizes, self.parameters.values()):
-            parameter_values[param.name] = param.draw(size, rng)
+            parameter_values[param.name] = param.draw(size, rng,
+                                                      parameter_values)
         return parameter_values
 
 
@@ -700,10 +739,7 @@ class ContinuousDistribution:
         return self._support(**self._all_parameters)
 
     def _support(self, **kwargs):
-        a, b = self._variable.domain.endpoints
-        a = kwargs.get(a, a)[()]
-        b = kwargs.get(b, b)[()]
-        return a, b
+        return self._variable.domain.get_numerical_endpoints(kwargs)
 
     def logentropy(self, method=None):
         return self._logentropy_dispatch(method=method, **self._all_parameters)
