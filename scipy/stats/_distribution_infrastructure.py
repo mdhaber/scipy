@@ -11,7 +11,6 @@ oo = np.inf
 
 # TODO:
 #  documentation
-#  document method call graph
 #  check NaN / inf behavior of moment methods
 #  add `axis` to `ks_1samp`
 #  don't ignore warnings in tests
@@ -1273,10 +1272,13 @@ class ContinuousDistribution:
                 moment = np.broadcast_to(moment, self._shape_shape)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_transform(order, **kwargs)
+            moment = self._moment_standard_transform(order, False, **kwargs)
 
         if moment is None and 'general' in methods:
             moment = self._moment_standard_general(order, **kwargs)
+
+        if moment is None and 'normalize' in methods:
+            moment = self._moment_standard_transform(order, True, **kwargs)
 
         if moment is not None:
             self._moment_standard_cache[order] = moment
@@ -1286,8 +1288,9 @@ class ContinuousDistribution:
     def _moment_standard(self, order, **kwargs):
         return None
 
-    def _moment_standard_transform(self, order, **kwargs):
-        methods = {'cache', 'formula', 'transform', 'quadrature'}
+    def _moment_standard_transform(self, order, use_quadrature, **kwargs):
+        methods = ({'quadrature'} if use_quadrature
+                   else {'cache', 'formula', 'transform'})
         central_moment = self._moment_central_dispatch(order, **kwargs,
                                                        methods=methods)
         if central_moment is None:
