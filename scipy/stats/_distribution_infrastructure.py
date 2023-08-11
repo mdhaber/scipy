@@ -10,6 +10,8 @@ _null = object()
 oo = np.inf
 
 # TODO:
+#  For developer sanity, get_numerical_endpoints should give a readable error
+#   message when parameter values are needed but not passed
 #  add options for drawing parameters: include endpoints/invalid, log-spacing
 #  add `mode` method (can draft without automatic bounding)
 #  use `median` information to improve integration?
@@ -21,7 +23,7 @@ oo = np.inf
 #  implement symmetric distribution
 #  Add loc/scale transformation
 #  Add operators for loc/scale transformation
-#  Be consistent about options passed to distributions/methods: tols, skip_iv, cache
+#  Be consistent about options passed to distributions/methods: tols, skip_iv, cache, rng
 #  profile/optimize
 #  general cleanup (choose keyword-only parameters)
 #  documentation
@@ -197,7 +199,7 @@ class _SimpleDomain(_Domain):
         # itself the array of numerical values of the endpoint.
         a = parameter_values.get(a, a)[()]
         b = parameter_values.get(b, b)[()]
-        return a, b
+        return np.broadcast_arrays(a, b)
 
     def contains(self, item, parameter_values={}):
         """Determine whether the argument is contained within the domain
@@ -247,7 +249,7 @@ class _RealDomain(_SimpleDomain):
 
         return f"{left}{a}, {b}{right}"
 
-    def draw(self, size=None, rng=None, parameter_values={}):
+    def draw(self, size=None, rng=None, proportions=None, parameter_values={}):
         """ Draw random values from the domain
 
         Parameters
@@ -259,18 +261,53 @@ class _RealDomain(_SimpleDomain):
             domain is inclusive; out-of-bounds values; extreme values).
         rng : np.Generator
             The Generator used for drawing random values.
+        proportions : tuple of numbers
+            A tuple of four non-negative numbers that indicate the expected
+            relative proportion of elements that:
+
+            - are strictly within the domain,
+            - are at one of the two endpoints,
+            - are strictly outside the domain, and
+            - are NaN,
+
+            respectively. Default is (1, 0, 0, 0). The number of elements in each category
+            is drawn from the multinomial distribution with `np.prod(size)` as
+            the number of trials and `proportions` as the event probabilities.
+            The values in `proportions` are automatically normalized to sum to
+            1.
         parameter_values : dict
             Map between the names of parameters (that define the endpoints)
             and numerical values (arrays).
 
         """
         rng = rng or np.random.default_rng()
-        a, b = self.get_numerical_endpoints(parameter_values)
-        a = np.minimum(a, np.finfo(a).max) if np.any(np.isinf(a)) else a
-        b = np.maximum(b, np.finfo(b).max) if np.any(np.isinf(b)) else b
+        proportions = (1, 0, 0, 0) if proportions is None else proportions
+        pvals = np.abs(proportions)/np.sum(proportions)
 
-        size = np.broadcast_shapes(size, np.shape(a), np.shape(b))  # needed?
-        return rng.uniform(a, b, size=size)
+        a, b = self.get_numerical_endpoints(parameter_values)
+        min = np.maximum(a, np.finfo(a).min/10) if np.any(np.isinf(a)) else a
+        max = np.minimum(b, np.finfo(b).max/10) if np.any(np.isinf(b)) else b
+
+        base_shape = min.shape
+        extended_shape = np.broadcast_shapes(size, base_shape)
+        n = int(np.prod(extended_shape)/np.prod(base_shape))
+
+        n_in, n_on, n_out, n_nan = rng.multinomial(n, pvals)
+
+        z_in = rng.uniform(min, max, size=(n_in,) + base_shape)
+
+        z_on = np.ones((n_on,) + base_shape)
+        z_on[:n_on//2] = a
+        z_on[n_on // 2:] = b
+
+        z_out = rng.uniform(min-10, max+10, size=(n_out,) + base_shape)
+
+        z_nan = np.full((n_nan,) + base_shape, np.nan)
+
+        z = np.concatenate((z_in, z_on, z_out, z_nan), axis=0)
+        z = rng.permuted(z, axis=0)
+
+        return np.reshape(z, extended_shape)
 
 class _IntegerDomain(_SimpleDomain):
     """ Represents a domain of consecutive integers.
@@ -321,7 +358,8 @@ class _Parameter:
         """ String representation of the parameter for use in documentation """
         return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
 
-    def draw(self, size=None, rng=None, parameter_values={}):
+    def draw(self, size=None, *, rng=None, domain='typical', proportions=None,
+             parameter_values={}):
         """ Draw random values of the parameter for use in testing
 
         Parameters
@@ -333,13 +371,33 @@ class _Parameter:
             including endpoints; out-of-bounds values; extreme values).
         rng : np.Generator
             The Generator used for drawing random values.
+        domain : str
+            The domain of the `_Parameter` from which to draw. Default is
+            "domain" (the *full* domain); alternative is "typical". An
+            enhancement would give a way to interpolate between the two.
+        proportions : tuple of numbers
+            A tuple of four non-negative numbers that indicate the expected
+            relative proportion of elements that:
+
+            - are strictly within the domain,
+            - are at one of the two endpoints,
+            - are strictly outside the domain, and
+            - are NaN,
+
+            respectively. Default is (1, 0, 0, 0). The number of elements in each category
+            is drawn from the multinomial distribution with `np.prod(size)` as
+            the number of trials and `proportions` as the event probabilities.
+            The values in `proportions` are automatically normalized to sum to
+            1.
         parameter_values : dict
             Map between the names of parameters (that define the endpoints of
             `typical`) and numerical values (arrays).
 
         """
-        return self.typical.draw(size=size, rng=rng,
-                                 parameter_values=parameter_values)
+        domain = getattr(self, domain)
+        proportions = (1, 0, 0, 0) if proportions is None else proportions
+        return domain.draw(size=size, rng=rng, proportions=proportions,
+                           parameter_values=parameter_values)
 
 
 class _RealParameter(_Parameter):
@@ -478,8 +536,8 @@ class _Parameterization:
             sizes = [sizes]*len(self.parameters)
 
         for size, param in zip(sizes, self.parameters.values()):
-            parameter_values[param.name] = param.draw(size, rng,
-                                                      parameter_values)
+            parameter_values[param.name] = param.draw(
+                size, rng=rng, parameter_values=parameter_values)
 
         return parameter_values
 
