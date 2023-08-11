@@ -13,8 +13,8 @@ oo = np.inf
 #  documentation
 #  document method call graph
 #  check NaN / inf behavior of moment methods
-#  test `moment`
-#  test `sample`
+#  add `axis` to `ks_1samp`
+#  don't ignore warnings in tests
 #  add lower limit to cdf
 #  implement `logmoment`?
 #  add `mode` method
@@ -360,6 +360,9 @@ class _Parameterization:
     def __init__(self, *parameters):
         self.parameters = {param.name: param for param in parameters}
 
+    def __len__(self):
+        return len(self.parameters)
+
     def validate(self, shapes):
         """ Checks whether the keyword arguments match the parameterization
 
@@ -637,6 +640,15 @@ class ContinuousDistribution:
         parameterization = cls._parameterizations[i_parameterization]
         shapes = parameterization.draw(sizes, rng)
         return cls(**shapes)
+
+    @classmethod
+    def _num_parameterizations(cls):
+        return len(cls._parameterizations)
+
+    @classmethod
+    def _num_shapes(cls):
+        return (0 if not cls._num_parameterizations()
+                else len(cls._parameterizations[0]))
 
     def _get_shapes(self, shape_names=None):
         shape_names = shape_names or self._all_shape_names

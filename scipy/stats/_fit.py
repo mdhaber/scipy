@@ -1224,14 +1224,15 @@ def _compute_dplus(cdfvals):  # adapted from _stats_py before gh-17062
     return (np.arange(1.0, n + 1) / n - cdfvals).max(axis=-1)
 
 
-def _compute_dminus(cdfvals, axis=-1):
+def _compute_dminus(cdfvals):
     n = cdfvals.shape[-1]
     return (cdfvals - np.arange(0.0, n)/n).max(axis=-1)
 
 
-def _kolmogorov_smirnov(dist, data):
-    x = np.sort(data, axis=-1)
+def _kolmogorov_smirnov(dist, data, axis=-1):
+    x = np.sort(data, axis=axis)
     cdfvals = dist.cdf(x)
+    cdfvals = np.moveaxis(cdfvals, axis, -1)
     Dplus = _compute_dplus(cdfvals)  # always works along last axis
     Dminus = _compute_dminus(cdfvals)
     return np.maximum(Dplus, Dminus)

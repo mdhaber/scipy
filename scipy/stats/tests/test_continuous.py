@@ -2,11 +2,12 @@ import warnings
 
 import numpy as np
 import pytest
-import hypothesis
 from numpy.testing import assert_allclose, assert_equal
-from hypothesis import strategies, given, assume
+from hypothesis import strategies, given
 import hypothesis.extra.numpy as npst
-from numpy import ComplexWarning
+
+from scipy.stats._fit import _kolmogorov_smirnov
+from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
     _Domain, _RealDomain, _RealParameter)
@@ -89,39 +90,24 @@ class Test_RealDomain:
         ref = f"{left_bracket}{a}, {b}{right_bracket}"
         assert str(domain) == ref
 
+
 class TestDistributions:
-    @pytest.mark.filterwarnings('ignore')
+    @pytest.mark.filterwarnings('ignore')  # remove this
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data())
-    def test_distribution(self, family, data):
+    def test_basic(self, family, data):
         # strengthen this test by letting min_side=0 for both broadcasted shapes
         # check for scalar output if all inputs are scalar
         # inject bad parameters and x-values, check NaN pattern
         rng = np.random.default_rng(4826584632856)
 
-        # If the distribution has parameters, choose a parameterization and
-        # draw broadcastable shapes for the parameter arrays.
-        n_parameterizations = len(family._parameterizations)
-        if n_parameterizations > 0:
-            i_parameterization = data.draw(strategies.integers(min_value=0, max_value=n_parameterizations-1))
-            n_parameters = len(family._parameterizations[i_parameterization].parameters)
-            shapes, result_shape = data.draw(npst.mutually_broadcastable_shapes(num_shapes=n_parameters))
-            dist = family._draw(shapes, rng=rng, i_parameterization=i_parameterization)
-        else:
-            dist = family._draw(rng=rng)
-            result_shape = tuple()
-
-        # Draw a broadcastable shape for the arguments, and draw values for the
-        # arguments.
-        x_shape = data.draw(npst.broadcastable_shapes(result_shape))
-        x = dist._variable.draw(x_shape, shapes=dist._all_shapes)
-        x_result_shape = np.broadcast_shapes(x_shape, result_shape)
-        p = rng.uniform(size=x_shape)
-        logp = np.log(p)
+        tmp = draw_distribution_from_family(family, data, rng)
+        dist, x, p, logp, result_shape, x_result_shape = tmp
 
         methods = {'log/exp', 'quadrature'}
         check_dist_func(dist, 'entropy', None, result_shape, methods)
         check_dist_func(dist, 'logentropy', None, result_shape, methods)
+
         check_moment_funcs(dist, result_shape)
 
         methods = {'icdf'}
@@ -156,6 +142,32 @@ class TestDistributions:
         check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
 
 
+def draw_distribution_from_family(family, data, rng):
+    # If the distribution has parameters, choose a parameterization and
+    # draw broadcastable shapes for the parameter arrays.
+    n_parameterizations = len(family._parameterizations)
+    if n_parameterizations > 0:
+        i_parameterization = data.draw(strategies.integers(min_value=0,
+                                                           max_value=n_parameterizations - 1))
+        n_parameters = len(
+            family._parameterizations[i_parameterization].parameters)
+        shapes, result_shape = data.draw(
+            npst.mutually_broadcastable_shapes(num_shapes=n_parameters))
+        dist = family._draw(shapes, rng=rng,
+                            i_parameterization=i_parameterization)
+    else:
+        dist = family._draw(rng=rng)
+        result_shape = tuple()
+
+    # Draw a broadcastable shape for the arguments, and draw values for the
+    # arguments.
+    x_shape = data.draw(npst.broadcastable_shapes(result_shape))
+    x = dist._variable.draw(x_shape, shapes=dist._all_shapes)
+    x_result_shape = np.broadcast_shapes(x_shape, result_shape)
+    p = rng.uniform(size=x_shape)
+    logp = np.log(p)
+
+    return dist, x, p, logp, result_shape, x_result_shape
 
 
 def check_dist_func(dist, fname, arg, result_shape, methods):
@@ -280,7 +292,6 @@ def check_moment_funcs(dist, result_shape):
     del dist._moment_central_cache[2]
 
     for i in range(6):
-        print(i)
         check(dist.moment_standard, i, 'cache', success=False)
         ref = dist.moment_central(i, method='quadrature') / var ** (i / 2)
         del dist._moment_central_cache[i]
@@ -289,3 +300,33 @@ def check_moment_funcs(dist, result_shape):
               success=formula_standard)
         check(dist.moment_standard, i, 'general', ref, success=i <= 2)
         check(dist.moment_standard, i, 'normalize', ref)
+
+
+@pytest.mark.parametrize('family', (LogUniform, Normal))
+@pytest.mark.parametrize('x_shape', [tuple(), (2, 3)])
+@pytest.mark.parametrize('dist_shape', [tuple(), (4, 1)])
+def test_sample(family, dist_shape, x_shape):
+    rng = np.random.default_rng(842582438235635)
+    num_parameterizations = family._num_parameterizations()
+    num_parameters = family._num_shapes()
+
+    if dist_shape and num_parameters == 0:
+        pytest.skip("Distribution can't have a shape without parameters.")
+
+    i = rng.integers(0, max(0, num_parameterizations-1), endpoint=True)
+    dist = family._draw([dist_shape]*num_parameters, rng, i_parameterization=i)
+
+    n = 1000
+    sample_size = (n,) + x_shape
+    sample_array_shape = sample_size + dist_shape
+
+    x = dist.sample(sample_size, rng=rng)
+    assert x.shape == sample_array_shape
+
+    # probably should give `axis` argument to ks_1samp, review that separately
+    statistic = _kolmogorov_smirnov(dist, x, axis=0)
+    pvalue = kolmogn(x.shape[0], statistic, cdf=False)
+    p_threshold = 0.01
+    num_pvalues = pvalue.size
+    num_small_pvalues = np.sum(pvalue < p_threshold)
+    assert num_small_pvalues < p_threshold * num_pvalues
