@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_equal
-from hypothesis import strategies, given
+from hypothesis import strategies, given, reproduce_failure  # noqa
 import hypothesis.extra.numpy as npst
 
 from scipy.stats._fit import _kolmogorov_smirnov

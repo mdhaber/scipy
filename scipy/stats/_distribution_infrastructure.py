@@ -26,8 +26,7 @@ oo = np.inf
 #   so we can check NaN patterns
 #  Should _Domain do the random sampling of values instead of _Parameter?
 #  Should `typical` attribute of _Parameter be a `_Domain`?
-#  why not have the _Parameter `check_dtype` also check whether argument is
-#    within the domain? Should also have a closer look at _Parameterization.
+#  Should also have a closer look at _Parameterization.
 #  use caching other than cached_properties - maybe lru_cache if it doesn't
 #   the overhead is not bad
 #  pass distribution parameters to methods that don't accept additional args?
@@ -311,7 +310,7 @@ class _RealParameter(_Parameter):
     All attributes are inherited.
 
     """
-    def check_dtype(self, arr):
+    def validate(self, arr, parameter_values):
         """ Input validation/standardization of numerical values of a parameter
 
         Checks whether elements of the argument `arr` are reals, ensuring that
@@ -350,7 +349,10 @@ class _RealParameter(_Parameter):
             message = f"Parameter {self.name} must be of real dtype."
             raise ValueError(message)
 
-        return arr, valid_dtype
+        in_domain = self.domain.contains(arr, parameter_values)
+        valid = in_domain & valid_dtype
+
+        return arr, arr.dtype, valid
 
 
 class _Parameterization:
@@ -413,9 +415,9 @@ class _Parameterization:
         dtypes = []
         for name, arr in parameter_values.items():
             parameter = self.parameters[name]
-            arr, valid = parameter.check_dtype(arr)
+            arr, dtype, valid = parameter.validate(arr, parameter_values)
             dtypes.append(arr.dtype)
-            valid = valid & parameter.domain.contains(arr, parameter_values)
+            # in_domain = parameter.domain.contains(arr, parameter_values)
             all_valid = all_valid & valid
             parameter_values[name] = arr
         dtype = np.result_type(*dtypes)
@@ -475,17 +477,16 @@ def _set_invalid_nan(f):
             raise ValueError(message) from e
 
         # check implications of <, <=
-        x, valid = self._variable.check_dtype(x)
         mask_low = x < low if method_name in replace_strict else x <= low
         mask_high = x > high if method_name in replace_strict else x >= high
         if method_name in replace_exact:
             x, a, b = np.broadcast_arrays(x, *self.support)
-            mask_low_exact = (x == low) & valid
+            mask_low_exact = (x == low)
             replace_low_exact = b[mask_low_exact] if method_name.endswith('ccdf') else a[mask_low_exact]
-            mask_high_exact = (x == high) & valid
+            mask_high_exact = (x == high)
             replace_high_exact = a[mask_high_exact] if method_name.endswith('ccdf') else b[mask_high_exact]
 
-        x_invalid = (mask_low | mask_high | ~valid)
+        x_invalid = (mask_low | mask_high)
         if np.any(x_invalid):
             x = np.copy(x)
             x[x_invalid] = np.nan
