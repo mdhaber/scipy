@@ -15,7 +15,6 @@ oo = np.inf
 #  add `axis` to `ks_1samp`
 #  don't ignore warnings in tests
 #  add lower limit to cdf
-#  implement `logmoment`?
 #  add `mode` method
 #  use `median` information to improve integration?
 #  implement symmetric distribution
@@ -26,16 +25,14 @@ oo = np.inf
 #   so we can check NaN patterns
 #  Should _Domain do the random sampling of values instead of _Parameter?
 #  Should `typical` attribute of _Parameter be a `_Domain`?
-#  Should also have a closer look at _Parameterization.
-#  use caching other than cached_properties - maybe lru_cache if it doesn't
-#   the overhead is not bad
-#  pass distribution parameters to methods that don't accept additional args?
 #  pass atol, rtol to methods
 #  profile/optimize
 #  add array API support
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
-#  ensure that user override return correct shape and dtype
+#  ensure that user override returns correct shape and dtype
 #  consider adding std back
+#  implement `logmoment`? (Not hard, but enough time and complexity to wait
+#   for reviewer feedback before adding.)
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -78,6 +75,13 @@ oo = np.inf
 #   the computation entirely. The shape of the arrays passed to the
 #   function will almost never be broadcastable with the shape of the
 #   cached parameter arrays.
+#
+#   Need to work a bit more on caching. It's not as fast as I'd like it to be.
+#   lru_cache for methods that don't accept additional arguments would be
+#   great, but it can't easily be turned off by the user. With a custom
+#   cache, we can easily add options that disabled or cleared it as needed.
+#   Perhaps there is a way to wrap `lru_cache` or the function wrapped by
+#   `lru_cache` to add that in.
 
 
 class _Domain:
@@ -416,8 +420,7 @@ class _Parameterization:
         for name, arr in parameter_values.items():
             parameter = self.parameters[name]
             arr, dtype, valid = parameter.validate(arr, parameter_values)
-            dtypes.append(arr.dtype)
-            # in_domain = parameter.domain.contains(arr, parameter_values)
+            dtypes.append(dtype)
             all_valid = all_valid & valid
             parameter_values[name] = arr
         dtype = np.result_type(*dtypes)
