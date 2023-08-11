@@ -30,7 +30,7 @@ oo = np.inf
 #    within the domain? Should also have a closer look at _Parameterization.
 #  use caching other than cached_properties - maybe lru_cache if it doesn't
 #   the overhead is not bad
-#  pass shape parameters to methods that don't accept additional args?
+#  pass distribution parameters to methods that don't accept additional args?
 #  pass atol, rtol to methods
 #  profile/optimize
 #  add array API support
@@ -38,10 +38,10 @@ oo = np.inf
 #  ensure that user override return correct shape and dtype
 #  consider adding std back
 
-# Originally, I planned to filter out invalid shape parameters for the
+# Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
-# 1D arrays containing only valid shape parameters. There are two problems
-# with this:
+# 1D arrays containing only valid distributino parameters. There are two
+# problems with this:
 # - This essentially requires copying all arrays, even if there is only a
 #   single invalid parameter combination. This is expensive. Then, to output
 #   the original size data to the user, we need to "decompress" the arrays
@@ -49,23 +49,36 @@ oo = np.inf
 #   there are no invalid data, these copies happen even in the normal case,
 #   where there are no invalid parameter combinations. We should not incur
 #   all this overhead in the normal case.
-# - For methods that accept arguments other than the shape parameters, the
+# - For methods that accept arguments other than distribution parameters, the
 #   user will pass in arrays that are broadcastable with the original arrays,
 #   not the compressed arrays. This means that this same sort of invalid
 #   value detection needs to be repeated every time one of these methods is
 #   called.
 #   The much simpler solution is to keep the data uncompressed but to replace
-#   the invalid shape parameters and arguments with NaNs (and only if some are
+#   the invalid parameters and arguments with NaNs (and only if some are
 #   invalid). With this approach, the copying happens only if/when it is
 #   needed. Most functions involved in stats distribution calculations don't
 #   mind NaNs; they just return NaN. The behavior "If x_i is NaN, the result
 #   is NaN" is explicit in the array API. So this should be fine.
 #   I'm also going to leave the data in the original shape. The reason for this
-#   is that the user can process shape parameters as needed and make them
-#   @cached_properties. If we leave all the original shapes alone, the input
-#   to functions like `pdf` that accept additional arguments will be
+#   is that the user can process distribution parameters as needed and make
+#   them @cached_properties. If we leave all the original shapes alone, the
+#   input to functions like `pdf` that accept additional arguments will be
 #   broadcastable with these @cached_properties. In most cases, this is
 #   completely transparent to the author.
+#
+#   Another important decision is that the *private* methods must accept
+#   the distribution parameters as inputs rather than relying on these
+#   cached properties directly (although the public methods typically pass
+#   the cached values to the private methods). This is because the elementwise
+#   algorithms for quadrature, differentiation, root-finding, and minimization
+#   require that the input functions are strictly elementwise in the sense
+#   that the value output for a given input element does not depend on the
+#   shape of the input or that element's location within the input array.
+#   When the computation has converged for an element, it is removed from
+#   the computation entirely. The shape of the arrays passed to the
+#   function will almost never be broadcastable with the shape of the
+#   cached parameter arrays.
 
 
 class _Domain:
@@ -130,7 +143,7 @@ class _SimpleDomain(_Domain):
     -------
     define_parameters(*parameters)
         Records any parameters used to define the endpoints of the domain
-    contains(item, shapes)
+    contains(item, parameters)
         Determines whether the argument is contained within the domain
 
     """
@@ -158,14 +171,14 @@ class _SimpleDomain(_Domain):
         new_symbols = {param.name: param.symbol for param in parameters}
         self.symbols.update(new_symbols)
 
-    def contains(self, item, shapes={}):
+    def contains(self, item, parameters={}):
         """Determine whether the argument is contained within the domain
 
         Parameters
         ----------
         item : ndarray
             The argument
-        shapes : dict
+        parameters : dict
             A dictionary that maps between string variable names and numerical
             values of parameters, which may define the endpoints.
 
@@ -180,10 +193,10 @@ class _SimpleDomain(_Domain):
 
         # If `a` (`b`) is a string - the name of the parameter that defines
         # the endpoint of the domain - then corresponding numerical values
-        # will be found in the `shapes` dictionary. Otherwise, it is itself
+        # will be found in the `parameters` dictionary. Otherwise, it is itself
         # the array of numerical values of the endpoint.
-        a = shapes.get(a, a)
-        b = shapes.get(b, b)
+        a = parameters.get(a, a)
+        b = parameters.get(b, b)
 
         in_left = item >= a if left_inclusive else item > a
         in_right = item <= b if right_inclusive else item < b
@@ -261,7 +274,7 @@ class _Parameter:
         """ String representation of the parameter for use in documentation """
         return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
 
-    def draw(self, size=None, rng=None, shapes={}):
+    def draw(self, size=None, rng=None, parameters={}):
         """ Draw random values of the parameter for use in testing
 
         Parameters
@@ -273,7 +286,7 @@ class _Parameter:
             including endpoints; out-of-bounds values; extreme values).
         rng : np.Generator
             The Generator used for drawing random values.
-        shapes : dict
+        parameters : dict
             Map between the names of parameters (that define the endpoints of
             `typical`) and numerical values (arrays).
 
@@ -283,10 +296,10 @@ class _Parameter:
 
         # If `a` (`b`) is a string - the name of the parameter that defines
         # the endpoint of the domain - then corresponding numerical values
-        # will be found in the `shapes` dictionary. Otherwise, it is itself
+        # will be found in the `parameters` dictionary. Otherwise, it is itself
         # the array of numerical values of the endpoint.
-        a = shapes.get(a, a)
-        b = shapes.get(b, b)
+        a = parameters.get(a, a)
+        b = parameters.get(b, b)
 
         return rng.uniform(a, b, size=np.broadcast_shapes(size, np.shape(a)))
 
@@ -362,12 +375,12 @@ class _Parameterization:
     def __len__(self):
         return len(self.parameters)
 
-    def validate(self, shapes):
+    def validate(self, parameters):
         """ Checks whether the keyword arguments match the parameterization
 
         Parameters
         ----------
-        shapes : set
+        parameters : set
             Set of names of parameters passed into the distribution as keyword
             arguments.
 
@@ -377,21 +390,21 @@ class _Parameterization:
             True if the keyword arguments names match the names of the
             parameters of this parameterization.
         """
-        return shapes == set(self.parameters.keys())
+        return parameters == set(self.parameters.keys())
 
-    def validate_shapes(self, shapes):
+    def validate_shapes(self, parameters):
         """ Input validation / standardization of parameterization
 
         Parameters
         ----------
-        shapes : dict
+        parameters : dict
             The keyword arguments passed as shape parameters to the
             distribution.
 
         Returns
         -------
         all_valid : ndarray
-            Logical array indicating the elements of the broadcasted shapes
+            Logical array indicating the elements of the broadcasted arrays
             for which all parameters are valid.
         dtype : dtype
             The common dtype of the parameter arrays. This will determine
@@ -399,13 +412,13 @@ class _Parameterization:
         """
         all_valid = True
         dtypes = []
-        for name, arr in shapes.items():
+        for name, arr in parameters.items():
             parameter = self.parameters[name]
             arr, valid = parameter.check_dtype(arr)
             dtypes.append(arr.dtype)
-            valid = valid & parameter.domain.contains(arr, shapes)
+            valid = valid & parameter.domain.contains(arr, parameters)
             all_valid = all_valid & valid
-            shapes[name] = arr
+            parameters[name] = arr
         dtype = np.result_type(*dtypes)
 
         return all_valid, dtype
@@ -415,11 +428,11 @@ class _Parameterization:
         return " ".join(messages)
 
     def draw(self, sizes=None, rng=None):
-        shapes = {}
+        parameters = {}
         sizes = sizes if np.iterable(sizes) else [sizes]*len(self.parameters)
         for size, param in zip(sizes, self.parameters.values()):
-            shapes[param.name] = param.draw(size, rng)
-        return shapes
+            parameters[param.name] = param.draw(size, rng)
+        return parameters
 
 
 def _set_invalid_nan(f):
@@ -568,15 +581,15 @@ def _log_real_standardize(x):
 
 class ContinuousDistribution:
 
-    def __init__(self, *, tol=_null, skip_iv=False, **shapes):
+    def __init__(self, *, tol=_null, skip_iv=False, **parameters):
         self.tol = tol
         self.skip_iv = skip_iv
-        self._dtype = np.float64  # default; may change depending on shapes
-        all_shape_names = list(shapes)
+        self._dtype = np.float64  # default; may change depending on parameters
+        all_shape_names = list(parameters)
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
-        shapes = {key: val for key, val in shapes.items() if val is not _null}
+        parameters = {key: val for key, val in parameters.items() if val is not _null}
 
         self._not_implemented = (
             f"`{self.__class__.__name__}` does not provide an accurate "
@@ -585,7 +598,7 @@ class ContinuousDistribution:
         )
 
         if skip_iv or not len(self._parameterizations):
-            self._shapes = shapes
+            self._shapes = parameters
             self._all_shape_names = all_shape_names
             self._invalid = np.asarray(False)  # FIXME: needs the right ndim
             self._any_invalid = False
@@ -593,7 +606,7 @@ class ContinuousDistribution:
             return
 
         # identify parameterization
-        shape_names_vals = tuple(zip(*shapes.items()))
+        shape_names_vals = tuple(zip(*parameters.items()))
         shape_names_vals = shape_names_vals or ([], [])
         shape_names, shape_vals = shape_names_vals
         shape_names_set = set(shape_names)
@@ -601,7 +614,7 @@ class ContinuousDistribution:
             if parameterization.validate(shape_names_set):
                 break
         else:
-            message = (f"The provided shapes `{shape_names_set}` "
+            message = (f"The provided parameters `{shape_names_set}` "
                        "do not match a supported parameterization of the "
                        f"`{self.__class__.__name__}` distribution family.")
             raise ValueError(message)
@@ -611,24 +624,24 @@ class ContinuousDistribution:
         try:
             shape_vals = np.broadcast_arrays(*shape_vals)
         except ValueError as e:
-            message = (f"The shapes {shape_names_set} provided to the "
+            message = (f"The parameters {shape_names_set} provided to the "
                        f"`{self.__class__.__name__}` distribution family "
                        "cannot be broadcast to the same shape.")
             raise ValueError(message) from e
 
-        # Replace invalid shapes with `np.nan`
-        shapes = dict(zip(shape_names, shape_vals))
-        valid, self._dtype = parameterization.validate_shapes(shapes)
+        # Replace invalid parameters with `np.nan`
+        parameters = dict(zip(shape_names, shape_vals))
+        valid, self._dtype = parameterization.validate_shapes(parameters)
         self._invalid = ~valid
         self._any_invalid = np.any(self._invalid)
-        self._shape_shape = valid.shape  # broadcasted shape of shapes
+        self._shape_shape = valid.shape  # broadcasted shape of parameters
         # If necessary, make the arrays contiguous and replace invalid with NaN
         if self._any_invalid:
-            for shape_name in shapes:
-                shapes[shape_name] = np.copy(shapes[shape_name])
-                shapes[shape_name][self._invalid] = np.nan
+            for shape_name in parameters:
+                parameters[shape_name] = np.copy(parameters[shape_name])
+                parameters[shape_name][self._invalid] = np.nan
 
-        self._shapes = shapes
+        self._shapes = parameters
         self._all_shape_names = all_shape_names
 
     @classmethod
@@ -637,8 +650,8 @@ class ContinuousDistribution:
             return cls()
 
         parameterization = cls._parameterizations[i_parameterization]
-        shapes = parameterization.draw(sizes, rng)
-        return cls(**shapes)
+        parameters = parameterization.draw(sizes, rng)
+        return cls(**parameters)
 
     @classmethod
     def _num_parameterizations(cls):
@@ -656,8 +669,8 @@ class ContinuousDistribution:
     @cached_property
     def _all_shapes(self):
         # It would be better if we could pass to private methods (e.g. _pdf)
-        # only the shapes that it wants. We could do this with inspection,
-        # but it is probably faster to remember the names of the shapes needed
+        # only the parameters that it wants. We could do this with inspection,
+        # but it is probably faster to remember the names of the parameters needed
         # by each method.
         return self._get_shapes()
 

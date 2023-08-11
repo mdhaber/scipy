@@ -162,7 +162,7 @@ def draw_distribution_from_family(family, data, rng):
     # Draw a broadcastable shape for the arguments, and draw values for the
     # arguments.
     x_shape = data.draw(npst.broadcastable_shapes(result_shape))
-    x = dist._variable.draw(x_shape, shapes=dist._all_shapes)
+    x = dist._variable.draw(x_shape, parameters=dist._all_shapes)
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
     p = rng.uniform(size=x_shape)
     logp = np.log(p)
@@ -192,6 +192,10 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
         methods.add('formula')
 
     np.testing.assert_equal(ref.shape, result_shape)
+    # Until we convert to array API, let's do the familiar thing:
+    # 0d things are scalars, not arrays
+    if result_shape == tuple():
+        assert np.isscalar(ref)
 
     for method in methods:
         res = getattr(dist, fname)(*args, method=method)
@@ -202,7 +206,8 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
             np.testing.assert_allclose(res, ref, **tol_override)
 
         np.testing.assert_equal(res.shape, result_shape)
-
+        if result_shape == tuple():
+            assert np.isscalar(res)
 
 def check_moment_funcs(dist, result_shape):
     # Check that all computation methods of all distribution functions agree
