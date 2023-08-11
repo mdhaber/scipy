@@ -40,7 +40,7 @@ oo = np.inf
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
-# 1D arrays containing only valid distributino parameters. There are two
+# 1D arrays containing only valid distribution parameters. There are two
 # problems with this:
 # - This essentially requires copying all arrays, even if there is only a
 #   single invalid parameter combination. This is expensive. Then, to output
@@ -143,7 +143,7 @@ class _SimpleDomain(_Domain):
     -------
     define_parameters(*parameters)
         Records any parameters used to define the endpoints of the domain
-    contains(item, parameters)
+    contains(item, parameter_values)
         Determines whether the argument is contained within the domain
 
     """
@@ -171,14 +171,14 @@ class _SimpleDomain(_Domain):
         new_symbols = {param.name: param.symbol for param in parameters}
         self.symbols.update(new_symbols)
 
-    def contains(self, item, parameters={}):
+    def contains(self, item, parameter_values={}):
         """Determine whether the argument is contained within the domain
 
         Parameters
         ----------
         item : ndarray
             The argument
-        parameters : dict
+        parameter_values : dict
             A dictionary that maps between string variable names and numerical
             values of parameters, which may define the endpoints.
 
@@ -193,10 +193,10 @@ class _SimpleDomain(_Domain):
 
         # If `a` (`b`) is a string - the name of the parameter that defines
         # the endpoint of the domain - then corresponding numerical values
-        # will be found in the `parameters` dictionary. Otherwise, it is itself
-        # the array of numerical values of the endpoint.
-        a = parameters.get(a, a)
-        b = parameters.get(b, b)
+        # will be found in the `parameter_values` dictionary. Otherwise, it is
+        # itself the array of numerical values of the endpoint.
+        a = parameter_values.get(a, a)
+        b = parameter_values.get(b, b)
 
         in_left = item >= a if left_inclusive else item > a
         in_right = item <= b if right_inclusive else item < b
@@ -274,7 +274,7 @@ class _Parameter:
         """ String representation of the parameter for use in documentation """
         return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
 
-    def draw(self, size=None, rng=None, parameters={}):
+    def draw(self, size=None, rng=None, parameter_values={}):
         """ Draw random values of the parameter for use in testing
 
         Parameters
@@ -286,7 +286,7 @@ class _Parameter:
             including endpoints; out-of-bounds values; extreme values).
         rng : np.Generator
             The Generator used for drawing random values.
-        parameters : dict
+        parameter_values : dict
             Map between the names of parameters (that define the endpoints of
             `typical`) and numerical values (arrays).
 
@@ -296,10 +296,10 @@ class _Parameter:
 
         # If `a` (`b`) is a string - the name of the parameter that defines
         # the endpoint of the domain - then corresponding numerical values
-        # will be found in the `parameters` dictionary. Otherwise, it is itself
-        # the array of numerical values of the endpoint.
-        a = parameters.get(a, a)
-        b = parameters.get(b, b)
+        # will be found in the `parameter_values` dictionary. Otherwise, it is
+        # itself the array of numerical values of the endpoint.
+        a = parameter_values.get(a, a)
+        b = parameter_values.get(b, b)
 
         return rng.uniform(a, b, size=np.broadcast_shapes(size, np.shape(a)))
 
@@ -365,8 +365,7 @@ class _Parameterization:
     Attributes
     ----------
     parameters : dict
-        String names (of keyword arguments) and the corresponding _Parameter
-        values.
+        String names (of keyword arguments) and the corresponding _Parameters.
 
     """
     def __init__(self, *parameters):
@@ -392,33 +391,33 @@ class _Parameterization:
         """
         return parameters == set(self.parameters.keys())
 
-    def validate_shapes(self, parameters):
+    def validate_shapes(self, parameter_values):
         """ Input validation / standardization of parameterization
 
         Parameters
         ----------
-        parameters : dict
-            The keyword arguments passed as shape parameters to the
+        parameter_values : dict
+            The keyword arguments passed as parameter values to the
             distribution.
 
         Returns
         -------
         all_valid : ndarray
             Logical array indicating the elements of the broadcasted arrays
-            for which all parameters are valid.
+            for which all parameter values are valid.
         dtype : dtype
             The common dtype of the parameter arrays. This will determine
             the dtype of the output of distribution methods.
         """
         all_valid = True
         dtypes = []
-        for name, arr in parameters.items():
+        for name, arr in parameter_values.items():
             parameter = self.parameters[name]
             arr, valid = parameter.check_dtype(arr)
             dtypes.append(arr.dtype)
-            valid = valid & parameter.domain.contains(arr, parameters)
+            valid = valid & parameter.domain.contains(arr, parameter_values)
             all_valid = all_valid & valid
-            parameters[name] = arr
+            parameter_values[name] = arr
         dtype = np.result_type(*dtypes)
 
         return all_valid, dtype
@@ -428,11 +427,11 @@ class _Parameterization:
         return " ".join(messages)
 
     def draw(self, sizes=None, rng=None):
-        parameters = {}
+        parameter_values = {}
         sizes = sizes if np.iterable(sizes) else [sizes]*len(self.parameters)
         for size, param in zip(sizes, self.parameters.values()):
-            parameters[param.name] = param.draw(size, rng)
-        return parameters
+            parameter_values[param.name] = param.draw(size, rng)
+        return parameter_values
 
 
 def _set_invalid_nan(f):
@@ -589,7 +588,8 @@ class ContinuousDistribution:
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
-        parameters = {key: val for key, val in parameters.items() if val is not _null}
+        parameters = {key: val for key, val in parameters.items()
+                      if val is not _null}
 
         self._not_implemented = (
             f"`{self.__class__.__name__}` does not provide an accurate "

@@ -147,8 +147,9 @@ def draw_distribution_from_family(family, data, rng):
     # draw broadcastable shapes for the parameter arrays.
     n_parameterizations = len(family._parameterizations)
     if n_parameterizations > 0:
-        i_parameterization = data.draw(strategies.integers(min_value=0,
-                                                           max_value=n_parameterizations - 1))
+        i_parameterization = (
+            data.draw(strategies.integers(min_value=0,
+                                          max_value=n_parameterizations - 1)))
         n_parameters = len(
             family._parameterizations[i_parameterization].parameters)
         shapes, result_shape = data.draw(
@@ -162,7 +163,7 @@ def draw_distribution_from_family(family, data, rng):
     # Draw a broadcastable shape for the arguments, and draw values for the
     # arguments.
     x_shape = data.draw(npst.broadcastable_shapes(result_shape))
-    x = dist._variable.draw(x_shape, parameters=dist._all_shapes)
+    x = dist._variable.draw(x_shape, parameter_values=dist._all_shapes)
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
     p = rng.uniform(size=x_shape)
     logp = np.log(p)
