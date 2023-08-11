@@ -752,7 +752,7 @@ class ContinuousDistribution:
     def _support(self, **kwargs):
         return self._variable.domain.get_numerical_endpoints(kwargs)
 
-    def logentropy(self, method=None):
+    def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._all_parameters)
 
     def _logentropy_dispatch(self, method=None, **kwargs):
@@ -776,7 +776,7 @@ class ContinuousDistribution:
         res = self._quadrature(logintegrand, kwargs=kwargs, log=True)
         return _log_real_standardize(res + np.pi*1j)
 
-    def entropy(self, method=None):
+    def entropy(self, *, method=None):
         return self._entropy_dispatch(method=method, **self._all_parameters)
 
     def _entropy_dispatch(self, method=None, **kwargs):
@@ -798,7 +798,7 @@ class ContinuousDistribution:
             return np.log(pdf)*pdf
         return -self._quadrature(integrand, kwargs=kwargs)
 
-    def median(self, method=None):
+    def median(self, *, method=None):
         return self._median_dispatch(method=method, **self._all_parameters)
 
     def _median_dispatch(self, method=None, **kwargs):
@@ -812,7 +812,7 @@ class ContinuousDistribution:
     def _median_icdf(self, **kwargs):
         return self._icdf_dispatch(0.5, **kwargs)
 
-    def logmean(self, method=None):
+    def logmean(self, *, method=None):
         return self._logmean_dispatch(method=method, **self._all_parameters)
 
     def _logmean_dispatch(self, method=None, **kwargs):
@@ -832,11 +832,11 @@ class ContinuousDistribution:
         return self._logmoment(1, -np.inf, **kwargs)
 
     @_set_invalid_nan_property
-    def mean(self, method=None):
+    def mean(self, *, method=None):
         methods = {method} if method is not None else self._all_moment_methods
         return self._moment_raw_dispatch(1, methods=methods, **self._all_parameters)
 
-    def logvar(self, method=None):
+    def logvar(self, *, method=None):
         return self._logvar_dispatch(method=method, logmean=self.logmean(),
                                      **self._all_parameters)
 
@@ -857,12 +857,18 @@ class ContinuousDistribution:
         logmean = np.log(mean + 0j) if logmean is None else logmean
         return self._logmoment(2, logmean, **kwargs)
 
+    def logstd(self, *, method=None):
+        return self.var(method=method)/2
+
     @_set_invalid_nan_property
-    def var(self, method=None):
+    def var(self, *, method=None):
         methods = {method} if method is not None else self._all_moment_methods
         return self._moment_central_dispatch(2, methods=methods, **self._all_parameters)
 
-    def logskewness(self, method=None):
+    def std(self, *, method=None):
+        return np.sqrt(self.var(method=method))
+
+    def logskewness(self, *, method=None):
         return self._logskewness_dispatch(method=method, logmean=self.logmean(),
                                           logvar=self.logvar(),**self._all_parameters)
 
@@ -887,11 +893,11 @@ class ContinuousDistribution:
         return self._logmoment(3, logmean, **kwargs) - 1.5 * logvar
 
     @_set_invalid_nan_property
-    def skewness(self, method=None):
+    def skewness(self, *, method=None):
         methods = {method} if method is not None else self._all_moment_methods
         return self._moment_standard_dispatch(3, methods=methods, **self._all_parameters)
 
-    def logkurtosis(self, method=None):
+    def logkurtosis(self, *, method=None):
         return self._logkurtosis_dispatch(method=method, logmean=self.logmean(),
                                           logvar=self.logvar(),**self._all_parameters)
 
@@ -916,12 +922,12 @@ class ContinuousDistribution:
         return self._logmoment(4, logmean, **kwargs) - 2 * logvar
 
     @_set_invalid_nan_property
-    def kurtosis(self, method=None):
+    def kurtosis(self, *, method=None):
         methods = {method} if method is not None else self._all_moment_methods
         return self._moment_standard_dispatch(4, methods=methods, **self._all_parameters)
 
     @_set_invalid_nan
-    def logpdf(self, x, method=None):
+    def logpdf(self, x, *, method=None):
         return self._logpdf_dispatch(x, method=method, **self._all_parameters)
 
     def _logpdf_dispatch(self, x, *, method=None, **kwargs):
@@ -936,7 +942,7 @@ class ContinuousDistribution:
         return np.log(self._pdf_dispatch(x, **kwargs))
 
     @_set_invalid_nan
-    def pdf(self, x, method=None):
+    def pdf(self, x, *, method=None):
         return self._pdf_dispatch(x, method=method, **self._all_parameters)
 
     def _pdf_dispatch(self, x, *, method=None, **kwargs):
@@ -951,7 +957,7 @@ class ContinuousDistribution:
         return np.exp(self._logpdf_dispatch(x, **kwargs))
 
     @_set_invalid_nan
-    def logcdf(self, x, method=None):
+    def logcdf(self, x, *, method=None):
         return self._logcdf_dispatch(x, method=method, **self._all_parameters)
 
     def _logcdf_dispatch(self, x, *, method=None, **kwargs):
@@ -979,7 +985,7 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     @_set_invalid_nan
-    def cdf(self, x, method=None):
+    def cdf(self, x, *, method=None):
         return self._cdf_dispatch(x, method=method, **self._all_parameters)
 
     def _cdf_dispatch(self, x, *, method=None, **kwargs):
@@ -1006,7 +1012,7 @@ class ContinuousDistribution:
                                 kwargs=kwargs)
 
     @_set_invalid_nan
-    def logccdf(self, x, method=None):
+    def logccdf(self, x, *, method=None):
         return self._logccdf_dispatch(x, method=method, **self._all_parameters)
 
     def _logccdf_dispatch(self, x, method=None, **kwargs):
@@ -1033,7 +1039,7 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     @_set_invalid_nan
-    def ccdf(self, x, method=None):
+    def ccdf(self, x, *, method=None):
         return self._ccdf_dispatch(x, method=method, **self._all_parameters)
 
     def _ccdf_dispatch(self, x, method=None, **kwargs):
@@ -1060,7 +1066,7 @@ class ContinuousDistribution:
                                 kwargs=kwargs)
 
     @_set_invalid_nan
-    def ilogcdf(self, x, method=None):
+    def ilogcdf(self, x, *, method=None):
         return self._ilogcdf_dispatch(x, method=method, **self._all_parameters)
 
     def _ilogcdf_dispatch(self, x, method=None, **kwargs):
@@ -1080,7 +1086,7 @@ class ContinuousDistribution:
         return self._solve_bounded(self._logcdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def icdf(self, x, method=None):
+    def icdf(self, x, *, method=None):
         return self._icdf_dispatch(x, method=method, **self._all_parameters)
 
     def _icdf_dispatch(self, x, method=None, **kwargs):
@@ -1100,7 +1106,7 @@ class ContinuousDistribution:
         return self._solve_bounded(self._cdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def ilogccdf(self, x, method=None):
+    def ilogccdf(self, x, *, method=None):
         return self._ilogccdf_dispatch(x, method=method, **self._all_parameters)
 
     def _ilogccdf_dispatch(self, x, method=None, **kwargs):
@@ -1120,7 +1126,7 @@ class ContinuousDistribution:
         return self._solve_bounded(self._logccdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def iccdf(self, x, method=None):
+    def iccdf(self, x, *, method=None):
         return self._iccdf_dispatch(x, method=method, **self._all_parameters)
 
     def _iccdf_dispatch(self, x, method=None, **kwargs):
@@ -1139,7 +1145,7 @@ class ContinuousDistribution:
     def _iccdf_solve_ccdf(self, x, **kwargs):
         return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
-    def sample(self, shape=(), rng=None):
+    def sample(self, shape=(), *, rng=None):
         shape = (shape,) if not np.iterable(shape) else tuple(shape)
         rng = np.random.default_rng() if rng is None else rng
         return self._sample(shape, rng, **self._all_parameters)
@@ -1149,7 +1155,7 @@ class ContinuousDistribution:
         uniform = rng.uniform(size=full_shape)
         return self._icdf_dispatch(uniform, **kwargs)
 
-    def logmoment(self, order, logcenter=None, standardized=False):
+    def logmoment(self, order=1, *, logcenter=None, standardized=False):
         # input validation
         logcenter = self.logmean if logcenter is None else logcenter
         raw = self._logmoment(order, logcenter, **self._all_parameters)
@@ -1184,7 +1190,7 @@ class ContinuousDistribution:
                 'normalize', 'general', 'quadrature'}
 
     @_set_invalid_nan_property
-    def moment_raw(self, order=1, method=None):
+    def moment_raw(self, order=1, *, method=None):
         order = self._validate_order(order)
         methods = self._all_moment_methods if method is None else {method}
         return self._moment_raw_dispatch(order, methods=methods,
@@ -1247,7 +1253,7 @@ class ContinuousDistribution:
         return 1 if order == 0 else None
 
     @_set_invalid_nan_property
-    def moment_central(self, order=1, method=None):
+    def moment_central(self, order=1, *, method=None):
         order = self._validate_order(order)
         methods = self._all_moment_methods if method is None else {method}
         return self._moment_central_dispatch(order, methods=methods,
@@ -1318,7 +1324,7 @@ class ContinuousDistribution:
         return general_central_moments.get(order, None)
 
     @_set_invalid_nan_property
-    def moment_standard(self, order=1, method=None):
+    def moment_standard(self, order=1, *, method=None):
         order = self._validate_order(order)
         methods = self._all_moment_methods if method is None else {method}
         return self._moment_standard_dispatch(order, methods=methods,

@@ -118,12 +118,14 @@ class TestDistributions:
         check_dist_func(dist, 'logvar', None, result_shape, methods)
         check_dist_func(dist, 'logskewness', None, result_shape, methods)
         check_dist_func(dist, 'logkurtosis', None, result_shape, methods)
+        assert_allclose(dist.logstd()*2, dist.var())
 
         methods = {'cache'}  #  weak test right now
         check_dist_func(dist, 'mean', None, result_shape, methods)
         check_dist_func(dist, 'var', None, result_shape, methods)
         check_dist_func(dist, 'skewness', None, result_shape, methods)
         check_dist_func(dist, 'kurtosis', None, result_shape, methods)
+        assert_allclose(dist.std()**2, dist.var())
 
         methods = {'log/exp'}
         check_dist_func(dist, 'pdf', x, x_result_shape, methods)
