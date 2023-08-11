@@ -10,27 +10,28 @@ _null = object()
 oo = np.inf
 
 # TODO:
-#  documentation
-#  check NaN / inf behavior of moment methods
-#  add `axis` to `ks_1samp`
+#  add options for drawing parameters: include endpoints/invalid, log-spacing
+#  add std back
 #  don't ignore warnings in tests
-#  add lower limit to cdf
-#  add `mode` method
+#  figure out what to do about logmoment - preserve code, but remove?
+#  add `mode` method (can draft without automatic bounding)
 #  use `median` information to improve integration?
+#  add lower limit to cdf
+#  Write `fit` method
+#  ensure that user overrides return correct shape and dtype
+#  check behavior of moment methods when moments are undefined
+#  add `axis` to `ks_1samp`
 #  implement symmetric distribution
 #  Add loc/scale transformation
 #  Add operators for loc/scale transformation
-#  Write `fit` method
-#  parameters should be able to draw random samples that straddle the endpoints
-#   so we can check NaN patterns
-#  pass atol, rtol to methods
+#  Be consistent about options passed to distributions/methods: tols, skip_iv, cache
 #  profile/optimize
+#  documentation
+#  make video
 #  add array API support
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
-#  ensure that user override returns correct shape and dtype
-#  consider adding std back
-#  implement `logmoment`? (Not hard, but enough time and complexity to wait
-#   for reviewer feedback before adding.)
+#  integrate `logmoment` into `moment`? (Not hard, but enough time and code
+#   complexity to wait for reviewer feedback before adding.)
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
