@@ -374,7 +374,7 @@ class _Parameterization:
     def __len__(self):
         return len(self.parameters)
 
-    def validate(self, parameters):
+    def matches(self, parameters):
         """ Checks whether the keyword arguments match the parameterization
 
         Parameters
@@ -391,7 +391,7 @@ class _Parameterization:
         """
         return parameters == set(self.parameters.keys())
 
-    def valid_parameters(self, parameter_values):
+    def validation(self, parameter_values):
         """ Input validation / standardization of parameterization
 
         Parameters
@@ -531,7 +531,7 @@ def _set_invalid_nan_property(f):
         return res[()]
 
     return filtered
-            
+
 
 def kwargs2args(f, args=[], kwargs={}):
     # this is a temporary workaround until the scalar algorithms `_tanhsinh`,
@@ -611,7 +611,7 @@ class ContinuousDistribution:
         parameter_names, parameter_vals = parameter_names_vals
         parameter_names_set = set(parameter_names)
         for parameterization in self._parameterizations:
-            if parameterization.validate(parameter_names_set):
+            if parameterization.matches(parameter_names_set):
                 break
         else:
             message = (f"The provided parameters `{parameter_names_set}` "
@@ -631,7 +631,7 @@ class ContinuousDistribution:
 
         # Replace invalid parameters with `np.nan`
         parameters = dict(zip(parameter_names, parameter_vals))
-        valid, self._dtype = parameterization.valid_parameters(parameters)
+        valid, self._dtype = parameterization.validation(parameters)
         self._invalid = ~valid
         self._any_invalid = np.any(self._invalid)
         self._shape = valid.shape  # broadcasted shape of parameters
