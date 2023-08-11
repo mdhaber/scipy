@@ -391,7 +391,7 @@ class _Parameterization:
         """
         return parameters == set(self.parameters.keys())
 
-    def validate_shapes(self, parameter_values):
+    def valid_parameters(self, parameter_values):
         """ Input validation / standardization of parameterization
 
         Parameters
@@ -520,8 +520,8 @@ def _set_invalid_nan_property(f):
         if dtype != self._dtype:  # this won't work for logmoments (complex)
             res = res.astype(dtype, copy=True)
 
-        if res.shape != self._shape_shape:  # faster to check first
-            res = np.broadcast_to(res, self._shape_shape)
+        if res.shape != self._shape:  # faster to check first
+            res = np.broadcast_to(res, self._shape)
 
         # Does the right thing happen without explicitly adding NaNs?
         # if self._any_invalid or dtype != self._dtype:
@@ -584,7 +584,7 @@ class ContinuousDistribution:
         self.tol = tol
         self.skip_iv = skip_iv
         self._dtype = np.float64  # default; may change depending on parameters
-        all_shape_names = list(parameters)
+        all_parameter_names = list(parameters)
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
@@ -598,23 +598,23 @@ class ContinuousDistribution:
         )
 
         if skip_iv or not len(self._parameterizations):
-            self._shapes = parameters
-            self._all_shape_names = all_shape_names
+            self._parameters = parameters
+            self._all_parameter_names = all_parameter_names
             self._invalid = np.asarray(False)  # FIXME: needs the right ndim
             self._any_invalid = False
-            self._shape_shape = tuple()
+            self._shape = tuple()
             return
 
         # identify parameterization
-        shape_names_vals = tuple(zip(*parameters.items()))
-        shape_names_vals = shape_names_vals or ([], [])
-        shape_names, shape_vals = shape_names_vals
-        shape_names_set = set(shape_names)
+        parameter_names_vals = tuple(zip(*parameters.items()))
+        parameter_names_vals = parameter_names_vals or ([], [])
+        parameter_names, parameter_vals = parameter_names_vals
+        parameter_names_set = set(parameter_names)
         for parameterization in self._parameterizations:
-            if parameterization.validate(shape_names_set):
+            if parameterization.validate(parameter_names_set):
                 break
         else:
-            message = (f"The provided parameters `{shape_names_set}` "
+            message = (f"The provided parameters `{parameter_names_set}` "
                        "do not match a supported parameterization of the "
                        f"`{self.__class__.__name__}` distribution family.")
             raise ValueError(message)
@@ -622,27 +622,27 @@ class ContinuousDistribution:
 
         # broadcast shape arguments
         try:
-            shape_vals = np.broadcast_arrays(*shape_vals)
+            parameter_vals = np.broadcast_arrays(*parameter_vals)
         except ValueError as e:
-            message = (f"The parameters {shape_names_set} provided to the "
+            message = (f"The parameters {parameter_names_set} provided to the "
                        f"`{self.__class__.__name__}` distribution family "
                        "cannot be broadcast to the same shape.")
             raise ValueError(message) from e
 
         # Replace invalid parameters with `np.nan`
-        parameters = dict(zip(shape_names, shape_vals))
-        valid, self._dtype = parameterization.validate_shapes(parameters)
+        parameters = dict(zip(parameter_names, parameter_vals))
+        valid, self._dtype = parameterization.valid_parameters(parameters)
         self._invalid = ~valid
         self._any_invalid = np.any(self._invalid)
-        self._shape_shape = valid.shape  # broadcasted shape of parameters
+        self._shape = valid.shape  # broadcasted shape of parameters
         # If necessary, make the arrays contiguous and replace invalid with NaN
         if self._any_invalid:
-            for shape_name in parameters:
-                parameters[shape_name] = np.copy(parameters[shape_name])
-                parameters[shape_name][self._invalid] = np.nan
+            for parameter_name in parameters:
+                parameters[parameter_name] = np.copy(parameters[parameter_name])
+                parameters[parameter_name][self._invalid] = np.nan
 
-        self._shapes = parameters
-        self._all_shape_names = all_shape_names
+        self._parameters = parameters
+        self._all_parameter_names = all_parameter_names
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=0):
@@ -658,21 +658,21 @@ class ContinuousDistribution:
         return len(cls._parameterizations)
 
     @classmethod
-    def _num_shapes(cls):
+    def _num_parameters(cls):
         return (0 if not cls._num_parameterizations()
                 else len(cls._parameterizations[0]))
 
-    def _get_shapes(self, shape_names=None):
-        shape_names = shape_names or self._all_shape_names
-        return {name: getattr(self, name) for name in shape_names}
+    def _get_parameters(self, parameter_names=None):
+        parameter_names = parameter_names or self._all_parameter_names
+        return {name: getattr(self, name) for name in parameter_names}
 
     @cached_property
-    def _all_shapes(self):
+    def _all_parameters(self):
         # It would be better if we could pass to private methods (e.g. _pdf)
-        # only the parameters that it wants. We could do this with inspection,
-        # but it is probably faster to remember the names of the parameters needed
-        # by each method.
-        return self._get_shapes()
+        # only the parameters that it wants. We could do this with
+        # introinspection, but it is probably faster if the class knows the
+        # names of the parameters needed by each method.
+        return self._get_parameters()
 
     def _overrides(self, method_name):
         method = getattr(self.__class__, method_name, None)
@@ -693,7 +693,7 @@ class ContinuousDistribution:
 
     @cached_property
     def support(self):
-        return self._support(**self._all_shapes)
+        return self._support(**self._all_parameters)
 
     def _support(self, **kwargs):
         a, b = self._variable.domain.endpoints
@@ -702,7 +702,7 @@ class ContinuousDistribution:
         return a, b
 
     def logentropy(self, method=None):
-        return self._logentropy_dispatch(method=method, **self._all_shapes)
+        return self._logentropy_dispatch(method=method, **self._all_parameters)
 
     def _logentropy_dispatch(self, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_logentropy'):
@@ -726,7 +726,7 @@ class ContinuousDistribution:
         return _log_real_standardize(res + np.pi*1j)
 
     def entropy(self, method=None):
-        return self._entropy_dispatch(method=method, **self._all_shapes)
+        return self._entropy_dispatch(method=method, **self._all_parameters)
 
     def _entropy_dispatch(self, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_entropy'):
@@ -748,7 +748,7 @@ class ContinuousDistribution:
         return -self._quadrature(integrand, kwargs=kwargs)
 
     def median(self, method=None):
-        return self._median_dispatch(method=method, **self._all_shapes)
+        return self._median_dispatch(method=method, **self._all_parameters)
 
     def _median_dispatch(self, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_median'):
@@ -762,7 +762,7 @@ class ContinuousDistribution:
         return self._icdf_dispatch(0.5, **kwargs)
 
     def logmean(self, method=None):
-        return self._logmean_dispatch(method=method, **self._all_shapes)
+        return self._logmean_dispatch(method=method, **self._all_parameters)
 
     def _logmean_dispatch(self, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_logmean'):
@@ -783,11 +783,11 @@ class ContinuousDistribution:
     @_set_invalid_nan_property
     def mean(self, method=None):
         methods = {method} if method is not None else self._all_moment_methods
-        return self._moment_raw_dispatch(1, methods=methods, **self._all_shapes)
+        return self._moment_raw_dispatch(1, methods=methods, **self._all_parameters)
 
     def logvar(self, method=None):
         return self._logvar_dispatch(method=method, logmean=self.logmean(),
-                                     **self._all_shapes)
+                                     **self._all_parameters)
 
     def _logvar_dispatch(self, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_logvar'):
@@ -809,11 +809,11 @@ class ContinuousDistribution:
     @_set_invalid_nan_property
     def var(self, method=None):
         methods = {method} if method is not None else self._all_moment_methods
-        return self._moment_central_dispatch(2, methods=methods, **self._all_shapes)
+        return self._moment_central_dispatch(2, methods=methods, **self._all_parameters)
 
     def logskewness(self, method=None):
         return self._logskewness_dispatch(method=method, logmean=self.logmean(),
-                                          logvar=self.logvar(),**self._all_shapes)
+                                          logvar=self.logvar(),**self._all_parameters)
 
     def _logskewness_dispatch(self, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_logskewness'):
@@ -838,11 +838,11 @@ class ContinuousDistribution:
     @_set_invalid_nan_property
     def skewness(self, method=None):
         methods = {method} if method is not None else self._all_moment_methods
-        return self._moment_standard_dispatch(3, methods=methods, **self._all_shapes)
+        return self._moment_standard_dispatch(3, methods=methods, **self._all_parameters)
 
     def logkurtosis(self, method=None):
         return self._logkurtosis_dispatch(method=method, logmean=self.logmean(),
-                                          logvar=self.logvar(),**self._all_shapes)
+                                          logvar=self.logvar(),**self._all_parameters)
 
     def _logkurtosis_dispatch(self, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_logkurtosis'):
@@ -867,11 +867,11 @@ class ContinuousDistribution:
     @_set_invalid_nan_property
     def kurtosis(self, method=None):
         methods = {method} if method is not None else self._all_moment_methods
-        return self._moment_standard_dispatch(4, methods=methods, **self._all_shapes)
+        return self._moment_standard_dispatch(4, methods=methods, **self._all_parameters)
 
     @_set_invalid_nan
     def logpdf(self, x, method=None):
-        return self._logpdf_dispatch(x, method=method, **self._all_shapes)
+        return self._logpdf_dispatch(x, method=method, **self._all_parameters)
 
     def _logpdf_dispatch(self, x, *, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_logpdf'):
@@ -886,7 +886,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def pdf(self, x, method=None):
-        return self._pdf_dispatch(x, method=method, **self._all_shapes)
+        return self._pdf_dispatch(x, method=method, **self._all_parameters)
 
     def _pdf_dispatch(self, x, *, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_pdf'):
@@ -901,7 +901,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logcdf(self, x, method=None):
-        return self._logcdf_dispatch(x, method=method, **self._all_shapes)
+        return self._logcdf_dispatch(x, method=method, **self._all_parameters)
 
     def _logcdf_dispatch(self, x, *, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_logcdf'):
@@ -929,7 +929,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def cdf(self, x, method=None):
-        return self._cdf_dispatch(x, method=method, **self._all_shapes)
+        return self._cdf_dispatch(x, method=method, **self._all_parameters)
 
     def _cdf_dispatch(self, x, *, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_cdf'):
@@ -956,7 +956,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logccdf(self, x, method=None):
-        return self._logccdf_dispatch(x, method=method, **self._all_shapes)
+        return self._logccdf_dispatch(x, method=method, **self._all_parameters)
 
     def _logccdf_dispatch(self, x, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_logccdf'):
@@ -983,7 +983,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ccdf(self, x, method=None):
-        return self._ccdf_dispatch(x, method=method, **self._all_shapes)
+        return self._ccdf_dispatch(x, method=method, **self._all_parameters)
 
     def _ccdf_dispatch(self, x, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_ccdf'):
@@ -1010,7 +1010,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ilogcdf(self, x, method=None):
-        return self._ilogcdf_dispatch(x, method=method, **self._all_shapes)
+        return self._ilogcdf_dispatch(x, method=method, **self._all_parameters)
 
     def _ilogcdf_dispatch(self, x, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_ilogcdf'):
@@ -1030,7 +1030,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def icdf(self, x, method=None):
-        return self._icdf_dispatch(x, method=method, **self._all_shapes)
+        return self._icdf_dispatch(x, method=method, **self._all_parameters)
 
     def _icdf_dispatch(self, x, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_icdf'):
@@ -1050,7 +1050,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ilogccdf(self, x, method=None):
-        return self._ilogccdf_dispatch(x, method=method, **self._all_shapes)
+        return self._ilogccdf_dispatch(x, method=method, **self._all_parameters)
 
     def _ilogccdf_dispatch(self, x, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_ilogccdf'):
@@ -1070,7 +1070,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def iccdf(self, x, method=None):
-        return self._iccdf_dispatch(x, method=method, **self._all_shapes)
+        return self._iccdf_dispatch(x, method=method, **self._all_parameters)
 
     def _iccdf_dispatch(self, x, method=None, **kwargs):
         if method in {None, 'formula'} and self._overrides('_iccdf'):
@@ -1091,17 +1091,17 @@ class ContinuousDistribution:
     def sample(self, shape=(), rng=None):
         shape = (shape,) if not np.iterable(shape) else tuple(shape)
         rng = np.random.default_rng() if rng is None else rng
-        return self._sample(shape, rng, **self._all_shapes)
+        return self._sample(shape, rng, **self._all_parameters)
 
     def _sample(self, shape, rng, **kwargs):
-        full_shape = shape + self._invalid.shape
+        full_shape = shape + self._shape
         uniform = rng.uniform(size=full_shape)
         return self._icdf_dispatch(uniform, **kwargs)
 
     def logmoment(self, order, logcenter=None, standardized=False):
         # input validation
         logcenter = self.logmean if logcenter is None else logcenter
-        raw = self._logmoment(order, logcenter, **self._all_shapes)
+        raw = self._logmoment(order, logcenter, **self._all_parameters)
         res = raw - self.logvar * order / 2 if standardized else raw
         return res
 
@@ -1137,7 +1137,7 @@ class ContinuousDistribution:
         order = self._validate_order(order)
         methods = self._all_moment_methods if method is None else {method}
         return self._moment_raw_dispatch(order, methods=methods,
-                                         **self._all_shapes)
+                                         **self._all_parameters)
 
     def _moment_raw_dispatch(self, order, *, methods, **kwargs):
         # How to indicate to the user if the requested methods could not be used?
@@ -1149,8 +1149,8 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_raw(order, **kwargs)
-            if moment is not None and getattr(moment, 'shape', None) != self._shape_shape:
-                moment = np.broadcast_to(moment, self._shape_shape)
+            if moment is not None and getattr(moment, 'shape', None) != self._shape:
+                moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods and order > 1:
             moment = self._moment_raw_transform(order, **kwargs)
@@ -1200,7 +1200,7 @@ class ContinuousDistribution:
         order = self._validate_order(order)
         methods = self._all_moment_methods if method is None else {method}
         return self._moment_central_dispatch(order, methods=methods,
-                                             **self._all_shapes)
+                                             **self._all_parameters)
 
     def _moment_central_dispatch(self, order, *, methods, **kwargs):
         moment = None
@@ -1210,8 +1210,8 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_central(order, **kwargs)
-            if moment is not None and getattr(moment, 'shape', None) != self._shape_shape:
-                moment = np.broadcast_to(moment, self._shape_shape)
+            if moment is not None and getattr(moment, 'shape', None) != self._shape:
+                moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods:
             moment = self._moment_central_transform(order, **kwargs)
@@ -1271,7 +1271,7 @@ class ContinuousDistribution:
         order = self._validate_order(order)
         methods = self._all_moment_methods if method is None else {method}
         return self._moment_standard_dispatch(order, methods=methods,
-                                              **self._all_shapes)
+                                              **self._all_parameters)
 
     def _moment_standard_dispatch(self, order, *, methods, **kwargs):
         moment = None
@@ -1281,8 +1281,8 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_standard(order, **kwargs)
-            if moment is not None and getattr(moment, 'shape', None) != self._shape_shape:
-                moment = np.broadcast_to(moment, self._shape_shape)
+            if moment is not None and getattr(moment, 'shape', None) != self._shape:
+                moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'normalize' in methods:
             moment = self._moment_standard_transform(order, False, **kwargs)

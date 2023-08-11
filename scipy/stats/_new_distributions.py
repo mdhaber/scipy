@@ -99,23 +99,23 @@ class LogUniform(ContinuousDistribution):
 
     @cached_property
     def a(self):
-        return (self._shapes['a'] if 'a' in self._shapes
-                else np.exp(self._shapes['log_a']))
+        return (self._parameters['a'] if 'a' in self._parameters
+                else np.exp(self._parameters['log_a']))
 
     @cached_property
     def b(self):
-        return (self._shapes['b'] if 'b' in self._shapes
-                else np.exp(self._shapes['log_b']))
+        return (self._parameters['b'] if 'b' in self._parameters
+                else np.exp(self._parameters['log_b']))
 
     @cached_property
     def log_a(self):
-        return (self._shapes['log_a'] if 'log_a' in self._shapes
-                else np.log(self._shapes['a']))
+        return (self._parameters['log_a'] if 'log_a' in self._parameters
+                else np.log(self._parameters['a']))
 
     @cached_property
     def log_b(self):
-        return (self._shapes['log_b'] if 'log_b' in self._shapes
-                else np.log(self._shapes['b']))
+        return (self._parameters['log_b'] if 'log_b' in self._parameters
+                else np.log(self._parameters['b']))
 
     # def _logpdf(self, x, *, log_a, log_b, **kwargs):
     #     return -np.log(x) - np.log(log_b - log_a)

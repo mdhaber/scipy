@@ -163,7 +163,7 @@ def draw_distribution_from_family(family, data, rng):
     # Draw a broadcastable shape for the arguments, and draw values for the
     # arguments.
     x_shape = data.draw(npst.broadcastable_shapes(result_shape))
-    x = dist._variable.draw(x_shape, parameter_values=dist._all_shapes)
+    x = dist._variable.draw(x_shape, parameter_values=dist._all_parameters)
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
     p = rng.uniform(size=x_shape)
     logp = np.log(p)
@@ -314,7 +314,7 @@ def check_moment_funcs(dist, result_shape):
 def test_sample(family, dist_shape, x_shape):
     rng = np.random.default_rng(842582438235635)
     num_parameterizations = family._num_parameterizations()
-    num_parameters = family._num_shapes()
+    num_parameters = family._num_parameters()
 
     if dist_shape and num_parameters == 0:
         pytest.skip("Distribution can't have a shape without parameters.")
