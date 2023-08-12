@@ -97,7 +97,7 @@ class Test_RealDomain:
 
 
 class TestDistributions:
-    # @pytest.mark.filterwarnings('ignore')  # remove this
+    @reproduce_failure('6.82.0', b'AAAAAAABAQEAAQEBAQEAAA==')
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data())
     def test_basic(self, family, data):
@@ -106,7 +106,9 @@ class TestDistributions:
         # inject bad parameters and x-values, check NaN pattern
         rng = np.random.default_rng(4826584632856)
 
-        tmp = draw_distribution_from_family(family, data, rng)
+        # relative proportions of valid, endpoint, out of bounds, and NaN params
+        proportions = (1, 0, 0, 0)
+        tmp = draw_distribution_from_family(family, data, rng, proportions)
         dist, x, p, logp, result_shape, x_result_shape = tmp
 
         methods = {'log/exp', 'quadrature'}
@@ -142,14 +144,14 @@ class TestDistributions:
         check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
 
 
-def draw_distribution_from_family(family, data, rng):
+def draw_distribution_from_family(family, data, rng, proportions):
     # If the distribution has parameters, choose a parameterization and
     # draw broadcastable shapes for the parameter arrays.
     n_parameters = family._num_parameters()
     if n_parameters > 0:
         shapes, result_shape = data.draw(
             npst.mutually_broadcastable_shapes(num_shapes=n_parameters))
-        dist = family._draw(shapes, rng=rng)
+        dist = family._draw(shapes, rng=rng, proportions=proportions)
     else:
         dist = family._draw(rng=rng)
         result_shape = tuple()
@@ -170,6 +172,10 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
     # with one another, effectively testing the correctness of the generic
     # computation methods and confirming the consistency of specific
     # distributions with their pdf/logpdf.
+    valid_parameters = get_valid_parameters(dist)
+    valid_arg, endpoint_arg, outside_arg, nan_arg = classify_arg(dist, arg)
+    all_valid = valid_arg & valid_parameters
+
     args = tuple() if arg is None else (arg,)
     methods = methods.copy()
 
@@ -350,3 +356,71 @@ def test_sample(family, dist_shape, x_shape):
     num_pvalues = pvalue.size
     num_small_pvalues = np.sum(pvalue < p_threshold)
     assert num_small_pvalues < p_threshold * num_pvalues
+
+
+def get_valid_parameters(dist):
+    # Given a distribution, return a logical array that is true where all
+    # distribution parameters are within their respective domains. The code
+    # here is probably quite similar to that used to form the `_invalid`
+    # attribute of the distribution, but this was written about a week later
+    # without referring to that code, so it is a somewhat independent check.
+
+    # Get all parameter values and `_Parameter` objects
+    parameter_values = dist._all_parameters
+    parameters = {}
+    for parameterization in dist._parameterizations:
+        parameters.update(parameterization.parameters)
+
+    all_valid = np.ones(dist._shape, dtype=bool)
+    for name, value in parameter_values.items():
+        parameter = parameters[name]
+
+        # Check that the numerical endpoints and inclusivity attribute
+        # agree with the `contains` method about which parameter values are
+        # within the domain.
+        a, b = parameter.domain.get_numerical_endpoints(
+            parameter_values=parameter_values)
+        a_included, b_included = parameter.domain.inclusive
+        valid = (a <= value) if a_included else a < value
+        valid &= (value <= b) if b_included else value < b
+        assert_equal(valid, parameter.domain.contains(
+            value, parameter_values=parameter_values))
+
+        # Form `all_valid` mask that is True where *all* parameters are valid
+        all_valid &= valid
+
+    # Check that the `all_valid` mask formed here is the complement of the
+    # `dist._invalid` mask stored by the infrastructure
+    assert_equal(~all_valid, dist._invalid)
+
+    return all_valid
+
+def classify_arg(dist, arg):
+    if arg is None:
+        valid_args = np.ones(dist._shape, dtype=bool)
+        endpoint_args = np.zeros(dist._shape, dtype=bool)
+        outside_args = np.zeros(dist._shape, dtype=bool)
+        nan_args = np.zeros(dist._shape, dtype=bool)
+        return valid_args, endpoint_args, outside_args, nan_args
+
+    a, b = dist._variable.domain.get_numerical_endpoints(
+        parameter_values=dist._all_parameters)
+
+    adist, bdist = dist.support
+    assert_equal(a[~dist._invalid], adist[~dist._invalid])
+    assert_equal(b[~dist._invalid], bdist[~dist._invalid])
+    assert_equal(np.isnan(adist), dist._invalid)
+    assert_equal(np.isnan(bdist), dist._invalid)
+
+    a, b, arg = np.broadcast_arrays(a, b, arg)
+    a_included, b_included = dist._variable.domain.inclusive
+
+    inside = (a <= arg) if a_included else a < arg
+    inside &= (arg <= b) if b_included else arg < b
+    # TODO: add `supported` method and check here
+    on = (a == arg) | (b == arg)
+    outside = (arg < a) if a_included else arg <= a
+    outside |= (b < arg) if b_included else b <= arg
+    nan = np.isnan(arg)
+
+    return inside, on, outside, nan

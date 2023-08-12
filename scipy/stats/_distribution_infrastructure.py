@@ -534,7 +534,7 @@ class _Parameterization:
         messages = [str(param) for name, param in self.parameters.items()]
         return " ".join(messages)
 
-    def draw(self, sizes=None, rng=None):
+    def draw(self, sizes=None, rng=None, proportions=None):
         # ENH: be smart about the order. The domains of some parameters
         # depend on others. If the relationshp is simple (e.g. a < b < c),
         # we could just draw values in order a, b, c.
@@ -545,7 +545,8 @@ class _Parameterization:
 
         for size, param in zip(sizes, self.parameters.values()):
             parameter_values[param.name] = param.draw(
-                size, rng=rng, parameter_values=parameter_values)
+                size, rng=rng, proportions=proportions,
+                parameter_values=parameter_values)
 
         return parameter_values
 
@@ -773,7 +774,8 @@ class ContinuousDistribution:
         self._all_parameter_names = all_parameter_names
 
     @classmethod
-    def _draw(cls, sizes=None, rng=None, i_parameterization=None):
+    def _draw(cls, sizes=None, rng=None, i_parameterization=None,
+              proportions=None):
         if len(cls._parameterizations) == 0:
             return cls()
         if i_parameterization is None:
@@ -781,7 +783,7 @@ class ContinuousDistribution:
             i_parameterization = rng.integers(0, max(0, n - 1), endpoint=True)
 
         parameterization = cls._parameterizations[i_parameterization]
-        parameters = parameterization.draw(sizes, rng)
+        parameters = parameterization.draw(sizes, rng, proportions=proportions)
         return cls(**parameters)
 
     @classmethod
