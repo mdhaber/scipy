@@ -10,8 +10,6 @@ _null = object()
 oo = np.inf
 
 # TODO:
-#  For developer sanity, get_numerical_endpoints should give a readable error
-#   message when parameter values are needed but not passed
 #  add options for drawing parameters: include endpoints/invalid, log-spacing
 #  add `mode` method (can draft without automatic bounding)
 #  use `median` information to improve integration?
@@ -25,6 +23,7 @@ oo = np.inf
 #  Add operators for loc/scale transformation
 #  Be consistent about options passed to distributions/methods: tols, skip_iv, cache, rng
 #  profile/optimize
+#  Carefully review input validation, especially for dtype conversions.
 #  general cleanup (choose keyword-only parameters)
 #  documentation
 #  make video
@@ -197,8 +196,17 @@ class _SimpleDomain(_Domain):
         # the endpoint of the domain - then corresponding numerical values
         # will be found in the `parameter_values` dictionary. Otherwise, it is
         # itself the array of numerical values of the endpoint.
-        a = parameter_values.get(a, a)[()]
-        b = parameter_values.get(b, b)[()]
+        try:
+            a = parameter_values.get(a, a)[()]
+            b = parameter_values.get(b, b)[()]
+        except TypeError as e:
+            message = ("The endpoints of the distribution are defined by "
+                       "parameters, but their values were not provided. When "
+                       f"using a private method of {self.__class__}, pass "
+                       "all required distribution parameters as keyword"
+                       "arguments.")
+            raise TypeError(message) from e
+
         return np.broadcast_arrays(a, b)
 
     def contains(self, item, parameter_values={}):
@@ -297,7 +305,7 @@ class _RealDomain(_SimpleDomain):
         z_in = rng.uniform(min, max, size=(n_in,) + base_shape)
 
         z_on = np.ones((n_on,) + base_shape)
-        z_on[:n_on//2] = a
+        z_on[:n_on // 2] = a
         z_on[n_on // 2:] = b
 
         z_out = rng.uniform(min-10, max+10, size=(n_out,) + base_shape)
@@ -581,6 +589,14 @@ def _set_invalid_nan(f):
                        "be be broadcast to the same shape as the distribution "
                        "parameters.")
             raise ValueError(message) from e
+
+        # Ensure that argument is at least as precise as distribution
+        # parameters, which are already at least floats. This will avoid issues
+        # with raising integers to negative integer powers failure to replace
+        # invalid integers with NaNs.
+        dtype = np.result_type(x.dtype, self._dtype)
+        if x.dtype != self._dtype:
+            x = x.astype(dtype, copy=True)
 
         # check implications of <, <=
         mask_low = x < low if method_name in replace_strict else x <= low

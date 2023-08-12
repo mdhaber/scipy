@@ -56,6 +56,11 @@ class Test_RealDomain:
                                  _RealParameter('b', domain=_RealDomain()))
         # Check that domain and string evaluation give the same result
         res = domain.contains(x, dict(a=a, b=b))
+
+        # Apparently, `np.float16([2]) < np.float32(2.0009766)` is False
+        # but `np.float16([2]) < np.float32([2.0009766])` is True
+        dtype = np.result_type(a.dtype, b.dtype, x.dtype)
+        a, b, x = a.astype(dtype), b.astype(dtype), x.astype(dtype)
         left_comparison = '<=' if inclusive_a else '<'
         right_comparison = '<=' if inclusive_b else '<'
         ref = eval(f'(a {left_comparison} x) & (x {right_comparison} b)')
