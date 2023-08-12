@@ -97,7 +97,6 @@ class Test_RealDomain:
 
 
 class TestDistributions:
-    @reproduce_failure('6.82.0', b'AAAAAAABAQEAAQEBAQEAAA==')
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data())
     def test_basic(self, family, data):

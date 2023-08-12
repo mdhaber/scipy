@@ -203,7 +203,7 @@ class _SimpleDomain(_Domain):
             message = ("The endpoints of the distribution are defined by "
                        "parameters, but their values were not provided. When "
                        f"using a private method of {self.__class__}, pass "
-                       "all required distribution parameters as keyword"
+                       "all required distribution parameters as keyword "
                        "arguments.")
             raise TypeError(message) from e
 
@@ -299,23 +299,59 @@ class _RealDomain(_SimpleDomain):
         base_shape = min.shape
         extended_shape = np.broadcast_shapes(size, base_shape)
         n = int(np.prod(extended_shape)/np.prod(base_shape))
-
         n_in, n_on, n_out, n_nan = rng.multinomial(n, pvals)
 
-        z_in = rng.uniform(min, max, size=(n_in,) + base_shape)
+        # `min` and `max` can have singleton dimensions that correspond with
+        # non-singleton dimensions in `size`. We need to be careful to avoid
+        # shuffling results (e.g. a value that was generated for the domain
+        # [min[i], max[i]] ends up at index j). To avoid this:
+        # - Squeeze the singleton dimensions out of `min`/`max`. Squeezing is
+        #   often not the right thing to do, but here is equivalent to moving
+        #   all the dimensions that are singleton in `min`/`max` (which may be
+        #   non-singleton in the result) to the left. This is what we want.
+        # - Now all the non-singleton dimensions of the result are on the left.
+        #   Ravel them to a single dimension of length `n`, which is now along
+        #   the 0th axis.
+        # - Reshape the 0th axis back to the required dimensions, and move
+        #   these axes back to their original places.
+        base_shape_padded = ((1,)*(len(extended_shape) - len(base_shape))
+                             + base_shape)
+        base_singletons = np.where(np.asarray(base_shape_padded)==1)[0]
+        new_base_singletons = tuple(range(len(base_singletons)))
+        # Base singleton dimensions are going to get expanded to these lengths
+        shape_expansion = np.asarray(extended_shape)[base_singletons]
 
-        z_on = np.ones((n_on,) + base_shape)
-        z_on[:n_on // 2] = a
-        z_on[n_on // 2:] = b
+        # assert(np.prod(shape_expansion) == n)  # check understanding
+        # min = np.reshape(min, base_shape_padded)
+        # max = np.reshape(max, base_shape_padded)
+        # min = np.moveaxis(min, base_singletons, new_base_singletons)
+        # max = np.moveaxis(max, base_singletons, new_base_singletons)
+        # squeezed_base_shape = max.shape[len(base_singletons):]
+        # assert np.all(min.reshape(squeezed_base_shape) == min.squeeze())
+        # assert np.all(max.reshape(squeezed_base_shape) == max.squeeze())
 
-        z_out = rng.uniform(min-10, max+10, size=(n_out,) + base_shape)
+        min = min.squeeze()
+        max = max.squeeze()
+        squeezed_base_shape = max.shape
 
-        z_nan = np.full((n_nan,) + base_shape, np.nan)
+        z_in = rng.uniform(min, max, size=(n_in,) + squeezed_base_shape)
+
+        z_on_shape = (n_on,) + squeezed_base_shape
+        z_on = np.ones(z_on_shape)
+        z_on[:n_on // 2] = min
+        z_on[n_on // 2:] = max
+
+        z_out = rng.uniform(min-10, max+10, size=(n_out,) + squeezed_base_shape)
+
+        z_nan = np.full((n_nan,) + squeezed_base_shape, np.nan)
 
         z = np.concatenate((z_in, z_on, z_out, z_nan), axis=0)
         z = rng.permuted(z, axis=0)
 
-        return np.reshape(z, extended_shape)
+        z = np.reshape(z, tuple(shape_expansion) + squeezed_base_shape)
+        z = np.moveaxis(z, new_base_singletons, base_singletons)
+        return z
+
 
 class _IntegerDomain(_SimpleDomain):
     """ Represents a domain of consecutive integers.
