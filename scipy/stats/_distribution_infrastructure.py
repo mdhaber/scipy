@@ -13,6 +13,8 @@ oo = np.inf
 #  add options for drawing parameters: include endpoints/invalid, log-spacing
 #  add `mode` method (can draft without automatic bounding)
 #  use `median` information to improve integration?
+#  __init__ method should call developer-overridden function to process parameters
+#  __init__ method should add parameters as attributes, not developer
 #  add lower limit to cdf
 #  Write `fit` method
 #  ensure that user overrides return correct shape and dtype
@@ -770,26 +772,15 @@ class ContinuousDistribution:
             self._shape = tuple()
             return
 
-        # identify parameterization
-        parameter_names_vals = tuple(zip(*parameters.items()))
-        parameter_names_vals = parameter_names_vals or ([], [])
-        parameter_names, parameter_vals = parameter_names_vals
-        parameter_names_set = set(parameter_names)
-        for parameterization in self._parameterizations:
-            if parameterization.matches(parameter_names_set):
-                break
-        else:
-            message = (f"The provided parameters `{parameter_names_set}` "
-                       "do not match a supported parameterization of the "
-                       f"`{self.__class__.__name__}` distribution family.")
-            raise ValueError(message)
+        parameterization, parameter_names, parameter_vals = (
+            self._identify_parameterization(parameters))
         self._parameterization = parameterization
 
         # broadcast shape arguments
         try:
             parameter_vals = np.broadcast_arrays(*parameter_vals)
         except ValueError as e:
-            message = (f"The parameters {parameter_names_set} provided to the "
+            message = (f"The parameters {set(parameter_names)} provided to the "
                        f"`{self.__class__.__name__}` distribution family "
                        "cannot be broadcast to the same shape.")
             raise ValueError(message) from e
@@ -808,6 +799,22 @@ class ContinuousDistribution:
 
         self._parameters = parameters
         self._all_parameter_names = all_parameter_names
+
+    def _identify_parameterization(self, parameters):
+        # identify parameterization
+        parameter_names_vals = tuple(zip(*parameters.items()))
+        parameter_names_vals = parameter_names_vals or ([], [])
+        parameter_names, parameter_vals = parameter_names_vals
+        parameter_names_set = set(parameter_names)
+        for parameterization in self._parameterizations:
+            if parameterization.matches(parameter_names_set):
+                break
+        else:
+            message = (f"The provided parameters `{parameter_names_set}` "
+                       "do not match a supported parameterization of the "
+                       f"`{self.__class__.__name__}` distribution family.")
+            raise ValueError(message)
+        return parameterization, parameter_names, parameter_vals
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=None,
@@ -1463,3 +1470,24 @@ class ContinuousDistribution:
 
         res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
         return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
+
+    ## Easiest to do right now
+    # @classmethod
+    # def llf(cls, parameters, *, sample, axis=-1):
+    #     dist = cls(**parameters)
+    #     return np.sum(dist.logpdf(sample), axis=axis)
+
+    ## Works if user doesn't pass in parameters, or passes in the right parameters
+    # def llf(self, parameters=None, *, sample, axis=-1):
+    #     parameters = self._all_parameters if parameters is None else parameters
+    #     return np.sum(self._logpdf_dispatch(sample, **parameters))
+
+    ## Probably best, but we still need something to process parameters
+    ## I have been thinking that I should break out the part of __init__
+    ## that identifies the parameterization and validates parameters and
+    ## call that here.
+    @classmethod
+    def llf(cls, parameters, *, sample, axis=-1):
+        logpdf = getattr(cls, '_logpdf', lambda cls, sample, **parameters: (
+            np.log(cls._pdf(cls, sample, **parameters))))
+        return np.sum(logpdf(cls, sample, **parameters), axis=axis)
