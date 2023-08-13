@@ -97,6 +97,8 @@ class Test_RealDomain:
 
 
 class TestDistributions:
+
+
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data())
     def test_basic(self, family, data):
@@ -109,6 +111,8 @@ class TestDistributions:
         proportions = (1, 0, 0, 0)
         tmp = draw_distribution_from_family(family, data, rng, proportions)
         dist, x, p, logp, result_shape, x_result_shape = tmp
+
+        print(dist._parameters, x)
 
         methods = {'log/exp', 'quadrature'}
         check_dist_func(dist, 'entropy', None, result_shape, methods)
@@ -158,7 +162,7 @@ def draw_distribution_from_family(family, data, rng, proportions):
     # Draw a broadcastable shape for the arguments, and draw values for the
     # arguments.
     x_shape = data.draw(npst.broadcastable_shapes(result_shape))
-    x = dist._variable.draw(x_shape, parameter_values=dist._all_parameters)
+    x = dist._variable.draw(x_shape, parameter_values=dist._parameters)
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
     p = rng.uniform(size=x_shape)
     logp = np.log(p)
@@ -365,7 +369,7 @@ def get_valid_parameters(dist):
     # without referring to that code, so it is a somewhat independent check.
 
     # Get all parameter values and `_Parameter` objects
-    parameter_values = dist._all_parameters
+    parameter_values = dist._parameters
     parameters = {}
     for parameterization in dist._parameterizations:
         parameters.update(parameterization.parameters)
@@ -403,7 +407,7 @@ def classify_arg(dist, arg):
         return valid_args, endpoint_args, outside_args, nan_args
 
     a, b = dist._variable.domain.get_numerical_endpoints(
-        parameter_values=dist._all_parameters)
+        parameter_values=dist._parameters)
 
     adist, bdist = dist.support
     assert_equal(a[~dist._invalid], adist[~dist._invalid])

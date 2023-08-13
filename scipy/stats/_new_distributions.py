@@ -97,25 +97,13 @@ class LogUniform(ContinuousDistribution):
     def __init__(self, *, a=_null, b=_null, log_a=_null, log_b=_null, **kwargs):
         super().__init__(a=a, b=b, log_a=log_a, log_b=log_b, **kwargs)
 
-    @cached_property
-    def a(self):
-        return (self._parameters['a'] if 'a' in self._parameters
-                else np.exp(self._parameters['log_a']))
+    def _process_parameters(self, a=None, b=None, log_a=None, log_b=None):
+        a = np.exp(log_a) if a is None else a
+        b = np.exp(log_b) if b is None else b
+        log_a = np.log(a) if log_a is None else log_a
+        log_b = np.log(b) if log_b is None else log_b
+        return dict(a=a, b=b, log_a=log_a, log_b=log_b)
 
-    @cached_property
-    def b(self):
-        return (self._parameters['b'] if 'b' in self._parameters
-                else np.exp(self._parameters['log_b']))
-
-    @cached_property
-    def log_a(self):
-        return (self._parameters['log_a'] if 'log_a' in self._parameters
-                else np.log(self._parameters['a']))
-
-    @cached_property
-    def log_b(self):
-        return (self._parameters['log_b'] if 'log_b' in self._parameters
-                else np.log(self._parameters['b']))
 
     # def _logpdf(self, x, *, log_a, log_b, **kwargs):
     #     return -np.log(x) - np.log(log_b - log_a)
