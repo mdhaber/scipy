@@ -4,7 +4,7 @@ from functools import cached_property
 from scipy._lib._util import _lazywhere
 from scipy import special
 from scipy.integrate._tanhsinh import _tanhsinh
-from scipy.optimize._zeros_py import _chandrupatla, _bracket_root
+from scipy.optimize._zeros_py import _chandrupatla, _bracket_root, _differentiate
 import numpy as np
 _null = object()
 oo = np.inf
@@ -1491,3 +1491,15 @@ class ContinuousDistribution:
         logpdf = getattr(cls, '_logpdf', lambda cls, sample, **parameters: (
             np.log(cls._pdf(cls, sample, **parameters))))
         return np.sum(logpdf(cls, sample, **parameters), axis=axis)
+
+    @classmethod
+    def dllf(cls, parameters, *, sample, var):
+        # relies on current behavior of `_differentiate` to get shapes right
+        parameters = parameters.copy()
+
+        def f(x):
+            parameters[var] = x
+            res = cls.llf(parameters, sample=sample[:, None], axis=0)
+            return np.reshape(res, x.shape)
+
+        return _differentiate(f, parameters[var]).df
