@@ -513,7 +513,7 @@ class _RealParameter(_Parameter):
             valid_dtype = (real_arr == arr)
             arr = real_arr
         else:
-            message = f"Parameter {self.name} must be of real dtype."
+            message = f"Parameter `{self.name}` must be of real dtype."
             raise ValueError(message)
 
         in_domain = self.domain.contains(arr, parameter_values)
@@ -770,6 +770,7 @@ def _log_real_standardize(x):
 
 
 class ContinuousDistribution:
+    _parameterizations = []
 
     def __init__(self, *, tol=_null, skip_iv=False, **parameters):
         self.tol = tol
@@ -780,21 +781,28 @@ class ContinuousDistribution:
         self._original_parameters = parameters
         parameters = {key: val for key, val in parameters.items()
                       if val is not _null}
-
+        self._parameters = parameters
+        self._invalid = np.asarray(False)
+        self._any_invalid = False
+        self._shape = tuple()
+        self._dtype = np.float64
         self._not_implemented = (
             f"`{self.__class__.__name__}` does not provide an accurate "
             "implementation of the required method. Leave `tol` unspecified "
             "to use the default implementation."
         )
 
-        if skip_iv or not len(self._parameterizations):
-            self._parameters = parameters
-            self._invalid = np.asarray(False)
-            self._any_invalid = False
-            self._shape = tuple()
-            self._dtype = np.float64
-            # Not sure that attributes should be set if we're skipping IV
+        if skip_iv:
+            # Not sure whether attributes should be set if we're skipping IV
             # self._set_parameter_attributes()
+            return
+
+        if not len(self._parameterizations):
+            if parameters:
+                message = (f"The {self.__class__.__name__}` distribution "
+                           "family does not accept parameters, but parameters "
+                           f"`{set(parameters)}` were provided.")
+                raise ValueError(message)
             return
 
         parameterization = self._identify_parameterization(parameters)
@@ -833,6 +841,7 @@ class ContinuousDistribution:
         # could look them up with a key (e.g. frozenset of parameter names).
         # I haven't been sure enough of these approaches to implement them.
         parameter_names_set = set(parameters)
+
         for parameterization in cls._parameterizations:
             if parameterization.matches(parameter_names_set):
                 break
@@ -841,6 +850,7 @@ class ContinuousDistribution:
                        "do not match a supported parameterization of the "
                        f"`{cls.__name__}` distribution family.")
             raise ValueError(message)
+
         return parameterization
 
     @classmethod

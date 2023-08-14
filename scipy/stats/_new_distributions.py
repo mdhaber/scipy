@@ -10,7 +10,6 @@ class Normal(ContinuousDistribution):
 
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
-    _parameterizations = []
     _variable = _x_param
 
     def _logpdf(self, x, **kwargs):
