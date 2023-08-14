@@ -337,14 +337,20 @@ class _RealDomain(_SimpleDomain):
         max = max.squeeze()
         squeezed_base_shape = max.shape
 
-        z_in = rng.uniform(min, max, size=(n_in,) + squeezed_base_shape)
+        # get copies of min and max with no nans so that uniform doesn't fail
+        min_nn, max_nn = min.copy(), max.copy()
+        i = np.isnan(min_nn) | np.isnan(max_nn)
+        min_nn[i] = 0
+        max_nn[i] = 1
+        z_in = rng.uniform(min_nn, max_nn, size=(n_in,) + squeezed_base_shape)
 
         z_on_shape = (n_on,) + squeezed_base_shape
         z_on = np.ones(z_on_shape)
         z_on[:n_on // 2] = min
         z_on[n_on // 2:] = max
 
-        z_out = rng.uniform(min-10, max+10, size=(n_out,) + squeezed_base_shape)
+        z_out = rng.uniform(min_nn-1e30, max_nn+1e30,
+                            size=(n_out,) + squeezed_base_shape)
 
         z_nan = np.full((n_nan,) + squeezed_base_shape, np.nan)
 

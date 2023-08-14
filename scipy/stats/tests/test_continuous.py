@@ -98,7 +98,7 @@ class Test_RealDomain:
 
 class TestDistributions:
 
-
+    @pytest.mark.filterwarnings("ignore")
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
@@ -160,9 +160,11 @@ def draw_distribution_from_family(family, data, rng, proportions):
     # Draw a broadcastable shape for the arguments, and draw values for the
     # arguments.
     x_shape = data.draw(npst.broadcastable_shapes(result_shape))
-    x = dist._variable.draw(x_shape, parameter_values=dist._parameters)
+    x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
+                            proportions=proportions)
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
-    p = rng.uniform(size=x_shape)
+    p_domain = _RealDomain((0, 1), (True, True))
+    p = p_domain.draw(x_shape, proportions=proportions)
     logp = np.log(p)
 
     return dist, x, p, logp, result_shape, x_result_shape
@@ -194,7 +196,8 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
     if fname in {'logmean', 'mean', 'logskewness', 'skewness'}:
         tol_override = {'atol': 1e-15}
     else:
-        assert np.isfinite(ref).all()
+        # Can also get infinities for other log methods
+        assert np.isfinite(ref[all_valid]).all()
 
     if dist._overrides(f'_{fname}'):
         methods.add('formula')
