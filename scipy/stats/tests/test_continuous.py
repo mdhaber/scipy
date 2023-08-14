@@ -136,6 +136,7 @@ class TestDistributions:
         proportions = (1, 1, 1, 1)
         tmp = draw_distribution_from_family(family, data, rng, proportions)
         dist, x, p, logp, result_shape, x_result_shape = tmp
+        sample_shape = data.draw(npst.array_shapes())
 
         methods = {'log/exp', 'quadrature'}
         check_dist_func(dist, 'entropy', None, result_shape, methods)
@@ -155,6 +156,7 @@ class TestDistributions:
         assert_allclose(dist.std()**2, dist.var())
 
         check_moment_funcs(dist, result_shape)
+        check_sample_shape_NaNs(dist, sample_shape, result_shape)
 
         methods = {'log/exp'}
         check_dist_func(dist, 'pdf', x, x_result_shape, methods)
@@ -171,6 +173,14 @@ class TestDistributions:
         check_dist_func(dist, 'icdf', p, x_result_shape, methods)
         check_dist_func(dist, 'ilogccdf', logp, x_result_shape, methods)
         check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
+
+
+def check_sample_shape_NaNs(dist, sample_shape, result_shape):
+    res = dist.sample(sample_shape)
+    valid_parameters = np.broadcast_to(get_valid_parameters(dist), res.shape)
+    assert_equal(res.shape, sample_shape + result_shape)
+    assert np.all(np.isfinite(res[valid_parameters]))
+    assert_equal(res[~valid_parameters], np.nan)
 
 
 def check_dist_func(dist, fname, arg, result_shape, methods):
@@ -415,7 +425,7 @@ def check_moment_funcs(dist, result_shape):
 @pytest.mark.parametrize('family', (LogUniform, Normal))
 @pytest.mark.parametrize('x_shape', [tuple(), (2, 3)])
 @pytest.mark.parametrize('dist_shape', [tuple(), (4, 1)])
-def test_sample(family, dist_shape, x_shape):
+def test_sample_against_cdf(family, dist_shape, x_shape):
     rng = np.random.default_rng(842582438235635)
     num_parameters = family._num_parameters()
 
