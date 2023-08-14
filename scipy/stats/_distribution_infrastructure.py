@@ -1515,12 +1515,13 @@ class ContinuousDistribution:
         parameterization = cls._identify_parameterization(parameters)
         parameters, _ = cls._broadcast(parameters)
         parameters, _, _, _ = cls._validate(parameterization, parameters)
+        processed = cls._process_parameters(**parameters)
 
         def f(x):
             params = parameters.copy()
             params[var] = x
-            params = cls._process_parameters(**params)
-            res = cls._llf(params, sample=sample[:, None], axis=0)
+            processed = cls._process_parameters(**params)
+            res = cls._llf(processed, sample=sample[:, None], axis=0)
             return np.reshape(res, x.shape)
 
-        return _differentiate(f, parameters[var]).df
+        return _differentiate(f, processed[var]).df
