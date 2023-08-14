@@ -13,8 +13,6 @@ oo = np.inf
 
 # TODO:
 #  test input validation
-#  override __repr__
-#  check/fix zero-size array
 #  in tests, check reference value against that produced using np.vectorize?
 #  add options for drawing parameters: log-spacing
 #  use `median` information to improve integration?
@@ -46,6 +44,8 @@ oo = np.inf
 #  When drawing endpoint/out-of-bounds values of a parameter, draw them from
 #   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
 #   Make tolerance override method-specific again.
+#  Test repr?
+#  Fix _scalar_optimization_algorithms with 0-size arrays
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -313,7 +313,10 @@ class _RealDomain(_SimpleDomain):
 
         base_shape = min.shape
         extended_shape = np.broadcast_shapes(size, base_shape)
-        n = int(np.prod(extended_shape)/np.prod(base_shape))
+        n_extended = np.prod(extended_shape)
+        n_base = np.prod(base_shape)
+        n = int(n_extended / n_base) if n_extended else 0
+
         n_in, n_on, n_out, n_nan = rng.multinomial(n, pvals)
 
         # `min` and `max` can have singleton dimensions that correspond with
@@ -774,6 +777,7 @@ class ContinuousDistribution:
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
+        self._original_parameters = parameters
         parameters = {key: val for key, val in parameters.items()
                       if val is not _null}
 
@@ -785,7 +789,7 @@ class ContinuousDistribution:
 
         if skip_iv or not len(self._parameterizations):
             self._parameters = parameters
-            self._invalid = np.asarray(False)  # FIXME: needs the right ndim
+            self._invalid = np.asarray(False)
             self._any_invalid = False
             self._shape = tuple()
             self._dtype = np.float64
@@ -805,6 +809,19 @@ class ContinuousDistribution:
         self._shape = shape
         self._dtype = dtype
         self._set_parameter_attributes()
+
+    def __repr__(self):
+        class_name = self.__class__.__name__
+        parameters = list(self._original_parameters)
+        info = []
+        if parameters:
+            parameters.sort()
+            info.append(f"{', '.join(parameters)}")
+        if self._shape:
+            info.append(f"shape={self._shape}")
+        if self._dtype != np.float64:
+            info.append(f"dtype={self._dtype}")
+        return f"{class_name}({', '.join(info)})"
 
     @classmethod
     def _identify_parameterization(cls, parameters):
@@ -984,6 +1001,8 @@ class ContinuousDistribution:
         # less than the PDF at the median, it's either a (rare in SciPy)
         # bimodal distribution (in which case the generic implementation will
         # never be great) or the mode is at one of the endpoints.
+        if not np.prod(self._shape):
+            return np.empty(self._shape, dtype=self._dtype)
         p_shape = (3,) + (1,)*len(self._shape)
         p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
         bracket = self._icdf_dispatch(p, **kwargs)
@@ -1548,6 +1567,10 @@ class ContinuousDistribution:
 
     def _quadrature(self, integrand, limits=None, args=None, kwargs=None, log=False):
         a, b = self._support(**kwargs) if limits is None else limits
+        a, b = np.broadcast_arrays(a, b)
+        if not a.size:
+            # maybe need to figure out result type from a, b
+            return np.empty(a.shape, dtype=self._dtype)
         args = [] if args is None else args
         kwargs = {} if kwargs is None else kwargs
         f, args = kwargs2args(integrand, args=args, kwargs=kwargs)
@@ -1560,6 +1583,9 @@ class ContinuousDistribution:
         kwargs = {} if kwargs is None else kwargs
 
         p, min, max = np.broadcast_arrays(p, min, max)
+        if not p.size:
+            # might need to figure out result type based on p
+            return np.empty(p.shape, dtype=self._dtype)
 
         def f2(x, p, **kwargs):
             return f(x, **kwargs) - p

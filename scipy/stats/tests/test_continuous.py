@@ -24,7 +24,7 @@ class Test_RealDomain:
         domain = _RealDomain(endpoints=(a, b), inclusive=(False, True))
         assert_equal(domain.contains(x), (a < x) & (x <= b))
 
-    @given(shapes=npst.mutually_broadcastable_shapes(num_shapes=3),
+    @given(shapes=npst.mutually_broadcastable_shapes(num_shapes=3, min_side=0),
            inclusive_a=strategies.booleans(),
            inclusive_b=strategies.booleans(),
            data=strategies.data())
@@ -102,7 +102,8 @@ def draw_distribution_from_family(family, data, rng, proportions):
     n_parameters = family._num_parameters()
     if n_parameters > 0:
         shapes, result_shape = data.draw(
-            npst.mutually_broadcastable_shapes(num_shapes=n_parameters))
+            npst.mutually_broadcastable_shapes(num_shapes=n_parameters,
+                                               min_side=0))
         dist = family._draw(shapes, rng=rng, proportions=proportions)
     else:
         dist = family._draw(rng=rng)
@@ -110,7 +111,7 @@ def draw_distribution_from_family(family, data, rng, proportions):
 
     # Draw a broadcastable shape for the arguments, and draw values for the
     # arguments.
-    x_shape = data.draw(npst.broadcastable_shapes(result_shape))
+    x_shape = data.draw(npst.broadcastable_shapes(result_shape, min_side=0))
     x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
                             proportions=proportions)
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
@@ -136,7 +137,7 @@ class TestDistributions:
         proportions = (1, 1, 1, 1)
         tmp = draw_distribution_from_family(family, data, rng, proportions)
         dist, x, p, logp, result_shape, x_result_shape = tmp
-        sample_shape = data.draw(npst.array_shapes())
+        sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=0))
 
         methods = {'log/exp', 'quadrature'}
         check_dist_func(dist, 'entropy', None, result_shape, methods)
