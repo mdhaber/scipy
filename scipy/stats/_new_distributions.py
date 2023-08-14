@@ -78,12 +78,12 @@ class LogUniform(ContinuousDistribution):
     _log_b_domain = _RealDomain(endpoints=('log_a', oo))
     _x_support = _RealDomain(endpoints=('a', 'b'), inclusive=(True, True))
 
-    _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 1))
-    _b_param = _RealParameter('b', domain=_b_domain, typical=(1, 1e3))
+    _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 0.9))
+    _b_param = _RealParameter('b', domain=_b_domain, typical=(1.1, 1e3))
     _log_a_param = _RealParameter('log_a', symbol=r'\log(a)',
-                                  domain=_log_a_domain, typical=(-3, 0))
+                                  domain=_log_a_domain, typical=(-3, -0.1))
     _log_b_param = _RealParameter('log_b', symbol=r'\log(b)',
-                                  domain=_log_b_domain, typical=(0, 3))
+                                  domain=_log_b_domain, typical=(0.1, 3))
     _x_param = _RealParameter('x', domain=_x_support, typical=('a', 'b'))
 
     _b_domain.define_parameters(_a_param)

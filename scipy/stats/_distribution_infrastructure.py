@@ -12,7 +12,9 @@ _null = object()
 oo = np.inf
 
 # TODO:
-#  add options for drawing parameters: include endpoints/invalid, log-spacing
+#  check/fix zero-size array
+#  in tests, check reference value against that produced using np.vectorize?
+#  add options for drawing parameters: log-spacing
 #  use `median` information to improve integration?
 #  Write `fit` method
 #  ensure that user overrides return correct shape and dtype
@@ -39,6 +41,9 @@ oo = np.inf
 #  Fully-bake addition of lower limit to CDF. It's really sloppy right now.
 #   Needs input validation, better method names, better style, and better
 #   efficiency. Similar idea needed in `logcdf`.
+#  When drawing endpoint/out-of-bounds values of a parameter, draw them from
+#   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
+#   Make tolerance override method-specific again.
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -354,7 +359,7 @@ class _RealDomain(_SimpleDomain):
         z_on[:n_on // 2] = min
         z_on[n_on // 2:] = max
 
-        z_out = rng.uniform(min_nn-1e30, max_nn+1e30,
+        z_out = rng.uniform(min_nn-10, max_nn+10,
                             size=(n_out,) + squeezed_base_shape)
 
         z_nan = np.full((n_nan,) + squeezed_base_shape, np.nan)
@@ -698,10 +703,11 @@ def _set_invalid_nan_property(f):
         if res.shape != self._shape:  # faster to check first
             res = np.broadcast_to(res, self._shape)
 
-        # Does the right thing happen without explicitly adding NaNs?
-        # if self._any_invalid or dtype != self._dtype:
-        #     res = res.astype(dtype, copy=True)
-        #     res[self._invalid] = np.nan  # might be redundant
+        if self._any_invalid or dtype != self._dtype:
+            res = res.astype(dtype, copy=True)
+            # may be redundant when quadrature is used, but not necessarily
+            # when formulas are used.
+            res[self._invalid] = np.nan
 
         return res[()]
 
@@ -800,7 +806,13 @@ class ContinuousDistribution:
 
     @classmethod
     def _identify_parameterization(cls, parameters):
-        # identify parameterization
+        # I've come back to this a few times wanting to avoid this explicit
+        # loop. I've considered several possibilities, but they've all been a
+        # little unusual. For example, we could override `_eq_` so we can
+        # use _parameterizations.index() to retrieve the parameterization,
+        # or the user could put the parameterizations in a dictionary so we
+        # could look them up with a key (e.g. frozenset of parameter names).
+        # I haven't been sure enough of these approaches to implement them.
         parameter_names_set = set(parameters)
         for parameterization in cls._parameterizations:
             if parameterization.matches(parameter_names_set):

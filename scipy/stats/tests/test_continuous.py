@@ -10,7 +10,7 @@ from scipy.stats._fit import _kolmogorov_smirnov
 from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
-    _Domain, _RealDomain, _RealParameter)
+    oo, _Domain, _RealDomain, _RealParameter)
 from scipy.stats._new_distributions import LogUniform, Normal
 
 class Test_RealDomain:
@@ -96,10 +96,35 @@ class Test_RealDomain:
         assert str(domain) == ref
 
 
+def draw_distribution_from_family(family, data, rng, proportions):
+    # If the distribution has parameters, choose a parameterization and
+    # draw broadcastable shapes for the parameter arrays.
+    n_parameters = family._num_parameters()
+    if n_parameters > 0:
+        shapes, result_shape = data.draw(
+            npst.mutually_broadcastable_shapes(num_shapes=n_parameters))
+        dist = family._draw(shapes, rng=rng, proportions=proportions)
+    else:
+        dist = family._draw(rng=rng)
+        result_shape = tuple()
+
+    # Draw a broadcastable shape for the arguments, and draw values for the
+    # arguments.
+    x_shape = data.draw(npst.broadcastable_shapes(result_shape))
+    x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
+                            proportions=proportions)
+    x_result_shape = np.broadcast_shapes(x_shape, result_shape)
+    p_domain = _RealDomain((0, 1), (True, True))
+    p = p_domain.draw(x_shape, proportions=proportions)
+    logp = np.log(p)
+
+    return dist, x, p, logp, result_shape, x_result_shape
+
+
 class TestDistributions:
 
     @pytest.mark.filterwarnings("ignore")
-    @pytest.mark.parametrize('family', (Normal, LogUniform,))
+    @pytest.mark.parametrize('family', (Normal, LogUniform))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
         # strengthen this test by letting min_side=0 for both broadcasted shapes
@@ -108,7 +133,7 @@ class TestDistributions:
         rng = np.random.default_rng(seed)
 
         # relative proportions of valid, endpoint, out of bounds, and NaN params
-        proportions = (1, 0, 0, 0)
+        proportions = (1, 1, 1, 1)
         tmp = draw_distribution_from_family(family, data, rng, proportions)
         dist, x, p, logp, result_shape, x_result_shape = tmp
 
@@ -148,39 +173,11 @@ class TestDistributions:
         check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
 
 
-def draw_distribution_from_family(family, data, rng, proportions):
-    # If the distribution has parameters, choose a parameterization and
-    # draw broadcastable shapes for the parameter arrays.
-    n_parameters = family._num_parameters()
-    if n_parameters > 0:
-        shapes, result_shape = data.draw(
-            npst.mutually_broadcastable_shapes(num_shapes=n_parameters))
-        dist = family._draw(shapes, rng=rng, proportions=proportions)
-    else:
-        dist = family._draw(rng=rng)
-        result_shape = tuple()
-
-    # Draw a broadcastable shape for the arguments, and draw values for the
-    # arguments.
-    x_shape = data.draw(npst.broadcastable_shapes(result_shape))
-    x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
-                            proportions=proportions)
-    x_result_shape = np.broadcast_shapes(x_shape, result_shape)
-    p_domain = _RealDomain((0, 1), (True, True))
-    p = p_domain.draw(x_shape, proportions=proportions)
-    logp = np.log(p)
-
-    return dist, x, p, logp, result_shape, x_result_shape
-
-
 def check_dist_func(dist, fname, arg, result_shape, methods):
     # Check that all computation methods of all distribution functions agree
     # with one another, effectively testing the correctness of the generic
     # computation methods and confirming the consistency of specific
     # distributions with their pdf/logpdf.
-    valid_parameters = get_valid_parameters(dist)
-    valid_arg, endpoint_arg, outside_arg, nan_arg = classify_arg(dist, arg)
-    all_valid = valid_arg & valid_parameters
 
     args = tuple() if arg is None else (arg,)
     methods = methods.copy()
@@ -192,9 +189,10 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
             getattr(dist, fname)(*args, method="cache")
 
     ref = getattr(dist, fname)(*args)
+    check_nans_and_edges(dist, fname, arg, ref)
 
-    tol_override = {}
-
+    # Remove this after fixing `draw`
+    tol_override = {'atol': 1e-15}
     # Mean can be 0, which makes logmean -oo.
     if fname in {'logmean', 'mean', 'logskewness', 'skewness'}:
         tol_override = {'atol': 1e-15}
@@ -202,9 +200,6 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
         # can only expect about half of machine precision for optimization
         # because math
         tol_override = {'atol': 1e-8}
-    else:
-        # Can also get infinities for other log methods
-        assert np.isfinite(ref[all_valid]).all()
 
     if dist._overrides(f'_{fname}'):
         methods.add('formula')
@@ -227,16 +222,89 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
         if result_shape == tuple():
             assert np.isscalar(res)
 
+def check_nans_and_edges(dist, fname, arg, res):
+    inverses = {'icdf', 'ilogccdf', 'iccdf'}
+
+    valid_parameters = get_valid_parameters(dist)
+    if fname in {'icdf', 'iccdf'}:
+        arg_domain = _RealDomain(endpoints=(0, 1), inclusive=(True, True))
+    elif fname in {'ilogcdf', 'ilogccdf'}:
+        arg_domain = _RealDomain(endpoints=(-oo, 0), inclusive=(True, True))
+    else:
+        arg_domain = dist._variable.domain
+
+    classified_args = classify_arg(dist, arg, arg_domain)
+    valid_parameters, *classified_args = np.broadcast_arrays(valid_parameters,
+                                                             *classified_args)
+    valid_arg, endpoint_arg, outside_arg, nan_arg = classified_args
+    all_valid = valid_arg & valid_parameters
+
+    # Check NaN pattern and edge cases
+    assert_equal(res[~valid_parameters], np.nan)
+    assert_equal(res[nan_arg], np.nan)
+
+    a, b = dist.support
+    a = np.broadcast_to(a, res.shape)
+    b = np.broadcast_to(b, res.shape)
+
+    # Writing this independently of how the are set in the distribution
+    # infrastructure. That is very compact; this is very verbose.
+    if fname in {'logpdf'}:
+        assert_equal(res[outside_arg == -1], -np.inf)
+        assert_equal(res[outside_arg == 1], -np.inf)
+        assert_equal(res[(endpoint_arg == -1) & ~valid_arg], -np.inf)
+        assert_equal(res[(endpoint_arg == 1) & ~valid_arg], -np.inf)
+    elif fname in {'pdf'}:
+        assert_equal(res[outside_arg == -1], 0)
+        assert_equal(res[outside_arg == 1], 0)
+        assert_equal(res[(endpoint_arg == -1) & ~valid_arg], 0)
+        assert_equal(res[(endpoint_arg == 1) & ~valid_arg], 0)
+    elif fname in {'logcdf'}:
+        assert_equal(res[outside_arg == -1], -oo)
+        assert_equal(res[outside_arg == 1], 0)
+        assert_equal(res[endpoint_arg == -1], -oo)
+        assert_equal(res[endpoint_arg == 1], 0)
+    elif fname in {'cdf'}:
+        assert_equal(res[outside_arg == -1], 0)
+        assert_equal(res[outside_arg == 1], 1)
+        assert_equal(res[endpoint_arg == -1], 0)
+        assert_equal(res[endpoint_arg == 1], 1)
+    elif fname in {'logccdf'}:
+        assert_equal(res[outside_arg == -1], 0)
+        assert_equal(res[outside_arg == 1], -oo)
+        assert_equal(res[endpoint_arg == -1], 0)
+        assert_equal(res[endpoint_arg == 1], -oo)
+    elif fname in {'ccdf'}:
+        assert_equal(res[outside_arg == -1], 1)
+        assert_equal(res[outside_arg == 1], 0)
+        assert_equal(res[endpoint_arg == -1], 1)
+        assert_equal(res[endpoint_arg == 1], 0)
+    elif fname in {'ilogcdf', 'icdf'}:
+        assert_equal(res[outside_arg == -1], np.nan)
+        assert_equal(res[outside_arg == 1], np.nan)
+        assert_equal(res[endpoint_arg == -1], a[endpoint_arg == -1])
+        assert_equal(res[endpoint_arg == 1], b[endpoint_arg == 1])
+    elif fname in {'ilogccdf', 'iccdf'}:
+        assert_equal(res[outside_arg == -1], np.nan)
+        assert_equal(res[outside_arg == 1], np.nan)
+        assert_equal(res[endpoint_arg == -1], b[endpoint_arg == -1])
+        assert_equal(res[endpoint_arg == 1], a[endpoint_arg == 1])
+
+    if fname not in {'logmean', 'mean', 'logskewness', 'skewness'}:
+        assert np.isfinite(res[all_valid & (endpoint_arg == 0)]).all()
+
 def check_moment_funcs(dist, result_shape):
     # Check that all computation methods of all distribution functions agree
     # with one another, effectively testing the correctness of the generic
     # computation methods and confirming the consistency of specific
     # distributions with their pdf/logpdf.
 
+    atol = 1e-10  # make this tighter (e.g. 1e-13) after fixing `draw`
+
     def check(moment, order, method=None, ref=None, success=True):
         if success:
             res = moment(order, method=method)
-            assert_allclose(res, ref, atol=1e-13)
+            assert_allclose(res, ref, atol=atol)
             assert res.shape == ref.shape
         else:
             with pytest.raises(NotImplementedError):
@@ -254,6 +322,7 @@ def check_moment_funcs(dist, result_shape):
     for i in range(6):
         check(dist.moment_raw, i, 'cache', success=False)  # not cached yet
         ref = dist.moment_raw(i, method='quadrature')
+        check_nans_and_edges(dist, 'moment_raw', None, ref)
         assert ref.shape == result_shape
         check(dist.moment_raw, i, 'cache', ref, success=True)  # cached now
         check(dist.moment_raw, i, 'formula', ref, success=formula_raw)
@@ -284,6 +353,7 @@ def check_moment_funcs(dist, result_shape):
     for i in range(6):
         check(dist.moment_central, i, 'cache', success=False)
         ref = dist.moment_central(i, method='quadrature')
+        check_nans_and_edges(dist, 'moment_central', None, ref)
         assert ref.shape == result_shape
         check(dist.moment_central, i, 'cache', ref, success=True)
         check(dist.moment_central, i, 'formula', ref, success=formula_central)
@@ -321,6 +391,7 @@ def check_moment_funcs(dist, result_shape):
     for i in range(6):
         check(dist.moment_standard, i, 'cache', success=False)
         ref = dist.moment_central(i, method='quadrature') / var ** (i / 2)
+        check_nans_and_edges(dist, 'moment_standard', None, ref)
         del dist._moment_central_cache[i]
         assert ref.shape == result_shape
         check(dist.moment_standard, i, 'formula', ref,
@@ -332,13 +403,13 @@ def check_moment_funcs(dist, result_shape):
     logmean = dist._logmoment(1, logcenter=-np.inf)
     for i in range(6):
         ref = np.exp(dist._logmoment(i, logcenter=-np.inf))
-        assert_allclose(dist.moment_raw(i), ref, atol=1e-13)
+        assert_allclose(dist.moment_raw(i), ref, atol=atol)
 
         ref = np.exp(dist._logmoment(i, logcenter=logmean))
-        assert_allclose(dist.moment_central(i), ref, atol=1e-13)
+        assert_allclose(dist.moment_central(i), ref, atol=atol)
 
         ref = np.exp(dist._logmoment(i, logcenter=logmean, standardized=True))
-        assert_allclose(dist.moment_standard(i), ref, atol=1e-13)
+        assert_allclose(dist.moment_standard(i), ref, atol=atol)
 
 
 @pytest.mark.parametrize('family', (LogUniform, Normal))
@@ -406,7 +477,7 @@ def get_valid_parameters(dist):
 
     return all_valid
 
-def classify_arg(dist, arg):
+def classify_arg(dist, arg, arg_domain):
     if arg is None:
         valid_args = np.ones(dist._shape, dtype=bool)
         endpoint_args = np.zeros(dist._shape, dtype=bool)
@@ -414,24 +485,28 @@ def classify_arg(dist, arg):
         nan_args = np.zeros(dist._shape, dtype=bool)
         return valid_args, endpoint_args, outside_args, nan_args
 
-    a, b = dist._variable.domain.get_numerical_endpoints(
+    a, b = arg_domain.get_numerical_endpoints(
         parameter_values=dist._parameters)
 
-    adist, bdist = dist.support
-    assert_equal(a[~dist._invalid], adist[~dist._invalid])
-    assert_equal(b[~dist._invalid], bdist[~dist._invalid])
-    assert_equal(np.isnan(adist), dist._invalid)
-    assert_equal(np.isnan(bdist), dist._invalid)
+    # # Not sure if this belongs here
+    # adist, bdist = dist.support
+    # assert_equal(a[~dist._invalid], adist[~dist._invalid])
+    # assert_equal(b[~dist._invalid], bdist[~dist._invalid])
+    # assert_equal(np.isnan(adist), dist._invalid)
+    # assert_equal(np.isnan(bdist), dist._invalid)
 
     a, b, arg = np.broadcast_arrays(a, b, arg)
-    a_included, b_included = dist._variable.domain.inclusive
+    a_included, b_included = arg_domain.inclusive
 
     inside = (a <= arg) if a_included else a < arg
     inside &= (arg <= b) if b_included else arg < b
     # TODO: add `supported` method and check here
-    on = (a == arg) | (b == arg)
-    outside = (arg < a) if a_included else arg <= a
-    outside |= (b < arg) if b_included else b <= arg
+    on = np.zeros(a.shape, dtype=int)
+    on[a == arg] = -1
+    on[b == arg] =1
+    outside = np.zeros(a.shape, dtype=int)
+    outside[(arg < a) if a_included else arg <= a] = -1
+    outside[(b < arg) if b_included else b <= arg] = 1
     nan = np.isnan(arg)
 
     return inside, on, outside, nan
