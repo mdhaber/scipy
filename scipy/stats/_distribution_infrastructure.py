@@ -14,7 +14,6 @@ oo = np.inf
 # TODO:
 #  add options for drawing parameters: include endpoints/invalid, log-spacing
 #  use `median` information to improve integration?
-#  add lower limit to cdf
 #  Write `fit` method
 #  ensure that user overrides return correct shape and dtype
 #  check behavior of moment methods when moments are undefined
@@ -37,6 +36,9 @@ oo = np.inf
 #  integrate `logmoment` into `moment`? (Not hard, but enough time and code
 #   complexity to wait for reviewer feedback before adding.)
 #  Eliminate bracket_root error "`min <= a < b <= max` must be True"
+#  Fully-bake addition of lower limit to CDF. It's really sloppy right now.
+#   Needs input validation, better method names, better style, and better
+#   efficiency. Similar idea needed in `logcdf`.
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -603,17 +605,18 @@ def _set_invalid_nan(f):
     # improve structure
     # need to come back to this to think more about use of < vs <=
     # update this
-    use_support = {'logpdf', 'logcdf', 'logccdf', 'pdf', 'cdf', 'ccdf'}
+    use_support = {'logpdf', 'logcdf', 'logccdf', 'pdf', 'cdf', 'ccdf',
+                   '_cdf_1arg'}
     use_01 = {'icdf', 'iccdf'}
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
     replace_lows = {'logpdf': -oo, 'logcdf': -oo, 'logccdf': 0,
-                   'pdf': 0, 'cdf': 0, 'ccdf': 1,
+                   'pdf': 0, 'cdf': 0, 'ccdf': 1, '_cdf_1arg': 0,
                    'icdf': np.nan, 'iccdf': np.nan,
                    'ilogcdf': np.nan, 'ilogccdf': np.nan}
     replace_highs = {'logpdf': -oo, 'logcdf': 0, 'logccdf': -oo,
-                    'pdf': 0, 'cdf': 1, 'ccdf': 0,
+                    'pdf': 0, 'cdf': 1, 'ccdf': 0, '_cdf_1arg': 1,
                     'icdf': np.nan, 'iccdf': np.nan,
                     'ilogcdf': np.nan, 'ilogccdf': np.nan}
 
@@ -1062,8 +1065,57 @@ class ContinuousDistribution:
         return self._quadrature(self._logpdf_dispatch, limits=(a, x),
                                 kwargs=kwargs, log=True)
 
+    def cdf(self, x, y=None, *, method=None):
+        if y is None:
+            return self._cdf_1arg(x, method=method)
+        else:
+            return self._cdf_2arg(x, y, method=method)
+
+    def _cdf_2arg(self, x, y, *, method=None):
+        # Draft logic here. Not really correct, and method names are poor.
+        if ((self._tol is _null and self._overrides('_cdf')
+             and self._overrides('_ccdf') and method is None)
+                or method=='formula'):
+            return self._cdf_2arg_formula(x, y)
+        elif ((self._overrides('_logcdf')
+               and self._overrides('_logccdf') and method is None)
+              or method=='log/exp'):
+            return self._cdf_2arg_logexp(x, y)
+        else:
+            return self._cdf_2arg_quadrature(x, y)
+
+    def _cdf_2arg_formula(self, x, y):
+        # Quick draft. Lots of optimizations possible.
+        # - do (custom) input validation once instead of four times
+        # - lazy evaluation of ccdf only where it's needed
+        # - add logic/options for using logcdf, quadrature
+        # - we could stack x and y to reduce number of function calls
+        cdf_x = self.cdf(x)
+        cdf_y = self.cdf(y)
+        ccdf_x = self.ccdf(x)
+        ccdf_y = self.ccdf(y)
+        i = (cdf_x < 0.5) & (cdf_y < 0.5)
+        return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
+
+    def _cdf_2arg_logexp(self, x, y):
+        logcdf_x = self.logcdf(x)
+        logcdf_y = self.logcdf(y)
+        logccdf_x = self.logccdf(x)
+        logccdf_y = self.logccdf(y)
+        i = (logcdf_x < -1) & (logcdf_y < -1)
+        return np.real(np.exp(np.where(i, _logexpxmexpy(logcdf_y, logcdf_x),
+                                       _logexpxmexpy(logccdf_x, logccdf_y))))
+
+    def _cdf_2arg_quadrature(self, x, y):
+        x, y = np.broadcast_arrays(x, y)
+        shape = np.broadcast_shapes(x.shape, self._shape)
+        x = np.broadcast_to(x, self._shape)
+        y = np.broadcast_to(y, self._shape)
+        return self._quadrature(self._pdf_dispatch, limits=(x, y),
+                                kwargs=self._parameters)
+
     @_set_invalid_nan
-    def cdf(self, x, *, method=None):
+    def _cdf_1arg(self, x, *, method):
         return self._cdf_dispatch(x, method=method, **self._parameters)
 
     def _cdf_dispatch(self, x, *, method=None, **kwargs):
