@@ -13,9 +13,6 @@ class Normal(ContinuousDistribution):
     _parameterizations = []
     _variable = _x_param
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def _logpdf(self, x, **kwargs):
         return -(np.log(2*np.pi)/2 + x**2/2)
 
@@ -94,9 +91,6 @@ class LogUniform(ContinuousDistribution):
                           _Parameterization(_a_param, _b_param)]
     _variable = _x_param
 
-    def __init__(self, *, a=_null, b=_null, log_a=_null, log_b=_null, **kwargs):
-        super().__init__(a=a, b=b, log_a=log_a, log_b=log_b, **kwargs)
-
     @classmethod
     def _process_parameters(cls, a=None, b=None, log_a=None, log_b=None):
         a = np.exp(log_a) if a is None else a
@@ -105,18 +99,14 @@ class LogUniform(ContinuousDistribution):
         log_b = np.log(b) if log_b is None else log_b
         return dict(a=a, b=b, log_a=log_a, log_b=log_b)
 
-
     # def _logpdf(self, x, *, log_a, log_b, **kwargs):
     #     return -np.log(x) - np.log(log_b - log_a)
 
-    # def _moment_raw(self, order, **kwargs):
-    #     if order == 0:
-    #         return np.nan
-    #     else:
-    #         return None
-
     def _pdf(self, x, *, log_a, log_b, **kwargs):
         return ((log_b - log_a)*x)**-1
+
+    # def _cdf(self, x, *, log_a, log_b, **kwargs):
+    #     return (np.log(x) - log_a)/(log_b - log_a)
 
     def _moment_raw(self, order, log_a, log_b, **kwargs):
         if order == 0:
@@ -124,6 +114,3 @@ class LogUniform(ContinuousDistribution):
         t1 = 1 / (log_b - log_a) / order
         t2 = np.real(np.exp(_log_diff(order * log_b, order * log_a)))
         return t1 * t2
-    #
-    # def _cdf(self, x, *, log_a, log_b, **kwargs):
-    #     return (np.log(x) - log_a)/(log_b - log_a)

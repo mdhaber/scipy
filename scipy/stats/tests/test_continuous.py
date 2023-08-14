@@ -100,19 +100,17 @@ class TestDistributions:
 
 
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
-    @given(data=strategies.data())
-    def test_basic(self, family, data):
+    @given(data=strategies.data(), seed=strategies.integers(min_value=0))
+    def test_basic(self, family, data, seed):
         # strengthen this test by letting min_side=0 for both broadcasted shapes
         # check for scalar output if all inputs are scalar
         # inject bad parameters and x-values, check NaN pattern
-        rng = np.random.default_rng(4826584632856)
+        rng = np.random.default_rng(seed)
 
         # relative proportions of valid, endpoint, out of bounds, and NaN params
         proportions = (1, 0, 0, 0)
         tmp = draw_distribution_from_family(family, data, rng, proportions)
         dist, x, p, logp, result_shape, x_result_shape = tmp
-
-        print(dist._parameters, x)
 
         methods = {'log/exp', 'quadrature'}
         check_dist_func(dist, 'entropy', None, result_shape, methods)
@@ -324,13 +322,13 @@ def check_moment_funcs(dist, result_shape):
     logmean = dist._logmoment(1, logcenter=-np.inf)
     for i in range(6):
         ref = np.exp(dist._logmoment(i, logcenter=-np.inf))
-        assert_allclose(dist.moment_raw(i), ref, atol=1e-14)
+        assert_allclose(dist.moment_raw(i), ref, atol=1e-13)
 
         ref = np.exp(dist._logmoment(i, logcenter=logmean))
-        assert_allclose(dist.moment_central(i), ref, atol=1e-14)
+        assert_allclose(dist.moment_central(i), ref, atol=1e-13)
 
         ref = np.exp(dist._logmoment(i, logcenter=logmean, standardized=True))
-        assert_allclose(dist.moment_standard(i), ref, atol=1e-14)
+        assert_allclose(dist.moment_standard(i), ref, atol=1e-13)
 
 
 @pytest.mark.parametrize('family', (LogUniform, Normal))

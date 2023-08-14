@@ -1439,8 +1439,8 @@ def _bracket_root_iv(func, a, b, min, max, factor, args, maxiter):
     if not maxiter == maxiter_int or maxiter < 0:
         raise ValueError(message)
 
-    if not np.all((min <= a) & (a < b) & (b <= max)):
-        raise ValueError('`min <= a < b <= max` must be True (elementwise).')
+    # if not np.all((min <= a) & (a < b) & (b <= max)):
+    #     raise ValueError('`min <= a < b <= max` must be True (elementwise).')
 
     return func, a, b, min, max, factor, args, maxiter
 

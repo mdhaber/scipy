@@ -19,6 +19,8 @@ oo = np.inf
 #  check behavior of moment methods when moments are undefined
 #  add `axis` to `ks_1samp`
 #  implement symmetric distribution
+#  Can we process the parameters before checking the parameterization? Then, it
+#   would be easy to accept any valid parameterization (e.g. `a` and `log_b`)
 #  Add loc/scale transformation
 #  Add operators for loc/scale transformation
 #  Be consistent about options passed to distributions/methods: tols, skip_iv, cache, rng
@@ -31,8 +33,7 @@ oo = np.inf
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
 #  integrate `logmoment` into `moment`? (Not hard, but enough time and code
 #   complexity to wait for reviewer feedback before adding.)
-#  When there are invalid parameters, icdf fails because _bracket_root_iv
-#   raises an error. ValueError: `min <= a < b <= max` must be True...
+#  Eliminate bracket_root error "`min <= a < b <= max` must be True"
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -776,8 +777,9 @@ class ContinuousDistribution:
         parameters, shape = self._broadcast(parameters)
         parameters, invalid, any_invalid, dtype = self._validate(
             parameterization, parameters)
+        parameters = self._process_parameters(**parameters)
 
-        self._parameters = self._process_parameters(**parameters)
+        self._parameters = parameters
         self._invalid = invalid
         self._any_invalid = any_invalid
         self._shape = shape
@@ -787,10 +789,7 @@ class ContinuousDistribution:
     @classmethod
     def _identify_parameterization(cls, parameters):
         # identify parameterization
-        parameter_names_vals = tuple(zip(*parameters.items()))
-        parameter_names_vals = parameter_names_vals or ([], [])
-        parameter_names, parameter_vals = parameter_names_vals
-        parameter_names_set = set(parameter_names)
+        parameter_names_set = set(parameters)
         for parameterization in cls._parameterizations:
             if parameterization.matches(parameter_names_set):
                 break
