@@ -31,6 +31,8 @@ oo = np.inf
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
 #  integrate `logmoment` into `moment`? (Not hard, but enough time and code
 #   complexity to wait for reviewer feedback before adding.)
+#  When there are invalid parameters, icdf fails because _bracket_root_iv
+#   raises an error. ValueError: `min <= a < b <= max` must be True...
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -748,8 +750,6 @@ class ContinuousDistribution:
     def __init__(self, *, tol=_null, skip_iv=False, **parameters):
         self.tol = tol
         self.skip_iv = skip_iv
-        self._dtype = np.float64  # default; may change depending on parameters
-        _parameter_names = list(parameters)
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
@@ -764,60 +764,75 @@ class ContinuousDistribution:
 
         if skip_iv or not len(self._parameterizations):
             self._parameters = parameters
-            self._parameter_names = _parameter_names
             self._invalid = np.asarray(False)  # FIXME: needs the right ndim
             self._any_invalid = False
             self._shape = tuple()
+            self._dtype = np.float64
+            # Not sure that attributes should be set if we're skipping IV
+            # self._set_parameter_attributes()
             return
 
-        parameterization, parameter_names, parameter_vals = (
-            self._identify_parameterization(parameters))
-        self._parameterization = parameterization
+        parameterization = self._identify_parameterization(parameters)
+        parameters, shape = self._broadcast(parameters)
+        parameters, invalid, any_invalid, dtype = self._validate(
+            parameterization, parameters)
 
-        # broadcast shape arguments
-        try:
-            parameter_vals = np.broadcast_arrays(*parameter_vals)
-        except ValueError as e:
-            message = (f"The parameters {set(parameter_names)} provided to the "
-                       f"`{self.__class__.__name__}` distribution family "
-                       "cannot be broadcast to the same shape.")
-            raise ValueError(message) from e
-
-        # Replace invalid parameters with `np.nan`
-        parameters = dict(zip(parameter_names, parameter_vals))
-        valid, self._dtype = parameterization.validation(parameters)
-        self._invalid = ~valid
-        self._any_invalid = np.any(self._invalid)
-        self._shape = valid.shape  # broadcasted shape of parameters
-        # If necessary, make the arrays contiguous and replace invalid with NaN
-        if self._any_invalid:
-            for parameter_name in parameters:
-                parameters[parameter_name] = np.copy(parameters[parameter_name])
-                parameters[parameter_name][self._invalid] = np.nan
-
-        self._parameter_names = _parameter_names
         self._parameters = self._process_parameters(**parameters)
+        self._invalid = invalid
+        self._any_invalid = any_invalid
+        self._shape = shape
+        self._dtype = dtype
         self._set_parameter_attributes()
 
-    def _set_parameter_attributes(self):
-        for name, val in self._parameters.items():
-            setattr(self, name, val)
-
-    def _identify_parameterization(self, parameters):
+    @classmethod
+    def _identify_parameterization(cls, parameters):
         # identify parameterization
         parameter_names_vals = tuple(zip(*parameters.items()))
         parameter_names_vals = parameter_names_vals or ([], [])
         parameter_names, parameter_vals = parameter_names_vals
         parameter_names_set = set(parameter_names)
-        for parameterization in self._parameterizations:
+        for parameterization in cls._parameterizations:
             if parameterization.matches(parameter_names_set):
                 break
         else:
             message = (f"The provided parameters `{parameter_names_set}` "
                        "do not match a supported parameterization of the "
-                       f"`{self.__class__.__name__}` distribution family.")
+                       f"`{cls.__name__}` distribution family.")
             raise ValueError(message)
-        return parameterization, parameter_names, parameter_vals
+        return parameterization
+
+    @classmethod
+    def _broadcast(cls, parameters):
+        # broadcast parameters
+        try:
+            parameter_vals = np.broadcast_arrays(*parameters.values())
+        except ValueError as e:
+            message = (f"The parameters {set(parameters)} provided to the "
+                       f"`{cls.__name__}` distribution family "
+                       "cannot be broadcast to the same shape.")
+            raise ValueError(message) from e
+        return (dict(zip(parameters.keys(), parameter_vals)),
+                parameter_vals[0].shape)
+
+    @classmethod
+    def _validate(cls, parameterization, parameters):
+        # Replace invalid parameters with `np.nan` and get NaN pattern
+        valid, dtype = parameterization.validation(parameters)
+        invalid = ~valid
+        any_invalid = np.any(invalid)
+        # If necessary, make the arrays contiguous and replace invalid with NaN
+        if any_invalid:
+            for parameter_name in parameters:
+                parameters[parameter_name] = np.copy(parameters[parameter_name])
+                parameters[parameter_name][invalid] = np.nan
+
+        return parameters, invalid, any_invalid, dtype
+
+
+    def _set_parameter_attributes(self):
+        for name, val in self._parameters.items():
+            setattr(self, name, val)
+
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=None,
@@ -1479,6 +1494,16 @@ class ContinuousDistribution:
     ## call that here.
     @classmethod
     def llf(cls, parameters, *, sample, axis=-1):
+        # still needs input validation of sample
+        parameterization = cls._identify_parameterization(parameters)
+        parameters, _ = cls._broadcast(parameters)
+        parameters, _, _, _ = cls._validate(parameterization, parameters)
+        parameters = cls._process_parameters(**parameters)
+
+        return cls._llf(parameters, sample=sample, axis=axis)
+
+    @classmethod
+    def _llf(cls, parameters, *, sample, axis):
         logpdf = getattr(cls, '_logpdf', lambda cls, sample, **parameters: (
             np.log(cls._pdf(cls, sample, **parameters))))
         return np.sum(logpdf(cls, sample, **parameters), axis=axis)
@@ -1487,10 +1512,15 @@ class ContinuousDistribution:
     def dllf(cls, parameters, *, sample, var):
         # relies on current behavior of `_differentiate` to get shapes right
         parameters = parameters.copy()
+        parameterization = cls._identify_parameterization(parameters)
+        parameters, _ = cls._broadcast(parameters)
+        parameters, _, _, _ = cls._validate(parameterization, parameters)
 
         def f(x):
-            parameters[var] = x
-            res = cls.llf(parameters, sample=sample[:, None], axis=0)
+            params = parameters.copy()
+            params[var] = x
+            params = cls._process_parameters(**params)
+            res = cls._llf(params, sample=sample[:, None], axis=0)
             return np.reshape(res, x.shape)
 
         return _differentiate(f, parameters[var]).df
