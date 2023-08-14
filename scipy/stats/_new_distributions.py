@@ -52,6 +52,9 @@ class Normal(ContinuousDistribution):
     def _median(self, **kwargs):
         return 0
 
+    def _mode(self, **kwargs):
+        return 0
+
     def _moment_raw(self, order, **kwargs):
         raw_moments = {0: 1, 1: 0, 2: 1, 3: 0, 4: 3, 5: 0}
         return raw_moments.get(order, None)

@@ -4,14 +4,15 @@ from functools import cached_property
 from scipy._lib._util import _lazywhere
 from scipy import special
 from scipy.integrate._tanhsinh import _tanhsinh
-from scipy.optimize._zeros_py import _chandrupatla, _bracket_root, _differentiate
+from scipy.optimize._zeros_py import (_chandrupatla, _bracket_root,
+                                      _differentiate)
+from scipy.optimize._chandrupatla import _chandrupatla_minimize
 import numpy as np
 _null = object()
 oo = np.inf
 
 # TODO:
 #  add options for drawing parameters: include endpoints/invalid, log-spacing
-#  add `mode` method (can draft without automatic bounding)
 #  use `median` information to improve integration?
 #  add lower limit to cdf
 #  Write `fit` method
@@ -31,6 +32,8 @@ oo = np.inf
 #  make video
 #  add array API support
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
+#  _chandrupatla_minimize should not report xm = fm = NaN when it fails
+#  improve mode after writing _bracket_minimize
 #  integrate `logmoment` into `moment`? (Not hard, but enough time and code
 #   complexity to wait for reviewer feedback before adding.)
 #  Eliminate bracket_root error "`min <= a < b <= max` must be True"
@@ -944,6 +947,39 @@ class ContinuousDistribution:
 
     def _median_icdf(self, **kwargs):
         return self._icdf_dispatch(0.5, **kwargs)
+
+    def mode(self, *, method=None):
+        return self._mode_dispatch(method=method, **self._parameters)
+
+    def _mode_dispatch(self, method=None, **kwargs):
+        # We could add a method that looks for a critical point with
+        # differentiation and the root finder
+        if method in {None, 'formula'} and self._overrides('_mode'):
+            return np.asarray(self._mode(**kwargs))[()]
+        elif method in {None, 'optimization'}:
+            return self._mode_optimization(**kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _mode_optimization(self, **kwargs):
+        # Heuristic until we write a proper minimization bracket finder (like
+        # bracket_root): if the PDF at the 0.01 and 99.99 percentiles is not
+        # less than the PDF at the median, it's either a (rare in SciPy)
+        # bimodal distribution (in which case the generic implementation will
+        # never be great) or the mode is at one of the endpoints.
+        p_shape = (3,) + (1,)*len(self._shape)
+        p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
+        bracket = self._icdf_dispatch(p, **kwargs)
+        res = _chandrupatla_minimize(lambda x: -self._pdf_dispatch(x, **kwargs),
+                                     *bracket)
+        mode = np.asarray(res.x)
+        mode_at_boundary = ~res.success
+        mode_at_left = mode_at_boundary & (res.fl <= res.fr)
+        mode_at_right = mode_at_boundary & (res.fr < res.fl)
+        a, b = self._support(**kwargs)
+        mode[mode_at_left] = a[mode_at_left]
+        mode[mode_at_right] = b[mode_at_right]
+        return mode[()]
 
     @_set_invalid_nan_property
     def mean(self, *, method=None):

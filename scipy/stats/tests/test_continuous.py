@@ -119,6 +119,9 @@ class TestDistributions:
         methods = {'icdf'}
         check_dist_func(dist, 'median', None, result_shape, methods)
 
+        methods = {'optimization'}
+        check_dist_func(dist, 'mode', None, result_shape, methods)
+
         methods = {'cache'}  #  weak test right now
         check_dist_func(dist, 'mean', None, result_shape, methods)
         check_dist_func(dist, 'var', None, result_shape, methods)
@@ -195,6 +198,10 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
     # Mean can be 0, which makes logmean -oo.
     if fname in {'logmean', 'mean', 'logskewness', 'skewness'}:
         tol_override = {'atol': 1e-15}
+    elif fname in {'mode'}:
+        # can only expect about half of machine precision for optimization
+        # because math
+        tol_override = {'atol': 1e-8}
     else:
         # Can also get infinities for other log methods
         assert np.isfinite(ref[all_valid]).all()
