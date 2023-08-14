@@ -65,8 +65,10 @@ class Normal(ContinuousDistribution):
     def _moment_standard(self, order, **kwargs):
         return self._moment_raw(order, **kwargs)
 
+    def _sample(self, sample_shape, full_shape, rng, **kwargs):
+        return rng.normal(size=full_shape)
 
-from scipy import special
+
 def _log_diff(log_p, log_q):
     return special.logsumexp([log_p, log_q+np.pi*1j], axis=0)
 

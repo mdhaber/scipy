@@ -12,6 +12,8 @@ _null = object()
 oo = np.inf
 
 # TODO:
+#  test input validation
+#  override __repr__
 #  check/fix zero-size array
 #  in tests, check reference value against that produced using np.vectorize?
 #  add options for drawing parameters: log-spacing
@@ -1287,13 +1289,24 @@ class ContinuousDistribution:
     def _iccdf_solve_ccdf(self, x, **kwargs):
         return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
-    def sample(self, shape=(), *, rng=None):
-        shape = (shape,) if not np.iterable(shape) else tuple(shape)
-        rng = np.random.default_rng() if rng is None else rng
-        return self._sample(shape, rng, **self._parameters)
-
-    def _sample(self, shape, rng, **kwargs):
+    def sample(self, shape=(), *, method=None, rng=None):
+        sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = shape + self._shape
+        rng = np.random.default_rng() if rng is None else rng
+        return self._sample_dispatch(sample_shape, full_shape, method=method,
+                                     rng=rng, **self._parameters)
+
+    def _sample_dispatch(self, sample_shape, full_shape, *, method, rng, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_sample'):
+            return np.asarray(self._sample(sample_shape, full_shape, rng=rng,
+                                           **kwargs))[()]
+        elif method in {None, 'inverse_transform'}:
+            return self._sample_inverse_transform(sample_shape, full_shape,
+                                                  rng=rng, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _sample_inverse_transform(self, sample_shape, full_shape, *, rng, **kwargs):
         uniform = rng.uniform(size=full_shape)
         return self._icdf_dispatch(uniform, **kwargs)
 

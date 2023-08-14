@@ -176,11 +176,24 @@ class TestDistributions:
 
 
 def check_sample_shape_NaNs(dist, sample_shape, result_shape):
-    res = dist.sample(sample_shape)
-    valid_parameters = np.broadcast_to(get_valid_parameters(dist), res.shape)
-    assert_equal(res.shape, sample_shape + result_shape)
-    assert np.all(np.isfinite(res[valid_parameters]))
-    assert_equal(res[~valid_parameters], np.nan)
+    methods = {'inverse_transform'}
+    if dist._overrides('_sample'):
+        methods.add('formula')
+
+    for method in methods:
+        res = dist.sample(sample_shape, method=method)
+        valid_parameters = np.broadcast_to(get_valid_parameters(dist),
+                                           res.shape)
+        assert_equal(res.shape, sample_shape + result_shape)
+        assert np.all(np.isfinite(res[valid_parameters]))
+        assert_equal(res[~valid_parameters], np.nan)
+
+        sample1 = dist.sample(sample_shape, method=method,
+                              rng=np.random.default_rng(42))
+        sample2 = dist.sample(sample_shape, method=method,
+                              rng=np.random.default_rng(42))
+        assert not np.any(np.equal(res, sample1))
+        assert_equal(sample1, sample2)
 
 
 def check_dist_func(dist, fname, arg, result_shape, methods):
