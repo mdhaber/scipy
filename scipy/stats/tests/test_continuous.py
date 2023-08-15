@@ -340,10 +340,7 @@ def check_moment_funcs(dist, result_shape):
     formula_raw = dist._overrides('_moment_raw')
     formula_central = dist._overrides('_moment_central')
     formula_standard = dist._overrides('_moment_standard')
-
-    dist._moment_raw_cache = {}
-    dist._moment_central_cache = {}
-    dist._moment_standard_cache = {}
+    dist.reset_cache()
 
     ### Check Raw Moments ###
     for i in range(6):
@@ -356,9 +353,7 @@ def check_moment_funcs(dist, result_shape):
         check(dist.moment_raw, i, 'general', ref, i == 0)
 
     # Clearing caches to better check their behavior
-    dist._moment_raw_cache = {}
-    dist._moment_central_cache = {}
-    dist._moment_standard_cache = {}
+    dist.reset_cache()
 
     # If we have central or standard moment formulas, or if there are
     # values in their cache, we can use method='transform'
@@ -371,9 +366,7 @@ def check_moment_funcs(dist, result_shape):
         dist.moment_central(i)  # build up the cache
         check(dist.moment_raw, i, 'transform', ref)
 
-    dist._moment_raw_cache = {}
-    dist._moment_central_cache = {}
-    dist._moment_standard_cache = {}
+    dist.reset_cache()
 
     ### Check Central Moments ###
 
@@ -390,9 +383,7 @@ def check_moment_funcs(dist, result_shape):
             dist.moment_raw(i)
             check(dist.moment_central, i, 'transform', ref)
 
-    dist._moment_raw_cache = {}
-    dist._moment_central_cache = {}
-    dist._moment_standard_cache = {}
+    dist.reset_cache()
 
     # If we have standard moment formulas, or if there are
     # values in their cache, we can use method='normalize'
@@ -406,9 +397,7 @@ def check_moment_funcs(dist, result_shape):
         dist.moment_standard(i)  # build up the cache
         check(dist.moment_central, i, 'normalize', ref)
 
-    dist._moment_raw_cache = {}
-    dist._moment_central_cache = {}
-    dist._moment_standard_cache = {}
+    dist.reset_cache()
 
     ### Check Standard Moments ###
 

@@ -1,5 +1,6 @@
 import functools
 import sys
+import enum
 from functools import cached_property
 from scipy._lib._util import _lazywhere
 from scipy import special
@@ -11,14 +12,25 @@ import numpy as np
 _null = object()
 oo = np.inf
 
+# Could add other policies for broadcasting and edge/out-of-bounds case handling
+# For instance, when edge case handling is known not to be needed, it's much
+# faster to turn it off, but it might still be nice to have array conversion
+# and shaping done so the user doesn't need to be so carefuly.
+IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
+
+# Alternative to enums is max cache size per function like lru_cache
+# Currently, this is only used by `moment_...` methods, but it could be used
+# for all methods that don't require an argument (e.g. entropy)
+CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE'])
+
 # TODO:
 #  double check optimizations from last commit
 #  test input validation
+#  test cache policy and `reset_cache`
 #  add options for drawing parameters: log-spacing
 #  Write `fit` method
 #  ensure that user overrides return correct shape and dtype
 #  check behavior of moment methods when moments are undefined
-#  add `axis` to `ks_1samp`
 #  implement symmetric distribution
 #  Can we process the parameters before checking the parameterization? Then, it
 #   would be easy to accept any valid parameterization (e.g. `a` and `log_b`)
@@ -49,6 +61,7 @@ oo = np.inf
 #   speed things up. If it's not needed, it may be about twice as slow. I think
 #   it should depend on the accuracy setting.
 #  in tests, check reference value against that produced using np.vectorize?
+#  add `axis` to `ks_1samp`
 
 
 # Originally, I planned to filter out invalid distribution parameters for the
@@ -628,8 +641,8 @@ def _set_invalid_nan(f):
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
-    def filtered(self, x, *args, skip_iv=False, **kwargs):
-        if self.skip_iv or skip_iv:
+    def filtered(self, x, *args, iv_policy=None, **kwargs):
+        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, x, *args, **kwargs)
 
         method_name = f.__name__
@@ -698,8 +711,8 @@ def _set_invalid_nan(f):
 
 def _set_invalid_nan_property(f):
     # maybe implement the cache here
-    def filtered(self, *args, method=None, skip_iv=False, **kwargs):
-        if self.skip_iv or skip_iv:
+    def filtered(self, *args, method=None, iv_policy=None, **kwargs):
+        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, *args, method=method, **kwargs)
 
         res = f(self, *args, method=method, **kwargs)
@@ -780,12 +793,14 @@ def _log_real_standardize(x):
 class ContinuousDistribution:
     _parameterizations = []
 
-    def __init__(self, *, tol=_null, skip_iv=False, rng=None, **parameters):
+    def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
+                 rng=None, **parameters):
         self.tol = tol
-        self.skip_iv = skip_iv
-        self._moment_raw_cache = {}
-        self._moment_central_cache = {}
-        self._moment_standard_cache = {}
+        self.iv_policy = iv_policy
+        self.cache_policy = cache_policy
+        # These will still exist even if cache_policy is NO_CACHE. This allows
+        # caching to be turned on and off easily.
+        self.reset_cache()
         self._original_parameters = parameters
         parameters = {key: val for key, val in parameters.items()
                       if val is not _null}
@@ -800,7 +815,7 @@ class ContinuousDistribution:
             "to use the default implementation."
         )
 
-        if skip_iv:
+        if iv_policy == IV_POLICY.SKIP_ALL:
             # Not sure whether attributes should be set if we're skipping IV
             # self._set_parameter_attributes()
             self._rng = rng or np.random.default_rng()
@@ -828,6 +843,11 @@ class ContinuousDistribution:
         self._shape = shape
         self._dtype = dtype
         self._set_parameter_attributes()
+
+    def reset_cache(self):
+        self._moment_raw_cache = {}
+        self._moment_central_cache = {}
+        self._moment_standard_cache = {}
 
     def __repr__(self):
         class_name = self.__class__.__name__
@@ -1390,8 +1410,8 @@ class ContinuousDistribution:
         return self._quadrature(logintegrand, args=(order, logcenter),
                                 kwargs=kwargs, log=True)
 
-    def _validate_order(self, order, f_name, skip_iv = False):
-        if self.skip_iv or skip_iv:
+    def _validate_order(self, order, f_name, iv_policy=None):
+        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return order
 
         order = np.asarray(order, dtype=self._dtype)[()]
@@ -1410,13 +1430,14 @@ class ContinuousDistribution:
                 'normalize', 'general', 'quadrature'}
 
     @_set_invalid_nan_property
-    def moment_raw(self, order=1, *, method=None):
+    def moment_raw(self, order=1, *, method=None, cache_policy=None):
         order = self._validate_order(order, "moment_raw")
         methods = self._moment_methods if method is None else {method}
-        return self._moment_raw_dispatch(order, methods=methods,
-                                         **self._parameters)
+        cache_policy = self.cache_policy if cache_policy is None else cache_policy
+        return self._moment_raw_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
-    def _moment_raw_dispatch(self, order, *, methods, **kwargs):
+    def _moment_raw_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
         # How to indicate to the user if the requested methods could not be used?
         # Rather than returning None when a moment is not available, raise?
         moment = None
@@ -1438,7 +1459,7 @@ class ContinuousDistribution:
         if moment is None and 'quadrature' in methods:
             moment = self._moment_integrate_pdf(order, center=0, **kwargs)
 
-        if moment is not None:
+        if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
             self._moment_raw_cache[order] = moment
 
         return moment
@@ -1473,13 +1494,14 @@ class ContinuousDistribution:
         return 1 if order == 0 else None
 
     @_set_invalid_nan_property
-    def moment_central(self, order=1, *, method=None):
+    def moment_central(self, order=1, *, method=None, cache_policy=None):
         order = self._validate_order(order, "moment_central")
         methods = self._moment_methods if method is None else {method}
-        return self._moment_central_dispatch(order, methods=methods,
-                                             **self._parameters)
+        cache_policy = self.cache_policy if cache_policy is None else cache_policy
+        return self._moment_central_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
-    def _moment_central_dispatch(self, order, *, methods, **kwargs):
+    def _moment_central_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -1504,7 +1526,7 @@ class ContinuousDistribution:
                                              methods=self._moment_methods)
             moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
 
-        if moment is not None:
+        if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
             self._moment_central_cache[order] = moment
 
         return moment
@@ -1544,13 +1566,14 @@ class ContinuousDistribution:
         return general_central_moments.get(order, None)
 
     @_set_invalid_nan_property
-    def moment_standard(self, order=1, *, method=None):
+    def moment_standard(self, order=1, *, method=None, cache_policy=None):
         order = self._validate_order(order, "moment_standard")
         methods = self._moment_methods if method is None else {method}
-        return self._moment_standard_dispatch(order, methods=methods,
-                                              **self._parameters)
+        cache_policy = self.cache_policy if cache_policy is None else cache_policy
+        return self._moment_standard_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
-    def _moment_standard_dispatch(self, order, *, methods, **kwargs):
+    def _moment_standard_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -1570,7 +1593,7 @@ class ContinuousDistribution:
         if moment is None and 'normalize' in methods:
             moment = self._moment_standard_transform(order, True, **kwargs)
 
-        if moment is not None:
+        if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
             self._moment_standard_cache[order] = moment
 
         return moment
