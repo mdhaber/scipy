@@ -128,7 +128,7 @@ def draw_distribution_from_family(family, data, rng, proportions):
 class TestDistributions:
 
     @pytest.mark.filterwarnings("ignore")
-    @pytest.mark.parametrize('family', (Normal, LogUniform))
+    @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
         # strengthen this test by letting min_side=0 for both broadcasted shapes
@@ -140,7 +140,8 @@ class TestDistributions:
         proportions = (1, 1, 1, 1)
         tmp = draw_distribution_from_family(family, data, rng, proportions)
         dist, x, p, logp, result_shape, x_result_shape = tmp
-        sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=0))
+        sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=0,
+                                                   max_side=20))
 
         methods = {'log/exp', 'quadrature'}
         check_dist_func(dist, 'entropy', None, result_shape, methods)
@@ -163,7 +164,7 @@ class TestDistributions:
         check_sample_shape_NaNs(dist, sample_shape, result_shape)
 
         methods = {'log/exp'}
-        check_dist_func(dist, 'pdf', x, x_result_shape, methods)
+        check_dist_func(dist, 'pdf', x, x_result_shape, methods);
         check_dist_func(dist, 'logpdf', x, x_result_shape, methods)
 
         methods = {'log/exp', 'complementarity', 'quadrature'}
@@ -250,7 +251,6 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
             assert np.isscalar(res)
 
 def check_nans_and_edges(dist, fname, arg, res):
-    inverses = {'icdf', 'ilogccdf', 'iccdf'}
 
     valid_parameters = get_valid_parameters(dist)
     if fname in {'icdf', 'iccdf'}:
@@ -266,6 +266,7 @@ def check_nans_and_edges(dist, fname, arg, res):
     valid_arg, endpoint_arg, outside_arg, nan_arg = classified_args
     all_valid = valid_arg & valid_parameters
 
+    params = dist._parameters
     # Check NaN pattern and edge cases
     assert_equal(res[~valid_parameters], np.nan)
     assert_equal(res[nan_arg], np.nan)

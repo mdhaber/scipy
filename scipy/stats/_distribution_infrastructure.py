@@ -646,17 +646,14 @@ class _Parameterization:
 
         return parameter_values
 
-def _set_invalid_nan(f):
-    # improve structure
-    # need to come back to this to think more about use of < vs <=
-    # update this
 
+def _set_invalid_nan(f):
     endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
     replacements = {'logpdf': (-oo, -oo), 'pdf': (0, 0),
                     'logcdf': (-oo, 0), 'logccdf': (0, -oo),
                     'cdf': (0, 1), 'ccdf': (1, 0), '_cdf_1arg': (0, 1)}
-    replace_strict = {'pdf', 'logpdf'}
+    replace_strict = {'pdf', 'logpdf', 'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
     def filtered(self, x, *args, iv_policy=None, **kwargs):
@@ -664,21 +661,25 @@ def _set_invalid_nan(f):
             return f(self, x, *args, **kwargs)
 
         method_name = f.__name__
-        low, high = endpoints.get(method_name, self.support)
-        replace_low, replace_high = replacements.get(method_name,
-                                                     (np.nan, np.nan))
+        x = np.asarray(x)
+        dtype = self._dtype
+        shape = self._shape
 
-        # Broadcasting is "slow". Skip if possible.
-        # Conversion from a scalar to array is pretty fast; asarray on an
-        # array is really fast.
-        x, low, high = np.asarray(x), np.asarray(low), np.asarray(high)
-        # Can this condition be loosened?
-        if x.shape == () or self._invalid.shape == () or x.shape == self._shape:
-            pass
-        else:
+        # Ensure that argument is at least as precise as distribution
+        # parameters, which are already at least floats. This will avoid issues
+        # with raising integers to negative integer powers failure to replace
+        # invalid integers with NaNs.
+        if x.dtype != dtype:
+            dtype = np.result_type(x.dtype, dtype)
+            x = np.asarray(x, dtype=dtype)
+
+        # Broadcasting is slow. Skip if possible.
+        if not x.shape == shape:
             try:
-                tmp = np.broadcast_arrays(x, self._invalid, low, high)
-                x, invalid, low, high = tmp
+                shape = np.broadcast_shapes(x.shape, shape)
+                x = np.broadcast_to(x, shape)
+                # Should we broadcast the distribution parameters to match shape of x?
+                # Should we copy if we broadcast to avoid passing a view to developer functions?
             except ValueError as e:
                 message = (
                     f"The argument provided to `{self.__class__.__name__}"
@@ -686,45 +687,62 @@ def _set_invalid_nan(f):
                     "shape as the distribution parameters.")
                 raise ValueError(message) from e
 
-        # Ensure that argument is at least as precise as distribution
-        # parameters, which are already at least floats. This will avoid issues
-        # with raising integers to negative integer powers failure to replace
-        # invalid integers with NaNs.
-        dtype = (self._dtype if x.dtype == self._dtype
-                 else np.result_type(x.dtype, self._dtype))
-        if x.dtype != self._dtype:
-            x = x.astype(dtype, copy=True)
-
-        # check implications of <, <=
+        low, high = endpoints.get(method_name, self.support)
         mask_low = x < low if method_name in replace_strict else x <= low
         mask_high = x > high if method_name in replace_strict else x >= high
-        if method_name in replace_exact:
-            x, a, b = np.broadcast_arrays(x, *self.support)
-            mask_low_exact = (x == low)
-            replace_low_exact = (b[mask_low_exact] if method_name.endswith('ccdf')
-                                 else a[mask_low_exact])
-            mask_high_exact = (x == high)
-            replace_high_exact = (a[mask_high_exact] if method_name.endswith('ccdf')
-                                  else b[mask_high_exact])
+        mask_invalid = (mask_low | mask_high)
+        any_invalid = (mask_invalid if mask_invalid.shape == ()
+                       else np.any(mask_invalid))
 
-        # TODO: might need to copy if mask_low_exact/mask_high_exact? Double check.
-        x_invalid = (mask_low | mask_high)
-        any_x_invalid = (x_invalid if x_invalid.shape == ()
-                         else np.any(x_invalid))
-        if any_x_invalid:
-            x = np.copy(x)
-            x[x_invalid] = np.nan
-        # TODO: ensure dtype is at least float and that output shape is correct
-        # see _set_invalid_nan_property below
-        out = np.asarray(f(self, x, *args, **kwargs))
-        if any_x_invalid:
-            out[mask_low] = replace_low
-            out[mask_high] = replace_high
+        any_endpoint = False
         if method_name in replace_exact:
-            out[mask_low_exact] = replace_low_exact
-            out[mask_high_exact] = replace_high_exact
+            mask_low_endpoint = (x == low)
+            mask_high_endpoint = (x == high)
+            mask_endpoint = (mask_low_endpoint | mask_high_endpoint)
+            any_endpoint = (mask_endpoint if mask_endpoint.shape == ()
+                            else np.any(mask_endpoint))
 
-        return out[()]
+        if any_invalid:
+            x = np.array(x, dtype=dtype, copy=True)
+            x[mask_invalid] = np.nan
+
+        res = np.asarray(f(self, x, *args, **kwargs))
+
+        res_needs_copy = False
+        if res.dtype != dtype:
+            dtype = np.result_type(dtype, self._dtype)
+            res_needs_copy = True
+
+        if res.shape != shape:  # faster to check first
+            res = np.broadcast_to(res, self._shape)
+            res_needs_copy = res_needs_copy or any_invalid or any_endpoint
+
+        if res_needs_copy:
+            res = np.array(res, dtype=dtype, copy=True)
+
+        if any_endpoint:
+            a, b = self.support
+            if a.shape != shape:
+                a = np.array(np.broadcast_to(a, shape), copy=True)
+                b = np.array(np.broadcast_to(b, shape), copy=True)
+
+            replace_low_endpoint = (
+                b[mask_low_endpoint] if method_name.endswith('ccdf')
+                else a[mask_low_endpoint])
+            replace_high_endpoint = (
+                a[mask_high_endpoint] if method_name.endswith('ccdf')
+                else b[mask_high_endpoint])
+
+            res[mask_low_endpoint] = replace_low_endpoint
+            res[mask_high_endpoint] = replace_high_endpoint
+
+        if any_invalid:
+            replace_low, replace_high = (
+                replacements.get(method_name, (np.nan, np.nan)))
+            res[mask_low] = replace_low
+            res[mask_high] = replace_high
+
+        return res[()]
 
     return filtered
 
@@ -933,16 +951,14 @@ class ContinuousDistribution:
 
         # It's much faster to check whether broadcasting is necessary than to
         # broadcast when it's not necessary.
-        # Besides being good to identifying array incompatibilities when the
-        # distribution is instantiated rather than when a method is called,
-        # broadcasting is only *needed* when there are invalid parameter
-        # combinations. (We replace invalid elements of the parameters with
-        # NaN. See justification at the top.) So if we can quickly assess
-        # whether the arrays are broadcastable, we *could* avoid broadcasting
-        # until it's required if there are invalid parameters. One such quick
-        # check is if the arrays without the same shape have size 1. For
-        # simplicity, though, I think we should leave out this optimization and
-        # let the user speed things up with `iv_profile` if desired.
+        # We should always make sure that the parameters *are* the same shape
+        # and not just broadcastble, though. Users can access parameters as
+        # attributes, and I think they should see the arrays as the same shape.
+        # More importantly, broadcasting can be important before logical
+        # indexing operations, which are needed in infrastructure code when
+        # there are invalid paramters, and may be needed in
+        # distribution-specific code. We don't want developers to need to
+        # broadcast in distribution functions.
 
         # list(map(np.asarray, parameters.values())) is more compact but less familiar
         parameter_vals = [np.asarray(parameter) for parameter in parameters.values()]

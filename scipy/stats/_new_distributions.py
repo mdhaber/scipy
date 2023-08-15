@@ -8,7 +8,7 @@ from scipy.stats._distribution_infrastructure import (
 
 class Normal(ContinuousDistribution):
 
-    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
+    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
 
