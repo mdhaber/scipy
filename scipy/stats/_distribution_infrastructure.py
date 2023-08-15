@@ -13,9 +13,7 @@ oo = np.inf
 
 # TODO:
 #  test input validation
-#  in tests, check reference value against that produced using np.vectorize?
 #  add options for drawing parameters: log-spacing
-#  use `median` information to improve integration?
 #  Write `fit` method
 #  ensure that user overrides return correct shape and dtype
 #  check behavior of moment methods when moments are undefined
@@ -46,6 +44,11 @@ oo = np.inf
 #   Make tolerance override method-specific again.
 #  Test repr?
 #  Fix _scalar_optimization_algorithms with 0-size arrays
+#  use `median` information to improve integration? In some cases this will
+#   speed things up. If it's not needed, it may be about twice as slow. I think
+#   it should depend on the accuracy setting.
+#  in tests, check reference value against that produced using np.vectorize?
+
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -799,7 +802,7 @@ class ContinuousDistribution:
 
         if not len(self._parameterizations):
             if parameters:
-                message = (f"The {self.__class__.__name__}` distribution "
+                message = (f"The `{self.__class__.__name__}` distribution "
                            "family does not accept parameters, but parameters "
                            f"`{set(parameters)}` were provided.")
                 raise ValueError(message)
@@ -846,9 +849,17 @@ class ContinuousDistribution:
             if parameterization.matches(parameter_names_set):
                 break
         else:
-            message = (f"The provided parameters `{parameter_names_set}` "
-                       "do not match a supported parameterization of the "
-                       f"`{cls.__name__}` distribution family.")
+            if not parameter_names_set:
+                message = (f"The `{cls.__name__}` distribution family "
+                           "requires parameters, but none were provided.")
+            else:
+                # Sorting for the sake of input validation tests
+                parameter_names_list = list(parameter_names_set)
+                parameter_names_list.sort()
+                parameter_names_set = set(parameter_names_list)
+                message = (f"The provided parameters `{parameter_names_set}` "
+                           "do not match a supported parameterization of the "
+                           f"`{cls.__name__}` distribution family.")
             raise ValueError(message)
 
         return parameterization
@@ -919,11 +930,13 @@ class ContinuousDistribution:
 
     @tol.setter
     def tol(self, tol):
-        if not (tol is _null or np.isscalar(tol)):
-            message = (f"Parameter `tol` of {self.__class__.__name__} must be "
-                       "a scalar, if specified.")
+        tol = np.asarray(tol)
+        if not ((tol.shape == () and np.issubdtype(tol.dtype, np.floating)
+                 and tol > 0) or (tol[()] is _null)):
+            message = (f"Attribute `tol` of `{self.__class__.__name__}` must "
+                       "be a positive scalar, if specified.")
             raise ValueError(message)
-        self._tol = tol
+        self._tol = tol[()]
 
     @cached_property
     def support(self):
@@ -1360,15 +1373,17 @@ class ContinuousDistribution:
         return self._quadrature(logintegrand, args=(order, logcenter),
                                 kwargs=kwargs, log=True)
 
-    def _validate_order(self, order, skip_iv = False):
+    def _validate_order(self, order, f_name, skip_iv = False):
         if self.skip_iv or skip_iv:
             return order
 
         order = np.asarray(order, dtype=self._dtype)[()]
         order_int = np.round(order)
-        if (order_int.size != 1 or order_int != order
+        if (order_int.shape != () or order_int != order
                 or order < 0 or not np.isfinite(order)):
-            message = '`order` must be a positive, finite integer.'
+            message = ("Argument `order` of "
+                       f"`{self.__class__.__name__}.{f_name}` must be a "
+                       "positive, finite integer.")
             raise ValueError(message)
         return order_int
 
@@ -1379,7 +1394,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_raw(self, order=1, *, method=None):
-        order = self._validate_order(order)
+        order = self._validate_order(order, "moment_raw")
         methods = self._moment_methods if method is None else {method}
         return self._moment_raw_dispatch(order, methods=methods,
                                          **self._parameters)
@@ -1442,7 +1457,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_central(self, order=1, *, method=None):
-        order = self._validate_order(order)
+        order = self._validate_order(order, "moment_central")
         methods = self._moment_methods if method is None else {method}
         return self._moment_central_dispatch(order, methods=methods,
                                              **self._parameters)
@@ -1513,7 +1528,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_standard(self, order=1, *, method=None):
-        order = self._validate_order(order)
+        order = self._validate_order(order, "moment_standard")
         methods = self._moment_methods if method is None else {method}
         return self._moment_standard_dispatch(order, methods=methods,
                                               **self._parameters)

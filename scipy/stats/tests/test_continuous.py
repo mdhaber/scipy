@@ -10,7 +10,8 @@ from scipy.stats._fit import _kolmogorov_smirnov
 from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
-    oo, _Domain, _RealDomain, _RealParameter)
+    oo, _Domain, _RealDomain, _RealParameter, ContinuousDistribution,
+    _Parameterization)
 from scipy.stats._new_distributions import LogUniform, Normal
 
 class Test_RealDomain:
@@ -534,3 +535,62 @@ def classify_arg(dist, arg, arg_domain):
     nan = np.isnan(arg)
 
     return inside, on, outside, nan
+
+
+def test_input_validation():
+    class Test(ContinuousDistribution):
+        _variable = _RealParameter('x', domain=_RealDomain())
+
+    message = ("The `Test` distribution family does not accept parameters, "
+               "but parameters `{'a'}` were provided.")
+    with pytest.raises(ValueError, match=message):
+        Test(a=1, )
+
+    message = ("Attribute `tol` of `Test` must be a positive scalar, if "
+               "specified.")
+    with pytest.raises(ValueError, match=message):
+        Test(tol=np.asarray([]))
+    with pytest.raises(ValueError, match=message):
+        Test(tol=[1, 2, 3])
+    with pytest.raises(ValueError, match=message):
+        Test(tol=np.nan)
+    with pytest.raises(ValueError, match=message):
+        Test(tol=-1)
+
+    message = ("Attribute `tol` of `Test` must be a positive scalar, if "
+               "specified.")
+    with pytest.raises(ValueError, match=message):
+        Test(tol=np.asarray([]))
+    with pytest.raises(ValueError, match=message):
+        Test(tol=[1, 2, 3])
+    with pytest.raises(ValueError, match=message):
+        Test(tol=np.nan)
+    with pytest.raises(ValueError, match=message):
+        Test(tol=-1)
+
+    message = ("Argument `order` of `Normal.moment_raw` must be a "
+               "positive, finite integer.")
+    with pytest.raises(ValueError, match=message):
+        Normal().moment_raw(-1)
+    message = "Argument `order` of `Normal.moment_central` must be..."
+    with pytest.raises(ValueError, match=message):
+        Normal().moment_central(np.inf)
+    message = "Argument `order` of `Normal.moment_standard` must be..."
+    with pytest.raises(ValueError, match=message):
+        Normal().moment_standard([1, 2, 3])
+
+    class Test2(ContinuousDistribution):
+        _p1 = _RealParameter('c', domain=_RealDomain())
+        _p2 = _RealParameter('d', domain=_RealDomain())
+        _parameterizations = [_Parameterization(_p1, _p2)]
+        _variable = _RealParameter('x', domain=_RealDomain())
+
+    message = ("The provided parameters `{'a'}` do not match a supported "
+               "parameterization of the `Test2` distribution family.")
+    with pytest.raises(ValueError, match=message):
+        Test2(a=1)
+        
+    message = ("The `Test2` distribution family requires parameters, but none "
+               "were provided.")
+    with pytest.raises(ValueError, match=message):
+        Test2()

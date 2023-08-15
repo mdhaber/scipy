@@ -71,6 +71,7 @@ class Normal(ContinuousDistribution):
 def _log_diff(log_p, log_q):
     return special.logsumexp([log_p, log_q+np.pi*1j], axis=0)
 
+
 class LogUniform(ContinuousDistribution):
 
     _a_domain = _RealDomain(endpoints=(0, oo))
