@@ -62,7 +62,13 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE'])
 #   it should depend on the accuracy setting.
 #  in tests, check reference value against that produced using np.vectorize?
 #  add `axis` to `ks_1samp`
-
+#  Getting `default_rng` takes forever! OK to do it only when support is called?
+#  User tips for faster execution:
+#  - pass NumPy arrays
+#  - pass inputs of floating point type (not integers)
+#  - prefer NumPy scalars or 0d arrays over other size 1 arrays
+#  - pass no invalid parameters and disable invalid parameter checks with iv_profile
+#  Seems like all NumPy functions
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -229,8 +235,8 @@ class _SimpleDomain(_Domain):
         # will be found in the `parameter_values` dictionary. Otherwise, it is
         # itself the array of numerical values of the endpoint.
         try:
-            a = parameter_values.get(a, a)[()]
-            b = parameter_values.get(b, b)[()]
+            a = np.asarray(parameter_values.get(a, a))
+            b = np.asarray(parameter_values.get(b, b))
         except TypeError as e:
             message = ("The endpoints of the distribution are defined by "
                        "parameters, but their values were not provided. When "
@@ -239,7 +245,7 @@ class _SimpleDomain(_Domain):
                        "arguments.")
             raise TypeError(message) from e
 
-        return np.broadcast_arrays(a, b)
+        return a, b
 
     def contains(self, item, parameter_values={}):
         """Determine whether the argument is contained within the domain
@@ -325,6 +331,7 @@ class _RealDomain(_SimpleDomain):
         pvals = np.abs(proportions)/np.sum(proportions)
 
         a, b = self.get_numerical_endpoints(parameter_values)
+        a, b = np.broadcast_arrays(a, b)
         min = np.maximum(a, np.finfo(a).min/10) if np.any(np.isinf(a)) else a
         max = np.minimum(b, np.finfo(b).max/10) if np.any(np.isinf(b)) else b
 
@@ -519,22 +526,26 @@ class _RealParameter(_Parameter):
 
         """
         arr = np.asarray(arr)
+        valid = self.domain.contains(arr, parameter_values)
 
-        if np.issubdtype(arr.dtype, np.floating):
-            valid_dtype = np.ones_like(arr, dtype=bool)
+        # minor optimization - fast track the most common types to avoid
+        # overhead of np.issubdtype. Checking for `in {...}` doesn't work : /
+        if arr.dtype == np.float64 or arr.dtype == np.float32:
+            pass
+        elif arr.dtype == np.int32 or arr.dtype == np.int64:
+            arr = np.asarray(arr, dtype=np.float64)
+        elif np.issubdtype(arr.dtype, np.floating):
+            pass
         elif np.issubdtype(arr.dtype, np.integer):
-            valid_dtype = np.ones_like(arr, dtype=bool)
             arr = np.asarray(arr, dtype=np.float64)
         elif np.issubdtype(arr.dtype, np.complexfloating):
             real_arr = np.real(arr)
             valid_dtype = (real_arr == arr)
             arr = real_arr
+            valid = valid & valid_dtype
         else:
             message = f"Parameter `{self.name}` must be of real dtype."
             raise ValueError(message)
-
-        in_domain = self.domain.contains(arr, parameter_values)
-        valid = in_domain & valid_dtype
 
         return arr, arr.dtype, valid
 
@@ -596,14 +607,14 @@ class _Parameterization:
             the dtype of the output of distribution methods.
         """
         all_valid = True
-        dtypes = []
+        dtypes = set()  # avoid np.result_type if there's only one type
         for name, arr in parameter_values.items():
             parameter = self.parameters[name]
             arr, dtype, valid = parameter.validate(arr, parameter_values)
-            dtypes.append(dtype)
+            dtypes.add(dtype)
             all_valid = all_valid & valid
             parameter_values[name] = arr
-        dtype = np.result_type(*dtypes)
+        dtype = arr.dtype if len(dtypes)==1 else np.result_type(*list(dtypes))
 
         return all_valid, dtype
 
@@ -818,9 +829,11 @@ class ContinuousDistribution:
         if iv_policy == IV_POLICY.SKIP_ALL:
             # Not sure whether attributes should be set if we're skipping IV
             # self._set_parameter_attributes()
-            self._rng = rng or np.random.default_rng()
+            self._rng = rng
             return
 
+        # _validate_rng returns None if rng is None. `default_rng()` takes
+        # ~30 µs on my machine.
         self._rng = self._validate_rng(rng)
 
         if not len(self._parameterizations):
@@ -869,7 +882,7 @@ class ContinuousDistribution:
                        f"of type `{type(rng)}`, but it must be a NumPy "
                        "`Generator`.")
             raise ValueError(message)
-        return rng or np.random.default_rng()
+        return rng
 
     @classmethod
     def _identify_parameterization(cls, parameters):
@@ -904,6 +917,26 @@ class ContinuousDistribution:
     @classmethod
     def _broadcast(cls, parameters):
         # broadcast parameters
+
+        # It's much faster to check whether broadcasting is necessary than to
+        # broadcast when it's not necessary.
+        # Besides being good to identifying array incompatibilities when the
+        # distribution is instantiated rather than when a method is called,
+        # broadcasting is only *needed* when there are invalid parameter
+        # combinations. (We replace invalid elements of the parameters with
+        # NaN. See justification at the top.) So if we can quickly assess
+        # whether the arrays are broadcastable, we *could* avoid broadcasting
+        # until it's required if there are invalid parameters. One such quick
+        # check is if the arrays without the same shape have size 1. For
+        # simplicity, though, I think we should leave out this optimization and
+        # let the user speed things up with `iv_profile` if desired.
+
+        # list(map(np.asarray, parameters.values())) is more compact but less familiar
+        parameter_vals = [np.asarray(parameter) for parameter in parameters.values()]
+        parameter_shapes = set((parameter.shape for parameter in parameter_vals))
+        if len(parameter_shapes) == 1:
+            return parameters, parameter_vals[0].shape
+
         try:
             parameter_vals = np.broadcast_arrays(*parameters.values())
         except ValueError as e:
@@ -919,7 +952,7 @@ class ContinuousDistribution:
         # Replace invalid parameters with `np.nan` and get NaN pattern
         valid, dtype = parameterization.validation(parameters)
         invalid = ~valid
-        any_invalid = np.any(invalid)
+        any_invalid = invalid if invalid.shape == () else np.any(invalid)
         # If necessary, make the arrays contiguous and replace invalid with NaN
         if any_invalid:
             for parameter_name in parameters:
@@ -967,11 +1000,15 @@ class ContinuousDistribution:
 
     @tol.setter
     def tol(self, tol):
+        if tol is _null:
+            self._tol = tol
+            return
+
         tol = np.asarray(tol)
-        if not ((tol.shape == () and np.issubdtype(tol.dtype, np.floating)
-                 and tol > 0) or (tol[()] is _null)):
+        if (tol.shape != () or not tol <= 0 or  # catches NaNs
+                not np.issubdtype(tol.dtype, np.floating)):
             message = (f"Attribute `tol` of `{self.__class__.__name__}` must "
-                       "be a positive scalar, if specified.")
+                       "be a positive float, if specified.")
             raise ValueError(message)
         self._tol = tol[()]
 
@@ -980,7 +1017,8 @@ class ContinuousDistribution:
         return self._support(**self._parameters)
 
     def _support(self, **kwargs):
-        return self._variable.domain.get_numerical_endpoints(kwargs)
+        endpoints = self._variable.domain.get_numerical_endpoints(kwargs)
+        return np.broadcast_arrays(*endpoints)
 
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
@@ -1371,7 +1409,7 @@ class ContinuousDistribution:
     def sample(self, shape=(), *, method=None, rng=None):
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = sample_shape + self._shape
-        rng = self._rng if rng is None else self._validate_rng(rng)
+        rng = self._validate_rng(rng) or self._rng or np.random.default_rng()
         return self._sample_dispatch(sample_shape, full_shape, method=method,
                                      rng=rng, **self._parameters)
 

@@ -537,18 +537,7 @@ def test_input_validation():
     with pytest.raises(ValueError, match=message):
         Test(a=1, )
 
-    message = ("Attribute `tol` of `Test` must be a positive scalar, if "
-               "specified.")
-    with pytest.raises(ValueError, match=message):
-        Test(tol=np.asarray([]))
-    with pytest.raises(ValueError, match=message):
-        Test(tol=[1, 2, 3])
-    with pytest.raises(ValueError, match=message):
-        Test(tol=np.nan)
-    with pytest.raises(ValueError, match=message):
-        Test(tol=-1)
-
-    message = ("Attribute `tol` of `Test` must be a positive scalar, if "
+    message = ("Attribute `tol` of `Test` must be a positive float, if "
                "specified.")
     with pytest.raises(ValueError, match=message):
         Test(tol=np.asarray([]))
@@ -592,7 +581,10 @@ def test_input_validation():
         Test2()
 
 
-@pytest.mark.parametrize('seed', [None, 23434924629239023])
+# I removed `None` from this list. The current behavior is to generate a new
+# `default_rng()` every time it is needed. We should not generate it during
+# initialization because it increases the time by more than 50%!
+@pytest.mark.parametrize('seed', [23434924629239023])
 def test_deepcopy_pickle(seed):
     kwargs = dict(a=[-1, 2], b=10)
     if seed:
