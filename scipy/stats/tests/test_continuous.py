@@ -549,7 +549,7 @@ def test_input_validation():
         Test(tol=-1)
 
     message = ("Argument `order` of `Test.moment_raw` must be a "
-               "positive, finite integer.")
+               "finite, positive integer.")
     with pytest.raises(ValueError, match=message):
         Test().moment_raw(-1)
     message = "Argument `order` of `Test.moment_central` must be..."

@@ -68,6 +68,7 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE'])
 #  - pass inputs of floating point type (not integers)
 #  - prefer NumPy scalars or 0d arrays over other size 1 arrays
 #  - pass no invalid parameters and disable invalid parameter checks with iv_profile
+#  - provide a Generator if you're going to do sampling
 #  Seems like all NumPy functions
 
 # Originally, I planned to filter out invalid distribution parameters for the
@@ -118,6 +119,13 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE'])
 #   cache, we can easily add options that disabled or cleared it as needed.
 #   Perhaps there is a way to wrap `lru_cache` or the function wrapped by
 #   `lru_cache` to add that in.
+#
+#   I've sprinkled in some optimizations for scalars and same-shape/type arrays
+#   throughout. The biggest time sinks before were:
+#   - broadcast_arrays
+#   - result_dtype
+#   - is_subdtype
+#   It is much faster to check whether these are necessary than to do them.
 
 
 class _Domain:
@@ -638,7 +646,6 @@ class _Parameterization:
 
         return parameter_values
 
-
 def _set_invalid_nan(f):
     # improve structure
     # need to come back to this to think more about use of < vs <=
@@ -683,7 +690,8 @@ def _set_invalid_nan(f):
         # parameters, which are already at least floats. This will avoid issues
         # with raising integers to negative integer powers failure to replace
         # invalid integers with NaNs.
-        dtype = np.result_type(x.dtype, self._dtype)
+        dtype = (self._dtype if x.dtype == self._dtype
+                 else np.result_type(x.dtype, self._dtype))
         if x.dtype != self._dtype:
             x = x.astype(dtype, copy=True)
 
@@ -701,7 +709,8 @@ def _set_invalid_nan(f):
 
         # TODO: might need to copy if mask_low_exact/mask_high_exact? Double check.
         x_invalid = (mask_low | mask_high)
-        any_x_invalid = np.any(x_invalid)
+        any_x_invalid = (x_invalid if x_invalid.shape == ()
+                         else np.any(x_invalid))
         if any_x_invalid:
             x = np.copy(x)
             x[x_invalid] = np.nan
@@ -719,9 +728,8 @@ def _set_invalid_nan(f):
 
     return filtered
 
-
 def _set_invalid_nan_property(f):
-    # maybe implement the cache here
+    # maybe implement the cache here?
     def filtered(self, *args, method=None, iv_policy=None, **kwargs):
         if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, *args, method=method, **kwargs)
@@ -732,16 +740,21 @@ def _set_invalid_nan_property(f):
             raise NotImplementedError(self._not_implemented)
 
         res = np.asarray(res)
-        dtype = np.result_type(res.dtype, self._dtype)
+        needs_copy = False
+        dtype = res.dtype
 
         if dtype != self._dtype:  # this won't work for logmoments (complex)
-            res = res.astype(dtype, copy=True)
+            dtype = np.result_type(dtype, self._dtype)
+            needs_copy = True
 
         if res.shape != self._shape:  # faster to check first
             res = np.broadcast_to(res, self._shape)
+            needs_copy = needs_copy or self._any_invalid
 
-        if self._any_invalid or dtype != self._dtype:
-            res = res.astype(dtype, copy=True)
+        if needs_copy:
+            res = np.asarray(res, dtype=dtype)
+
+        if self._any_invalid:
             # may be redundant when quadrature is used, but not necessarily
             # when formulas are used.
             res[self._invalid] = np.nan
@@ -1017,8 +1030,10 @@ class ContinuousDistribution:
         return self._support(**self._parameters)
 
     def _support(self, **kwargs):
-        endpoints = self._variable.domain.get_numerical_endpoints(kwargs)
-        return np.broadcast_arrays(*endpoints)
+        a, b = self._variable.domain.get_numerical_endpoints(kwargs)
+        if a.shape != b.shape:
+            a, b = np.broadcast_arrays(a, b)
+        return a, b
 
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
@@ -1453,14 +1468,19 @@ class ContinuousDistribution:
             return order
 
         order = np.asarray(order, dtype=self._dtype)[()]
-        order_int = np.round(order)
-        if (order_int.shape != () or order_int != order
-                or order < 0 or not np.isfinite(order)):
-            message = ("Argument `order` of "
-                       f"`{self.__class__.__name__}.{f_name}` must be a "
-                       "positive, finite integer.")
+        message = (f"Argument `order` of `{self.__class__.__name__}.{f_name}` "
+                   "must be a finite, positive integer.")
+        try:
+            order_int = round(order.item())
+            # If this fails for any reason (e.g. it's an array, it's infinite)
+            # it's not a valid `order`.
+        except Exception as e:
+            raise ValueError(message) from e
+
+        if order_int <0 or order_int != order:
             raise ValueError(message)
-        return order_int
+
+        return order
 
     @cached_property
     def _moment_methods(self):
@@ -1485,8 +1505,10 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_raw(order, **kwargs)
-            if moment is not None and getattr(moment, 'shape', None) != self._shape:
-                moment = np.broadcast_to(moment, self._shape)
+            if moment is not None:
+                moment = np.asarray(moment)
+                if moment.shape != self._shape:
+                    moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods and order > 1:
             moment = self._moment_raw_transform(order, **kwargs)
@@ -1547,8 +1569,10 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_central(order, **kwargs)
-            if moment is not None and getattr(moment, 'shape', None) != self._shape:
-                moment = np.broadcast_to(moment, self._shape)
+            if moment is not None:
+                moment = np.asarray(moment)
+                if moment.shape != self._shape:
+                    moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods:
             moment = self._moment_central_transform(order, **kwargs)
@@ -1619,8 +1643,10 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_standard(order, **kwargs)
-            if moment is not None and getattr(moment, 'shape', None) != self._shape:
-                moment = np.broadcast_to(moment, self._shape)
+            if moment is not None:
+                moment = np.asarray(moment)
+                if moment.shape != self._shape:
+                    moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'normalize' in methods:
             moment = self._moment_standard_transform(order, False, **kwargs)
