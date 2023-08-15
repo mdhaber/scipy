@@ -12,6 +12,7 @@ _null = object()
 oo = np.inf
 
 # TODO:
+#  double check optimizations from last commit
 #  test input validation
 #  add options for drawing parameters: log-spacing
 #  Write `fit` method
@@ -618,42 +619,41 @@ def _set_invalid_nan(f):
     # improve structure
     # need to come back to this to think more about use of < vs <=
     # update this
-    use_support = {'logpdf', 'logcdf', 'logccdf', 'pdf', 'cdf', 'ccdf',
-                   '_cdf_1arg'}
-    use_01 = {'icdf', 'iccdf'}
+
+    endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
+                 'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
+    replacements = {'logpdf': (-oo, -oo), 'pdf': (0, 0),
+                    'logcdf': (-oo, 0), 'logccdf': (0, -oo),
+                    'cdf': (0, 1), 'ccdf': (1, 0), '_cdf_1arg': (0, 1)}
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
-
-    replace_lows = {'logpdf': -oo, 'logcdf': -oo, 'logccdf': 0,
-                   'pdf': 0, 'cdf': 0, 'ccdf': 1, '_cdf_1arg': 0,
-                   'icdf': np.nan, 'iccdf': np.nan,
-                   'ilogcdf': np.nan, 'ilogccdf': np.nan}
-    replace_highs = {'logpdf': -oo, 'logcdf': 0, 'logccdf': -oo,
-                    'pdf': 0, 'cdf': 1, 'ccdf': 0, '_cdf_1arg': 1,
-                    'icdf': np.nan, 'iccdf': np.nan,
-                    'ilogcdf': np.nan, 'ilogccdf': np.nan}
 
     def filtered(self, x, *args, skip_iv=False, **kwargs):
         if self.skip_iv or skip_iv:
             return f(self, x, *args, **kwargs)
 
         method_name = f.__name__
-        if method_name in use_support:
-            low, high = self.support
-        elif method_name in use_01:
-            low, high = 0, 1
+        low, high = endpoints.get(method_name, self.support)
+        replace_low, replace_high = replacements.get(method_name,
+                                                     (np.nan, np.nan))
+
+        # Broadcasting is "slow". Skip if possible.
+        # Conversion from a scalar to array is pretty fast; asarray on an
+        # array is really fast.
+        x, low, high = np.asarray(x), np.asarray(low), np.asarray(high)
+        # Can this condition be loosened?
+        if x.shape == () or self._invalid.shape == () or x.shape == self._shape:
+            pass
         else:
-            low, high = -np.inf, 0
-        replace_low = replace_lows[method_name]
-        replace_high = replace_highs[method_name]
-        try:
-            x, invalid, low, high = np.broadcast_arrays(x, self._invalid, low, high)
-        except ValueError as e:
-            message = (f"The argument provided to "
-                       f"`{self.__class__.__name__}.{method_name}` cannot "
-                       "be be broadcast to the same shape as the distribution "
-                       "parameters.")
-            raise ValueError(message) from e
+            try:
+                tmp = np.broadcast_arrays(x, self._invalid, low, high)
+                x, invalid, low, high = tmp
+            except ValueError as e:
+                message = (
+                    f"The argument provided to `{self.__class__.__name__}"
+                    f".{method_name}` cannot be be broadcast to the same "
+                    "shape as the distribution parameters.")
+                raise ValueError(message) from e
 
         # Ensure that argument is at least as precise as distribution
         # parameters, which are already at least floats. This will avoid issues
@@ -669,19 +669,24 @@ def _set_invalid_nan(f):
         if method_name in replace_exact:
             x, a, b = np.broadcast_arrays(x, *self.support)
             mask_low_exact = (x == low)
-            replace_low_exact = b[mask_low_exact] if method_name.endswith('ccdf') else a[mask_low_exact]
+            replace_low_exact = (b[mask_low_exact] if method_name.endswith('ccdf')
+                                 else a[mask_low_exact])
             mask_high_exact = (x == high)
-            replace_high_exact = a[mask_high_exact] if method_name.endswith('ccdf') else b[mask_high_exact]
+            replace_high_exact = (a[mask_high_exact] if method_name.endswith('ccdf')
+                                  else b[mask_high_exact])
 
+        # TODO: might need to copy if mask_low_exact/mask_high_exact? Double check.
         x_invalid = (mask_low | mask_high)
-        if np.any(x_invalid):
+        any_x_invalid = np.any(x_invalid)
+        if any_x_invalid:
             x = np.copy(x)
             x[x_invalid] = np.nan
         # TODO: ensure dtype is at least float and that output shape is correct
         # see _set_invalid_nan_property below
         out = np.asarray(f(self, x, *args, **kwargs))
-        out[mask_low] = replace_low
-        out[mask_high] = replace_high
+        if any_x_invalid:
+            out[mask_low] = replace_low
+            out[mask_high] = replace_high
         if method_name in replace_exact:
             out[mask_low_exact] = replace_low_exact
             out[mask_high_exact] = replace_high_exact
