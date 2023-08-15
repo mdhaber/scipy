@@ -775,7 +775,7 @@ def _log_real_standardize(x):
 class ContinuousDistribution:
     _parameterizations = []
 
-    def __init__(self, *, tol=_null, skip_iv=False, **parameters):
+    def __init__(self, *, tol=_null, skip_iv=False, rng=None, **parameters):
         self.tol = tol
         self.skip_iv = skip_iv
         self._moment_raw_cache = {}
@@ -798,7 +798,10 @@ class ContinuousDistribution:
         if skip_iv:
             # Not sure whether attributes should be set if we're skipping IV
             # self._set_parameter_attributes()
+            self._rng = rng or np.random.default_rng()
             return
+
+        self._rng = self._validate_rng(rng)
 
         if not len(self._parameterizations):
             if parameters:
@@ -833,6 +836,15 @@ class ContinuousDistribution:
         if self._dtype != np.float64:
             info.append(f"dtype={self._dtype}")
         return f"{class_name}({', '.join(info)})"
+
+    def _validate_rng(self, rng):
+        if rng is not None and not isinstance(rng, np.random.Generator):
+            message = ("Argument `rng` passed to the "
+                       f"`{self.__class__.__name__}` distribution family is "
+                       f"of type `{type(rng)}`, but it must be a NumPy "
+                       "`Generator`.")
+            raise ValueError(message)
+        return rng or np.random.default_rng()
 
     @classmethod
     def _identify_parameterization(cls, parameters):
@@ -1333,8 +1345,8 @@ class ContinuousDistribution:
 
     def sample(self, shape=(), *, method=None, rng=None):
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
-        full_shape = shape + self._shape
-        rng = np.random.default_rng() if rng is None else rng
+        full_shape = sample_shape + self._shape
+        rng = self._rng if rng is None else self._validate_rng(rng)
         return self._sample_dispatch(sample_shape, full_shape, method=method,
                                      rng=rng, **self._parameters)
 

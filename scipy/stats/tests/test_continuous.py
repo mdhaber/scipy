@@ -1,4 +1,6 @@
 import warnings
+import pickle
+from copy import deepcopy
 
 import numpy as np
 import pytest
@@ -568,16 +570,21 @@ def test_input_validation():
     with pytest.raises(ValueError, match=message):
         Test(tol=-1)
 
-    message = ("Argument `order` of `Normal.moment_raw` must be a "
+    message = ("Argument `order` of `Test.moment_raw` must be a "
                "positive, finite integer.")
     with pytest.raises(ValueError, match=message):
-        Normal().moment_raw(-1)
-    message = "Argument `order` of `Normal.moment_central` must be..."
+        Test().moment_raw(-1)
+    message = "Argument `order` of `Test.moment_central` must be..."
     with pytest.raises(ValueError, match=message):
-        Normal().moment_central(np.inf)
-    message = "Argument `order` of `Normal.moment_standard` must be..."
+        Test().moment_central(np.inf)
+    message = "Argument `order` of `Test.moment_standard` must be..."
     with pytest.raises(ValueError, match=message):
-        Normal().moment_standard([1, 2, 3])
+        Test().moment_standard([1, 2, 3])
+
+    message = ("Argument `rng` passed to the `Test` distribution family is of "
+               "type `<class 'int'>`, but it must be a NumPy `Generator`.")
+    with pytest.raises(ValueError, match=message):
+        Test(rng=1)
 
     class Test2(ContinuousDistribution):
         _p1 = _RealParameter('c', domain=_RealDomain())
@@ -594,3 +601,16 @@ def test_input_validation():
                "were provided.")
     with pytest.raises(ValueError, match=message):
         Test2()
+
+
+@pytest.mark.parametrize('seed', [None, 23434924629239023])
+def test_deepcopy_pickle(seed):
+    kwargs = dict(a=[-1, 2], b=10)
+    if seed:
+        kwargs['rng'] = np.random.default_rng(seed)
+    dist1 = LogUniform(**kwargs)
+    dist2 = deepcopy(dist1)
+    dist3 = pickle.loads(pickle.dumps(dist1))
+    res1, res2, res3 = dist1.sample(), dist2.sample(), dist3.sample()
+    assert_equal(res2, res1)
+    assert_equal(res3, res1)
