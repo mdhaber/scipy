@@ -1020,7 +1020,7 @@ class ContinuousDistribution:
 
     def _overrides(self, method_name):
         method = getattr(self.__class__, method_name, None)
-        super_method = getattr(self.__class__.__base__, method_name, None)
+        super_method = getattr(ContinuousDistribution, method_name, None)
         return method is not super_method
 
     @property
@@ -1146,28 +1146,20 @@ class ContinuousDistribution:
         mode[mode_at_right] = b[mode_at_right]
         return mode[()]
 
-    @_set_invalid_nan_property
-    def mean(self, *, method=None):
-        methods = {method} if method is not None else self._moment_methods
-        return self._moment_raw_dispatch(1, methods=methods, **self._parameters)
+    def mean(self, *, method=None, cache_policy=None):
+        return self.moment_raw(1, method=method, cache_policy=cache_policy)
 
-    @_set_invalid_nan_property
-    def var(self, *, method=None):
-        methods = {method} if method is not None else self._moment_methods
-        return self._moment_central_dispatch(2, methods=methods, **self._parameters)
+    def var(self, *, method=None, cache_policy=None):
+        return self.moment_central(2, method=method, cache_policy=cache_policy)
 
-    def std(self, *, method=None):
-        return np.sqrt(self.var(method=method))
+    def std(self, *, method=None, cache_policy=None):
+        return np.sqrt(self.var(method=method, cache_policy=cache_policy))
 
-    @_set_invalid_nan_property
-    def skewness(self, *, method=None):
-        methods = {method} if method is not None else self._moment_methods
-        return self._moment_standard_dispatch(3, methods=methods, **self._parameters)
+    def skewness(self, *, method=None, cache_policy=None):
+        return self.moment_standard(3, method=method, cache_policy=cache_policy)
 
-    @_set_invalid_nan_property
-    def kurtosis(self, *, method=None):
-        methods = {method} if method is not None else self._moment_methods
-        return self._moment_standard_dispatch(4, methods=methods, **self._parameters)
+    def kurtosis(self, *, method=None, cache_policy=None):
+        return self.moment_standard(4, method=method, cache_policy=cache_policy)
 
     @_set_invalid_nan
     def logpdf(self, x, *, method=None):
@@ -1544,9 +1536,6 @@ class ContinuousDistribution:
         return None
 
     def _moment_raw_transform(self, order, **kwargs):
-        # Doesn't make sense to get the mean by "transform", since that's
-        # how we got here. Questionable whether 'quadrature' should be here.
-
         central_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'normalize', 'general'}
@@ -1556,6 +1545,8 @@ class ContinuousDistribution:
                 return None
             central_moments.append(moment_i)
 
+        # Doesn't make sense to get the mean by "transform", since that's
+        # how we got here. Questionable whether 'quadrature' should be here.
         mean_methods = {'cache', 'formula', 'quadrature'}
         mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
         if mean is None:
@@ -1814,3 +1805,141 @@ class ContinuousDistribution:
             return np.reshape(res, x.shape)
 
         return _differentiate(f, processed[var]).df
+
+
+# Rough sketch of how we might shift/scale distributions. The purpose of
+# making it a separate class is just for
+# a) simplicity of the code and
+# b) not mandate that every distribution accept loc/scale.
+# The simplicity is important, because I think we'd also like to be able to
+# generate truncated distributions, wrapped distributions,
+# double/symmetric distributions, folded distributions from arbitrary
+# distributions. We wouldn't want to cram all of this into the
+# `ContinuousDistribution` class. Also, the order of the composition
+# matters (e.g. truncate then shift/scale or vice versa); it's easier to
+# accomodate different orders if the transformation is built up from
+# components.
+#
+# There are other ways to accomplish these objectives besides a function that
+# returns a class; this is just a proof of concept.
+
+def shift_scale_distribution(cls):
+    class ShiftedScaledDistribution(cls):
+        def __init__(self, *args, loc=0, scale=1, **kwargs):
+            # input validation
+            self.loc = loc
+            # I think we should accept negative scale, meaning that the
+            # distribution is flipped. This would obviate the need to have
+            # separate left and right distributions (e.g. weibull_min/max,
+            # gumbel_l/gumbel_r).
+            self.scale = scale
+            super().__init__(*args, **kwargs)
+
+        def __repr__(self):
+            class_name = self.__class__.__base__.__name__
+            parameters = list(self._original_parameters)
+            info = []
+            if parameters:
+                parameters.sort()
+                info.append(f"{', '.join(parameters)}")
+            if self.loc is not None:
+                info.append(f"loc={self.loc}")
+            if self.scale is not None:
+                info.append(f"scale={self.scale}")
+            if self._shape:
+                info.append(f"shape={self._shape}")
+            if self._dtype != np.float64:
+                info.append(f"dtype={self._dtype}")
+            return f"{class_name}({', '.join(info)})"
+
+        def _transform(self, x):
+            return (x - self.loc)/self.scale
+
+        def _itransform(self, x):
+            return x * self.scale + self.loc
+
+        def __getattribute__(self, item):
+            if item in {'logcdf', 'cdf', 'logccdf', 'ccdf'}:
+                f = getattr(super(), item)
+                return (lambda x, *args, **kwargs:
+                        f(self._transform(x), *args, **kwargs))
+            elif item in {'ilogcdf', 'icdf', 'ilogccdf', 'iccdf', ''}:
+                f = getattr(super(), item)
+                return (lambda x, *args, **kwargs:
+                        self._itransform(f(x, *args, **kwargs)))
+
+            return super().__getattribute__(item)
+
+        def entropy(self, *args, **kwargs):
+            return super().entropy(*args, **kwargs) + np.log(self.scale)
+
+        def logentropy(self, *args, **kwargs):
+            lH0 = super().logentropy(*args, **kwargs)
+            lls = np.log(np.log(self.scale))
+            return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
+
+        def logpdf(self, x, *args, **kwargs):
+            return super().logpdf(self._transform(x), *args, **kwargs) - np.log(self.scale)
+
+        def pdf(self, x, *args, **kwargs):
+            return super().pdf(self._transform(x), *args, **kwargs)/self.scale
+
+        def moment_standard(self, *args, **kwargs):
+            return super().moment_standard(*args, **kwargs)
+
+        def moment_central(self, order, *args, **kwargs):
+            return (super().moment_central(order, *args, **kwargs)
+                    * self.scale**order)
+
+        def moment_raw(self, order, *args, **kwargs):
+            raw_moments = []
+            for i in range(int(order) + 1):
+                moment_i = super().moment_raw(i, *args, **kwargs) * self.scale**i
+                raw_moments.append(moment_i)
+
+            # double check this
+            return self._moment_transform_center(order, raw_moments, 0, -self.loc)
+
+        def __add__(self, loc):
+            # Note: It would be nice to be able to convert an existing instance
+            # of a `ContinuousDistribution` to a `ShiftedScaledDistribution``'
+            # e.g. the `__add__` method of `ContinuousDistribution` would
+            # return a `ShiftedScaledDistribution`.
+            loc = np.asarray(loc)
+            # input validation
+            self.loc = self.loc + loc
+            return self
+
+        def __sub__(self, loc):
+            loc = np.asarray(loc)
+            # input validation
+            self.loc = self.loc - loc
+            return self
+
+        def __mul__(self, scale):
+            scale = np.asarray(scale)
+            # input validation
+            self.scale = self.scale * scale
+            self.loc = self.loc * scale
+            return self
+
+        def __truediv__(self, scale):
+            scale = np.asarray(scale)
+            # input validation
+            self.scale = self.scale / scale
+            self.loc = self.loc / scale
+            return self
+
+        def __radd__(self, other):
+            return self.__add__(other)
+
+        def __rsub__(self, other):
+            return self.__add__(other)
+
+        def __rmul__(self, other):
+            return self.__add__(other)
+
+        def __rtruediv__(self, other):
+            return self.__add__(other)
+
+    return ShiftedScaledDistribution
