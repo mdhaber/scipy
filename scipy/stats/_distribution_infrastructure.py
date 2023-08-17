@@ -24,7 +24,7 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  allow negative scale
+#  why is icdf(1) slow? Those should be set to NaN and replaced.
 #  make it possible to modify parameters
 #  ensure that user overrides return correct shape and dtype
 #  Write `fit` method
@@ -1886,132 +1886,174 @@ class ContinuousDistribution:
 # matters (e.g. truncate then shift/scale or vice versa); it's easier to
 # accomodate different orders if the transformation is built up from
 # components.
-#
-# There are other ways to accomplish these objectives besides a function that
-# returns a class; this is just a proof of concept.
 
-def shift_scale_distribution(cls):
-    # Note: I think this should be changed to composition rather than
-    # inheritance. This would make it easy to generate a
-    # `ShiftedScaledDistribution` from an existing `ContinuousDistribution`
-    # object, and it would make it easier to chain together different
-    # transformations.
-    class ShiftedScaledDistribution(cls):
-        def __init__(self, *args, loc=0, scale=1, **kwargs):
-            # input validation
-            self.loc = loc
-            # I think we should accept negative scale, meaning that the
-            # distribution is flipped. This would obviate the need to have
-            # separate left and right distributions (e.g. weibull_min/max,
-            # gumbel_l/gumbel_r).
-            self.scale = scale
-            super().__init__(*args, **kwargs)
+class ShiftedScaledDistribution(ContinuousDistribution):
+    # I'm not sure we need this to inherit from ContinuousDistribution, but
+    # it should be recognized as the same type because it will have
+    # all the same public methods and be usable in all the same ways. Really,
+    # we want both of these classes to implement an interface.
 
-        def __repr__(self):
-            class_name = self.__class__.__base__.__name__
-            parameters = list(self._original_parameters)
-            info = []
-            if parameters:
-                parameters.sort()
-                info.append(f"{', '.join(parameters)}")
-            if self.loc is not None:
-                info.append(f"loc={self.loc}")
-            if self.scale is not None:
-                info.append(f"scale={self.scale}")
-            if self._shape:
-                info.append(f"shape={self._shape}")
-            if self._dtype != np.float64:
-                info.append(f"dtype={self._dtype}")
-            return f"{class_name}({', '.join(info)})"
+    def __init__(self, dist, *args, loc=0, scale=1, **kwargs):
+        # input validation
+        super().__init__(*args, **kwargs)
+        self.loc = np.asarray(loc)
+        self.scale = np.asarray(scale)
+        self._dist = dist
+        self._process_loc_scale()
 
-        def _transform(self, x):
-            return (x - self.loc)/self.scale
+    def _process_loc_scale(self):
+        # maybe need to do other things
+        self._shape = np.broadcast_shapes(self.loc.shape, self.scale.shape, self._dist._shape)
+        self._dtype = np.result_type(self.loc.dtype, self.scale.dtype, self._dist._dtype)
 
-        def _itransform(self, x):
-            return x * self.scale + self.loc
+    def __repr__(self):
+        dist = self._dist
+        class_name = dist.__class__.__name__
+        parameters = list(dist._original_parameters)
+        info = []
+        if parameters:
+            parameters.sort()
+            info.append(f"{', '.join(parameters)}")
+        if self.loc is not None:
+            info.append(f"loc={self.loc}")
+        if self.scale is not None:
+            info.append(f"scale={self.scale}")
+        if self._shape:
+            info.append(f"shape={self._shape}")
+        if self._dtype != np.float64:
+            info.append(f"dtype={self._dtype}")
+        return f"{class_name}({', '.join(info)})"
 
-        def __getattribute__(self, item):
-            if item in {'logcdf', 'cdf', 'logccdf', 'ccdf'}:
-                f = getattr(super(), item)
-                return (lambda x, *args, **kwargs:
-                        f(self._transform(x), *args, **kwargs))
-            elif item in {'ilogcdf', 'icdf', 'ilogccdf', 'iccdf', ''}:
-                f = getattr(super(), item)
-                return (lambda x, *args, **kwargs:
-                        self._itransform(f(x, *args, **kwargs)))
+    def _transform(self, x):
+        return (x - self.loc)/self.scale
 
-            return super().__getattribute__(item)
+    def _itransform(self, x):
+        return x * self.scale + self.loc
 
-        def entropy(self, *args, **kwargs):
-            return super().entropy(*args, **kwargs) + np.log(self.scale)
+    # Because we're supporting negative scale, these methods take twice as
+    # long as they would otherwise. Perhaps support for negative scale
+    # should be an option.
+    def __getattribute__(self, item):
+        if item in {'logcdf', 'cdf', 'logccdf', 'ccdf'}:
+            f = getattr(self._dist, item)
+            citem = {'logcdf': 'logccdf', 'cdf': 'ccdf',
+                     'logccdf': 'logcdf', 'ccdf': 'cdf'}
+            cf = getattr(self._dist, citem[item])
 
-        def logentropy(self, *args, **kwargs):
-            lH0 = super().logentropy(*args, **kwargs)
-            lls = np.log(np.log(self.scale))
-            return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
+            def wrapped(x, *args, **kwargs):
+                fx = f(self._transform(x), *args, **kwargs)
+                cfx = cf(self._transform(x), *args, **kwargs)
+                sign = np.broadcast_to(self.scale, fx.shape) > 0
+                return np.where(sign, fx, cfx)
 
-        def logpdf(self, x, *args, **kwargs):
-            return super().logpdf(self._transform(x), *args, **kwargs) - np.log(self.scale)
+            return wrapped
 
-        def pdf(self, x, *args, **kwargs):
-            return super().pdf(self._transform(x), *args, **kwargs)/self.scale
+        elif item in {'ilogcdf', 'icdf', 'ilogccdf', 'iccdf', ''}:
+            f = getattr(self._dist, item)
+            citem = {'ilogcdf': 'ilogccdf', 'icdf': 'iccdf',
+                     'ilogccdf': 'ilogcdf', 'iccdf': 'icdf'}
+            cf = getattr(self._dist, citem[item])
 
-        def moment_standard(self, *args, **kwargs):
-            return super().moment_standard(*args, **kwargs)
+            def wrapped(x, *args, **kwargs):
+                fx = self._itransform(f(x, *args, **kwargs))
+                cfx = self._itransform(cf(x, *args, **kwargs))
+                sign = np.broadcast_to(self.scale, fx.shape) > 0
+                return np.where(sign, fx, cfx)
 
-        def moment_central(self, order, *args, **kwargs):
-            return (super().moment_central(order, *args, **kwargs)
-                    * self.scale**order)
+            return wrapped
 
-        def moment_raw(self, order, *args, **kwargs):
-            raw_moments = []
-            for i in range(int(order) + 1):
-                moment_i = super().moment_raw(i, *args, **kwargs) * self.scale**i
-                raw_moments.append(moment_i)
+        return super().__getattribute__(item)
 
-            # double check this
-            return self._moment_transform_center(order, raw_moments, 0, -self.loc)
+    @cached_property
+    def support(self):
+        a, b = self._dist.support
+        a, b = self._itransform(a), self._itransform(b)
+        sign = np.broadcast_to(self.scale, a.shape) > 0
+        return np.where(sign, a, b), np.where(sign, b, a)
 
-        def __add__(self, loc):
-            # Note: It would be nice to be able to convert an existing instance
-            # of a `ContinuousDistribution` to a `ShiftedScaledDistribution``'
-            # e.g. the `__add__` method of `ContinuousDistribution` would
-            # return a `ShiftedScaledDistribution`.
-            loc = np.asarray(loc)
-            # input validation
-            self.loc = self.loc + loc
-            return self
+    def entropy(self, *args, **kwargs):
+        return self._dist.entropy(*args, **kwargs) + np.log(abs(self.scale))
 
-        def __sub__(self, loc):
-            loc = np.asarray(loc)
-            # input validation
-            self.loc = self.loc - loc
-            return self
+    def logentropy(self, *args, **kwargs):
+        lH0 = self._dist.logentropy(*args, **kwargs)
+        lls = np.log(np.log(abs(self.scale)))
+        return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
 
-        def __mul__(self, scale):
-            scale = np.asarray(scale)
-            # input validation
-            self.scale = self.scale * scale
-            self.loc = self.loc * scale
-            return self
+    def logpdf(self, x, *args, **kwargs):
+        return (self._dist.logpdf(self._transform(x), *args, **kwargs)
+                - np.log(abs(self.scale)))
 
-        def __truediv__(self, scale):
-            scale = np.asarray(scale)
-            # input validation
-            self.scale = self.scale / scale
-            self.loc = self.loc / scale
-            return self
+    def pdf(self, x, *args, **kwargs):
+        return (self._dist.pdf(self._transform(x), *args, **kwargs)
+                / abs(self.scale))
 
-        def __radd__(self, other):
-            return self.__add__(other)
+    def moment_standard(self, order, *args, **kwargs):
+        return (self._dist.moment_standard(order, *args, **kwargs)
+                * np.sign(self.scale)**order)
 
-        def __rsub__(self, other):
-            return self.__add__(other)
+    def moment_central(self, order, *args, **kwargs):
+        return (self._dist.moment_central(order, *args, **kwargs)
+                * self.scale**order)
 
-        def __rmul__(self, other):
-            return self.__add__(other)
+    def moment_raw(self, order, *args, **kwargs):
+        raw_moments = []
+        for i in range(int(order) + 1):
+            moment_i = (self._dist.moment_raw(i, *args, **kwargs)
+                        * self.scale**i)
+            raw_moments.append(moment_i)
 
-        def __rtruediv__(self, other):
-            return self.__add__(other)
+        # double check this
+        return self._moment_transform_center(order, raw_moments,
+                                             self.loc, 0)
 
-    return ShiftedScaledDistribution
+    def sample(self, shape=(), *, method=None, rng=None):
+        sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
+        full_shape = sample_shape + self._shape
+        rng = self._validate_rng(rng) or self._rng or np.random.default_rng()
+        sample = self._dist._sample_dispatch(
+            sample_shape, full_shape, method=method, rng=rng,
+            **self._dist._parameters)
+        return sample * self.scale + self.loc
+
+    # Add these methods to ContinuousDistribution so
+    def __add__(self, loc):
+        loc = np.asarray(loc)
+        # input validation
+        self.loc = self.loc + loc
+        self._process_loc_scale()
+        return self
+
+    def __sub__(self, loc):
+        loc = np.asarray(loc)
+        # input validation
+        self.loc = self.loc - loc
+        self._process_loc_scale()
+        return self
+
+    def __mul__(self, scale):
+        scale = np.asarray(scale)
+        # input validation
+        self.scale = self.scale * scale
+        self.loc = self.loc * scale
+        self._process_loc_scale()
+        return self
+
+    def __truediv__(self, scale):
+        scale = np.asarray(scale)
+        # input validation
+        self.scale = self.scale / scale
+        self.loc = self.loc / scale
+        self._process_loc_scale()
+        return self
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __rsub__(self, other):
+        return self.__add__(other)
+
+    def __rmul__(self, other):
+        return self.__add__(other)
+
+    def __rtruediv__(self, other):
+        return self.__add__(other)
