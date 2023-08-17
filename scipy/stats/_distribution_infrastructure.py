@@ -24,13 +24,12 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  why is icdf(1) slow? Those should be set to NaN and replaced.
-#  make it possible to modify parameters
 #  ensure that user overrides return correct shape and dtype
+#  make it possible to modify parameters
 #  Write `fit` method
-#  check behavior of moment methods when moments are undefined/infinite
 #  implement symmetric distribution
 #  implement composite distribution
+#  check behavior of moment methods when moments are undefined/infinite
 #  Be consistent about options passed to distributions/methods: tols, skip_iv, cache, rng
 #  profile/optimize
 #  general cleanup (choose keyword-only parameters)
@@ -654,7 +653,7 @@ def _set_invalid_nan(f):
     replacements = {'logpdf': (-oo, -oo), 'pdf': (0, 0),
                     'logcdf': (-oo, 0), 'logccdf': (0, -oo),
                     'cdf': (0, 1), 'ccdf': (1, 0), '_cdf_1arg': (0, 1)}
-    replace_strict = {'pdf', 'logpdf', 'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
+    replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
     def filtered(self, x, *args, iv_policy=None, **kwargs):
@@ -721,6 +720,12 @@ def _set_invalid_nan(f):
         if res_needs_copy:
             res = np.array(res, dtype=dtype, copy=True)
 
+        if any_invalid:
+            replace_low, replace_high = (
+                replacements.get(method_name, (np.nan, np.nan)))
+            res[mask_low] = replace_low
+            res[mask_high] = replace_high
+
         if any_endpoint:
             a, b = self.support
             if a.shape != shape:
@@ -736,12 +741,6 @@ def _set_invalid_nan(f):
 
             res[mask_low_endpoint] = replace_low_endpoint
             res[mask_high_endpoint] = replace_high_endpoint
-
-        if any_invalid:
-            replace_low, replace_high = (
-                replacements.get(method_name, (np.nan, np.nan)))
-            res[mask_low] = replace_low
-            res[mask_high] = replace_high
 
         return res[()]
 
