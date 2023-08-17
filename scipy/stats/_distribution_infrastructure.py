@@ -997,6 +997,11 @@ class ContinuousDistribution:
 
 
     @classmethod
+    def _process_parameters(cls, **kwargs):
+        return kwargs
+
+
+    @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=None,
               proportions=None):
         if len(cls._parameterizations) == 0:
@@ -1710,6 +1715,7 @@ class ContinuousDistribution:
         args = [] if args is None else args
         kwargs = {} if kwargs is None else kwargs
         f, args = kwargs2args(integrand, args=args, kwargs=kwargs)
+        args = np.broadcast_arrays(*args)
         res = _tanhsinh(f, a, b, args=args, log=log)
         return res.integral
 
@@ -1824,6 +1830,11 @@ class ContinuousDistribution:
 # returns a class; this is just a proof of concept.
 
 def shift_scale_distribution(cls):
+    # Note: I think this should be changed to composition rather than
+    # inheritance. This would make it easy to generate a
+    # `ShiftedScaledDistribution` from an existing `ContinuousDistribution`
+    # object, and it would make it easier to chain together different
+    # transformations.
     class ShiftedScaledDistribution(cls):
         def __init__(self, *args, loc=0, scale=1, **kwargs):
             # input validation

@@ -6,6 +6,40 @@ from scipy.stats._distribution_infrastructure import (
     oo, _null)
 
 
+def factorial(n):
+    return special.gamma(n + 1)
+
+
+class OrderStatisticDistribution(ContinuousDistribution):
+
+    # These should really be _IntegerDomain/_IntegerParameter
+    _r_domain = _RealDomain(endpoints=(1, 'n'), inclusive=(True, True))
+    _r_param = _RealParameter('r', domain=_r_domain, typical=(1, 2))
+
+    _n_domain = _RealDomain(endpoints=(1, np.inf), inclusive=(True, True))
+    _n_param = _RealParameter('n', domain=_n_domain, typical=(1, 4))
+
+    _r_domain.define_parameters(_n_param)
+
+    _parameterizations = [_Parameterization(_r_param, _n_param)]
+
+    def __init__(self, *args, dist, **kwargs):
+        # This needs some careful thought, but I think it can work.
+        self._dist = dist
+        self._variable = dist._variable
+        super().__init__(*args, **kwargs)
+        self._parameters.update(dist._parameters)
+        self._shape = np.broadcast_shapes(self._shape, dist._shape)
+        self._invalid = np.broadcast_to(self._invalid, self._shape)
+
+    def _pdf(self, x, r, n, **kwargs):
+        factor = factorial(n) / (factorial(r-1) * factorial(n-r))
+        fX = self._dist._pdf_dispatch(x, **kwargs)
+        FX = self._dist._cdf_dispatch(x, **kwargs)
+        cFX = self._dist._ccdf_dispatch(x, **kwargs)
+        return factor * fX * FX**(r-1) * cFX**(n-r)
+
+
 class Normal(ContinuousDistribution):
 
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
