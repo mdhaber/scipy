@@ -573,7 +573,7 @@ def test_input_validation():
         _parameterizations = [_Parameterization(_p1, _p2)]
         _variable = _RealParameter('x', domain=_RealDomain())
 
-    message = ("The provided parameters `{'a'}` do not match a supported "
+    message = ("The provided parameters `{a}` do not match a supported "
                "parameterization of the `Test2` distribution family.")
     with pytest.raises(ValueError, match=message):
         Test2(a=1)
@@ -583,6 +583,20 @@ def test_input_validation():
     with pytest.raises(ValueError, match=message):
         Test2()
 
+    message = ("The parameters `{c, d}` provided to the `Test2` "
+               "distribution family cannot be broadcast to the same shape.")
+    with pytest.raises(ValueError, match=message):
+        Test2(c=[1, 2], d=[1, 2, 3])
+
+    message = ("The argument provided to `Test2.pdf` cannot be be broadcast to "
+              "the same shape as the distribution parameters.")
+    with pytest.raises(ValueError, match=message):
+        dist = Test2(c=[1, 2, 3], d=[1, 2, 3])
+        dist.pdf([1, 2])
+
+    message = ("Parameter `c` must be of real dtype.")
+    with pytest.raises(ValueError, match=message):
+        Test2(c=[1, object()], d=[1, 2])
 
 # I removed `None` from this list. The current behavior is to generate a new
 # `default_rng()` every time it is needed. We should not generate it during

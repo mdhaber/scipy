@@ -24,14 +24,13 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  test input validation
+#  allow negative scale
 #  make it possible to modify parameters
 #  ensure that user overrides return correct shape and dtype
 #  Write `fit` method
 #  check behavior of moment methods when moments are undefined/infinite
 #  implement symmetric distribution
-#  Can we process the parameters before checking the parameterization? Then, it
-#   would be easy to accept any valid parameterization (e.g. `a` and `log_b`)
+#  implement composite distribution
 #  Be consistent about options passed to distributions/methods: tols, skip_iv, cache, rng
 #  profile/optimize
 #  general cleanup (choose keyword-only parameters)
@@ -68,6 +67,8 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #  - provide a Generator if you're going to do sampling
 #  add options for drawing parameters: log-spacing
 #  accuracy benchmark suite
+#  Can we process the parameters before checking the parameterization? Then, it
+#   would be easy to accept any valid parameterization (e.g. `a` and `log_b`)
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -532,8 +533,8 @@ class _RealParameter(_Parameter):
 
         """
         arr = np.asarray(arr)
-        valid = self.domain.contains(arr, parameter_values)
 
+        valid_dtype = None
         # minor optimization - fast track the most common types to avoid
         # overhead of np.issubdtype. Checking for `in {...}` doesn't work : /
         if arr.dtype == np.float64 or arr.dtype == np.float32:
@@ -548,10 +549,12 @@ class _RealParameter(_Parameter):
             real_arr = np.real(arr)
             valid_dtype = (real_arr == arr)
             arr = real_arr
-            valid = valid & valid_dtype
         else:
             message = f"Parameter `{self.name}` must be of real dtype."
             raise ValueError(message)
+
+        valid = self.domain.contains(arr, parameter_values)
+        valid = valid & valid_dtype if valid_dtype is not None else valid
 
         return arr, arr.dtype, valid
 
@@ -933,11 +936,8 @@ class ContinuousDistribution:
                 message = (f"The `{cls.__name__}` distribution family "
                            "requires parameters, but none were provided.")
             else:
-                # Sorting for the sake of input validation tests
-                parameter_names_list = list(parameter_names_set)
-                parameter_names_list.sort()
-                parameter_names_set = set(parameter_names_list)
-                message = (f"The provided parameters `{parameter_names_set}` "
+                parameter_names = cls._get_parameter_str(parameters)
+                message = (f"The provided parameters `{parameter_names}` "
                            "do not match a supported parameterization of the "
                            f"`{cls.__name__}` distribution family.")
             raise ValueError(message)
@@ -968,12 +968,20 @@ class ContinuousDistribution:
         try:
             parameter_vals = np.broadcast_arrays(*parameters.values())
         except ValueError as e:
-            message = (f"The parameters {set(parameters)} provided to the "
+            parameter_names = cls._get_parameter_str(parameters)
+            message = (f"The parameters `{parameter_names}` provided to the "
                        f"`{cls.__name__}` distribution family "
                        "cannot be broadcast to the same shape.")
             raise ValueError(message) from e
         return (dict(zip(parameters.keys(), parameter_vals)),
                 parameter_vals[0].shape)
+
+    @classmethod
+    def _get_parameter_str(cls, parameters):
+        # Sorting for the sake of input validation tests
+        parameter_names_list = list(parameters.keys())
+        parameter_names_list.sort()
+        return f"{{{', '.join(parameter_names_list)}}}"
 
     @classmethod
     def _validate(cls, parameterization, parameters):
@@ -1049,7 +1057,8 @@ class ContinuousDistribution:
         try:
             import matplotlib  # noqa
         except ModuleNotFoundError as exc:
-            message = "matplotlib must be installed to use method `plot`."
+            message = ("`matplotlib` must be installed to use "
+                       f"`{self.__class__.__name__}.plot`.")
             raise ModuleNotFoundError(message) from exc
 
         if ax is None:
