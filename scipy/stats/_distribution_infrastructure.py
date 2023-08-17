@@ -21,12 +21,10 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 # Alternative to enums is max cache size per function like lru_cache
 # Currently, this is only used by `moment_...` methods, but it could be used
 # for all methods that don't require an argument (e.g. entropy)
-CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE'])
+CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  add plot
 #  test input validation
-#  test cache policy and `reset_cache`
 #  make it possible to modify parameters
 #  ensure that user overrides return correct shape and dtype
 #  Write `fit` method
@@ -839,7 +837,8 @@ class ContinuousDistribution:
                  rng=None, **parameters):
         self.tol = tol
         self.iv_policy = iv_policy
-        self.cache_policy = cache_policy
+        self.cache_policy = (cache_policy if cache_policy is not None
+                             else CACHE_POLICY.CACHE)
         # These will still exist even if cache_policy is NO_CACHE. This allows
         # caching to be turned on and off easily.
         self.reset_cache()

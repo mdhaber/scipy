@@ -13,7 +13,7 @@ from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
     oo, _Domain, _RealDomain, _RealParameter, ContinuousDistribution,
-    _Parameterization)
+    _Parameterization, CACHE_POLICY, IV_POLICY)
 from scipy.stats._new_distributions import LogUniform, Normal
 
 class Test_RealDomain:
@@ -598,3 +598,40 @@ def test_deepcopy_pickle(seed):
     res1, res2, res3 = dist1.sample(), dist2.sample(), dist3.sample()
     assert_equal(res2, res1)
     assert_equal(res3, res1)
+
+
+def test_cache_policy():
+    dist = Normal(cache_policy=CACHE_POLICY.NO_CACHE)
+    # make error message more appropriate
+    message = "`Normal` does not provide an accurate implementation of the "
+    with pytest.raises(NotImplementedError, match=message):
+        dist.mean(method='cache')
+    mean = dist.mean()
+    with pytest.raises(NotImplementedError, match=message):
+        dist.mean(method='cache')
+
+    # add to enum
+    dist.cache_policy = CACHE_POLICY.CACHE
+    with pytest.raises(NotImplementedError, match=message):
+        dist.mean(method='cache')
+    mean = dist.mean()  # method is 'formula' by default
+    cached_mean = dist.mean(method='cache')
+    assert_equal(cached_mean, mean)
+
+    # cache is overridden by latest evaluation
+    quadrature_mean = dist.mean(method='quadrature')
+    cached_mean = dist.mean(method='cache')
+    assert_equal(cached_mean, quadrature_mean)
+    assert not np.all(mean == quadrature_mean)
+
+    # We can turn the cache off, and it won't change, but the old cache is
+    # still available
+    dist.cache_policy = CACHE_POLICY.NO_CACHE
+    mean = dist.mean(method='formula')
+    cached_mean = dist.mean(method='cache')
+    assert_equal(cached_mean, quadrature_mean)
+    assert not np.all(mean == quadrature_mean)
+
+    dist.reset_cache()
+    with pytest.raises(NotImplementedError, match=message):
+        dist.mean(method='cache')
