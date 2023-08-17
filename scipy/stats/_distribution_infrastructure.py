@@ -24,24 +24,23 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE'])
 
 # TODO:
-#  double check optimizations from last commit
+#  add plot
 #  test input validation
 #  test cache policy and `reset_cache`
-#  add options for drawing parameters: log-spacing
-#  Write `fit` method
+#  make it possible to modify parameters
 #  ensure that user overrides return correct shape and dtype
-#  check behavior of moment methods when moments are undefined
+#  Write `fit` method
+#  check behavior of moment methods when moments are undefined/infinite
 #  implement symmetric distribution
 #  Can we process the parameters before checking the parameterization? Then, it
 #   would be easy to accept any valid parameterization (e.g. `a` and `log_b`)
-#  Add loc/scale transformation
-#  Add operators for loc/scale transformation
 #  Be consistent about options passed to distributions/methods: tols, skip_iv, cache, rng
 #  profile/optimize
-#  Carefully review input validation, especially for dtype conversions.
 #  general cleanup (choose keyword-only parameters)
 #  documentation
+#  compare old/new distribution timing
 #  make video
+#  PR
 #  add array API support
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
 #  _chandrupatla_minimize should not report xm = fm = NaN when it fails
@@ -69,7 +68,8 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE'])
 #  - prefer NumPy scalars or 0d arrays over other size 1 arrays
 #  - pass no invalid parameters and disable invalid parameter checks with iv_profile
 #  - provide a Generator if you're going to do sampling
-#  Seems like all NumPy functions
+#  add options for drawing parameters: log-spacing
+#  accuracy benchmark suite
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -1045,6 +1045,59 @@ class ContinuousDistribution:
                        "be a positive float, if specified.")
             raise ValueError(message)
         self._tol = tol[()]
+
+    def plot(self, ax=None, funcs=None, cdf=0.001, ccdf=0.001):
+        try:
+            import matplotlib  # noqa
+        except ModuleNotFoundError as exc:
+            message = "matplotlib must be installed to use method `plot`."
+            raise ModuleNotFoundError(message) from exc
+
+        if ax is None:
+            import matplotlib.pyplot as plt
+            ax = plt.gca()
+
+        funcs = funcs or ['pdf']
+        funcs = [funcs] if type(funcs) == str else funcs
+
+        # Should also offer control over absolute `x` instead of probability
+        a, b = self.support
+        a = np.where(np.isinf(a), self.icdf(cdf), a)
+        b = np.where(np.isinf(b), self.iccdf(ccdf), b)
+        x = np.linspace(a, b, 300)
+
+        for method in funcs:
+            f = getattr(self, method)
+
+            def hist_plot(x, *args, **kwargs):
+                sample = self.sample(10000)
+                # should cut off at user-specified limits
+                ax.hist(sample, bins=30, density=True, *args, **kwargs)
+
+            def fun_plot(x, *args, **kwargs):
+                y = f(x)
+                ax.plot(x, y, *args, **kwargs)
+
+            plot = hist_plot if method == 'sample' else fun_plot
+
+            if len(funcs) > 1:
+                # Would be good to have different ylabel scales
+                # if there are two methods; create different plots
+                # depending on shape of methods nested lists
+                plot(x, label=method)
+            else:
+                # would be good to show parameters as label
+                plot(x)
+
+        # should use LaTeX; use symbols
+        ax.set_xlabel('x')
+        ax.set_ylabel('pdf(x)')
+        ax.legend()
+        method_str = (f".{funcs[0]}" if len(funcs) == 1
+                      else f" functions {funcs}")
+        title = str(self) + method_str
+        ax.set_title(title)
+        return ax
 
     @cached_property
     def support(self):
