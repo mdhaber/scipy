@@ -24,6 +24,8 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
+#  all private methods should be classmethods
+#  loc/scale should override _dispatch methods
 #  ensure that user overrides return correct shape and dtype
 #  make it possible to modify parameters
 #  Write `fit` method
@@ -687,7 +689,7 @@ def _set_invalid_nan(f):
                     "shape as the distribution parameters.")
                 raise ValueError(message) from e
 
-        low, high = endpoints.get(method_name, self.support)
+        low, high = endpoints.get(method_name, self.support())
         mask_low = x < low if method_name in replace_strict else x <= low
         mask_high = x > high if method_name in replace_strict else x >= high
         mask_invalid = (mask_low | mask_high)
@@ -727,7 +729,7 @@ def _set_invalid_nan(f):
             res[mask_high] = replace_high
 
         if any_endpoint:
-            a, b = self.support
+            a, b = self.support()
             if a.shape != shape:
                 a = np.array(np.broadcast_to(a, shape), copy=True)
                 b = np.array(np.broadcast_to(b, shape), copy=True)
@@ -755,7 +757,7 @@ def _set_invalid_nan_property(f):
         res = f(self, *args, method=method, **kwargs)
         if res is None:
             # message could be more appropriate
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
         res = np.asarray(res)
         needs_copy = False
@@ -834,6 +836,8 @@ def _log_real_standardize(x):
 
 class ContinuousDistribution:
     _parameterizations = []
+    _moment_methods = {'cache', 'formula', 'transform',
+                       'normalize', 'general', 'quadrature'}
 
     def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
                  rng=None, **parameters):
@@ -852,11 +856,6 @@ class ContinuousDistribution:
         self._any_invalid = False
         self._shape = tuple()
         self._dtype = np.float64
-        self._not_implemented = (
-            f"`{self.__class__.__name__}` does not provide an accurate "
-            "implementation of the required method. Leave `tol` unspecified "
-            "to use the default implementation."
-        )
 
         if iv_policy == IV_POLICY.SKIP_ALL:
             # Not sure whether attributes should be set if we're skipping IV
@@ -894,6 +893,10 @@ class ContinuousDistribution:
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
 
+    def _set_parameter_attributes(self):
+        for name, val in self._parameters.items():
+            setattr(self, name, val)
+
     def __repr__(self):
         class_name = self.__class__.__name__
         parameters = list(self._original_parameters)
@@ -907,10 +910,11 @@ class ContinuousDistribution:
             info.append(f"dtype={self._dtype}")
         return f"{class_name}({', '.join(info)})"
 
-    def _validate_rng(self, rng):
+    @classmethod
+    def _validate_rng(cls, rng):
         if rng is not None and not isinstance(rng, np.random.Generator):
             message = ("Argument `rng` passed to the "
-                       f"`{self.__class__.__name__}` distribution family is "
+                       f"`{cls.__name__}` distribution family is "
                        f"of type `{type(rng)}`, but it must be a NumPy "
                        "`Generator`.")
             raise ValueError(message)
@@ -996,16 +1000,9 @@ class ContinuousDistribution:
 
         return parameters, invalid, any_invalid, dtype
 
-
-    def _set_parameter_attributes(self):
-        for name, val in self._parameters.items():
-            setattr(self, name, val)
-
-
     @classmethod
     def _process_parameters(cls, **kwargs):
         return kwargs
-
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=None,
@@ -1029,8 +1026,9 @@ class ContinuousDistribution:
         return (0 if not cls._num_parameterizations()
                 else len(cls._parameterizations[0]))
 
-    def _overrides(self, method_name):
-        method = getattr(self.__class__, method_name, None)
+    @classmethod
+    def _overrides(cls, method_name):
+        method = getattr(cls, method_name, None)
         super_method = getattr(ContinuousDistribution, method_name, None)
         return method is not super_method
 
@@ -1068,7 +1066,7 @@ class ContinuousDistribution:
         funcs = [funcs] if type(funcs) == str else funcs
 
         # Should also offer control over absolute `x` instead of probability
-        a, b = self.support
+        a, b = self.support()
         a = np.where(np.isinf(a), self.icdf(cdf), a)
         b = np.where(np.isinf(b), self.iccdf(ccdf), b)
         x = np.linspace(a, b, 300)
@@ -1106,15 +1104,23 @@ class ContinuousDistribution:
         ax.set_title(title)
         return ax
 
-    @cached_property
     def support(self):
         return self._support(**self._parameters)
 
-    def _support(self, **kwargs):
-        a, b = self._variable.domain.get_numerical_endpoints(kwargs)
+    @classmethod
+    def _support(cls, **kwargs):
+        a, b = cls._variable.domain.get_numerical_endpoints(kwargs)
         if a.shape != b.shape:
             a, b = np.broadcast_arrays(a, b)
         return a, b
+
+    @classmethod
+    def _not_implemented(cls):
+        return (
+            f"`{cls.__name__}` does not provide an accurate "
+            "implementation of the required method. Leave `tol` unspecified "
+            "to use the default implementation."
+        )
 
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
@@ -1127,7 +1133,7 @@ class ContinuousDistribution:
         elif method in {'quadrature', None}:
             return self._logentropy_integrate_logpdf(**kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _logentropy_log_entropy(self, **kwargs):
         res = np.log(self._entropy_dispatch(**kwargs) + 0j)
@@ -1151,7 +1157,7 @@ class ContinuousDistribution:
         elif method in {'quadrature', None}:
             return self._entropy_integrate_pdf(**kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _entropy_exp_logentropy(self, **kwargs):
         return np.exp(self._logentropy_dispatch(**kwargs))
@@ -1171,7 +1177,7 @@ class ContinuousDistribution:
         elif method in {None, 'icdf'}:
             return self._median_icdf(**kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _median_icdf(self, **kwargs):
         return self._icdf_dispatch(0.5, **kwargs)
@@ -1187,7 +1193,7 @@ class ContinuousDistribution:
         elif method in {None, 'optimization'}:
             return self._mode_optimization(**kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _mode_optimization(self, **kwargs):
         # Heuristic until we write a proper minimization bracket finder (like
@@ -1236,7 +1242,7 @@ class ContinuousDistribution:
         elif (self.tol is _null and method is None) or method == 'log/exp':
             return self._logpdf_log_pdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _logpdf_log_pdf(self, x, **kwargs):
         return np.log(self._pdf_dispatch(x, **kwargs))
@@ -1251,7 +1257,7 @@ class ContinuousDistribution:
         if (self._overrides('_logpdf') and method is None) or method == 'log/exp':
             return self._pdf_exp_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _pdf_exp_logpdf(self, x, **kwargs):
         return np.exp(self._logpdf_dispatch(x, **kwargs))
@@ -1270,7 +1276,7 @@ class ContinuousDistribution:
         elif method in {'quadrature', None}:
             return self._logcdf_integrate_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _logcdf_log_cdf(self, x, **kwargs):
         return np.log(self._cdf_dispatch(x, **kwargs))
@@ -1347,7 +1353,7 @@ class ContinuousDistribution:
         elif method in {'quadrature', None}:
             return self._cdf_integrate_pdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _cdf_exp_logcdf(self, x, **kwargs):
         return np.exp(self._logcdf_dispatch(x, **kwargs))
@@ -1374,7 +1380,7 @@ class ContinuousDistribution:
         elif method in {'quadrature', None}:
             return self._logccdf_integrate_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _logccdf_log_ccdf(self, x, **kwargs):
         return np.log(self._ccdf_dispatch(x, **kwargs))
@@ -1401,7 +1407,7 @@ class ContinuousDistribution:
         elif method in {'quadrature', None}:
             return self._ccdf_integrate_pdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _ccdf_exp_logccdf(self, x, **kwargs):
         return np.exp(self._logccdf_dispatch(x, **kwargs))
@@ -1426,7 +1432,7 @@ class ContinuousDistribution:
         elif method in {None, 'inversion'}:
             return self._ilogcdf_solve_logcdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _ilogcdf_ilogccdf1m(self, x, **kwargs):
         return self._ilogccdf_dispatch(_log1mexp(x), **kwargs)
@@ -1446,7 +1452,7 @@ class ContinuousDistribution:
         elif method in {None, 'inversion'}:
             return self._icdf_solve_cdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _icdf_iccdf1m(self, x, **kwargs):
         return self._iccdf_dispatch(1 - x, **kwargs)
@@ -1466,7 +1472,7 @@ class ContinuousDistribution:
         elif method in {None, 'inversion'}:
             return self._ilogccdf_solve_logccdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _ilogccdf_ilogcdf1m(self, x, **kwargs):
         return self._ilogcdf_dispatch(_log1mexp(x), **kwargs)
@@ -1486,7 +1492,7 @@ class ContinuousDistribution:
         elif method in {None, 'inversion'}:
             return self._iccdf_solve_ccdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
     def _iccdf_icdf1m(self, x, **kwargs):
         return self._icdf_dispatch(1 - x, **kwargs)
@@ -1509,9 +1515,9 @@ class ContinuousDistribution:
             return self._sample_inverse_transform(sample_shape, full_shape,
                                                   rng=rng, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented)
+            raise NotImplementedError(self._not_implemented())
 
-    def _sample_inverse_transform(self, sample_shape, full_shape, *, rng, **kwargs):
+    def _sample_inverse_transform(self, _, full_shape, *, rng, **kwargs):
         uniform = rng.uniform(size=full_shape)
         return self._icdf_dispatch(uniform, **kwargs)
 
@@ -1536,12 +1542,16 @@ class ContinuousDistribution:
         return self._quadrature(logintegrand, args=(order, logcenter),
                                 kwargs=kwargs, log=True)
 
-    def _validate_order(self, order, f_name, iv_policy=None):
-        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
+    @classmethod
+    def _validate_order(cls, order, f_name, iv_policy=None):
+        if iv_policy == IV_POLICY.SKIP_ALL:
             return order
 
-        order = np.asarray(order, dtype=self._dtype)[()]
-        message = (f"Argument `order` of `{self.__class__.__name__}.{f_name}` "
+        # We want the output `order` to be a float so that integer * float
+        # conversion rules don't accidentally increase precision. I don't think
+        # we can really support float16 across the board, so float32 it is.
+        order = np.asarray(order, dtype=np.float32)[()]
+        message = (f"Argument `order` of `{cls.__name__}.{f_name}` "
                    "must be a finite, positive integer.")
         try:
             order_int = round(order.item())
@@ -1555,14 +1565,9 @@ class ContinuousDistribution:
 
         return order
 
-    @cached_property
-    def _moment_methods(self):
-        return {'cache', 'formula', 'transform',
-                'normalize', 'general', 'quadrature'}
-
     @_set_invalid_nan_property
     def moment_raw(self, order=1, *, method=None, cache_policy=None):
-        order = self._validate_order(order, "moment_raw")
+        order = self._validate_order(order, "moment_raw", self.iv_policy)
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_raw_dispatch(
@@ -1620,14 +1625,15 @@ class ContinuousDistribution:
         moment = self._moment_transform_center(order, central_moments, mean, 0)
         return moment
 
-    def _moment_raw_general(self, order, **kwargs):
+    @classmethod
+    def _moment_raw_general(cls, order, **kwargs):
         # This is the only general formula for a raw moment of a probability
         # distribution
         return 1 if order == 0 else None
 
     @_set_invalid_nan_property
     def moment_central(self, order=1, *, method=None, cache_policy=None):
-        order = self._validate_order(order, "moment_central")
+        order = self._validate_order(order, "moment_central", self.iv_policy)
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_central_dispatch(
@@ -1695,13 +1701,14 @@ class ContinuousDistribution:
                                             **kwargs)
         return standard_moment*var**(order/2)
 
-    def _moment_central_general(self, order, **kwargs):
+    @classmethod
+    def _moment_central_general(cls, order, **kwargs):
         general_central_moments = {0: 1, 1: 0}
         return general_central_moments.get(order, None)
 
     @_set_invalid_nan_property
     def moment_standard(self, order=1, *, method=None, cache_policy=None):
-        order = self._validate_order(order, "moment_standard")
+        order = self._validate_order(order, "moment_standard", self.iv_policy)
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_standard_dispatch(
@@ -1748,7 +1755,8 @@ class ContinuousDistribution:
                                             **kwargs)
         return central_moment/var**(order/2)
 
-    def _moment_standard_general(self, order, **kwargs):
+    @classmethod
+    def _moment_standard_general(cls, order, **kwargs):
         general_standard_moments = {0: 1, 1: 0, 2: 1}
         return general_standard_moments.get(order, None)
 
@@ -1758,7 +1766,8 @@ class ContinuousDistribution:
             return pdf*(x-center)**order
         return self._quadrature(integrand, args=(order, center), kwargs=kwargs)
 
-    def _moment_transform_center(self, order, moment_as, a, b):
+    @classmethod
+    def _moment_transform_center(cls, order, moment_as, a, b):
         a, b, *moment_as = np.broadcast_arrays(a, b, *moment_as)
         n = order
         i = np.arange(n+1).reshape([-1]+[1]*a.ndim)  # orthogonal to other axes
@@ -1766,12 +1775,14 @@ class ContinuousDistribution:
         moment_b = np.sum(n_choose_i*moment_as*(a-b)**(n-i), axis=0)
         return moment_b
 
-    def _quadrature(self, integrand, limits=None, args=None, kwargs=None, log=False):
-        a, b = self._support(**kwargs) if limits is None else limits
+    @classmethod
+    def _quadrature(cls, integrand, limits=None, args=None, kwargs=None, log=False):
+        a, b = cls._support(**kwargs) if limits is None else limits
         a, b = np.broadcast_arrays(a, b)
         if not a.size:
             # maybe need to figure out result type from a, b
-            return np.empty(a.shape, dtype=self._dtype)
+            dtype = np.result_type(a.dtype, b.dtype)
+            return np.empty(a.shape, dtype=dtype)
         args = [] if args is None else args
         kwargs = {} if kwargs is None else kwargs
         f, args = kwargs2args(integrand, args=args, kwargs=kwargs)
@@ -1779,15 +1790,16 @@ class ContinuousDistribution:
         res = _tanhsinh(f, a, b, args=args, log=log)
         return res.integral
 
-    def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
+    @classmethod
+    def _solve_bounded(cls, f, p, *, bounds=None, kwargs=None):
         # should modify _bracket_root and _chandrupatla so we don't need all this
-        min, max = self._support(**kwargs) if bounds is None else bounds
+        min, max = cls._support(**kwargs) if bounds is None else bounds
         kwargs = {} if kwargs is None else kwargs
 
         p, min, max = np.broadcast_arrays(p, min, max)
         if not p.size:
-            # might need to figure out result type based on p
-            return np.empty(p.shape, dtype=self._dtype)
+            dtype = np.result_type(p.dtype, min.dtype, max.dtype)
+            return np.empty(p.shape, dtype=dtype)
 
         def f2(x, p, **kwargs):
             return f(x, **kwargs) - p
@@ -1823,21 +1835,6 @@ class ContinuousDistribution:
         res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
         return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
 
-    ## Easiest to do right now
-    # @classmethod
-    # def llf(cls, parameters, *, sample, axis=-1):
-    #     dist = cls(**parameters)
-    #     return np.sum(dist.logpdf(sample), axis=axis)
-
-    ## Works if user doesn't pass in parameters, or passes in the right parameters
-    # def llf(self, parameters=None, *, sample, axis=-1):
-    #     parameters = self._parameters if parameters is None else parameters
-    #     return np.sum(self._logpdf_dispatch(sample, **parameters))
-
-    ## Probably best, but we still need something to process parameters
-    ## I have been thinking that I should break out the part of __init__
-    ## that identifies the parameterization and validates parameters and
-    ## call that here.
     @classmethod
     def llf(cls, parameters, *, sample, axis=-1):
         # still needs input validation of sample
@@ -1963,9 +1960,8 @@ class ShiftedScaledDistribution(ContinuousDistribution):
 
         return super().__getattribute__(item)
 
-    @cached_property
     def support(self):
-        a, b = self._dist.support
+        a, b = self._dist.support()
         a, b = self._itransform(a), self._itransform(b)
         sign = np.broadcast_to(self.scale, a.shape) > 0
         return np.where(sign, a, b), np.where(sign, b, a)
