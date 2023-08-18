@@ -46,10 +46,12 @@ class Normal(ContinuousDistribution):
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
 
-    def _logpdf(self, x, **kwargs):
+    @classmethod
+    def _logpdf(cls, x, **kwargs):
         return -(np.log(2*np.pi)/2 + x**2/2)
 
-    def _pdf(self, x, **kwargs):
+    @classmethod
+    def _pdf(cls, x, **kwargs):
         return 1/np.sqrt(2*np.pi) * np.exp(-x**2/2)
 
     def _logcdf(self, x, **kwargs):
@@ -141,7 +143,8 @@ class LogUniform(ContinuousDistribution):
     # def _logpdf(self, x, *, log_a, log_b, **kwargs):
     #     return -np.log(x) - np.log(log_b - log_a)
 
-    def _pdf(self, x, *, log_a, log_b, **kwargs):
+    @classmethod
+    def _pdf(cls, x, *, log_a, log_b, **kwargs):
         return ((log_b - log_a)*x)**-1
 
     # def _cdf(self, x, *, log_a, log_b, **kwargs):

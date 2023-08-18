@@ -25,6 +25,7 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
 #  all private methods should be classmethods
+#  dist.mean is a 0d array - why isn't that caught by tests?
 #  loc/scale should override _dispatch methods
 #  ensure that user overrides return correct shape and dtype
 #  make it possible to modify parameters
@@ -648,7 +649,6 @@ class _Parameterization:
 
         return parameter_values
 
-
 def _set_invalid_nan(f):
     endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
@@ -658,6 +658,7 @@ def _set_invalid_nan(f):
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
+    # @functools.wraps
     def filtered(self, x, *args, iv_policy=None, **kwargs):
         if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, x, *args, **kwargs)
@@ -750,6 +751,7 @@ def _set_invalid_nan(f):
 
 def _set_invalid_nan_property(f):
     # maybe implement the cache here?
+    # @functools.wraps
     def filtered(self, *args, method=None, iv_policy=None, **kwargs):
         if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, *args, method=method, **kwargs)
@@ -1234,33 +1236,37 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logpdf(self, x, *, method=None):
-        return self._logpdf_dispatch(x, method=method, **self._parameters)
+        return self._logpdf_dispatch(x, method=method, tol=self._tol, **self._parameters)
 
-    def _logpdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logpdf'):
-            return self._logpdf(x, **kwargs)
-        elif (self.tol is _null and method is None) or method == 'log/exp':
-            return self._logpdf_log_pdf(x, **kwargs)
+    @classmethod
+    def _logpdf_dispatch(cls, x, *, method=None, tol=_null, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_logpdf'):
+            return cls._logpdf(x, **kwargs)
+        elif (tol is _null and method is None) or method == 'log/exp':
+            return cls._logpdf_log_pdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _logpdf_log_pdf(self, x, **kwargs):
-        return np.log(self._pdf_dispatch(x, **kwargs))
+    @classmethod
+    def _logpdf_log_pdf(cls, x, **kwargs):
+        return np.log(cls._pdf_dispatch(x, **kwargs))
 
     @_set_invalid_nan
     def pdf(self, x, *, method=None):
         return self._pdf_dispatch(x, method=method, **self._parameters)
 
-    def _pdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_pdf'):
-            return self._pdf(x, **kwargs)
-        if (self._overrides('_logpdf') and method is None) or method == 'log/exp':
-            return self._pdf_exp_logpdf(x, **kwargs)
+    @classmethod
+    def _pdf_dispatch(cls, x, *, method=None, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_pdf'):
+            return cls._pdf(x, **kwargs)
+        if (cls._overrides('_logpdf') and method is None) or method == 'log/exp':
+            return cls._pdf_exp_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _pdf_exp_logpdf(self, x, **kwargs):
-        return np.exp(self._logpdf_dispatch(x, **kwargs))
+    @classmethod
+    def _pdf_exp_logpdf(cls, x, **kwargs):
+        return np.exp(cls._logpdf_dispatch(x, **kwargs))
 
     @_set_invalid_nan
     def logcdf(self, x, *, method=None):
