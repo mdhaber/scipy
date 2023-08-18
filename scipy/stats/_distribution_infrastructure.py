@@ -24,6 +24,7 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
+#  loc/scale should override _dispatch methods
 #  ensure that user overrides return correct shape and dtype
 #  make it possible to modify parameters
 #  Write `fit` method
@@ -68,6 +69,8 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #  accuracy benchmark suite
 #  Can we process the parameters before checking the parameterization? Then, it
 #   would be easy to accept any valid parameterization (e.g. `a` and `log_b`)
+#  Should caches be attributes so we can more easily ensure that they are not
+#   modified when caching is turned off?
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -1131,6 +1134,7 @@ class ContinuousDistribution:
             a, b = np.broadcast_arrays(a, b)
         return a[()], b[()]
 
+    @_set_invalid_nan_property
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
 
@@ -1155,6 +1159,7 @@ class ContinuousDistribution:
         res = self._quadrature(logintegrand, kwargs=kwargs, log=True)
         return _log_real_standardize(res + np.pi*1j)
 
+    @_set_invalid_nan_property
     def entropy(self, *, method=None):
         return self._entropy_dispatch(method=method, **self._parameters)
 
@@ -1177,6 +1182,7 @@ class ContinuousDistribution:
             return np.log(pdf)*pdf
         return -self._quadrature(integrand, kwargs=kwargs)
 
+    @_set_invalid_nan_property
     def median(self, *, method=None):
         return self._median_dispatch(method=method, **self._parameters)
 
@@ -1191,6 +1197,7 @@ class ContinuousDistribution:
     def _median_icdf(self, **kwargs):
         return self._icdf_dispatch(0.5, **kwargs)
 
+    @_set_invalid_nan_property
     def mode(self, *, method=None):
         return self._mode_dispatch(method=method, **self._parameters)
 
@@ -1510,6 +1517,8 @@ class ContinuousDistribution:
         return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
     def sample(self, shape=(), *, method=None, rng=None):
+        # needs output validation to ensure that developer returns correct
+        # dtype and shape
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = sample_shape + self._shape
         rng = self._validate_rng(rng) or self._rng or np.random.default_rng()
@@ -1838,51 +1847,72 @@ class ContinuousDistribution:
         res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
         return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
 
-    ## Easiest to do right now
+    # If we really don't like llf/dllf to create instances of the class, they
+    # could do something like this
+    #
     # @classmethod
     # def llf(cls, parameters, *, sample, axis=-1):
-    #     dist = cls(**parameters)
-    #     return np.sum(dist.logpdf(sample), axis=axis)
+    #     # still needs input validation of sample
+    #     parameterization = cls._identify_parameterization(parameters)
+    #     parameters, _ = cls._broadcast(parameters)
+    #     parameters, _, _, _ = cls._validate(parameterization, parameters)
+    #     parameters = cls._process_parameters(**parameters)
+    #
+    #     return cls._llf(parameters, sample=sample, axis=axis)
+    #
+    # @classmethod
+    # def _llf(cls, parameters, *, sample, axis):
+    #     logpdf = getattr(cls, '_logpdf', lambda cls, sample, **parameters: (
+    #         np.log(cls._pdf(cls, sample, **parameters))))
+    #     # _logpdf and _pdf should be classmethods
+    #     return np.sum(logpdf(cls, sample, **parameters), axis=axis)
+    #
+    # @classmethod
+    # def dllf(cls, parameters, *, sample, var):
+    #     # relies on current behavior of `_differentiate` to get shapes right
+    #     parameters = parameters.copy()
+    #     parameterization = cls._identify_parameterization(parameters)
+    #     parameters, _ = cls._broadcast(parameters)
+    #     parameters, _, _, _ = cls._validate(parameterization, parameters)
+    #     processed = cls._process_parameters(**parameters)
+    #
+    #     def f(x):
+    #         params = parameters.copy()
+    #         params[var] = x
+    #         processed = cls._process_parameters(**params)
+    #         res = cls._llf(processed, sample=sample[:, None], axis=0)
+    #         return np.reshape(res, x.shape)
+    #
+    #     return _differentiate(f, processed[var]).df
+    #
+    # Another thought is to use the approach below, but suppose the user
+    # accesses the method via an instance of the class. We could have a
+    # hybrid descriptor instead of `classmethod` that passes `llf` the
+    # class if accessed via a class and instance if accessed via an instance.
+    # Then `llf` could decide which of the two it is, and not create an
+    # instance if one was provided.
 
-    ## Works if user doesn't pass in parameters, or passes in the right parameters
-    # def llf(self, parameters=None, *, sample, axis=-1):
-    #     parameters = self._parameters if parameters is None else parameters
-    #     return np.sum(self._logpdf_dispatch(sample, **parameters))
-
-    ## Probably best, but we still need something to process parameters
-    ## I have been thinking that I should break out the part of __init__
-    ## that identifies the parameterization and validates parameters and
-    ## call that here.
     @classmethod
-    def llf(cls, parameters, *, sample, axis=-1):
+    def llf(cls, parameters={}, *, sample, axis=-1):
         # still needs input validation of sample
-        parameterization = cls._identify_parameterization(parameters)
-        parameters, _ = cls._broadcast(parameters)
-        parameters, _, _, _ = cls._validate(parameterization, parameters)
-        parameters = cls._process_parameters(**parameters)
+        dist = cls(**parameters)
+        return dist._llf(dist._parameters, sample=sample, axis=axis)
 
-        return cls._llf(parameters, sample=sample, axis=axis)
-
-    @classmethod
-    def _llf(cls, parameters, *, sample, axis):
-        logpdf = getattr(cls, '_logpdf', lambda cls, sample, **parameters: (
-            np.log(cls._pdf(cls, sample, **parameters))))
-        return np.sum(logpdf(cls, sample, **parameters), axis=axis)
+    def _llf(self, parameters, *, sample, axis):
+        return np.sum(self._logpdf_dispatch(sample, **parameters), axis=axis)
 
     @classmethod
     def dllf(cls, parameters, *, sample, var):
         # relies on current behavior of `_differentiate` to get shapes right
         parameters = parameters.copy()
-        parameterization = cls._identify_parameterization(parameters)
-        parameters, _ = cls._broadcast(parameters)
-        parameters, _, _, _ = cls._validate(parameterization, parameters)
-        processed = cls._process_parameters(**parameters)
+        dist = cls(**parameters)
+        processed = dist._parameters
 
         def f(x):
             params = parameters.copy()
             params[var] = x
             processed = cls._process_parameters(**params)
-            res = cls._llf(processed, sample=sample[:, None], axis=0)
+            res = dist._llf(processed, sample=sample[:, None], axis=0)
             return np.reshape(res, x.shape)
 
         return _differentiate(f, processed[var]).df
