@@ -840,6 +840,14 @@ class ContinuousDistribution:
 
     def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
                  rng=None, **parameters):
+        # We override __getattr__ and __setattr__ so distribution parameters
+        # can be modified safely. The attribute `_parameters` needs to exist
+        # for them to work, so take care of that.
+        super().__setattr__('_parameters', dict())
+        # This is _solely_ for the syntactic sugar of setting attributes with
+        # dot notation. We can avoid messing with these things by allowing
+        # the user to set attributes only via a method.
+
         self.tol = tol
         self.iv_policy = iv_policy
         self.cache_policy = (cache_policy if cache_policy is not None
@@ -851,6 +859,7 @@ class ContinuousDistribution:
         parameters = {key: val for key, val in parameters.items()
                       if val is not _null}
         self._parameters = parameters
+        self._parameterization = None
         self._invalid = np.asarray(False)
         self._any_invalid = False
         self._shape = tuple()
@@ -863,7 +872,6 @@ class ContinuousDistribution:
 
         if iv_policy == IV_POLICY.SKIP_ALL:
             # Not sure whether attributes should be set if we're skipping IV
-            # self._set_parameter_attributes()
             self._rng = rng
             return
 
@@ -883,14 +891,58 @@ class ContinuousDistribution:
         parameters, shape = self._broadcast(parameters)
         parameters, invalid, any_invalid, dtype = self._validate(
             parameterization, parameters)
+        # Let's try to process the parameters before validation. Then we can
+        # ensure that the shapes are consistent, and we can be more flexible
+        # about what parameterizations are accepted.
         parameters = self._process_parameters(**parameters)
 
         self._parameters = parameters
+        self._parameterization = parameterization
         self._invalid = invalid
         self._any_invalid = any_invalid
         self._shape = shape
         self._dtype = dtype
-        self._set_parameter_attributes()
+
+    # If we're uncomfortable with this, we can allow the user to get and
+    # set attributes with methods.
+    def __getattr__(self, item):
+        if '_parameters' not in vars(self):
+            raise AttributeError()
+
+        if item in self._parameters:
+            return self._parameters[item]
+
+        return super().__getattr__(item)
+
+    def __setattr__(self, key, value):
+        if key in self._parameters:
+            self._parameters[key] = value
+            self._original_parameters[key] = value
+            parameters = self._original_parameters
+
+            if self.iv_policy != IV_POLICY.SKIP_ALL:
+                # This is default behavior, which re-runs all the parameter
+                # validation whenever a parameter is modified. For many
+                # distributions, the domain of a parameter doesn't depend on
+                # other parameters, so parameters could safely be modified
+                # withuout validating the other parameters again. To handle
+                # these cases more efficiently, we could allow the developer
+                # to override this behavior.
+                self.reset_cache()
+                parameterization = (self._parameterization or
+                                    self._identify_parameterization(parameters))
+                parameters, shape = self._broadcast(parameters)
+                parameters, invalid, any_invalid, dtype = self._validate(
+                    parameterization, parameters)
+                parameters = self._process_parameters(**parameters)
+
+                self._parameters = parameters
+                self._invalid = invalid
+                self._any_invalid = any_invalid
+                self._shape = shape
+                self._dtype = dtype
+            return
+        super().__setattr__(key, value)
 
     def reset_cache(self):
         self._moment_raw_cache = {}
@@ -999,12 +1051,6 @@ class ContinuousDistribution:
                 parameters[parameter_name][invalid] = np.nan
 
         return parameters, invalid, any_invalid, dtype
-
-
-    def _set_parameter_attributes(self):
-        for name, val in self._parameters.items():
-            setattr(self, name, val)
-
 
     @classmethod
     def _process_parameters(cls, **kwargs):
