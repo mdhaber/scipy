@@ -894,6 +894,7 @@ class ContinuousDistribution:
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
+        self._support_cache = None
 
     def _set_parameter_attributes(self):
         for name, val in self._parameters.items():
@@ -1107,7 +1108,22 @@ class ContinuousDistribution:
         return ax
 
     def support(self):
-        return self._support(**self._parameters)
+        # We manually cache this instead of using `cached_property` for two
+        # reasons:
+        # - make it easier for users to remember what is a method and what is
+        #   an attribute: anything the user can set (e.g. an attribute, policy,
+        #   or tolerance) is an attribute; everything that can only return
+        #   information is a method.
+        # - If this were a `cached_property`, we couldn't update the value
+        #   when the distribution parameters change.
+        # Caching is important, though, because calls to _support take 1~2 µs
+        # even when `a` and `b` are already the same shape.
+        if self._support_cache is not None:
+            return self._support_cache
+        support = self._support(**self._parameters)
+        if self.cache_policy != CACHE_POLICY.NO_CACHE:
+            self._support_cache = support
+        return support
 
     @classmethod
     def _support(cls, **kwargs):
