@@ -687,7 +687,7 @@ def _set_invalid_nan(f):
                     "shape as the distribution parameters.")
                 raise ValueError(message) from e
 
-        low, high = endpoints.get(method_name, self.support)
+        low, high = endpoints.get(method_name, self.support())
         mask_low = x < low if method_name in replace_strict else x <= low
         mask_high = x > high if method_name in replace_strict else x >= high
         mask_invalid = (mask_low | mask_high)
@@ -727,7 +727,7 @@ def _set_invalid_nan(f):
             res[mask_high] = replace_high
 
         if any_endpoint:
-            a, b = self.support
+            a, b = self.support()
             if a.shape != shape:
                 a = np.array(np.broadcast_to(a, shape), copy=True)
                 b = np.array(np.broadcast_to(b, shape), copy=True)
@@ -893,6 +893,7 @@ class ContinuousDistribution:
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
+        self._support_cache = None
 
     def __repr__(self):
         class_name = self.__class__.__name__
@@ -1068,7 +1069,7 @@ class ContinuousDistribution:
         funcs = [funcs] if type(funcs) == str else funcs
 
         # Should also offer control over absolute `x` instead of probability
-        a, b = self.support
+        a, b = self.support()
         a = np.where(np.isinf(a), self.icdf(cdf), a)
         b = np.where(np.isinf(b), self.iccdf(ccdf), b)
         x = np.linspace(a, b, 300)
@@ -1106,15 +1107,29 @@ class ContinuousDistribution:
         ax.set_title(title)
         return ax
 
-    @cached_property
     def support(self):
-        return self._support(**self._parameters)
+        # We manually cache this instead of using `cached_property` for two
+        # reasons:
+        # - make it easier for users to remember what is a method and what is
+        #   an attribute: anything the user can set (e.g. an attribute, policy,
+        #   or tolerance) is an attribute; everything that can only return
+        #   information is a method.
+        # - If this were a `cached_property`, we couldn't update the value
+        #   when the distribution parameters change.
+        # Caching is important, though, because calls to _support take 1~2 µs
+        # even when `a` and `b` are already the same shape.
+        if self._support_cache is not None:
+            return self._support_cache
+        support = self._support(**self._parameters)
+        if self.cache_policy != CACHE_POLICY.NO_CACHE:
+            self._support_cache = support
+        return support
 
     def _support(self, **kwargs):
         a, b = self._variable.domain.get_numerical_endpoints(kwargs)
         if a.shape != b.shape:
             a, b = np.broadcast_arrays(a, b)
-        return a, b
+        return a[()], b[()]
 
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
@@ -1965,7 +1980,7 @@ class ShiftedScaledDistribution(ContinuousDistribution):
 
     @cached_property
     def support(self):
-        a, b = self._dist.support
+        a, b = self._dist.support()
         a, b = self._itransform(a), self._itransform(b)
         sign = np.broadcast_to(self.scale, a.shape) > 0
         return np.where(sign, a, b), np.where(sign, b, a)
