@@ -1127,48 +1127,54 @@ class ContinuousDistribution:
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
 
-    def _logentropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logentropy'):
-            return self._logentropy(**kwargs)
-        elif (self.tol is _null and self._overrides('_entropy') and method is None) or method=='log/exp':
-            return self._logentropy_log_entropy(**kwargs)
+    @classmethod
+    def _logentropy_dispatch(cls, method=None, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_logentropy'):
+            return cls._logentropy(**kwargs)
+        elif (cls.tol is _null and cls._overrides('_entropy') and method is None) or method=='log/exp':
+            return cls._logentropy_log_entropy(**kwargs)
         elif method in {'quadrature', None}:
-            return self._logentropy_integrate_logpdf(**kwargs)
+            return cls._logentropy_integrate_logpdf(**kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _logentropy_log_entropy(self, **kwargs):
-        res = np.log(self._entropy_dispatch(**kwargs) + 0j)
+    @classmethod
+    def _logentropy_log_entropy(cls, **kwargs):
+        res = np.log(cls._entropy_dispatch(**kwargs) + 0j)
         return _log_real_standardize(res)
 
-    def _logentropy_integrate_logpdf(self, **kwargs):
+    @classmethod
+    def _logentropy_integrate_logpdf(cls, **kwargs):
         def logintegrand(x, **kwargs):
-            logpdf = self._logpdf_dispatch(x, **kwargs)
+            logpdf = cls._logpdf_dispatch(x, **kwargs)
             return logpdf + np.log(0j+logpdf)
-        res = self._quadrature(logintegrand, kwargs=kwargs, log=True)
+        res = cls._quadrature(logintegrand, kwargs=kwargs, log=True)
         return _log_real_standardize(res + np.pi*1j)
 
     def entropy(self, *, method=None):
         return self._entropy_dispatch(method=method, **self._parameters)
 
-    def _entropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_entropy'):
-            return self._entropy(**kwargs)
-        elif (self._overrides('_logentropy') and method is None) or method=='log/exp':
-            return self._entropy_exp_logentropy(**kwargs)
+    @classmethod
+    def _entropy_dispatch(cls, method=None, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_entropy'):
+            return cls._entropy(**kwargs)
+        elif (cls._overrides('_logentropy') and method is None) or method=='log/exp':
+            return cls._entropy_exp_logentropy(**kwargs)
         elif method in {'quadrature', None}:
-            return self._entropy_integrate_pdf(**kwargs)
+            return cls._entropy_integrate_pdf(**kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _entropy_exp_logentropy(self, **kwargs):
-        return np.exp(self._logentropy_dispatch(**kwargs))
+    @classmethod
+    def _entropy_exp_logentropy(cls, **kwargs):
+        return np.exp(cls._logentropy_dispatch(**kwargs))
 
-    def _entropy_integrate_pdf(self, **kwargs):
+    @classmethod
+    def _entropy_integrate_pdf(cls, **kwargs):
         def integrand(x, **kwargs):
-            pdf = self._pdf_dispatch(x, **kwargs)
+            pdf = cls._pdf_dispatch(x, **kwargs)
             return np.log(pdf)*pdf
-        return -self._quadrature(integrand, kwargs=kwargs)
+        return -cls._quadrature(integrand, kwargs=kwargs)
 
     def median(self, *, method=None):
         return self._median_dispatch(method=method, **self._parameters)

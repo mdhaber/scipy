@@ -78,9 +78,11 @@ class Normal(ContinuousDistribution):
     def _ilogccdf(self, x, **kwargs):
         return -special.ndtri_exp(x)
 
+    @classmethod
     def _entropy(self, **kwargs):
         return (1 + np.log(2*np.pi))/2
 
+    @classmethod
     def _logentropy(self, **kwargs):
         return np.log1p(np.log(2*np.pi)) - np.log(2)
 
