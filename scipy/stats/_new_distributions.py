@@ -54,27 +54,35 @@ class Normal(ContinuousDistribution):
     def _pdf(cls, x, **kwargs):
         return 1/np.sqrt(2*np.pi) * np.exp(-x**2/2)
 
+    @classmethod
     def _logcdf(self, x, **kwargs):
         return special.log_ndtr(x)
 
+    @classmethod
     def _cdf(self, x, **kwargs):
         return special.ndtr(x)
 
+    @classmethod
     def _logccdf(self, x, **kwargs):
         return special.log_ndtr(-x)
 
+    @classmethod
     def _ccdf(self, x, **kwargs):
         return special.ndtr(-x)
 
+    @classmethod
     def _icdf(self, x, **kwargs):
         return special.ndtri(x)
 
+    @classmethod
     def _ilogcdf(self, x, **kwargs):
         return special.ndtri_exp(x)
 
+    @classmethod
     def _iccdf(self, x, **kwargs):
         return -special.ndtri(x)
 
+    @classmethod
     def _ilogccdf(self, x, **kwargs):
         return -special.ndtri_exp(x)
 
@@ -86,6 +94,7 @@ class Normal(ContinuousDistribution):
     def _logentropy(self, **kwargs):
         return np.log1p(np.log(2*np.pi)) - np.log(2)
 
+    @classmethod
     def _median(self, **kwargs):
         return 0
 
@@ -102,6 +111,7 @@ class Normal(ContinuousDistribution):
     def _moment_standard(self, order, **kwargs):
         return self._moment_raw(order, **kwargs)
 
+    @classmethod
     def _sample(self, sample_shape, full_shape, rng, **kwargs):
         return rng.normal(size=full_shape)
 
@@ -149,6 +159,7 @@ class LogUniform(ContinuousDistribution):
     def _pdf(cls, x, *, log_a, log_b, **kwargs):
         return ((log_b - log_a)*x)**-1
 
+    # @classmethod
     # def _cdf(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
 

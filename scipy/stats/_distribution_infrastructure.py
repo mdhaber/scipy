@@ -1195,16 +1195,18 @@ class ContinuousDistribution:
     def median(self, *, method=None):
         return self._median_dispatch(method=method, **self._parameters)
 
-    def _median_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_median'):
-            return np.asarray(self._median(**kwargs))[()]
+    @classmethod
+    def _median_dispatch(cls, method=None, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_median'):
+            return np.asarray(cls._median(**kwargs))[()]
         elif method in {None, 'icdf'}:
-            return self._median_icdf(**kwargs)
+            return cls._median_icdf(**kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _median_icdf(self, **kwargs):
-        return self._icdf_dispatch(0.5, **kwargs)
+    @classmethod
+    def _median_icdf(cls, **kwargs):
+        return cls._icdf_dispatch(0.5, **kwargs)
 
     def mode(self, *, method=None):
         return self._mode_dispatch(method=method, **self._parameters)
@@ -1258,7 +1260,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logpdf(self, x, *, method=None):
-        return self._logpdf_dispatch(x, method=method, tol=self._tol, **self._parameters)
+        return self._logpdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
 
     @classmethod
     def _logpdf_dispatch(cls, x, *, method=None, tol=_null, **kwargs):
@@ -1292,241 +1294,272 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logcdf(self, x, *, method=None):
-        return self._logcdf_dispatch(x, method=method, **self._parameters)
+        return self._logcdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
 
-    def _logcdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logcdf'):
-            return self._logcdf(x, **kwargs)
-        elif (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
-            return self._logcdf_log_cdf(x, **kwargs)
-        elif (self._overrides('_logccdf') and method is None) or method=='complementarity':
-            return self._logcdf_log1mexpccdf(x, **kwargs)
+    @classmethod
+    def _logcdf_dispatch(cls, x, *, method=None, tol=_null, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_logcdf'):
+            return cls._logcdf(x, **kwargs)
+        elif (tol is _null and cls._overrides('_cdf') and method is None) or method=='log/exp':
+            return cls._logcdf_log_cdf(x, **kwargs)
+        elif (cls._overrides('_logccdf') and method is None) or method=='complementarity':
+            return cls._logcdf_log1mexpccdf(x, **kwargs)
         elif method in {'quadrature', None}:
-            return self._logcdf_integrate_logpdf(x, **kwargs)
+            return cls._logcdf_integrate_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _logcdf_log_cdf(self, x, **kwargs):
-        return np.log(self._cdf_dispatch(x, **kwargs))
+    @classmethod
+    def _logcdf_log_cdf(cls, x, **kwargs):
+        return np.log(cls._cdf_dispatch(x, **kwargs))
 
-    def _logcdf_log1mexpccdf(self, x, **kwargs):
-        return _log1mexp(self._logccdf_dispatch(x, **kwargs))
+    @classmethod
+    def _logcdf_log1mexpccdf(cls, x, **kwargs):
+        return _log1mexp(cls._logccdf_dispatch(x, **kwargs))
 
-
-    def _logcdf_integrate_logpdf(self, x, **kwargs):
-        a, _ = self._support(**kwargs)
-        return self._quadrature(self._logpdf_dispatch, limits=(a, x),
+    @classmethod
+    def _logcdf_integrate_logpdf(cls, x, **kwargs):
+        a, _ = cls._support(**kwargs)
+        return cls._quadrature(cls._logpdf_dispatch, limits=(a, x),
                                 kwargs=kwargs, log=True)
 
-    def cdf(self, x, y=None, *, method=None):
-        if y is None:
-            return self._cdf_1arg(x, method=method)
-        else:
-            return self._cdf_2arg(x, y, method=method)
-
-    def _cdf_2arg(self, x, y, *, method=None):
-        # Draft logic here. Not really correct, and method names are poor.
-        if ((self._tol is _null and self._overrides('_cdf')
-             and self._overrides('_ccdf') and method is None)
-                or method=='formula'):
-            return self._cdf_2arg_formula(x, y)
-        elif ((self._overrides('_logcdf')
-               and self._overrides('_logccdf') and method is None)
-              or method=='log/exp'):
-            return self._cdf_2arg_logexp(x, y)
-        else:
-            return self._cdf_2arg_quadrature(x, y)
-
-    def _cdf_2arg_formula(self, x, y):
-        # Quick draft. Lots of optimizations possible.
-        # - do (custom) input validation once instead of four times
-        # - lazy evaluation of ccdf only where it's needed
-        # - add logic/options for using logcdf, quadrature
-        # - we could stack x and y to reduce number of function calls
-        cdf_x = self.cdf(x)
-        cdf_y = self.cdf(y)
-        ccdf_x = self.ccdf(x)
-        ccdf_y = self.ccdf(y)
-        i = (cdf_x < 0.5) & (cdf_y < 0.5)
-        return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
-
-    def _cdf_2arg_logexp(self, x, y):
-        logcdf_x = self.logcdf(x)
-        logcdf_y = self.logcdf(y)
-        logccdf_x = self.logccdf(x)
-        logccdf_y = self.logccdf(y)
-        i = (logcdf_x < -1) & (logcdf_y < -1)
-        return np.real(np.exp(np.where(i, _logexpxmexpy(logcdf_y, logcdf_x),
-                                       _logexpxmexpy(logccdf_x, logccdf_y))))
-
-    def _cdf_2arg_quadrature(self, x, y):
-        x, y = np.broadcast_arrays(x, y)
-        shape = np.broadcast_shapes(x.shape, self._shape)
-        x = np.broadcast_to(x, self._shape)
-        y = np.broadcast_to(y, self._shape)
-        return self._quadrature(self._pdf_dispatch, limits=(x, y),
-                                kwargs=self._parameters)
-
     @_set_invalid_nan
-    def _cdf_1arg(self, x, *, method):
-        return self._cdf_dispatch(x, method=method, **self._parameters)
+    def cdf(self, x, *, method=None):
+        return self._cdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
 
-    def _cdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_cdf'):
-            return self._cdf(x, **kwargs)
-        elif (self._overrides('_logcdf') and method is None) or method=='log/exp':
-            return self._cdf_exp_logcdf(x, **kwargs)
-        elif (self._tol is _null and self._overrides('_ccdf') and method is None) or method=='complementarity':
-            return self._cdf_1mccdf(x, **kwargs)
+    # def cdf(self, x, y=None, *, method=None):
+    #     if y is None:
+    #         return self._cdf_1arg(x, method=method)
+    #     else:
+    #         return self._cdf_2arg(x, y, method=method)
+
+    # def _cdf_2arg(self, x, y, *, method=None):
+    #     # Draft logic here. Not really correct, and method names are poor.
+    #     if ((self.tol is _null and self._overrides('_cdf')
+    #          and self._overrides('_ccdf') and method is None)
+    #             or method=='formula'):
+    #         return self._cdf_2arg_formula(x, y)
+    #     elif ((self._overrides('_logcdf')
+    #            and self._overrides('_logccdf') and method is None)
+    #           or method=='log/exp'):
+    #         return self._cdf_2arg_logexp(x, y)
+    #     else:
+    #         return self._cdf_2arg_quadrature(x, y)
+    #
+    # def _cdf_2arg_formula(self, x, y):
+    #     # Quick draft. Lots of optimizations possible.
+    #     # - do (custom) input validation once instead of four times
+    #     # - lazy evaluation of ccdf only where it's needed
+    #     # - add logic/options for using logcdf, quadrature
+    #     # - we could stack x and y to reduce number of function calls
+    #     cdf_x = self.cdf(x)
+    #     cdf_y = self.cdf(y)
+    #     ccdf_x = self.ccdf(x)
+    #     ccdf_y = self.ccdf(y)
+    #     i = (cdf_x < 0.5) & (cdf_y < 0.5)
+    #     return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
+    #
+    # def _cdf_2arg_logexp(self, x, y):
+    #     logcdf_x = self.logcdf(x)
+    #     logcdf_y = self.logcdf(y)
+    #     logccdf_x = self.logccdf(x)
+    #     logccdf_y = self.logccdf(y)
+    #     i = (logcdf_x < -1) & (logcdf_y < -1)
+    #     return np.real(np.exp(np.where(i, _logexpxmexpy(logcdf_y, logcdf_x),
+    #                                    _logexpxmexpy(logccdf_x, logccdf_y))))
+    #
+    # def _cdf_2arg_quadrature(self, x, y):
+    #     x, y = np.broadcast_arrays(x, y)
+    #     shape = np.broadcast_shapes(x.shape, self._shape)
+    #     x = np.broadcast_to(x, self._shape)
+    #     y = np.broadcast_to(y, self._shape)
+    #     return self._quadrature(self._pdf_dispatch, limits=(x, y),
+    #                             kwargs=self._parameters)
+    #
+    # @_set_invalid_nan
+    # def _cdf_1arg(self, x, *, method):
+    #     return self._cdf_dispatch(x, method=method, **self._parameters)
+
+    @classmethod
+    def _cdf_dispatch(cls, x, *, method=None, tol=_null, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_cdf'):
+            return cls._cdf(x, **kwargs)
+        elif (cls._overrides('_logcdf') and method is None) or method=='log/exp':
+            return cls._cdf_exp_logcdf(x, **kwargs)
+        elif (tol is _null and cls._overrides('_ccdf') and method is None) or method=='complementarity':
+            return cls._cdf_1mccdf(x, **kwargs)
         elif method in {'quadrature', None}:
-            return self._cdf_integrate_pdf(x, **kwargs)
+            return cls._cdf_integrate_pdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _cdf_exp_logcdf(self, x, **kwargs):
-        return np.exp(self._logcdf_dispatch(x, **kwargs))
+    @classmethod
+    def _cdf_exp_logcdf(cls, x, **kwargs):
+        return np.exp(cls._logcdf_dispatch(x, **kwargs))
 
-    def _cdf_1mccdf(self, x, **kwargs):
-        return 1 - self._ccdf_dispatch(x, **kwargs)
+    @classmethod
+    def _cdf_1mccdf(cls, x, **kwargs):
+        return 1 - cls._ccdf_dispatch(x, **kwargs)
 
-    def _cdf_integrate_pdf(self, x, **kwargs):
-        a, _ = self._support(**kwargs)
-        return self._quadrature(self._pdf_dispatch, limits=(a, x),
+    @classmethod
+    def _cdf_integrate_pdf(cls, x, **kwargs):
+        a, _ = cls._support(**kwargs)
+        return cls._quadrature(cls._pdf_dispatch, limits=(a, x),
                                 kwargs=kwargs)
 
     @_set_invalid_nan
     def logccdf(self, x, *, method=None):
-        return self._logccdf_dispatch(x, method=method, **self._parameters)
+        return self._logccdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
 
-    def _logccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logccdf'):
-            return self._logccdf(x, **kwargs)
-        if (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
-            return self._logccdf_log_ccdf(x, **kwargs)
-        elif (self._overrides('_logcdf') and method is None) or method=='complementarity':
-            return self._logccdf_log1mexpcdf(x, **kwargs)
+    @classmethod
+    def _logccdf_dispatch(cls, x, method=None, tol=_null, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_logccdf'):
+            return cls._logccdf(x, **kwargs)
+        if (tol is _null and cls._overrides('_cdf') and method is None) or method=='log/exp':
+            return cls._logccdf_log_ccdf(x, **kwargs)
+        elif (cls._overrides('_logcdf') and method is None) or method=='complementarity':
+            return cls._logccdf_log1mexpcdf(x, **kwargs)
         elif method in {'quadrature', None}:
-            return self._logccdf_integrate_logpdf(x, **kwargs)
+            return cls._logccdf_integrate_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _logccdf_log_ccdf(self, x, **kwargs):
-        return np.log(self._ccdf_dispatch(x, **kwargs))
+    @classmethod
+    def _logccdf_log_ccdf(cls, x, **kwargs):
+        return np.log(cls._ccdf_dispatch(x, **kwargs))
 
-    def _logccdf_log1mexpcdf(self, x, **kwargs):
-        return _log1mexp(self._logcdf_dispatch(x, **kwargs))
+    @classmethod
+    def _logccdf_log1mexpcdf(cls, x, **kwargs):
+        return _log1mexp(cls._logcdf_dispatch(x, **kwargs))
 
-    def _logccdf_integrate_logpdf(self, x, **kwargs):
-        _, b = self._support(**kwargs)
-        return self._quadrature(self._logpdf_dispatch, limits=(x, b),
+    @classmethod
+    def _logccdf_integrate_logpdf(cls, x, **kwargs):
+        _, b = cls._support(**kwargs)
+        return cls._quadrature(cls._logpdf_dispatch, limits=(x, b),
                                 kwargs=kwargs, log=True)
 
     @_set_invalid_nan
     def ccdf(self, x, *, method=None):
-        return self._ccdf_dispatch(x, method=method, **self._parameters)
+        return self._ccdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
 
-    def _ccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_ccdf'):
-            return self._ccdf(x, **kwargs)
-        elif (self._overrides('_logccdf') and method is None) or method=='log/exp':
-            return self._ccdf_exp_logccdf(x, **kwargs)
-        elif (self._tol is _null and self._overrides('_cdf') and method is None) or method=='complementarity':
-            return self._ccdf_1mcdf(x, **kwargs)
+    @classmethod
+    def _ccdf_dispatch(cls, x, method=None, tol=_null, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_ccdf'):
+            return cls._ccdf(x, **kwargs)
+        elif (cls._overrides('_logccdf') and method is None) or method=='log/exp':
+            return cls._ccdf_exp_logccdf(x, **kwargs)
+        elif (tol is _null and cls._overrides('_cdf') and method is None) or method=='complementarity':
+            return cls._ccdf_1mcdf(x, **kwargs)
         elif method in {'quadrature', None}:
-            return self._ccdf_integrate_pdf(x, **kwargs)
+            return cls._ccdf_integrate_pdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _ccdf_exp_logccdf(self, x, **kwargs):
-        return np.exp(self._logccdf_dispatch(x, **kwargs))
+    @classmethod
+    def _ccdf_exp_logccdf(cls, x, **kwargs):
+        return np.exp(cls._logccdf_dispatch(x, **kwargs))
 
-    def _ccdf_1mcdf(self, x, **kwargs):
-        return 1 - self._cdf_dispatch(x, **kwargs)
+    @classmethod
+    def _ccdf_1mcdf(cls, x, **kwargs):
+        return 1 - cls._cdf_dispatch(x, **kwargs)
 
-    def _ccdf_integrate_pdf(self, x, **kwargs):
-        _, b = self._support(**kwargs)
-        return self._quadrature(self._pdf_dispatch, limits=(x, b),
+    @classmethod
+    def _ccdf_integrate_pdf(cls, x, **kwargs):
+        _, b = cls._support(**kwargs)
+        return cls._quadrature(cls._pdf_dispatch, limits=(x, b),
                                 kwargs=kwargs)
 
     @_set_invalid_nan
     def ilogcdf(self, x, *, method=None):
         return self._ilogcdf_dispatch(x, method=method, **self._parameters)
 
-    def _ilogcdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_ilogcdf'):
-            return self._ilogcdf(x, **kwargs)
-        elif (self._overrides('_ilogccdf') and method is None) or method=='complementarity':
-            return self._ilogcdf_ilogccdf1m(x, **kwargs)
+    @classmethod
+    def _ilogcdf_dispatch(cls, x, method=None, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_ilogcdf'):
+            return cls._ilogcdf(x, **kwargs)
+        elif (cls._overrides('_ilogccdf') and method is None) or method=='complementarity':
+            return cls._ilogcdf_ilogccdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
-            return self._ilogcdf_solve_logcdf(x, **kwargs)
+            return cls._ilogcdf_solve_logcdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _ilogcdf_ilogccdf1m(self, x, **kwargs):
-        return self._ilogccdf_dispatch(_log1mexp(x), **kwargs)
+    @classmethod
+    def _ilogcdf_ilogccdf1m(cls, x, **kwargs):
+        return cls._ilogccdf_dispatch(_log1mexp(x), **kwargs)
 
-    def _ilogcdf_solve_logcdf(self, x, **kwargs):
-        return self._solve_bounded(self._logcdf_dispatch, x, kwargs=kwargs)
+    @classmethod
+    def _ilogcdf_solve_logcdf(cls, x, **kwargs):
+        return cls._solve_bounded(cls._logcdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
     def icdf(self, x, *, method=None):
-        return self._icdf_dispatch(x, method=method, **self._parameters)
+        return self._icdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
 
-    def _icdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_icdf'):
-            return self._icdf(x, **kwargs)
-        elif (self.tol is _null and self._overrides('_iccdf') and method is None) or method=='complementarity':
-            return self._icdf_iccdf1m(x, **kwargs)
+    @classmethod
+    def _icdf_dispatch(cls, x, method=None, tol=_null, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_icdf'):
+            return cls._icdf(x, **kwargs)
+        elif (tol is _null and cls._overrides('_iccdf') and method is None) or method=='complementarity':
+            return cls._icdf_iccdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
-            return self._icdf_solve_cdf(x, **kwargs)
+            return cls._icdf_solve_cdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _icdf_iccdf1m(self, x, **kwargs):
-        return self._iccdf_dispatch(1 - x, **kwargs)
+    @classmethod
+    def _icdf_iccdf1m(cls, x, **kwargs):
+        return cls._iccdf_dispatch(1 - x, **kwargs)
 
-    def _icdf_solve_cdf(self, x, **kwargs):
-        return self._solve_bounded(self._cdf_dispatch, x, kwargs=kwargs)
+    @classmethod
+    def _icdf_solve_cdf(cls, x, **kwargs):
+        return cls._solve_bounded(cls._cdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
     def ilogccdf(self, x, *, method=None):
         return self._ilogccdf_dispatch(x, method=method, **self._parameters)
 
-    def _ilogccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_ilogccdf'):
-            return self._ilogccdf(x, **kwargs)
-        elif (self._overrides('_ilogcdf') and method is None) or method=='complementarity':
-            return self._ilogccdf_ilogcdf1m(x, **kwargs)
+    @classmethod
+    def _ilogccdf_dispatch(cls, x, method=None, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_ilogccdf'):
+            return cls._ilogccdf(x, **kwargs)
+        elif (cls._overrides('_ilogcdf') and method is None) or method=='complementarity':
+            return cls._ilogccdf_ilogcdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
-            return self._ilogccdf_solve_logccdf(x, **kwargs)
+            return cls._ilogccdf_solve_logccdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _ilogccdf_ilogcdf1m(self, x, **kwargs):
-        return self._ilogcdf_dispatch(_log1mexp(x), **kwargs)
+    @classmethod
+    def _ilogccdf_ilogcdf1m(cls, x, **kwargs):
+        return cls._ilogcdf_dispatch(_log1mexp(x), **kwargs)
 
-    def _ilogccdf_solve_logccdf(self, x, **kwargs):
-        return self._solve_bounded(self._logccdf_dispatch, x, kwargs=kwargs)
+    @classmethod
+    def _ilogccdf_solve_logccdf(cls, x, **kwargs):
+        return cls._solve_bounded(cls._logccdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
     def iccdf(self, x, *, method=None):
-        return self._iccdf_dispatch(x, method=method, **self._parameters)
+        return self._iccdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
 
-    def _iccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_iccdf'):
-            return self._iccdf(x, **kwargs)
-        elif (self.tol is _null and self._overrides('_icdf') and method is None) or method=='complementarity':
-            return self._iccdf_icdf1m(x, **kwargs)
+    @classmethod
+    def _iccdf_dispatch(cls, x, method=None, tol=_null, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_iccdf'):
+            return cls._iccdf(x, **kwargs)
+        elif (tol is _null and cls._overrides('_icdf') and method is None) or method=='complementarity':
+            return cls._iccdf_icdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
-            return self._iccdf_solve_ccdf(x, **kwargs)
+            return cls._iccdf_solve_ccdf(x, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _iccdf_icdf1m(self, x, **kwargs):
-        return self._icdf_dispatch(1 - x, **kwargs)
+    @classmethod
+    def _iccdf_icdf1m(cls, x, **kwargs):
+        return cls._icdf_dispatch(1 - x, **kwargs)
 
-    def _iccdf_solve_ccdf(self, x, **kwargs):
-        return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
+    @classmethod
+    def _iccdf_solve_ccdf(cls, x, **kwargs):
+        return cls._solve_bounded(cls._ccdf_dispatch, x, kwargs=kwargs)
 
     def sample(self, shape=(), *, method=None, rng=None):
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
@@ -1535,19 +1568,21 @@ class ContinuousDistribution:
         return self._sample_dispatch(sample_shape, full_shape, method=method,
                                      rng=rng, **self._parameters)
 
-    def _sample_dispatch(self, sample_shape, full_shape, *, method, rng, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_sample'):
-            return np.asarray(self._sample(sample_shape, full_shape, rng=rng,
+    @classmethod
+    def _sample_dispatch(cls, sample_shape, full_shape, *, method, rng, **kwargs):
+        if method in {None, 'formula'} and cls._overrides('_sample'):
+            return np.asarray(cls._sample(sample_shape, full_shape, rng=rng,
                                            **kwargs))[()]
         elif method in {None, 'inverse_transform'}:
-            return self._sample_inverse_transform(sample_shape, full_shape,
+            return cls._sample_inverse_transform(sample_shape, full_shape,
                                                   rng=rng, **kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _sample_inverse_transform(self, _, full_shape, *, rng, **kwargs):
+    @classmethod
+    def _sample_inverse_transform(cls, _, full_shape, *, rng, **kwargs):
         uniform = rng.uniform(size=full_shape)
-        return self._icdf_dispatch(uniform, **kwargs)
+        return cls._icdf_dispatch(uniform, **kwargs)
 
     def _logmoment(self, order=1, *, logcenter=None, standardized=False):
         # make this private until it is worked into moment
