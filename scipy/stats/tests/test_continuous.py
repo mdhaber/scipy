@@ -273,7 +273,7 @@ def check_nans_and_edges(dist, fname, arg, res):
     assert_equal(res[~valid_parameters], np.nan)
     assert_equal(res[nan_arg], np.nan)
 
-    a, b = dist.support()
+    a, b = dist.support
     a = np.broadcast_to(a, res.shape)
     b = np.broadcast_to(b, res.shape)
 
@@ -508,7 +508,7 @@ def classify_arg(dist, arg, arg_domain):
         parameter_values=dist._parameters)
 
     # # Not sure if this belongs here
-    # adist, bdist = dist.support()
+    # adist, bdist = dist.support
     # assert_equal(a[~dist._invalid], adist[~dist._invalid])
     # assert_equal(b[~dist._invalid], bdist[~dist._invalid])
     # assert_equal(np.isnan(adist), dist._invalid)

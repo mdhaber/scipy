@@ -32,12 +32,11 @@ class OrderStatisticDistribution(ContinuousDistribution):
         self._shape = np.broadcast_shapes(self._shape, dist._shape)
         self._invalid = np.broadcast_to(self._invalid, self._shape)
 
-    @classmethod
-    def _pdf(cls, x, r, n, **kwargs):
+    def _pdf(self, x, r, n, **kwargs):
         factor = factorial(n) / (factorial(r-1) * factorial(n-r))
-        fX = cls._dist._pdf_dispatch(x, **kwargs)
-        FX = cls._dist._cdf_dispatch(x, **kwargs)
-        cFX = cls._dist._ccdf_dispatch(x, **kwargs)
+        fX = self._dist._pdf_dispatch(x, **kwargs)
+        FX = self._dist._cdf_dispatch(x, **kwargs)
+        cFX = self._dist._ccdf_dispatch(x, **kwargs)
         return factor * fX * FX**(r-1) * cFX**(n-r)
 
 
@@ -47,59 +46,45 @@ class Normal(ContinuousDistribution):
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
 
-    @classmethod
-    def _logpdf(cls, x, **kwargs):
+    def _logpdf(self, x, **kwargs):
         return -(np.log(2*np.pi)/2 + x**2/2)
 
-    @classmethod
-    def _pdf(cls, x, **kwargs):
+    def _pdf(self, x, **kwargs):
         return 1/np.sqrt(2*np.pi) * np.exp(-x**2/2)
 
-    @classmethod
     def _logcdf(self, x, **kwargs):
         return special.log_ndtr(x)
 
-    @classmethod
     def _cdf(self, x, **kwargs):
         return special.ndtr(x)
 
-    @classmethod
     def _logccdf(self, x, **kwargs):
         return special.log_ndtr(-x)
 
-    @classmethod
     def _ccdf(self, x, **kwargs):
         return special.ndtr(-x)
 
-    @classmethod
     def _icdf(self, x, **kwargs):
         return special.ndtri(x)
 
-    @classmethod
     def _ilogcdf(self, x, **kwargs):
         return special.ndtri_exp(x)
 
-    @classmethod
     def _iccdf(self, x, **kwargs):
         return -special.ndtri(x)
 
-    @classmethod
     def _ilogccdf(self, x, **kwargs):
         return -special.ndtri_exp(x)
 
-    @classmethod
     def _entropy(self, **kwargs):
         return (1 + np.log(2*np.pi))/2
 
-    @classmethod
     def _logentropy(self, **kwargs):
         return np.log1p(np.log(2*np.pi)) - np.log(2)
 
-    @classmethod
     def _median(self, **kwargs):
         return 0
 
-    @classmethod
     def _mode(self, **kwargs):
         return 0
 
@@ -113,7 +98,6 @@ class Normal(ContinuousDistribution):
     def _moment_standard(self, order, **kwargs):
         return self._moment_raw(order, **kwargs)
 
-    @classmethod
     def _sample(self, sample_shape, full_shape, rng, **kwargs):
         return rng.normal(size=full_shape)
 
@@ -157,11 +141,9 @@ class LogUniform(ContinuousDistribution):
     # def _logpdf(self, x, *, log_a, log_b, **kwargs):
     #     return -np.log(x) - np.log(log_b - log_a)
 
-    @classmethod
-    def _pdf(cls, x, *, log_a, log_b, **kwargs):
+    def _pdf(self, x, *, log_a, log_b, **kwargs):
         return ((log_b - log_a)*x)**-1
 
-    # @classmethod
     # def _cdf(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
 

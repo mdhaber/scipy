@@ -24,8 +24,6 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  dist.mean is a 0d array - why isn't that caught by tests?
-#  loc/scale should override _dispatch methods
 #  ensure that user overrides return correct shape and dtype
 #  make it possible to modify parameters
 #  Write `fit` method
@@ -126,39 +124,6 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #   - result_dtype
 #   - is_subdtype
 #   It is much faster to check whether these are necessary than to do them.
-#
-#   I've designated most private methods as classmethods. The driving reason
-#   is that we'd like for `llf` and `dllf` to be classmethods rather than
-#   instance methods because the arguments of those functions, mathematically,
-#   are the shape parameters, so it is a bit backwards to have to instantiate
-#   a distribution in order to call them. Similarly, `fit` makes more sense
-#   as a classmethod unless it would modify an existing distribution. So
-#   these methods should be able to call `_pdf_dispatch` or `_logpdf_dispatch`
-#   to do MLE, and they should be able to call the cdf dispatch methods for
-#   maximum product spacing, which would require that the these methods be
-#   classmethods, too. I went ahead and made the inverse methods classmethods
-#   for good measure. To be honest, the moment methods would need to be
-#   classmethods if we want to support method of moments, but this would
-#   require that the cache be passed around to basically all the methods, and
-#   this would get a little cumbersome, so I'm holding off on that. The other
-#   reason is that it might be good to expose a stateless interface at some
-#   point per the concerns expressed in gh-15928. Already, most of the private
-#   functions have little dependence on the state because all the pre-processed
-#   distribution parameters passed to them so that they behave as strictly
-#   elementwise functions (as needed by the integration, rootfinding,
-#   minimization, and differentiation functions). So making them classmethods
-#   helps ensure that no unnecessary state dependence creeps into them.
-#   There are two downsides to classmethods:
-#   - all the methods need the decorator, which just looks annoying
-#   - they may be slightly slower to execute, based on limited testing
-#     and what I've read.
-#   So note that if we want to reverse this decision, it's very easy to
-#   convert classmethods back to instance methods. At a minimum, all that is
-#   required is to remove the decorator. It is technically optional to
-#   replace the name `cls` with `self`. The only other things to do might be
-#   to adjust PEP8 whitespace (since `cls` is one character shorter than
-#   `self`) and rely on state rather than passing in arguments (e.g. `tol`)
-#   where convenient.
 
 
 class _Domain:
@@ -681,6 +646,7 @@ class _Parameterization:
 
         return parameter_values
 
+
 def _set_invalid_nan(f):
     endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
@@ -690,7 +656,6 @@ def _set_invalid_nan(f):
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
-    # @functools.wraps
     def filtered(self, x, *args, iv_policy=None, **kwargs):
         if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, x, *args, **kwargs)
@@ -722,7 +687,7 @@ def _set_invalid_nan(f):
                     "shape as the distribution parameters.")
                 raise ValueError(message) from e
 
-        low, high = endpoints.get(method_name, self.support())
+        low, high = endpoints.get(method_name, self.support)
         mask_low = x < low if method_name in replace_strict else x <= low
         mask_high = x > high if method_name in replace_strict else x >= high
         mask_invalid = (mask_low | mask_high)
@@ -762,7 +727,7 @@ def _set_invalid_nan(f):
             res[mask_high] = replace_high
 
         if any_endpoint:
-            a, b = self.support()
+            a, b = self.support
             if a.shape != shape:
                 a = np.array(np.broadcast_to(a, shape), copy=True)
                 b = np.array(np.broadcast_to(b, shape), copy=True)
@@ -783,7 +748,6 @@ def _set_invalid_nan(f):
 
 def _set_invalid_nan_property(f):
     # maybe implement the cache here?
-    # @functools.wraps
     def filtered(self, *args, method=None, iv_policy=None, **kwargs):
         if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, *args, method=method, **kwargs)
@@ -791,7 +755,7 @@ def _set_invalid_nan_property(f):
         res = f(self, *args, method=method, **kwargs)
         if res is None:
             # message could be more appropriate
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
         res = np.asarray(res)
         needs_copy = False
@@ -870,8 +834,6 @@ def _log_real_standardize(x):
 
 class ContinuousDistribution:
     _parameterizations = []
-    _moment_methods = {'cache', 'formula', 'transform',
-                       'normalize', 'general', 'quadrature'}
 
     def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
                  rng=None, **parameters):
@@ -890,6 +852,11 @@ class ContinuousDistribution:
         self._any_invalid = False
         self._shape = tuple()
         self._dtype = np.float64
+        self._not_implemented = (
+            f"`{self.__class__.__name__}` does not provide an accurate "
+            "implementation of the required method. Leave `tol` unspecified "
+            "to use the default implementation."
+        )
 
         if iv_policy == IV_POLICY.SKIP_ALL:
             # Not sure whether attributes should be set if we're skipping IV
@@ -926,11 +893,6 @@ class ContinuousDistribution:
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
-        self._support_cache = None
-
-    def _set_parameter_attributes(self):
-        for name, val in self._parameters.items():
-            setattr(self, name, val)
 
     def __repr__(self):
         class_name = self.__class__.__name__
@@ -945,11 +907,10 @@ class ContinuousDistribution:
             info.append(f"dtype={self._dtype}")
         return f"{class_name}({', '.join(info)})"
 
-    @classmethod
-    def _validate_rng(cls, rng):
+    def _validate_rng(self, rng):
         if rng is not None and not isinstance(rng, np.random.Generator):
             message = ("Argument `rng` passed to the "
-                       f"`{cls.__name__}` distribution family is "
+                       f"`{self.__class__.__name__}` distribution family is "
                        f"of type `{type(rng)}`, but it must be a NumPy "
                        "`Generator`.")
             raise ValueError(message)
@@ -1035,9 +996,16 @@ class ContinuousDistribution:
 
         return parameters, invalid, any_invalid, dtype
 
+
+    def _set_parameter_attributes(self):
+        for name, val in self._parameters.items():
+            setattr(self, name, val)
+
+
     @classmethod
     def _process_parameters(cls, **kwargs):
         return kwargs
+
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=None,
@@ -1061,9 +1029,8 @@ class ContinuousDistribution:
         return (0 if not cls._num_parameterizations()
                 else len(cls._parameterizations[0]))
 
-    @classmethod
-    def _overrides(cls, method_name):
-        method = getattr(cls, method_name, None)
+    def _overrides(self, method_name):
+        method = getattr(self.__class__, method_name, None)
         super_method = getattr(ContinuousDistribution, method_name, None)
         return method is not super_method
 
@@ -1101,7 +1068,7 @@ class ContinuousDistribution:
         funcs = [funcs] if type(funcs) == str else funcs
 
         # Should also offer control over absolute `x` instead of probability
-        a, b = self.support()
+        a, b = self.support
         a = np.where(np.isinf(a), self.icdf(cdf), a)
         b = np.where(np.isinf(b), self.iccdf(ccdf), b)
         x = np.linspace(a, b, 300)
@@ -1139,152 +1106,110 @@ class ContinuousDistribution:
         ax.set_title(title)
         return ax
 
+    @cached_property
     def support(self):
-        # We manually cache this instead of using `cached_property` for two
-        # reasons:
-        # - make it easier for users to remember what is a method and what is
-        #   an attribute: anything the user can set (e.g. an attribute, policy,
-        #   or tolerance) is an attribute; everything that can only return
-        #   information is a method.
-        # - If this were a `cached_property`, we couldn't update the value
-        #   when the distribution parameters change.
-        # Caching is important, though, because calls to _support take 1~2 µs
-        # even when `a` and `b` are already the same shape.
-        if self._support_cache is not None:
-            return self._support_cache
-        support = self._support(**self._parameters)
-        if self.cache_policy != CACHE_POLICY.NO_CACHE:
-            self._support_cache = support
-        return support
+        return self._support(**self._parameters)
 
-    @classmethod
-    def _support(cls, **kwargs):
-        a, b = cls._variable.domain.get_numerical_endpoints(kwargs)
+    def _support(self, **kwargs):
+        a, b = self._variable.domain.get_numerical_endpoints(kwargs)
         if a.shape != b.shape:
             a, b = np.broadcast_arrays(a, b)
         return a, b
 
-    @classmethod
-    def _not_implemented(cls):
-        return (
-            f"`{cls.__name__}` does not provide an accurate "
-            "implementation of the required method. Leave `tol` unspecified "
-            "to use the default implementation."
-        )
-
-    @_set_invalid_nan_property
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
 
-    @classmethod
-    def _logentropy_dispatch(cls, method=None, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_logentropy'):
-            return cls._logentropy(**kwargs)
-        elif (cls.tol is _null and cls._overrides('_entropy') and method is None) or method=='log/exp':
-            return cls._logentropy_log_entropy(**kwargs)
+    def _logentropy_dispatch(self, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_logentropy'):
+            return self._logentropy(**kwargs)
+        elif (self.tol is _null and self._overrides('_entropy') and method is None) or method=='log/exp':
+            return self._logentropy_log_entropy(**kwargs)
         elif method in {'quadrature', None}:
-            return cls._logentropy_integrate_logpdf(**kwargs)
+            return self._logentropy_integrate_logpdf(**kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _logentropy_log_entropy(cls, **kwargs):
-        res = np.log(cls._entropy_dispatch(**kwargs) + 0j)
+    def _logentropy_log_entropy(self, **kwargs):
+        res = np.log(self._entropy_dispatch(**kwargs) + 0j)
         return _log_real_standardize(res)
 
-    @classmethod
-    def _logentropy_integrate_logpdf(cls, **kwargs):
+    def _logentropy_integrate_logpdf(self, **kwargs):
         def logintegrand(x, **kwargs):
-            logpdf = cls._logpdf_dispatch(x, **kwargs)
+            logpdf = self._logpdf_dispatch(x, **kwargs)
             return logpdf + np.log(0j+logpdf)
-        res = cls._quadrature(logintegrand, kwargs=kwargs, log=True)
+        res = self._quadrature(logintegrand, kwargs=kwargs, log=True)
         return _log_real_standardize(res + np.pi*1j)
 
-    @_set_invalid_nan_property
     def entropy(self, *, method=None):
         return self._entropy_dispatch(method=method, **self._parameters)
 
-    @classmethod
-    def _entropy_dispatch(cls, method=None, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_entropy'):
-            return cls._entropy(**kwargs)
-        elif (cls._overrides('_logentropy') and method is None) or method=='log/exp':
-            return cls._entropy_exp_logentropy(**kwargs)
+    def _entropy_dispatch(self, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_entropy'):
+            return self._entropy(**kwargs)
+        elif (self._overrides('_logentropy') and method is None) or method=='log/exp':
+            return self._entropy_exp_logentropy(**kwargs)
         elif method in {'quadrature', None}:
-            return cls._entropy_integrate_pdf(**kwargs)
+            return self._entropy_integrate_pdf(**kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _entropy_exp_logentropy(cls, **kwargs):
-        return np.exp(cls._logentropy_dispatch(**kwargs))
+    def _entropy_exp_logentropy(self, **kwargs):
+        return np.exp(self._logentropy_dispatch(**kwargs))
 
-    @classmethod
-    def _entropy_integrate_pdf(cls, **kwargs):
+    def _entropy_integrate_pdf(self, **kwargs):
         def integrand(x, **kwargs):
-            pdf = cls._pdf_dispatch(x, **kwargs)
+            pdf = self._pdf_dispatch(x, **kwargs)
             return np.log(pdf)*pdf
-        return -cls._quadrature(integrand, kwargs=kwargs)
+        return -self._quadrature(integrand, kwargs=kwargs)
 
-    @_set_invalid_nan_property
     def median(self, *, method=None):
         return self._median_dispatch(method=method, **self._parameters)
 
-    @classmethod
-    def _median_dispatch(cls, method=None, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_median'):
-            return np.asarray(cls._median(**kwargs))[()]
+    def _median_dispatch(self, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_median'):
+            return np.asarray(self._median(**kwargs))[()]
         elif method in {None, 'icdf'}:
-            return cls._median_icdf(**kwargs)
+            return self._median_icdf(**kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _median_icdf(cls, **kwargs):
-        return cls._icdf_dispatch(0.5, **kwargs)
+    def _median_icdf(self, **kwargs):
+        return self._icdf_dispatch(0.5, **kwargs)
 
-    @_set_invalid_nan_property
     def mode(self, *, method=None):
         return self._mode_dispatch(method=method, **self._parameters)
 
-    @classmethod
-    def _mode_dispatch(cls, method=None, **kwargs):
+    def _mode_dispatch(self, method=None, **kwargs):
         # We could add a method that looks for a critical point with
         # differentiation and the root finder
-        if method in {None, 'formula'} and cls._overrides('_mode'):
-            return np.asarray(cls._mode(**kwargs))[()]
+        if method in {None, 'formula'} and self._overrides('_mode'):
+            return np.asarray(self._mode(**kwargs))[()]
         elif method in {None, 'optimization'}:
-            return cls._mode_optimization(**kwargs)
+            return self._mode_optimization(**kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _mode_optimization(cls, **kwargs):
+    def _mode_optimization(self, **kwargs):
         # Heuristic until we write a proper minimization bracket finder (like
         # bracket_root): if the PDF at the 0.01 and 99.99 percentiles is not
         # less than the PDF at the median, it's either a (rare in SciPy)
         # bimodal distribution (in which case the generic implementation will
         # never be great) or the mode is at one of the endpoints.
-        a, b = cls._support(**kwargs)
-        if not a.size:
-            return np.empty(a.shape, dtype=a.dtype)
-
-        p_shape = (3,) + (1,)*len(a.shape)
+        if not np.prod(self._shape):
+            return np.empty(self._shape, dtype=self._dtype)
+        p_shape = (3,) + (1,)*len(self._shape)
         p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
-        bracket = cls._icdf_dispatch(p, **kwargs)
-        res = _chandrupatla_minimize(lambda x: -cls._pdf_dispatch(x, **kwargs),
+        bracket = self._icdf_dispatch(p, **kwargs)
+        res = _chandrupatla_minimize(lambda x: -self._pdf_dispatch(x, **kwargs),
                                      *bracket)
         mode = np.asarray(res.x)
         mode_at_boundary = ~res.success
         mode_at_left = mode_at_boundary & (res.fl <= res.fr)
         mode_at_right = mode_at_boundary & (res.fr < res.fl)
+        a, b = self._support(**kwargs)
         mode[mode_at_left] = a[mode_at_left]
         mode[mode_at_right] = b[mode_at_right]
         return mode[()]
-
-    # mean, var, std, skewness, and kurtosis don't need
-    # _set_invalid_nan_property decorator because they rely solely on
-    # methods that are already decorated.
 
     def mean(self, *, method=None, cache_policy=None):
         return self.moment_raw(1, method=method, cache_policy=cache_policy)
@@ -1303,331 +1228,292 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logpdf(self, x, *, method=None):
-        return self._logpdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
+        return self._logpdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _logpdf_dispatch(cls, x, *, method=None, tol=_null, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_logpdf'):
-            return cls._logpdf(x, **kwargs)
-        elif (tol is _null and method is None) or method == 'log/exp':
-            return cls._logpdf_log_pdf(x, **kwargs)
+    def _logpdf_dispatch(self, x, *, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_logpdf'):
+            return self._logpdf(x, **kwargs)
+        elif (self.tol is _null and method is None) or method == 'log/exp':
+            return self._logpdf_log_pdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _logpdf_log_pdf(cls, x, **kwargs):
-        return np.log(cls._pdf_dispatch(x, **kwargs))
+    def _logpdf_log_pdf(self, x, **kwargs):
+        return np.log(self._pdf_dispatch(x, **kwargs))
 
     @_set_invalid_nan
     def pdf(self, x, *, method=None):
         return self._pdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _pdf_dispatch(cls, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_pdf'):
-            return cls._pdf(x, **kwargs)
-        if (cls._overrides('_logpdf') and method is None) or method == 'log/exp':
-            return cls._pdf_exp_logpdf(x, **kwargs)
+    def _pdf_dispatch(self, x, *, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_pdf'):
+            return self._pdf(x, **kwargs)
+        if (self._overrides('_logpdf') and method is None) or method == 'log/exp':
+            return self._pdf_exp_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _pdf_exp_logpdf(cls, x, **kwargs):
-        return np.exp(cls._logpdf_dispatch(x, **kwargs))
+    def _pdf_exp_logpdf(self, x, **kwargs):
+        return np.exp(self._logpdf_dispatch(x, **kwargs))
 
     @_set_invalid_nan
     def logcdf(self, x, *, method=None):
-        return self._logcdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
+        return self._logcdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _logcdf_dispatch(cls, x, *, method=None, tol=_null, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_logcdf'):
-            return cls._logcdf(x, **kwargs)
-        elif (tol is _null and cls._overrides('_cdf') and method is None) or method=='log/exp':
-            return cls._logcdf_log_cdf(x, **kwargs)
-        elif (cls._overrides('_logccdf') and method is None) or method=='complementarity':
-            return cls._logcdf_log1mexpccdf(x, **kwargs)
+    def _logcdf_dispatch(self, x, *, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_logcdf'):
+            return self._logcdf(x, **kwargs)
+        elif (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
+            return self._logcdf_log_cdf(x, **kwargs)
+        elif (self._overrides('_logccdf') and method is None) or method=='complementarity':
+            return self._logcdf_log1mexpccdf(x, **kwargs)
         elif method in {'quadrature', None}:
-            return cls._logcdf_integrate_logpdf(x, **kwargs)
+            return self._logcdf_integrate_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _logcdf_log_cdf(cls, x, **kwargs):
-        return np.log(cls._cdf_dispatch(x, **kwargs))
+    def _logcdf_log_cdf(self, x, **kwargs):
+        return np.log(self._cdf_dispatch(x, **kwargs))
 
-    @classmethod
-    def _logcdf_log1mexpccdf(cls, x, **kwargs):
-        return _log1mexp(cls._logccdf_dispatch(x, **kwargs))
+    def _logcdf_log1mexpccdf(self, x, **kwargs):
+        return _log1mexp(self._logccdf_dispatch(x, **kwargs))
 
-    @classmethod
-    def _logcdf_integrate_logpdf(cls, x, **kwargs):
-        a, _ = cls._support(**kwargs)
-        return cls._quadrature(cls._logpdf_dispatch, limits=(a, x),
+
+    def _logcdf_integrate_logpdf(self, x, **kwargs):
+        a, _ = self._support(**kwargs)
+        return self._quadrature(self._logpdf_dispatch, limits=(a, x),
                                 kwargs=kwargs, log=True)
 
-    @_set_invalid_nan
-    def cdf(self, x, *, method=None):
-        return self._cdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
-
-    # def cdf(self, x, y=None, *, method=None):
-    #     if y is None:
-    #         return self._cdf_1arg(x, method=method)
-    #     else:
-    #         return self._cdf_2arg(x, y, method=method)
-
-    # def _cdf_2arg(self, x, y, *, method=None):
-    #     # Draft logic here. Not really correct, and method names are poor.
-    #     if ((self.tol is _null and self._overrides('_cdf')
-    #          and self._overrides('_ccdf') and method is None)
-    #             or method=='formula'):
-    #         return self._cdf_2arg_formula(x, y)
-    #     elif ((self._overrides('_logcdf')
-    #            and self._overrides('_logccdf') and method is None)
-    #           or method=='log/exp'):
-    #         return self._cdf_2arg_logexp(x, y)
-    #     else:
-    #         return self._cdf_2arg_quadrature(x, y)
-    #
-    # def _cdf_2arg_formula(self, x, y):
-    #     # Quick draft. Lots of optimizations possible.
-    #     # - do (custom) input validation once instead of four times
-    #     # - lazy evaluation of ccdf only where it's needed
-    #     # - add logic/options for using logcdf, quadrature
-    #     # - we could stack x and y to reduce number of function calls
-    #     cdf_x = self.cdf(x)
-    #     cdf_y = self.cdf(y)
-    #     ccdf_x = self.ccdf(x)
-    #     ccdf_y = self.ccdf(y)
-    #     i = (cdf_x < 0.5) & (cdf_y < 0.5)
-    #     return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
-    #
-    # def _cdf_2arg_logexp(self, x, y):
-    #     logcdf_x = self.logcdf(x)
-    #     logcdf_y = self.logcdf(y)
-    #     logccdf_x = self.logccdf(x)
-    #     logccdf_y = self.logccdf(y)
-    #     i = (logcdf_x < -1) & (logcdf_y < -1)
-    #     return np.real(np.exp(np.where(i, _logexpxmexpy(logcdf_y, logcdf_x),
-    #                                    _logexpxmexpy(logccdf_x, logccdf_y))))
-    #
-    # def _cdf_2arg_quadrature(self, x, y):
-    #     x, y = np.broadcast_arrays(x, y)
-    #     shape = np.broadcast_shapes(x.shape, self._shape)
-    #     x = np.broadcast_to(x, self._shape)
-    #     y = np.broadcast_to(y, self._shape)
-    #     return self._quadrature(self._pdf_dispatch, limits=(x, y),
-    #                             kwargs=self._parameters)
-    #
-    # @_set_invalid_nan
-    # def _cdf_1arg(self, x, *, method):
-    #     return self._cdf_dispatch(x, method=method, **self._parameters)
-
-    @classmethod
-    def _cdf_dispatch(cls, x, *, method=None, tol=_null, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_cdf'):
-            return cls._cdf(x, **kwargs)
-        elif (cls._overrides('_logcdf') and method is None) or method=='log/exp':
-            return cls._cdf_exp_logcdf(x, **kwargs)
-        elif (tol is _null and cls._overrides('_ccdf') and method is None) or method=='complementarity':
-            return cls._cdf_1mccdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return cls._cdf_integrate_pdf(x, **kwargs)
+    def cdf(self, x, y=None, *, method=None):
+        if y is None:
+            return self._cdf_1arg(x, method=method)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            return self._cdf_2arg(x, y, method=method)
 
-    @classmethod
-    def _cdf_exp_logcdf(cls, x, **kwargs):
-        return np.exp(cls._logcdf_dispatch(x, **kwargs))
+    def _cdf_2arg(self, x, y, *, method=None):
+        # Draft logic here. Not really correct, and method names are poor.
+        if ((self._tol is _null and self._overrides('_cdf')
+             and self._overrides('_ccdf') and method is None)
+                or method=='formula'):
+            return self._cdf_2arg_formula(x, y)
+        elif ((self._overrides('_logcdf')
+               and self._overrides('_logccdf') and method is None)
+              or method=='log/exp'):
+            return self._cdf_2arg_logexp(x, y)
+        else:
+            return self._cdf_2arg_quadrature(x, y)
 
-    @classmethod
-    def _cdf_1mccdf(cls, x, **kwargs):
-        return 1 - cls._ccdf_dispatch(x, **kwargs)
+    def _cdf_2arg_formula(self, x, y):
+        # Quick draft. Lots of optimizations possible.
+        # - do (custom) input validation once instead of four times
+        # - lazy evaluation of ccdf only where it's needed
+        # - add logic/options for using logcdf, quadrature
+        # - we could stack x and y to reduce number of function calls
+        cdf_x = self.cdf(x)
+        cdf_y = self.cdf(y)
+        ccdf_x = self.ccdf(x)
+        ccdf_y = self.ccdf(y)
+        i = (cdf_x < 0.5) & (cdf_y < 0.5)
+        return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
 
-    @classmethod
-    def _cdf_integrate_pdf(cls, x, **kwargs):
-        a, _ = cls._support(**kwargs)
-        return cls._quadrature(cls._pdf_dispatch, limits=(a, x),
+    def _cdf_2arg_logexp(self, x, y):
+        logcdf_x = self.logcdf(x)
+        logcdf_y = self.logcdf(y)
+        logccdf_x = self.logccdf(x)
+        logccdf_y = self.logccdf(y)
+        i = (logcdf_x < -1) & (logcdf_y < -1)
+        return np.real(np.exp(np.where(i, _logexpxmexpy(logcdf_y, logcdf_x),
+                                       _logexpxmexpy(logccdf_x, logccdf_y))))
+
+    def _cdf_2arg_quadrature(self, x, y):
+        x, y = np.broadcast_arrays(x, y)
+        shape = np.broadcast_shapes(x.shape, self._shape)
+        x = np.broadcast_to(x, self._shape)
+        y = np.broadcast_to(y, self._shape)
+        return self._quadrature(self._pdf_dispatch, limits=(x, y),
+                                kwargs=self._parameters)
+
+    @_set_invalid_nan
+    def _cdf_1arg(self, x, *, method):
+        return self._cdf_dispatch(x, method=method, **self._parameters)
+
+    def _cdf_dispatch(self, x, *, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_cdf'):
+            return self._cdf(x, **kwargs)
+        elif (self._overrides('_logcdf') and method is None) or method=='log/exp':
+            return self._cdf_exp_logcdf(x, **kwargs)
+        elif (self._tol is _null and self._overrides('_ccdf') and method is None) or method=='complementarity':
+            return self._cdf_1mccdf(x, **kwargs)
+        elif method in {'quadrature', None}:
+            return self._cdf_integrate_pdf(x, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _cdf_exp_logcdf(self, x, **kwargs):
+        return np.exp(self._logcdf_dispatch(x, **kwargs))
+
+    def _cdf_1mccdf(self, x, **kwargs):
+        return 1 - self._ccdf_dispatch(x, **kwargs)
+
+    def _cdf_integrate_pdf(self, x, **kwargs):
+        a, _ = self._support(**kwargs)
+        return self._quadrature(self._pdf_dispatch, limits=(a, x),
                                 kwargs=kwargs)
 
     @_set_invalid_nan
     def logccdf(self, x, *, method=None):
-        return self._logccdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
+        return self._logccdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _logccdf_dispatch(cls, x, method=None, tol=_null, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_logccdf'):
-            return cls._logccdf(x, **kwargs)
-        if (tol is _null and cls._overrides('_cdf') and method is None) or method=='log/exp':
-            return cls._logccdf_log_ccdf(x, **kwargs)
-        elif (cls._overrides('_logcdf') and method is None) or method=='complementarity':
-            return cls._logccdf_log1mexpcdf(x, **kwargs)
+    def _logccdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_logccdf'):
+            return self._logccdf(x, **kwargs)
+        if (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
+            return self._logccdf_log_ccdf(x, **kwargs)
+        elif (self._overrides('_logcdf') and method is None) or method=='complementarity':
+            return self._logccdf_log1mexpcdf(x, **kwargs)
         elif method in {'quadrature', None}:
-            return cls._logccdf_integrate_logpdf(x, **kwargs)
+            return self._logccdf_integrate_logpdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _logccdf_log_ccdf(cls, x, **kwargs):
-        return np.log(cls._ccdf_dispatch(x, **kwargs))
+    def _logccdf_log_ccdf(self, x, **kwargs):
+        return np.log(self._ccdf_dispatch(x, **kwargs))
 
-    @classmethod
-    def _logccdf_log1mexpcdf(cls, x, **kwargs):
-        return _log1mexp(cls._logcdf_dispatch(x, **kwargs))
+    def _logccdf_log1mexpcdf(self, x, **kwargs):
+        return _log1mexp(self._logcdf_dispatch(x, **kwargs))
 
-    @classmethod
-    def _logccdf_integrate_logpdf(cls, x, **kwargs):
-        _, b = cls._support(**kwargs)
-        return cls._quadrature(cls._logpdf_dispatch, limits=(x, b),
+    def _logccdf_integrate_logpdf(self, x, **kwargs):
+        _, b = self._support(**kwargs)
+        return self._quadrature(self._logpdf_dispatch, limits=(x, b),
                                 kwargs=kwargs, log=True)
 
     @_set_invalid_nan
     def ccdf(self, x, *, method=None):
-        return self._ccdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
+        return self._ccdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _ccdf_dispatch(cls, x, method=None, tol=_null, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_ccdf'):
-            return cls._ccdf(x, **kwargs)
-        elif (cls._overrides('_logccdf') and method is None) or method=='log/exp':
-            return cls._ccdf_exp_logccdf(x, **kwargs)
-        elif (tol is _null and cls._overrides('_cdf') and method is None) or method=='complementarity':
-            return cls._ccdf_1mcdf(x, **kwargs)
+    def _ccdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_ccdf'):
+            return self._ccdf(x, **kwargs)
+        elif (self._overrides('_logccdf') and method is None) or method=='log/exp':
+            return self._ccdf_exp_logccdf(x, **kwargs)
+        elif (self._tol is _null and self._overrides('_cdf') and method is None) or method=='complementarity':
+            return self._ccdf_1mcdf(x, **kwargs)
         elif method in {'quadrature', None}:
-            return cls._ccdf_integrate_pdf(x, **kwargs)
+            return self._ccdf_integrate_pdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _ccdf_exp_logccdf(cls, x, **kwargs):
-        return np.exp(cls._logccdf_dispatch(x, **kwargs))
+    def _ccdf_exp_logccdf(self, x, **kwargs):
+        return np.exp(self._logccdf_dispatch(x, **kwargs))
 
-    @classmethod
-    def _ccdf_1mcdf(cls, x, **kwargs):
-        return 1 - cls._cdf_dispatch(x, **kwargs)
+    def _ccdf_1mcdf(self, x, **kwargs):
+        return 1 - self._cdf_dispatch(x, **kwargs)
 
-    @classmethod
-    def _ccdf_integrate_pdf(cls, x, **kwargs):
-        _, b = cls._support(**kwargs)
-        return cls._quadrature(cls._pdf_dispatch, limits=(x, b),
+    def _ccdf_integrate_pdf(self, x, **kwargs):
+        _, b = self._support(**kwargs)
+        return self._quadrature(self._pdf_dispatch, limits=(x, b),
                                 kwargs=kwargs)
 
     @_set_invalid_nan
     def ilogcdf(self, x, *, method=None):
         return self._ilogcdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _ilogcdf_dispatch(cls, x, method=None, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_ilogcdf'):
-            return cls._ilogcdf(x, **kwargs)
-        elif (cls._overrides('_ilogccdf') and method is None) or method=='complementarity':
-            return cls._ilogcdf_ilogccdf1m(x, **kwargs)
+    def _ilogcdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_ilogcdf'):
+            return self._ilogcdf(x, **kwargs)
+        elif (self._overrides('_ilogccdf') and method is None) or method=='complementarity':
+            return self._ilogcdf_ilogccdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
-            return cls._ilogcdf_solve_logcdf(x, **kwargs)
+            return self._ilogcdf_solve_logcdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _ilogcdf_ilogccdf1m(cls, x, **kwargs):
-        return cls._ilogccdf_dispatch(_log1mexp(x), **kwargs)
+    def _ilogcdf_ilogccdf1m(self, x, **kwargs):
+        return self._ilogccdf_dispatch(_log1mexp(x), **kwargs)
 
-    @classmethod
-    def _ilogcdf_solve_logcdf(cls, x, **kwargs):
-        return cls._solve_bounded(cls._logcdf_dispatch, x, kwargs=kwargs)
+    def _ilogcdf_solve_logcdf(self, x, **kwargs):
+        return self._solve_bounded(self._logcdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
     def icdf(self, x, *, method=None):
-        return self._icdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
+        return self._icdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _icdf_dispatch(cls, x, method=None, tol=_null, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_icdf'):
-            return cls._icdf(x, **kwargs)
-        elif (tol is _null and cls._overrides('_iccdf') and method is None) or method=='complementarity':
-            return cls._icdf_iccdf1m(x, **kwargs)
+    def _icdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_icdf'):
+            return self._icdf(x, **kwargs)
+        elif (self.tol is _null and self._overrides('_iccdf') and method is None) or method=='complementarity':
+            return self._icdf_iccdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
-            return cls._icdf_solve_cdf(x, **kwargs)
+            return self._icdf_solve_cdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _icdf_iccdf1m(cls, x, **kwargs):
-        return cls._iccdf_dispatch(1 - x, **kwargs)
+    def _icdf_iccdf1m(self, x, **kwargs):
+        return self._iccdf_dispatch(1 - x, **kwargs)
 
-    @classmethod
-    def _icdf_solve_cdf(cls, x, **kwargs):
-        return cls._solve_bounded(cls._cdf_dispatch, x, kwargs=kwargs)
+    def _icdf_solve_cdf(self, x, **kwargs):
+        return self._solve_bounded(self._cdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
     def ilogccdf(self, x, *, method=None):
         return self._ilogccdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _ilogccdf_dispatch(cls, x, method=None, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_ilogccdf'):
-            return cls._ilogccdf(x, **kwargs)
-        elif (cls._overrides('_ilogcdf') and method is None) or method=='complementarity':
-            return cls._ilogccdf_ilogcdf1m(x, **kwargs)
+    def _ilogccdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_ilogccdf'):
+            return self._ilogccdf(x, **kwargs)
+        elif (self._overrides('_ilogcdf') and method is None) or method=='complementarity':
+            return self._ilogccdf_ilogcdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
-            return cls._ilogccdf_solve_logccdf(x, **kwargs)
+            return self._ilogccdf_solve_logccdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _ilogccdf_ilogcdf1m(cls, x, **kwargs):
-        return cls._ilogcdf_dispatch(_log1mexp(x), **kwargs)
+    def _ilogccdf_ilogcdf1m(self, x, **kwargs):
+        return self._ilogcdf_dispatch(_log1mexp(x), **kwargs)
 
-    @classmethod
-    def _ilogccdf_solve_logccdf(cls, x, **kwargs):
-        return cls._solve_bounded(cls._logccdf_dispatch, x, kwargs=kwargs)
+    def _ilogccdf_solve_logccdf(self, x, **kwargs):
+        return self._solve_bounded(self._logccdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
     def iccdf(self, x, *, method=None):
-        return self._iccdf_dispatch(x, method=method, tol=self.tol, **self._parameters)
+        return self._iccdf_dispatch(x, method=method, **self._parameters)
 
-    @classmethod
-    def _iccdf_dispatch(cls, x, method=None, tol=_null, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_iccdf'):
-            return cls._iccdf(x, **kwargs)
-        elif (tol is _null and cls._overrides('_icdf') and method is None) or method=='complementarity':
-            return cls._iccdf_icdf1m(x, **kwargs)
+    def _iccdf_dispatch(self, x, method=None, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_iccdf'):
+            return self._iccdf(x, **kwargs)
+        elif (self.tol is _null and self._overrides('_icdf') and method is None) or method=='complementarity':
+            return self._iccdf_icdf1m(x, **kwargs)
         elif method in {None, 'inversion'}:
-            return cls._iccdf_solve_ccdf(x, **kwargs)
+            return self._iccdf_solve_ccdf(x, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _iccdf_icdf1m(cls, x, **kwargs):
-        return cls._icdf_dispatch(1 - x, **kwargs)
+    def _iccdf_icdf1m(self, x, **kwargs):
+        return self._icdf_dispatch(1 - x, **kwargs)
 
-    @classmethod
-    def _iccdf_solve_ccdf(cls, x, **kwargs):
-        return cls._solve_bounded(cls._ccdf_dispatch, x, kwargs=kwargs)
+    def _iccdf_solve_ccdf(self, x, **kwargs):
+        return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
     def sample(self, shape=(), *, method=None, rng=None):
-        # needs output shape and dtype validation? Developer override could
-        # produce incorrect shape and dtype.
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = sample_shape + self._shape
         rng = self._validate_rng(rng) or self._rng or np.random.default_rng()
         return self._sample_dispatch(sample_shape, full_shape, method=method,
                                      rng=rng, **self._parameters)
 
-    @classmethod
-    def _sample_dispatch(cls, sample_shape, full_shape, *, method, rng, **kwargs):
-        if method in {None, 'formula'} and cls._overrides('_sample'):
-            return np.asarray(cls._sample(sample_shape, full_shape, rng=rng,
+    def _sample_dispatch(self, sample_shape, full_shape, *, method, rng, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_sample'):
+            return np.asarray(self._sample(sample_shape, full_shape, rng=rng,
                                            **kwargs))[()]
         elif method in {None, 'inverse_transform'}:
-            return cls._sample_inverse_transform(sample_shape, full_shape,
+            return self._sample_inverse_transform(sample_shape, full_shape,
                                                   rng=rng, **kwargs)
         else:
-            raise NotImplementedError(cls._not_implemented())
+            raise NotImplementedError(self._not_implemented)
 
-    @classmethod
-    def _sample_inverse_transform(cls, _, full_shape, *, rng, **kwargs):
+    def _sample_inverse_transform(self, sample_shape, full_shape, *, rng, **kwargs):
         uniform = rng.uniform(size=full_shape)
-        return cls._icdf_dispatch(uniform, **kwargs)
+        return self._icdf_dispatch(uniform, **kwargs)
 
     def _logmoment(self, order=1, *, logcenter=None, standardized=False):
         # make this private until it is worked into moment
@@ -1650,16 +1536,12 @@ class ContinuousDistribution:
         return self._quadrature(logintegrand, args=(order, logcenter),
                                 kwargs=kwargs, log=True)
 
-    @classmethod
-    def _validate_order(cls, order, f_name, iv_policy=None):
-        if iv_policy == IV_POLICY.SKIP_ALL:
+    def _validate_order(self, order, f_name, iv_policy=None):
+        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return order
 
-        # We want the output `order` to be a float so that integer * float
-        # conversion rules don't accidentally increase precision. I don't think
-        # we can really support float16 across the board, so float32 it is.
-        order = np.asarray(order, dtype=np.float32)[()]
-        message = (f"Argument `order` of `{cls.__name__}.{f_name}` "
+        order = np.asarray(order, dtype=self._dtype)[()]
+        message = (f"Argument `order` of `{self.__class__.__name__}.{f_name}` "
                    "must be a finite, positive integer.")
         try:
             order_int = round(order.item())
@@ -1673,16 +1555,20 @@ class ContinuousDistribution:
 
         return order
 
+    @cached_property
+    def _moment_methods(self):
+        return {'cache', 'formula', 'transform',
+                'normalize', 'general', 'quadrature'}
+
     @_set_invalid_nan_property
     def moment_raw(self, order=1, *, method=None, cache_policy=None):
-        order = self._validate_order(order, "moment_raw", self.iv_policy)
+        order = self._validate_order(order, "moment_raw")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_raw_dispatch(
-            order, methods=methods, cache_policy=cache_policy,
-            shape=self._shape, **self._parameters)
+            order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
-    def _moment_raw_dispatch(self, order, *, methods, shape, cache_policy=None, **kwargs):
+    def _moment_raw_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
         # How to indicate to the user if the requested methods could not be used?
         # Rather than returning None when a moment is not available, raise?
         moment = None
@@ -1698,7 +1584,7 @@ class ContinuousDistribution:
                     moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods and order > 1:
-            moment = self._moment_raw_transform(order, shape, **kwargs)
+            moment = self._moment_raw_transform(order, **kwargs)
 
         if moment is None and 'general' in methods:
             moment = self._moment_raw_general(order, **kwargs)
@@ -1714,11 +1600,11 @@ class ContinuousDistribution:
     def _moment_raw(self, order, **kwargs):
         return None
 
-    def _moment_raw_transform(self, order, shape, **kwargs):
+    def _moment_raw_transform(self, order, **kwargs):
         central_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'normalize', 'general'}
-            moment_i = self._moment_central_dispatch(order=i, shape=shape,
+            moment_i = self._moment_central_dispatch(order=i,
                                                      methods=methods, **kwargs)
             if moment_i is None:
                 return None
@@ -1727,7 +1613,7 @@ class ContinuousDistribution:
         # Doesn't make sense to get the mean by "transform", since that's
         # how we got here. Questionable whether 'quadrature' should be here.
         mean_methods = {'cache', 'formula', 'quadrature'}
-        mean = self._moment_raw_dispatch(1, methods=mean_methods, shape=shape, **kwargs)
+        mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
         if mean is None:
             return None
 
@@ -1741,15 +1627,13 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_central(self, order=1, *, method=None, cache_policy=None):
-        order = self._validate_order(order, "moment_central", self.iv_policy)
+        order = self._validate_order(order, "moment_central")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_central_dispatch(
-            order, methods=methods, cache_policy=cache_policy,
-            shape=self._shape, **self._parameters)
+            order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
-    def _moment_central_dispatch(self, order, *, methods, shape,
-                                 cache_policy=None, **kwargs):
+    def _moment_central_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -1759,20 +1643,20 @@ class ContinuousDistribution:
             moment = self._moment_central(order, **kwargs)
             if moment is not None:
                 moment = np.asarray(moment)
-                if moment.shape != shape:
-                    moment = np.broadcast_to(moment, shape)
+                if moment.shape != self._shape:
+                    moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods:
-            moment = self._moment_central_transform(order, shape, **kwargs)
+            moment = self._moment_central_transform(order, **kwargs)
 
         if moment is None and 'normalize' in methods and order > 2:
-            moment = self._moment_central_normalize(order, shape, **kwargs)
+            moment = self._moment_central_normalize(order, **kwargs)
 
         if moment is None and 'general' in methods:
             moment = self._moment_central_general(order, **kwargs)
 
         if moment is None and 'quadrature' in methods:
-            mean = self._moment_raw_dispatch(1, **kwargs, shape=shape,
+            mean = self._moment_raw_dispatch(1, **kwargs,
                                              methods=self._moment_methods)
             moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
 
@@ -1784,32 +1668,31 @@ class ContinuousDistribution:
     def _moment_central(self, order, **kwargs):
         return None
 
-    def _moment_central_transform(self, order, shape, **kwargs):
+    def _moment_central_transform(self, order, **kwargs):
 
         raw_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'general'}
             moment_i = self._moment_raw_dispatch(order=i, methods=methods,
-                                                 shape=shape, **kwargs)
+                                                 **kwargs)
             if moment_i is None:
                 return None
             raw_moments.append(moment_i)
 
         mean_methods = self._moment_methods
-        mean = self._moment_raw_dispatch(1, methods=mean_methods, shape=shape,
-                                         **kwargs)
+        mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
 
         moment = self._moment_transform_center(order, raw_moments, 0, mean)
         return moment
 
-    def _moment_central_normalize(self, order, shape, **kwargs):
+    def _moment_central_normalize(self, order, **kwargs):
         methods = {'cache', 'formula', 'general'}
-        standard_moment = self._moment_standard_dispatch(
-            order, **kwargs, shape=shape, methods=methods)
+        standard_moment = self._moment_standard_dispatch(order, **kwargs,
+                                                         methods=methods)
         if standard_moment is None:
             return None
         var = self._moment_central_dispatch(2, methods=self._moment_methods,
-                                            shape=shape, **kwargs)
+                                            **kwargs)
         return standard_moment*var**(order/2)
 
     def _moment_central_general(self, order, **kwargs):
@@ -1818,14 +1701,13 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_standard(self, order=1, *, method=None, cache_policy=None):
-        order = self._validate_order(order, "moment_standard", self.iv_policy)
+        order = self._validate_order(order, "moment_standard")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_standard_dispatch(
-            order, methods=methods, cache_policy=cache_policy,
-            shape=self._shape, **self._parameters)
+            order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
-    def _moment_standard_dispatch(self, order, *, methods, shape, cache_policy=None, **kwargs):
+    def _moment_standard_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -1835,17 +1717,17 @@ class ContinuousDistribution:
             moment = self._moment_standard(order, **kwargs)
             if moment is not None:
                 moment = np.asarray(moment)
-                if moment.shape != shape:
-                    moment = np.broadcast_to(moment, shape)
+                if moment.shape != self._shape:
+                    moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_transform(order, False, shape, **kwargs)
+            moment = self._moment_standard_transform(order, False, **kwargs)
 
         if moment is None and 'general' in methods:
             moment = self._moment_standard_general(order, **kwargs)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_transform(order, True, shape, **kwargs)
+            moment = self._moment_standard_transform(order, True, **kwargs)
 
         if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
             self._moment_standard_cache[order] = moment
@@ -1855,15 +1737,15 @@ class ContinuousDistribution:
     def _moment_standard(self, order, **kwargs):
         return None
 
-    def _moment_standard_transform(self, order, use_quadrature, shape, **kwargs):
+    def _moment_standard_transform(self, order, use_quadrature, **kwargs):
         methods = ({'quadrature'} if use_quadrature
                    else {'cache', 'formula', 'transform'})
-        central_moment = self._moment_central_dispatch(
-            order, shape=shape, methods=methods, **kwargs)
+        central_moment = self._moment_central_dispatch(order, **kwargs,
+                                                       methods=methods)
         if central_moment is None:
             return None
-        var = self._moment_central_dispatch(
-            2, methods=self._moment_methods, shape=shape, **kwargs)
+        var = self._moment_central_dispatch(2, methods=self._moment_methods,
+                                            **kwargs)
         return central_moment/var**(order/2)
 
     def _moment_standard_general(self, order, **kwargs):
@@ -1884,14 +1766,12 @@ class ContinuousDistribution:
         moment_b = np.sum(n_choose_i*moment_as*(a-b)**(n-i), axis=0)
         return moment_b
 
-    @classmethod
-    def _quadrature(cls, integrand, limits=None, args=None, kwargs=None, log=False):
-        a, b = cls._support(**kwargs) if limits is None else limits
+    def _quadrature(self, integrand, limits=None, args=None, kwargs=None, log=False):
+        a, b = self._support(**kwargs) if limits is None else limits
         a, b = np.broadcast_arrays(a, b)
         if not a.size:
             # maybe need to figure out result type from a, b
-            dtype = np.result_type(a.dtype, b.dtype)
-            return np.empty(a.shape, dtype=dtype)
+            return np.empty(a.shape, dtype=self._dtype)
         args = [] if args is None else args
         kwargs = {} if kwargs is None else kwargs
         f, args = kwargs2args(integrand, args=args, kwargs=kwargs)
@@ -1899,16 +1779,15 @@ class ContinuousDistribution:
         res = _tanhsinh(f, a, b, args=args, log=log)
         return res.integral
 
-    @classmethod
-    def _solve_bounded(cls, f, p, *, bounds=None, kwargs=None):
+    def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
         # should modify _bracket_root and _chandrupatla so we don't need all this
-        min, max = cls._support(**kwargs) if bounds is None else bounds
+        min, max = self._support(**kwargs) if bounds is None else bounds
         kwargs = {} if kwargs is None else kwargs
 
         p, min, max = np.broadcast_arrays(p, min, max)
         if not p.size:
-            dtype = np.result_type(p.dtype, min.dtype, max.dtype)
-            return np.empty(p.shape, dtype=dtype)
+            # might need to figure out result type based on p
+            return np.empty(p.shape, dtype=self._dtype)
 
         def f2(x, p, **kwargs):
             return f(x, **kwargs) - p
@@ -1944,6 +1823,21 @@ class ContinuousDistribution:
         res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
         return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
 
+    ## Easiest to do right now
+    # @classmethod
+    # def llf(cls, parameters, *, sample, axis=-1):
+    #     dist = cls(**parameters)
+    #     return np.sum(dist.logpdf(sample), axis=axis)
+
+    ## Works if user doesn't pass in parameters, or passes in the right parameters
+    # def llf(self, parameters=None, *, sample, axis=-1):
+    #     parameters = self._parameters if parameters is None else parameters
+    #     return np.sum(self._logpdf_dispatch(sample, **parameters))
+
+    ## Probably best, but we still need something to process parameters
+    ## I have been thinking that I should break out the part of __init__
+    ## that identifies the parameterization and validates parameters and
+    ## call that here.
     @classmethod
     def llf(cls, parameters, *, sample, axis=-1):
         # still needs input validation of sample
@@ -2069,8 +1963,9 @@ class ShiftedScaledDistribution(ContinuousDistribution):
 
         return super().__getattribute__(item)
 
+    @cached_property
     def support(self):
-        a, b = self._dist.support()
+        a, b = self._dist.support
         a, b = self._itransform(a), self._itransform(b)
         sign = np.broadcast_to(self.scale, a.shape) > 0
         return np.where(sign, a, b), np.where(sign, b, a)
