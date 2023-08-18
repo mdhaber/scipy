@@ -1140,6 +1140,7 @@ class ContinuousDistribution:
             "to use the default implementation."
         )
 
+    @_set_invalid_nan_property
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
 
@@ -1167,6 +1168,7 @@ class ContinuousDistribution:
         res = cls._quadrature(logintegrand, kwargs=kwargs, log=True)
         return _log_real_standardize(res + np.pi*1j)
 
+    @_set_invalid_nan_property
     def entropy(self, *, method=None):
         return self._entropy_dispatch(method=method, **self._parameters)
 
@@ -1192,6 +1194,7 @@ class ContinuousDistribution:
             return np.log(pdf)*pdf
         return -cls._quadrature(integrand, kwargs=kwargs)
 
+    @_set_invalid_nan_property
     def median(self, *, method=None):
         return self._median_dispatch(method=method, **self._parameters)
 
@@ -1208,40 +1211,48 @@ class ContinuousDistribution:
     def _median_icdf(cls, **kwargs):
         return cls._icdf_dispatch(0.5, **kwargs)
 
+    @_set_invalid_nan_property
     def mode(self, *, method=None):
         return self._mode_dispatch(method=method, **self._parameters)
 
-    def _mode_dispatch(self, method=None, **kwargs):
+    @classmethod
+    def _mode_dispatch(cls, method=None, **kwargs):
         # We could add a method that looks for a critical point with
         # differentiation and the root finder
-        if method in {None, 'formula'} and self._overrides('_mode'):
-            return np.asarray(self._mode(**kwargs))[()]
+        if method in {None, 'formula'} and cls._overrides('_mode'):
+            return np.asarray(cls._mode(**kwargs))[()]
         elif method in {None, 'optimization'}:
-            return self._mode_optimization(**kwargs)
+            return cls._mode_optimization(**kwargs)
         else:
-            raise NotImplementedError(self._not_implemented())
+            raise NotImplementedError(cls._not_implemented())
 
-    def _mode_optimization(self, **kwargs):
+    @classmethod
+    def _mode_optimization(cls, **kwargs):
         # Heuristic until we write a proper minimization bracket finder (like
         # bracket_root): if the PDF at the 0.01 and 99.99 percentiles is not
         # less than the PDF at the median, it's either a (rare in SciPy)
         # bimodal distribution (in which case the generic implementation will
         # never be great) or the mode is at one of the endpoints.
-        if not np.prod(self._shape):
-            return np.empty(self._shape, dtype=self._dtype)
-        p_shape = (3,) + (1,)*len(self._shape)
+        a, b = cls._support(**kwargs)
+        if not a.size:
+            return np.empty(a.shape, dtype=a.dtype)
+
+        p_shape = (3,) + (1,)*len(a.shape)
         p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
-        bracket = self._icdf_dispatch(p, **kwargs)
-        res = _chandrupatla_minimize(lambda x: -self._pdf_dispatch(x, **kwargs),
+        bracket = cls._icdf_dispatch(p, **kwargs)
+        res = _chandrupatla_minimize(lambda x: -cls._pdf_dispatch(x, **kwargs),
                                      *bracket)
         mode = np.asarray(res.x)
         mode_at_boundary = ~res.success
         mode_at_left = mode_at_boundary & (res.fl <= res.fr)
         mode_at_right = mode_at_boundary & (res.fr < res.fl)
-        a, b = self._support(**kwargs)
         mode[mode_at_left] = a[mode_at_left]
         mode[mode_at_right] = b[mode_at_right]
         return mode[()]
+
+    # mean, var, std, skewness, and kurtosis don't need
+    # _set_invalid_nan_property decorator because they rely solely on
+    # methods that are already decorated.
 
     def mean(self, *, method=None, cache_policy=None):
         return self.moment_raw(1, method=method, cache_policy=cache_policy)
@@ -1562,6 +1573,8 @@ class ContinuousDistribution:
         return cls._solve_bounded(cls._ccdf_dispatch, x, kwargs=kwargs)
 
     def sample(self, shape=(), *, method=None, rng=None):
+        # needs output shape and dtype validation? Developer override could
+        # produce incorrect shape and dtype.
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = sample_shape + self._shape
         rng = self._validate_rng(rng) or self._rng or np.random.default_rng()
@@ -1634,9 +1647,10 @@ class ContinuousDistribution:
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_raw_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **self._parameters)
+            order, methods=methods, cache_policy=cache_policy,
+            shape=self._shape, **self._parameters)
 
-    def _moment_raw_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
+    def _moment_raw_dispatch(self, order, *, methods, shape, cache_policy=None, **kwargs):
         # How to indicate to the user if the requested methods could not be used?
         # Rather than returning None when a moment is not available, raise?
         moment = None
@@ -1652,7 +1666,7 @@ class ContinuousDistribution:
                     moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods and order > 1:
-            moment = self._moment_raw_transform(order, **kwargs)
+            moment = self._moment_raw_transform(order, shape, **kwargs)
 
         if moment is None and 'general' in methods:
             moment = self._moment_raw_general(order, **kwargs)
@@ -1668,11 +1682,11 @@ class ContinuousDistribution:
     def _moment_raw(self, order, **kwargs):
         return None
 
-    def _moment_raw_transform(self, order, **kwargs):
+    def _moment_raw_transform(self, order, shape, **kwargs):
         central_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'normalize', 'general'}
-            moment_i = self._moment_central_dispatch(order=i,
+            moment_i = self._moment_central_dispatch(order=i, shape=shape,
                                                      methods=methods, **kwargs)
             if moment_i is None:
                 return None
@@ -1681,7 +1695,7 @@ class ContinuousDistribution:
         # Doesn't make sense to get the mean by "transform", since that's
         # how we got here. Questionable whether 'quadrature' should be here.
         mean_methods = {'cache', 'formula', 'quadrature'}
-        mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
+        mean = self._moment_raw_dispatch(1, methods=mean_methods, shape=shape, **kwargs)
         if mean is None:
             return None
 
@@ -1700,9 +1714,11 @@ class ContinuousDistribution:
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_central_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **self._parameters)
+            order, methods=methods, cache_policy=cache_policy,
+            shape=self._shape, **self._parameters)
 
-    def _moment_central_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
+    def _moment_central_dispatch(self, order, *, methods, shape,
+                                 cache_policy=None, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -1712,20 +1728,20 @@ class ContinuousDistribution:
             moment = self._moment_central(order, **kwargs)
             if moment is not None:
                 moment = np.asarray(moment)
-                if moment.shape != self._shape:
-                    moment = np.broadcast_to(moment, self._shape)
+                if moment.shape != shape:
+                    moment = np.broadcast_to(moment, shape)
 
         if moment is None and 'transform' in methods:
-            moment = self._moment_central_transform(order, **kwargs)
+            moment = self._moment_central_transform(order, shape, **kwargs)
 
         if moment is None and 'normalize' in methods and order > 2:
-            moment = self._moment_central_normalize(order, **kwargs)
+            moment = self._moment_central_normalize(order, shape, **kwargs)
 
         if moment is None and 'general' in methods:
             moment = self._moment_central_general(order, **kwargs)
 
         if moment is None and 'quadrature' in methods:
-            mean = self._moment_raw_dispatch(1, **kwargs,
+            mean = self._moment_raw_dispatch(1, **kwargs, shape=shape,
                                              methods=self._moment_methods)
             moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
 
@@ -1737,31 +1753,32 @@ class ContinuousDistribution:
     def _moment_central(self, order, **kwargs):
         return None
 
-    def _moment_central_transform(self, order, **kwargs):
+    def _moment_central_transform(self, order, shape, **kwargs):
 
         raw_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'general'}
             moment_i = self._moment_raw_dispatch(order=i, methods=methods,
-                                                 **kwargs)
+                                                 shape=shape, **kwargs)
             if moment_i is None:
                 return None
             raw_moments.append(moment_i)
 
         mean_methods = self._moment_methods
-        mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
+        mean = self._moment_raw_dispatch(1, methods=mean_methods, shape=shape,
+                                         **kwargs)
 
         moment = self._moment_transform_center(order, raw_moments, 0, mean)
         return moment
 
-    def _moment_central_normalize(self, order, **kwargs):
+    def _moment_central_normalize(self, order, shape, **kwargs):
         methods = {'cache', 'formula', 'general'}
-        standard_moment = self._moment_standard_dispatch(order, **kwargs,
-                                                         methods=methods)
+        standard_moment = self._moment_standard_dispatch(
+            order, **kwargs, shape=shape, methods=methods)
         if standard_moment is None:
             return None
         var = self._moment_central_dispatch(2, methods=self._moment_methods,
-                                            **kwargs)
+                                            shape=shape, **kwargs)
         return standard_moment*var**(order/2)
 
     @classmethod
@@ -1775,9 +1792,10 @@ class ContinuousDistribution:
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_standard_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **self._parameters)
+            order, methods=methods, cache_policy=cache_policy,
+            shape=self._shape, **self._parameters)
 
-    def _moment_standard_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
+    def _moment_standard_dispatch(self, order, *, methods, shape, cache_policy=None, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -1787,17 +1805,17 @@ class ContinuousDistribution:
             moment = self._moment_standard(order, **kwargs)
             if moment is not None:
                 moment = np.asarray(moment)
-                if moment.shape != self._shape:
-                    moment = np.broadcast_to(moment, self._shape)
+                if moment.shape != shape:
+                    moment = np.broadcast_to(moment, shape)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_transform(order, False, **kwargs)
+            moment = self._moment_standard_transform(order, False, shape, **kwargs)
 
         if moment is None and 'general' in methods:
             moment = self._moment_standard_general(order, **kwargs)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_transform(order, True, **kwargs)
+            moment = self._moment_standard_transform(order, True, shape, **kwargs)
 
         if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
             self._moment_standard_cache[order] = moment
@@ -1807,15 +1825,15 @@ class ContinuousDistribution:
     def _moment_standard(self, order, **kwargs):
         return None
 
-    def _moment_standard_transform(self, order, use_quadrature, **kwargs):
+    def _moment_standard_transform(self, order, use_quadrature, shape, **kwargs):
         methods = ({'quadrature'} if use_quadrature
                    else {'cache', 'formula', 'transform'})
-        central_moment = self._moment_central_dispatch(order, **kwargs,
-                                                       methods=methods)
+        central_moment = self._moment_central_dispatch(
+            order, shape=shape, methods=methods, **kwargs)
         if central_moment is None:
             return None
-        var = self._moment_central_dispatch(2, methods=self._moment_methods,
-                                            **kwargs)
+        var = self._moment_central_dispatch(
+            2, methods=self._moment_methods, shape=shape, **kwargs)
         return central_moment/var**(order/2)
 
     @classmethod

@@ -98,6 +98,7 @@ class Normal(ContinuousDistribution):
     def _median(self, **kwargs):
         return 0
 
+    @classmethod
     def _mode(self, **kwargs):
         return 0
 
