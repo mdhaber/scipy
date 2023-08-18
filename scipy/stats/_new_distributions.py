@@ -32,11 +32,12 @@ class OrderStatisticDistribution(ContinuousDistribution):
         self._shape = np.broadcast_shapes(self._shape, dist._shape)
         self._invalid = np.broadcast_to(self._invalid, self._shape)
 
-    def _pdf(self, x, r, n, **kwargs):
+    @classmethod
+    def _pdf(cls, x, r, n, **kwargs):
         factor = factorial(n) / (factorial(r-1) * factorial(n-r))
-        fX = self._dist._pdf_dispatch(x, **kwargs)
-        FX = self._dist._cdf_dispatch(x, **kwargs)
-        cFX = self._dist._ccdf_dispatch(x, **kwargs)
+        fX = cls._dist._pdf_dispatch(x, **kwargs)
+        FX = cls._dist._cdf_dispatch(x, **kwargs)
+        cFX = cls._dist._ccdf_dispatch(x, **kwargs)
         return factor * fX * FX**(r-1) * cFX**(n-r)
 
 

@@ -24,7 +24,6 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  all private methods should be classmethods
 #  dist.mean is a 0d array - why isn't that caught by tests?
 #  loc/scale should override _dispatch methods
 #  ensure that user overrides return correct shape and dtype
@@ -127,6 +126,39 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #   - result_dtype
 #   - is_subdtype
 #   It is much faster to check whether these are necessary than to do them.
+#
+#   I've designated most private methods as classmethods. The driving reason
+#   is that we'd like for `llf` and `dllf` to be classmethods rather than
+#   instance methods because the arguments of those functions, mathematically,
+#   are the shape parameters, so it is a bit backwards to have to instantiate
+#   a distribution in order to call them. Similarly, `fit` makes more sense
+#   as a classmethod unless it would modify an existing distribution. So
+#   these methods should be able to call `_pdf_dispatch` or `_logpdf_dispatch`
+#   to do MLE, and they should be able to call the cdf dispatch methods for
+#   maximum product spacing, which would require that the these methods be
+#   classmethods, too. I went ahead and made the inverse methods classmethods
+#   for good measure. To be honest, the moment methods would need to be
+#   classmethods if we want to support method of moments, but this would
+#   require that the cache be passed around to basically all the methods, and
+#   this would get a little cumbersome, so I'm holding off on that. The other
+#   reason is that it might be good to expose a stateless interface at some
+#   point per the concerns expressed in gh-15928. Already, most of the private
+#   functions have little dependence on the state because all the pre-processed
+#   distribution parameters passed to them so that they behave as strictly
+#   elementwise functions (as needed by the integration, rootfinding,
+#   minimization, and differentiation functions). So making them classmethods
+#   helps ensure that no unnecessary state dependence creeps into them.
+#   There are two downsides to classmethods:
+#   - all the methods need the decorator, which just looks annoying
+#   - they may be slightly slower to execute, based on limited testing
+#     and what I've read.
+#   So note that if we want to reverse this decision, it's very easy to
+#   convert classmethods back to instance methods. At a minimum, all that is
+#   required is to remove the decorator. It is technically optional to
+#   replace the name `cls` with `self`. The only other things to do might be
+#   to adjust PEP8 whitespace (since `cls` is one character shorter than
+#   `self`) and rely on state rather than passing in arguments (e.g. `tol`)
+#   where convenient.
 
 
 class _Domain:
@@ -1702,8 +1734,7 @@ class ContinuousDistribution:
         moment = self._moment_transform_center(order, central_moments, mean, 0)
         return moment
 
-    @classmethod
-    def _moment_raw_general(cls, order, **kwargs):
+    def _moment_raw_general(self, order, **kwargs):
         # This is the only general formula for a raw moment of a probability
         # distribution
         return 1 if order == 0 else None
@@ -1781,8 +1812,7 @@ class ContinuousDistribution:
                                             shape=shape, **kwargs)
         return standard_moment*var**(order/2)
 
-    @classmethod
-    def _moment_central_general(cls, order, **kwargs):
+    def _moment_central_general(self, order, **kwargs):
         general_central_moments = {0: 1, 1: 0}
         return general_central_moments.get(order, None)
 
@@ -1836,8 +1866,7 @@ class ContinuousDistribution:
             2, methods=self._moment_methods, shape=shape, **kwargs)
         return central_moment/var**(order/2)
 
-    @classmethod
-    def _moment_standard_general(cls, order, **kwargs):
+    def _moment_standard_general(self, order, **kwargs):
         general_standard_moments = {0: 1, 1: 0, 2: 1}
         return general_standard_moments.get(order, None)
 
@@ -1847,8 +1876,7 @@ class ContinuousDistribution:
             return pdf*(x-center)**order
         return self._quadrature(integrand, args=(order, center), kwargs=kwargs)
 
-    @classmethod
-    def _moment_transform_center(cls, order, moment_as, a, b):
+    def _moment_transform_center(self, order, moment_as, a, b):
         a, b, *moment_as = np.broadcast_arrays(a, b, *moment_as)
         n = order
         i = np.arange(n+1).reshape([-1]+[1]*a.ndim)  # orthogonal to other axes
