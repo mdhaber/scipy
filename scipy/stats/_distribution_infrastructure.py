@@ -24,7 +24,7 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  loc/scale should override _dispatch methods
+#  test loc/scale distribution
 #  Write `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
@@ -67,6 +67,8 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #  accuracy benchmark suite
 #  Should caches be attributes so we can more easily ensure that they are not
 #   modified when caching is turned off?
+#  Make ShiftedScaledDistribution more efficient - only process underlying
+#   distribution parameters as necessary.
 
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
@@ -1943,11 +1945,6 @@ class ContinuousDistribution:
 # components.
 
 class ShiftedScaledDistribution(ContinuousDistribution):
-    # I'm not sure we need this to inherit from ContinuousDistribution, but
-    # it should be recognized as the same type because it will have
-    # all the same public methods and be usable in all the same ways. Really,
-    # we want both of these classes to implement an interface.
-
     _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
     _loc_param = _RealParameter('loc', symbol='µ', domain=_loc_domain, typical=(1, 2))
 
@@ -1969,19 +1966,19 @@ class ShiftedScaledDistribution(ContinuousDistribution):
 
     def _process_parameters(self, loc=None, scale=None, **kwargs):
         loc = loc if loc is not None else np.zeros_like(scale)
-        scale = scale if scale is not None else np.zeros_like(loc)
+        scale = scale if scale is not None else np.ones_like(loc)
         sign = scale > 0
-        parameters = self._dist._process_parameters(**kwargs) if kwargs else {}
+        parameters = self._dist._process_parameters(**kwargs)
         parameters.update(dict(loc=loc, scale=scale, sign=sign))
         return parameters
 
-    def update_parameters(self, *, iv_policy=None, loc=None, scale=None, **kwargs):
+    def update_parameters(self, *, iv_policy=None, **kwargs):
         # maybe broadcast everything before processing?
         parameters = {}
-        if loc is not None:
-            parameters['loc'] = loc
-        if scale is not None:
-            parameters['scale'] = scale
+        # There may be some issues with _original_parameters
+        # We only want to update with _dist._original_parameters during
+        # initialization. Afterward that, we want to start with
+        # self._original_parameters.
         parameters.update(self._dist._original_parameters)
         parameters.update(kwargs)
         super().update_parameters(iv_policy=iv_policy, **parameters)
