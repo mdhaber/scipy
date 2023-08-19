@@ -25,8 +25,6 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
 #  loc/scale should override _dispatch methods
-#  ensure that user overrides return correct shape and dtype
-#  make it possible to modify parameters
 #  Write `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
@@ -67,8 +65,6 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #  - provide a Generator if you're going to do sampling
 #  add options for drawing parameters: log-spacing
 #  accuracy benchmark suite
-#  Can we process the parameters before checking the parameterization? Then, it
-#   would be easy to accept any valid parameterization (e.g. `a` and `log_b`)
 #  Should caches be attributes so we can more easily ensure that they are not
 #   modified when caching is turned off?
 
@@ -558,7 +554,7 @@ class _RealParameter(_Parameter):
         valid = self.domain.contains(arr, parameter_values)
         valid = valid & valid_dtype if valid_dtype is not None else valid
 
-        return arr, arr.dtype, valid
+        return arr[()], arr.dtype, valid
 
 
 class _Parameterization:
@@ -891,9 +887,6 @@ class ContinuousDistribution:
         parameters, shape = self._broadcast(parameters)
         parameters, invalid, any_invalid, dtype = self._validate(
             parameterization, parameters)
-        # Let's try to process the parameters before validation. Then we can
-        # ensure that the shapes are consistent, and we can be more flexible
-        # about what parameterizations are accepted.
         parameters = self._process_parameters(**parameters)
 
         self._parameters = parameters
@@ -1055,7 +1048,6 @@ class ContinuousDistribution:
     @classmethod
     def _process_parameters(cls, **kwargs):
         return kwargs
-
 
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=None,
@@ -1648,10 +1640,6 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_raw(order, **kwargs)
-            if moment is not None:
-                moment = np.asarray(moment)
-                if moment.shape != self._shape:
-                    moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods and order > 1:
             moment = self._moment_raw_transform(order, **kwargs)
@@ -1711,10 +1699,6 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_central(order, **kwargs)
-            if moment is not None:
-                moment = np.asarray(moment)
-                if moment.shape != self._shape:
-                    moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'transform' in methods:
             moment = self._moment_central_transform(order, **kwargs)
@@ -1785,10 +1769,6 @@ class ContinuousDistribution:
 
         if moment is None and 'formula' in methods:
             moment = self._moment_standard(order, **kwargs)
-            if moment is not None:
-                moment = np.asarray(moment)
-                if moment.shape != self._shape:
-                    moment = np.broadcast_to(moment, self._shape)
 
         if moment is None and 'normalize' in methods:
             moment = self._moment_standard_transform(order, False, **kwargs)
@@ -1986,8 +1966,8 @@ class ShiftedScaledDistribution(ContinuousDistribution):
     def __init__(self, dist, *args, loc=0, scale=1, **kwargs):
         # input validation
         super().__init__(*args, **kwargs)
-        self.loc = np.asarray(loc)
-        self.scale = np.asarray(scale)
+        self.loc = np.asarray(loc)[()]
+        self.scale = np.asarray(scale)[()]
         self._dist = dist
         self._process_loc_scale()
 
@@ -2034,7 +2014,7 @@ class ShiftedScaledDistribution(ContinuousDistribution):
                 fx = f(self._transform(x), *args, **kwargs)
                 cfx = cf(self._transform(x), *args, **kwargs)
                 sign = np.broadcast_to(self.scale, fx.shape) > 0
-                return np.where(sign, fx, cfx)
+                return np.where(sign, fx, cfx)[()]
 
             return wrapped
 
@@ -2048,18 +2028,17 @@ class ShiftedScaledDistribution(ContinuousDistribution):
                 fx = self._itransform(f(x, *args, **kwargs))
                 cfx = self._itransform(cf(x, *args, **kwargs))
                 sign = np.broadcast_to(self.scale, fx.shape) > 0
-                return np.where(sign, fx, cfx)
+                return np.where(sign, fx, cfx)[()]
 
             return wrapped
 
         return super().__getattribute__(item)
 
-    @cached_property
     def support(self):
         a, b = self._dist.support()
         a, b = self._itransform(a), self._itransform(b)
         sign = np.broadcast_to(self.scale, a.shape) > 0
-        return np.where(sign, a, b), np.where(sign, b, a)
+        return np.where(sign, a, b)[()], np.where(sign, b, a)[()]
 
     def entropy(self, *args, **kwargs):
         return self._dist.entropy(*args, **kwargs) + np.log(abs(self.scale))
