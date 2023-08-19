@@ -130,8 +130,7 @@ class LogUniform(ContinuousDistribution):
                           _Parameterization(_a_param, _b_param)]
     _variable = _x_param
 
-    @classmethod
-    def _process_parameters(cls, a=None, b=None, log_a=None, log_b=None):
+    def _process_parameters(self, a=None, b=None, log_a=None, log_b=None):
         a = np.exp(log_a) if a is None else a
         b = np.exp(log_b) if b is None else b
         log_a = np.log(a) if log_a is None else log_a

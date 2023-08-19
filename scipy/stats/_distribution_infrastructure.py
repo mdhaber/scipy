@@ -847,12 +847,13 @@ class ContinuousDistribution:
             "to use the default implementation."
         )
         self._original_parameters = {}
-        self.reset_parameters(**parameters)
+        self.update_parameters(**parameters)
 
-    def reset_parameters(self, *, iv_policy=None, **kwargs):
+    def update_parameters(self, *, iv_policy=None, **kwargs):
 
         parameters = original_parameters = self._original_parameters.copy()
         parameters.update(**kwargs)
+        parameterization = None
         self._invalid = np.asarray(False)
         self._any_invalid = False
         self._shape = tuple()
@@ -898,6 +899,7 @@ class ContinuousDistribution:
 
         self.reset_cache()
         self._parameters = parameters
+        self._parameterization = parameterization
         self._original_parameters = original_parameters
 
     def __getattr__(self, item):
@@ -1029,8 +1031,7 @@ class ContinuousDistribution:
 
         return parameters, invalid, any_invalid, dtype
 
-    @classmethod
-    def _process_parameters(cls, **kwargs):
+    def _process_parameters(self, **kwargs):
         return kwargs
 
     @classmethod
@@ -1911,21 +1912,21 @@ class ContinuousDistribution:
     def _llf(self, parameters, *, sample, axis):
         return np.sum(self._logpdf_dispatch(sample, **parameters), axis=axis)
 
-    @classmethod
-    def dllf(cls, parameters, *, sample, var):
-        # relies on current behavior of `_differentiate` to get shapes right
-        parameters = parameters.copy()
-        dist = cls(**parameters)
-        processed = dist._parameters
-
-        def f(x):
-            params = parameters.copy()
-            params[var] = x
-            processed = cls._process_parameters(**params)
-            res = dist._llf(processed, sample=sample[:, None], axis=0)
-            return np.reshape(res, x.shape)
-
-        return _differentiate(f, processed[var]).df
+    # @classmethod
+    # def dllf(cls, parameters, *, sample, var):
+    #     # relies on current behavior of `_differentiate` to get shapes right
+    #     parameters = parameters.copy()
+    #     dist = cls(**parameters)
+    #     processed = dist._parameters
+    #
+    #     def f(x):
+    #         params = parameters.copy()
+    #         params[var] = x
+    #         processed = cls._process_parameters(**params)
+    #         res = dist._llf(processed, sample=sample[:, None], axis=0)
+    #         return np.reshape(res, x.shape)
+    #
+    #     return _differentiate(f, processed[var]).df
 
 
 # Rough sketch of how we might shift/scale distributions. The purpose of
@@ -1953,17 +1954,37 @@ class ShiftedScaledDistribution(ContinuousDistribution):
     _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
     _scale_param = _RealParameter('scale', symbol='σ', domain=_scale_domain, typical=(0.1, 10))
 
-    _parameterizations = [_Parameterization(_loc_param, _scale_param)]
+    _parameterizations = [_Parameterization(_loc_param, _scale_param),
+                          _Parameterization(_loc_param),
+                          _Parameterization(_scale_param)]
 
     def __init__(self, dist, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self._dist = dist
-        self._parameters.update(dist._parameters)
+        if dist._parameterization:
+            # Add standard distribution parameters to our parameterization
+            dist_parameters = dist._parameterization.parameters
+            for parameterization in self._parameterizations:
+                parameterization.parameters.update(dist_parameters)
+        super().__init__(*args, **kwargs)
 
-    @classmethod
-    def _process_parameters(cls, loc=None, scale=None, **kwargs):
+    def _process_parameters(self, loc=None, scale=None, **kwargs):
+        loc = loc if loc is not None else np.zeros_like(scale)
+        scale = scale if scale is not None else np.zeros_like(loc)
         sign = scale > 0
-        return dict(loc=loc, scale=scale, sign=sign)
+        parameters = self._dist._process_parameters(**kwargs) if kwargs else {}
+        parameters.update(dict(loc=loc, scale=scale, sign=sign))
+        return parameters
+
+    def update_parameters(self, *, iv_policy=None, loc=None, scale=None, **kwargs):
+        # maybe broadcast everything before processing?
+        parameters = {}
+        if loc is not None:
+            parameters['loc'] = loc
+        if scale is not None:
+            parameters['scale'] = scale
+        parameters.update(self._dist._original_parameters)
+        parameters.update(kwargs)
+        super().update_parameters(iv_policy=iv_policy, **parameters)
 
     # def __repr__(self):
     #     dist = self._dist
