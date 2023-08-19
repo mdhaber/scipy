@@ -836,69 +836,75 @@ class ContinuousDistribution:
 
     def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
                  rng=None, **parameters):
-        # We override __getattr__ and __setattr__ so distribution parameters
-        # can be modified safely. The attribute `_parameters` needs to exist
-        # for them to work, so take care of that.
-        super().__setattr__('_parameters', dict())
-        # This is _solely_ for the syntactic sugar of setting attributes with
-        # dot notation. We can avoid messing with these things by allowing
-        # the user to set attributes only via a method.
-
         self.tol = tol
         self.iv_policy = iv_policy
         self.cache_policy = (cache_policy if cache_policy is not None
                              else CACHE_POLICY.CACHE)
-        # These will still exist even if cache_policy is NO_CACHE. This allows
-        # caching to be turned on and off easily.
-        self.reset_cache()
-        self._original_parameters = parameters
-        parameters = {key: val for key, val in parameters.items()
-                      if val is not _null}
-        self._parameters = parameters
-        self._parameterization = None
-        self._invalid = np.asarray(False)
-        self._any_invalid = False
-        self._shape = tuple()
-        self._dtype = np.float64
+        self._rng = self._validate_rng(rng, iv_policy)
         self._not_implemented = (
             f"`{self.__class__.__name__}` does not provide an accurate "
             "implementation of the required method. Leave `tol` unspecified "
             "to use the default implementation."
         )
+        self._original_parameters = {}
+        self.reset_parameters(**parameters)
 
-        if iv_policy == IV_POLICY.SKIP_ALL:
-            # Not sure whether attributes should be set if we're skipping IV
-            self._rng = rng
-            return
+    def reset_parameters(self, *, iv_policy=None, **kwargs):
 
-        # _validate_rng returns None if rng is None. `default_rng()` takes
-        # ~30 µs on my machine.
-        self._rng = self._validate_rng(rng)
+        parameters = original_parameters = self._original_parameters.copy()
+        parameters.update(**kwargs)
+        self._invalid = np.asarray(False)
+        self._any_invalid = False
+        self._shape = tuple()
+        self._dtype = np.float64
 
-        if not len(self._parameterizations):
+        if (iv_policy or self.iv_policy) == IV_POLICY.SKIP_ALL:
+            pass
+        elif not len(self._parameterizations):
             if parameters:
                 message = (f"The `{self.__class__.__name__}` distribution "
                            "family does not accept parameters, but parameters "
                            f"`{set(parameters)}` were provided.")
                 raise ValueError(message)
-            return
+        else:
+            # This is default behavior, which re-runs all the parameter
+            # validation whenever a parameter is modified. For many
+            # distributions, the domain of a parameter doesn't depend on
+            # other parameters, so parameters could safely be modified
+            # withuout validating the other parameters again. To handle
+            # these cases more efficiently, we could allow the developer
+            # to override this behavior.
 
-        parameterization = self._identify_parameterization(parameters)
-        parameters, shape = self._broadcast(parameters)
-        parameters, invalid, any_invalid, dtype = self._validate(
-            parameterization, parameters)
-        parameters = self._process_parameters(**parameters)
+            # Currently the user can only update the original parameterization.
+            # Even though that parameterization is already known,
+            # `_identify_parameterization` is called to produce a nice error
+            # message if the user passes other values. To be a little more
+            # efficient, we could detect whether the values passed are
+            # consistent with the original parameterization rather than finding
+            # it from scratch. However, we might want other parameterizations
+            # to be accepted, which would require other changes, so I didn't
+            # optimize this.
 
+            parameterization = self._identify_parameterization(parameters)
+            parameters, shape = self._broadcast(parameters)
+            parameters, invalid, any_invalid, dtype = self._validate(
+                parameterization, parameters)
+            parameters = self._process_parameters(**parameters)
+
+            self._invalid = invalid
+            self._any_invalid = any_invalid
+            self._shape = shape
+            self._dtype = dtype
+
+        self.reset_cache()
         self._parameters = parameters
-        self._parameterization = parameterization
-        self._invalid = invalid
-        self._any_invalid = any_invalid
-        self._shape = shape
-        self._dtype = dtype
+        self._original_parameters = original_parameters
 
-    # If we're uncomfortable with this, we can allow the user to get and
-    # set attributes with methods.
     def __getattr__(self, item):
+        # This might be needed in __init__ to ensure that `_parameters` exists
+        # super().__setattr__('_parameters', dict())
+
+        # This is needed for deepcopy/pickling
         if '_parameters' not in vars(self):
             raise AttributeError()
 
@@ -907,37 +913,10 @@ class ContinuousDistribution:
 
         return super().__getattr__(item)
 
-    def __setattr__(self, key, value):
-        if key in self._parameters:
-            self._parameters[key] = value
-            self._original_parameters[key] = value
-            parameters = self._original_parameters
-
-            if self.iv_policy != IV_POLICY.SKIP_ALL:
-                # This is default behavior, which re-runs all the parameter
-                # validation whenever a parameter is modified. For many
-                # distributions, the domain of a parameter doesn't depend on
-                # other parameters, so parameters could safely be modified
-                # withuout validating the other parameters again. To handle
-                # these cases more efficiently, we could allow the developer
-                # to override this behavior.
-                self.reset_cache()
-                parameterization = (self._parameterization or
-                                    self._identify_parameterization(parameters))
-                parameters, shape = self._broadcast(parameters)
-                parameters, invalid, any_invalid, dtype = self._validate(
-                    parameterization, parameters)
-                parameters = self._process_parameters(**parameters)
-
-                self._parameters.update(parameters)
-                self._invalid = invalid
-                self._any_invalid = any_invalid
-                self._shape = shape
-                self._dtype = dtype
-            return
-        super().__setattr__(key, value)
-
     def reset_cache(self):
+        # For simplicity, these will still exist even if cache_policy is
+        # NO_CACHE; they just won't be populated. This allows caching to be
+        # turned on and off easily.
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
@@ -956,7 +935,12 @@ class ContinuousDistribution:
             info.append(f"dtype={self._dtype}")
         return f"{class_name}({', '.join(info)})"
 
-    def _validate_rng(self, rng):
+    def _validate_rng(self, rng, iv_policy=None):
+        # _validate_rng returns None if rng is None. `default_rng()` takes
+        # ~30 µs on my machine.
+        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
+            return rng
+
         if rng is not None and not isinstance(rng, np.random.Generator):
             message = ("Argument `rng` passed to the "
                        f"`{self.__class__.__name__}` distribution family is "
