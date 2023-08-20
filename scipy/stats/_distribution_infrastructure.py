@@ -1968,13 +1968,12 @@ class ContinuousDistribution:
 # making it a separate class is just for
 # a) simplicity of the code and
 # b) not mandate that every distribution accept loc/scale.
-# The simplicity is important, because I think we'd also like to be able to
-# generate truncated distributions, wrapped distributions,
-# double/symmetric distributions, folded distributions from arbitrary
-# distributions. We wouldn't want to cram all of this into the
-# `ContinuousDistribution` class. Also, the order of the composition
+# The simplicity is important, because we should apply the same approach for
+# all transformations of distributions: truncation, wrapping, folding,
+# and doubling, for instance. We wouldn't want to cram all of these options
+# into the `ContinuousDistribution` class. Also, the order of the composition
 # matters (e.g. truncate then shift/scale or vice versa); it's easier to
-# accomodate different orders if the transformation is built up from
+# accommodate different orders if the transformation is built up from
 # components.
 
 class ShiftedScaledDistribution(ContinuousDistribution):
@@ -2016,23 +2015,10 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         parameters.update(kwargs)
         super().update_parameters(iv_policy=iv_policy, **parameters)
 
-    # def __repr__(self):
-    #     dist = self._dist
-    #     class_name = dist.__class__.__name__
-    #     parameters = list(dist._original_parameters)
-    #     info = []
-    #     if parameters:
-    #         parameters.sort()
-    #         info.append(f"{', '.join(parameters)}")
-    #     if self.loc is not None:
-    #         info.append(f"loc={self.loc}")
-    #     if self.scale is not None:
-    #         info.append(f"scale={self.scale}")
-    #     if self._shape:
-    #         info.append(f"shape={self._shape}")
-    #     if self._dtype != np.float64:
-    #         info.append(f"dtype={self._dtype}")
-    #     return f"{class_name}({', '.join(info)})"
+    def __repr__(self):
+        s = super().__repr__()
+        return s.replace('ShiftedScaledDistribution',
+                         self._dist.__class__.__name__)
 
     def _transform(self, x, loc, scale, **kwargs):
         return (x - loc)/scale
@@ -2085,6 +2071,14 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         lls = np.log(np.log(abs(scale)))
         return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
 
+    def _median_dispatch(self, *, method, loc, scale, **kwargs):
+        raw = self._dist._median_dispatch(method=method, **kwargs)
+        return self._itransform(raw, loc, scale)
+
+    def _mode_dispatch(self, *, method, loc, scale, **kwargs):
+        raw = self._dist._mode_dispatch(method=method, **kwargs)
+        return self._itransform(raw, loc, scale)
+
     def _logpdf_dispatch(self, x, *args, loc, scale, sign, **kwargs):
         return (self._dist._logpdf_dispatch(self._transform(x, loc, scale), *args, **kwargs)
                 - np.log(abs(scale)))
@@ -2093,52 +2087,55 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         return (self._dist._pdf_dispatch(self._transform(x, loc, scale), *args, **kwargs)
                 / abs(scale))
 
-    # def moment_standard(self, order, *args, **kwargs):
-    #     return (self._dist.moment_standard(order, *args, **kwargs)
-    #             * np.sign(self.scale)**order)
-    #
-    # def moment_central(self, order, *args, **kwargs):
-    #     return (self._dist.moment_central(order, *args, **kwargs)
-    #             * self.scale**order)
-    #
-    # def moment_raw(self, order, *args, **kwargs):
-    #     raw_moments = []
-    #     for i in range(int(order) + 1):
-    #         moment_i = (self._dist.moment_raw(i, *args, **kwargs)
-    #                     * self.scale**i)
-    #         raw_moments.append(moment_i)
-    #
-    #     # double check this
-    #     return self._moment_transform_center(order, raw_moments,
-    #                                          self.loc, 0)
+    def _moment_standard_dispatch(self, order, *, loc, scale, methods, cache_policy=None, **kwargs):
+        return (self._dist._moment_standard_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **kwargs)
+                * np.sign(scale)**order)
 
-    # def sample(self, shape=(), *, method=None, rng=None):
-    #     sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
-    #     full_shape = sample_shape + self._shape
-    #     rng = self._validate_rng(rng) or self._rng or np.random.default_rng()
-    #     sample = self._dist._sample_dispatch(
-    #         sample_shape, full_shape, method=method, rng=rng,
-    #         **self._dist._parameters)
-    #     return sample * self.scale + self.loc
+    def _moment_central_dispatch(self, order, *, loc, scale, methods, cache_policy=None, **kwargs):
+        return (self._dist._moment_central_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **kwargs)
+                * scale**order)
+
+    def _moment_raw_dispatch(self, order, *, loc, scale, methods, cache_policy=None, **kwargs):
+        raw_moments = []
+        for i in range(int(order) + 1):
+            raw = self._dist._moment_raw_dispatch(
+                i, methods=methods, cache_policy=cache_policy, **kwargs)
+            moment_i = raw * scale**i
+            raw_moments.append(moment_i)
+
+        return self._moment_transform_center(
+            order, raw_moments, loc, 0)
+
+    def _sample_dispatch(self, sample_shape, full_shape, *, method, rng, **kwargs):
+        rvs = self._dist._sample_dispatch(
+            sample_shape, full_shape, method=method, rng=rng, **kwargs)
+        return rvs*self.scale + self.loc
+
+    def _qmc_sample_dispatch(self, length, full_shape, *, method, qrng, **kwargs):
+        rvs = self._dist._qmc_sample_dispatch(
+            length, full_shape, method=method, qrng=qrng, **kwargs)
+        return rvs*self.scale + self.loc
 
     # Add these methods to ContinuousDistribution so they can return a
     # ShiftedScaledDistribution
     def __add__(self, loc):
-        self.loc = self.loc + loc
+        self.update_parameters(loc=self.loc + loc)
         return self
 
     def __sub__(self, loc):
-        self.loc = self.loc - loc
+        self.update_parameters(loc=self.loc - loc)
         return self
 
     def __mul__(self, scale):
-        self.scale = self.scale * scale
-        self.loc = self.loc * scale
+        self.update_parameters(loc=self.loc * scale,
+                               scale=self.scale * scale)
         return self
 
     def __truediv__(self, scale):
-        self.scale = self.scale / scale
-        self.loc = self.loc / scale
+        self.update_parameters(loc=self.loc / scale,
+                               scale=self.scale / scale)
         return self
 
     def __radd__(self, other):
