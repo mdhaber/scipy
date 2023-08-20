@@ -786,6 +786,21 @@ def _set_invalid_nan_property(f):
 
     return filtered
 
+def _dispatch(f):
+
+    def wrapped(self, method=None, *args, **kwargs):
+        func_name = f.__name__
+        methods = self._methods[func_name]
+        method = method or self._method_cache.get(func_name, None)
+        if method is not None:
+            return self._call_selected_method(method, methods, **kwargs)
+        else:
+            method = f(self, method, *args, **kwargs)
+            self._method_cache[func_name] = method
+            return self._call_selected_method(method, methods, **kwargs)
+
+    return wrapped
+
 
 def kwargs2args(f, args=[], kwargs={}):
     # this is a temporary workaround until the scalar algorithms `_tanhsinh`,
@@ -853,6 +868,24 @@ class ContinuousDistribution:
             "to use the default implementation."
         )
         self._original_parameters = {}
+
+        self._methods = {
+            '_logentropy_dispatch': {
+                'formula': self._logentropy,
+                'log/exp': self._logentropy_log_entropy,
+                'quadrature': self._logentropy_integrate_logpdf
+            },
+            '_entropy_dispatch': {
+                'formula': self._entropy,
+                'log/exp': self._entropy_exp_logentropy,
+                'quadrature': self._entropy_integrate_pdf
+            },
+            '_median_dispatch': {
+                'formula': self._median,
+                'icdf': self._median_icdf,
+            }
+        }
+
         self.update_parameters(**parameters)
 
     def update_parameters(self, *, iv_policy=None, **kwargs):
@@ -919,7 +952,7 @@ class ContinuousDistribution:
         if item in self._parameters:
             return self._parameters[item]
 
-        return super().__getattr__(item)
+        return super().__getattribute__(item)
 
     def reset_cache(self):
         # For simplicity, these will still exist even if cache_policy is
@@ -929,6 +962,7 @@ class ContinuousDistribution:
         self._moment_central_cache = {}
         self._moment_standard_cache = {}
         self._support_cache = None
+        self._method_cache = {}
 
     def __repr__(self):
         class_name = self.__class__.__name__
@@ -1170,15 +1204,26 @@ class ContinuousDistribution:
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
 
+
+    def _call_selected_method(self, method, methods, *args, **kwargs):
+        try:
+            return methods[method](*args, **kwargs)
+        except KeyError as e:
+            raise NotImplementedError(self._not_implemented) from e
+
+
+    @_dispatch
     def _logentropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logentropy'):
-            return self._logentropy(**kwargs)
-        elif (self.tol is _null and self._overrides('_entropy') and method is None) or method=='log/exp':
-            return self._logentropy_log_entropy(**kwargs)
-        elif method in {'quadrature', None}:
-            return self._logentropy_integrate_logpdf(**kwargs)
+        if self._overrides('_logentropy'):
+            method = 'formula'
+        elif self.tol is _null and self._overrides('_entropy'):
+            method = 'log/exp'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'quadrature'
+        return method
+
+    def _logentropy(self, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _logentropy_log_entropy(self, **kwargs):
         res = np.log(self._entropy_dispatch(**kwargs) + 0j)
@@ -1195,15 +1240,18 @@ class ContinuousDistribution:
     def entropy(self, *, method=None):
         return self._entropy_dispatch(method=method, **self._parameters)
 
+    @_dispatch
     def _entropy_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_entropy'):
-            return self._entropy(**kwargs)
-        elif (self._overrides('_logentropy') and method is None) or method=='log/exp':
-            return self._entropy_exp_logentropy(**kwargs)
-        elif method in {'quadrature', None}:
-            return self._entropy_integrate_pdf(**kwargs)
+        if self._overrides('_entropy'):
+            method = 'formula'
+        elif self._overrides('_logentropy'):
+            method = 'log/exp'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'quadrature'
+        return method
+
+    def _entropy(self, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _entropy_exp_logentropy(self, **kwargs):
         return np.exp(self._logentropy_dispatch(**kwargs))
@@ -1218,13 +1266,16 @@ class ContinuousDistribution:
     def median(self, *, method=None):
         return self._median_dispatch(method=method, **self._parameters)
 
+    @_dispatch
     def _median_dispatch(self, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_median'):
-            return np.asarray(self._median(**kwargs))[()]
-        elif method in {None, 'icdf'}:
-            return self._median_icdf(**kwargs)
+        if self._overrides('_median'):
+            method = 'formula'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'icdf'
+        return method
+
+    def _median(self, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _median_icdf(self, **kwargs):
         return self._icdf_dispatch(0.5, **kwargs)
