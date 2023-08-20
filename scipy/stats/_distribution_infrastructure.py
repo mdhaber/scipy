@@ -788,16 +788,16 @@ def _set_invalid_nan_property(f):
 
 def _dispatch(f):
 
-    def wrapped(self, method=None, *args, **kwargs):
+    def wrapped(self, *args, method=None, **kwargs):
         func_name = f.__name__
         methods = self._methods[func_name]
         method = method or self._method_cache.get(func_name, None)
         if method is not None:
-            return self._call_selected_method(method, methods, **kwargs)
+            return self._call_selected_method(method, methods, *args, **kwargs)
         else:
-            method = f(self, method, *args, **kwargs)
+            method = f(self, *args, method=method, **kwargs)
             self._method_cache[func_name] = method
-            return self._call_selected_method(method, methods, **kwargs)
+            return self._call_selected_method(method, methods, *args, **kwargs)
 
     return wrapped
 
@@ -883,7 +883,19 @@ class ContinuousDistribution:
             '_median_dispatch': {
                 'formula': self._median,
                 'icdf': self._median_icdf,
-            }
+            },
+            '_mode_dispatch': {
+                'formula': self._mode,
+                'optimization': self._mode_optimization,
+            },
+            '_logpdf_dispatch': {
+                'formula': self._logpdf,
+                'log/exp': self._logpdf_log_pdf,
+            },
+            '_pdf_dispatch': {
+                'formula': self._pdf,
+                'log/exp': self._pdf_exp_logpdf,
+            },
         }
 
         self.update_parameters(**parameters)
@@ -947,7 +959,7 @@ class ContinuousDistribution:
 
         # This is needed for deepcopy/pickling
         if '_parameters' not in vars(self):
-            raise AttributeError()
+            return super().__getattribute__(item)
 
         if item in self._parameters:
             return self._parameters[item]
@@ -1284,15 +1296,18 @@ class ContinuousDistribution:
     def mode(self, *, method=None):
         return self._mode_dispatch(method=method, **self._parameters)
 
+    @_dispatch
     def _mode_dispatch(self, method=None, **kwargs):
         # We could add a method that looks for a critical point with
         # differentiation and the root finder
-        if method in {None, 'formula'} and self._overrides('_mode'):
-            return np.asarray(self._mode(**kwargs))[()]
-        elif method in {None, 'optimization'}:
-            return self._mode_optimization(**kwargs)
+        if self._overrides('_mode'):
+            method = 'formula'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'optimization'
+        return method
+
+    def _mode(self, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _mode_optimization(self, **kwargs):
         # Heuristic until we write a proper minimization bracket finder (like
@@ -1335,13 +1350,16 @@ class ContinuousDistribution:
     def logpdf(self, x, *, method=None):
         return self._logpdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _logpdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logpdf'):
-            return self._logpdf(x, **kwargs)
-        elif (self.tol is _null and method is None) or method == 'log/exp':
-            return self._logpdf_log_pdf(x, **kwargs)
-        else:
-            raise NotImplementedError(self._not_implemented)
+        if self._overrides('_logpdf'):
+            method = 'formula'
+        elif self.tol is _null:  # ensure that developers override _logpdf
+            method = 'log/exp'
+        return method
+
+    def _logpdf(self, x, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _logpdf_log_pdf(self, x, **kwargs):
         return np.log(self._pdf_dispatch(x, **kwargs))
@@ -1350,13 +1368,16 @@ class ContinuousDistribution:
     def pdf(self, x, *, method=None):
         return self._pdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _pdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_pdf'):
-            return self._pdf(x, **kwargs)
-        if (self._overrides('_logpdf') and method is None) or method == 'log/exp':
-            return self._pdf_exp_logpdf(x, **kwargs)
+        if self._overrides('_pdf'):
+            method = 'formula'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'log/exp'
+        return method
+
+    def _pdf(self, x, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _pdf_exp_logpdf(self, x, **kwargs):
         return np.exp(self._logpdf_dispatch(x, **kwargs))
