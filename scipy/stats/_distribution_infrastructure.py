@@ -8,6 +8,7 @@ from scipy.integrate._tanhsinh import _tanhsinh
 from scipy.optimize._zeros_py import (_chandrupatla, _bracket_root,
                                       _differentiate)
 from scipy.optimize._chandrupatla import _chandrupatla_minimize
+from scipy.stats.qmc import Halton
 import numpy as np
 _null = object()
 oo = np.inf
@@ -25,11 +26,13 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
 #  test loc/scale distribution
+#  address name collisions in transformed distributions
 #  Write `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
 #  check behavior of moment methods when moments are undefined/infinite
-#  Be consistent about options passed to distributions/methods: tols, skip_iv, cache, rng
+#  Be consistent about options passed to distributions/methods: tols, skip_iv,
+#    cache, rng. Also check for issues with transformed distributions.
 #  profile/optimize
 #  general cleanup (choose keyword-only parameters)
 #  documentation
@@ -1106,15 +1109,17 @@ class ContinuousDistribution:
             f = getattr(self, method)
 
             def hist_plot(x, *args, **kwargs):
-                sample = self.sample(10000)
+                sample = f(1000)
                 # should cut off at user-specified limits
-                ax.hist(sample, bins=30, density=True, *args, **kwargs)
+                ax.hist(sample, bins=30, density=True,
+                        histtype='step', *args, **kwargs)
 
             def fun_plot(x, *args, **kwargs):
                 y = f(x)
                 ax.plot(x, y, *args, **kwargs)
 
-            plot = hist_plot if method == 'sample' else fun_plot
+            plot = (hist_plot if method in {'sample', 'qmc_sample'}
+                    else fun_plot)
 
             if len(funcs) > 1:
                 # Would be good to have different ylabel scales
@@ -1128,7 +1133,8 @@ class ContinuousDistribution:
         # should use LaTeX; use symbols
         ax.set_xlabel('x')
         ax.set_ylabel('pdf(x)')
-        ax.legend()
+        if len(funcs) > 1:
+            ax.legend()
         method_str = (f".{funcs[0]}" if len(funcs) == 1
                       else f" functions {funcs}")
         title = str(self) + method_str
@@ -1562,6 +1568,33 @@ class ContinuousDistribution:
 
     def _sample_inverse_transform(self, sample_shape, full_shape, *, rng, **kwargs):
         uniform = rng.uniform(size=full_shape)
+        return self._icdf_dispatch(uniform, **kwargs)
+
+    def qmc_sample(self, shape=(), *, method=None, qrng=Halton, rng=None):
+        # Any shape is allowed, but observations along the 0th dimension are
+        # not independent.
+        sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
+        full_shape = sample_shape + self._shape
+        d = int(np.prod(full_shape[1:]))
+        length = full_shape[0]
+        qrng = qrng(d=d, seed=rng)
+        return self._qmc_sample_dispatch(
+            length, full_shape, method=method, qrng=qrng,
+            **self._parameters)
+
+    def _qmc_sample_dispatch(self, length, full_shape, *, method, qrng, **kwargs):
+        if method in {None, 'formula'} and self._overrides('_qmc_sample'):
+            return np.asarray(self._qmc_sample(
+                length, full_shape, qrng=qrng, **kwargs))[()]
+        elif method in {None, 'inverse_transform'}:
+            return self._qmc_sample_inverse_transform(
+                length, full_shape, qrng=qrng, **kwargs)
+        else:
+            raise NotImplementedError(self._not_implemented)
+
+    def _qmc_sample_inverse_transform(self, length, full_shape, *, qrng, **kwargs):
+        uniform = qrng.random(length)
+        uniform = np.reshape(uniform, full_shape)
         return self._icdf_dispatch(uniform, **kwargs)
 
     def _logmoment(self, order=1, *, logcenter=None, standardized=False):
