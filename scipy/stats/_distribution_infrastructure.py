@@ -3,7 +3,7 @@ import sys
 import enum
 from functools import cached_property
 from scipy._lib._util import _lazywhere
-from scipy import special
+from scipy import special, optimize
 from scipy.integrate._tanhsinh import _tanhsinh
 from scipy.optimize._zeros_py import (_chandrupatla, _bracket_root,
                                       _differentiate)
@@ -25,9 +25,10 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
+#  _parameterizations cannot be a class variable if it is modified
 #  test loc/scale distribution
 #  address name collisions in transformed distributions
-#  Write `fit` method
+#  Add bounds to `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
 #  check behavior of moment methods when moments are undefined/infinite
@@ -1938,31 +1939,32 @@ class ContinuousDistribution:
     # Then `llf` could decide which of the two it is, and not create an
     # instance if one was provided.
 
-    @classmethod
-    def llf(cls, parameters={}, *, sample, axis=-1):
-        # still needs input validation of sample
-        dist = cls(**parameters)
-        return dist._llf(dist._parameters, sample=sample, axis=axis)
+    def llf(self, parameters={}, *, sample, axis=-1):
+        self.update_parameters(**parameters)
+        return np.sum(self.logpdf(sample), axis=axis)
 
-    def _llf(self, parameters, *, sample, axis):
-        return np.sum(self._logpdf_dispatch(sample, **parameters), axis=axis)
+    def dllf(self, parameters={}, *, sample, var):
+        self.update_parameters(**parameters)
 
-    # @classmethod
-    # def dllf(cls, parameters, *, sample, var):
-    #     # relies on current behavior of `_differentiate` to get shapes right
-    #     parameters = parameters.copy()
-    #     dist = cls(**parameters)
-    #     processed = dist._parameters
-    #
-    #     def f(x):
-    #         params = parameters.copy()
-    #         params[var] = x
-    #         processed = cls._process_parameters(**params)
-    #         res = dist._llf(processed, sample=sample[:, None], axis=0)
-    #         return np.reshape(res, x.shape)
-    #
-    #     return _differentiate(f, processed[var]).df
+        def f(x):
+            update = {}
+            update[var] = x
+            self.update_parameters(**update)
+            res = self.llf(sample=sample[:, np.newaxis], axis=0)
+            return np.reshape(res, x.shape)
 
+        return _differentiate(f, self._parameters[var]).df
+
+    def fit(self, sample):
+
+        names = list(self._original_parameters.keys())
+        x0 = list(self._original_parameters.values())
+        def objective(x):
+            self.update_parameters(**dict(zip(names, x)))
+            return -self.llf(sample=sample)
+
+        res = optimize.minimize(objective, x0)
+        return res
 
 # Rough sketch of how we might shift/scale distributions. The purpose of
 # making it a separate class is just for

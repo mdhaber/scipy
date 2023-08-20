@@ -3,7 +3,7 @@ import numpy as np
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
-    oo, _null)
+    oo, _null, ShiftedScaledDistribution)
 
 
 def factorial(n):
@@ -100,6 +100,12 @@ class Normal(ContinuousDistribution):
 
     def _sample(self, sample_shape, full_shape, rng, **kwargs):
         return rng.normal(size=full_shape)
+
+
+class ShiftedScaledNormal(ContinuousDistribution):
+    def __new__(cls, *, loc, scale, **kwargs):
+        return ShiftedScaledDistribution(
+            Normal(), loc=loc, scale=scale, **kwargs)
 
 
 def _log_diff(log_p, log_q):
