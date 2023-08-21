@@ -2045,50 +2045,40 @@ class ContinuousDistribution:
         res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
         return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
 
-    # If we really don't like llf/dllf to create instances of the class, they
-    # could do something like this
-    #
-    # @classmethod
-    # def llf(cls, parameters, *, sample, axis=-1):
-    #     # still needs input validation of sample
-    #     parameterization = cls._identify_parameterization(parameters)
-    #     parameters, _ = cls._broadcast(parameters)
-    #     parameters, _, _, _ = cls._validate(parameterization, parameters)
-    #     parameters = cls._process_parameters(**parameters)
-    #
-    #     return cls._llf(parameters, sample=sample, axis=axis)
-    #
-    # @classmethod
-    # def _llf(cls, parameters, *, sample, axis):
-    #     logpdf = getattr(cls, '_logpdf', lambda cls, sample, **parameters: (
-    #         np.log(cls._pdf(cls, sample, **parameters))))
-    #     # _logpdf and _pdf should be classmethods
-    #     return np.sum(logpdf(cls, sample, **parameters), axis=axis)
-    #
-    # @classmethod
-    # def dllf(cls, parameters, *, sample, var):
-    #     # relies on current behavior of `_differentiate` to get shapes right
-    #     parameters = parameters.copy()
-    #     parameterization = cls._identify_parameterization(parameters)
-    #     parameters, _ = cls._broadcast(parameters)
-    #     parameters, _, _, _ = cls._validate(parameterization, parameters)
-    #     processed = cls._process_parameters(**parameters)
-    #
-    #     def f(x):
-    #         params = parameters.copy()
-    #         params[var] = x
-    #         processed = cls._process_parameters(**params)
-    #         res = cls._llf(processed, sample=sample[:, None], axis=0)
-    #         return np.reshape(res, x.shape)
-    #
-    #     return _differentiate(f, processed[var]).df
-    #
-    # Another thought is to use the approach below, but suppose the user
-    # accesses the method via an instance of the class. We could have a
-    # hybrid descriptor instead of `classmethod` that passes `llf` the
-    # class if accessed via a class and instance if accessed via an instance.
-    # Then `llf` could decide which of the two it is, and not create an
-    # instance if one was provided.
+    # At first glance, it would seem ideal for `fit` were a classmethod,
+    # called like `LogUniform.fit(sample=sample)`.
+    # I tried this. I insisted on it for a while. Consider the following:
+    # * if `fit` is a classmethod, it cannot call instance methods. If we
+    #   want to support MLE, MPS, MoM, MoLM, then we end up with most of the
+    #   private methods needing to be classmethods, too. There are two issues
+    #   with this.
+    #   - Although they are nearly independent of state and get called with
+    #     the parameters as keyword arguments, they do depend on some instance
+    #     attributes like `tol` and the cache policy. These sorts of things
+    #     can be passed in, but then there are other cases like the overridden
+    #     methods of `OrderStatisticDistribution` and
+    #     `ShiftedScaledDistribution`, which naturally want to have access to
+    #     `self._dist`, the distribution they modify. If we want to pass that
+    #     in, we would have to modify the public methods to do so. Do we
+    #     really want to modify all that just for `fit`, `llf`? And do we
+    #     really want to see the @classmethod decorator on pretty much every
+    #     method we write, including the overrides for specified
+    #     distributions?
+    #   - Even more importantly: we will want to `fit` and get the LLF for
+    #     distributions that aren't simple instances of named classes, but they
+    #     are transformed from standard distributions. Does it make sense to
+    #     call `ShiftedScaledDistribution.fit...` and pass in the class of the
+    #     distribution that is shifted/scaled as an addtitional argument?
+    #     In such cases, I think it is more intuitive for the user to
+    #     generate such a transformed distribution `dist` and call `dist.fit`.
+    #     Fortunately, this essentially *requires* the user to provide a guess
+    #     of the parameters, which is actually a good thing in the general
+    #     case (no analytical formula).
+    # There are ways of getting around these issues, and I've explored them.
+    # But the fact is that this infrastructure is object-oriented. There are a
+    # *lot* of advantages to this, so I would rather not fight it for the few
+    # cases where we might prefer a slightly different invocation as a matter
+    # of principle.
 
     def llf(self, parameters={}, *, sample, axis=-1):
         self.update_parameters(**parameters)
@@ -2107,7 +2097,8 @@ class ContinuousDistribution:
         return _differentiate(f, self._parameters[var]).df
 
     def fit(self, sample):
-
+        # very basic `fit` method that only works for distributions with
+        # unbounded parameter and argument domains.
         names = list(self._original_parameters.keys())
         x0 = list(self._original_parameters.values())
         def objective(x):
@@ -2119,15 +2110,15 @@ class ContinuousDistribution:
 
 # Rough sketch of how we might shift/scale distributions. The purpose of
 # making it a separate class is just for
-# a) simplicity of the code and
-# b) not mandate that every distribution accept loc/scale.
-# The simplicity is important, because we should apply the same approach for
-# all transformations of distributions: truncation, wrapping, folding,
-# and doubling, for instance. We wouldn't want to cram all of these options
+# a) simplicity of the ContinuousDistribution class and
+# b) avoiding the requirement that every distribution accept loc/scale.
+# The simplicity of ContinuousDistribution is important, because there are
+# several other distribution transformations to be supported; e.g., truncation,
+# wrapping, folding, and doubling. We wouldn't want to cram all of this
 # into the `ContinuousDistribution` class. Also, the order of the composition
-# matters (e.g. truncate then shift/scale or vice versa); it's easier to
+# matters (e.g. truncate then shift/scale or vice versa). It's easier to
 # accommodate different orders if the transformation is built up from
-# components.
+# components rather than all built into `ContinuousDistribution`.
 
 class ShiftedScaledDistribution(ContinuousDistribution):
     _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
