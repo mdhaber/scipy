@@ -32,7 +32,7 @@ class OrderStatisticDistribution(ContinuousDistribution):
         self._shape = np.broadcast_shapes(self._shape, dist._shape)
         self._invalid = np.broadcast_to(self._invalid, self._shape)
 
-    def _pdf(self, x, r, n, **kwargs):
+    def _pdf_formula(self, x, r, n, **kwargs):
         factor = factorial(n) / (factorial(r-1) * factorial(n-r))
         fX = self._dist._pdf_dispatch(x, **kwargs)
         FX = self._dist._cdf_dispatch(x, **kwargs)
@@ -88,15 +88,15 @@ class Normal(ContinuousDistribution):
     def _mode_formula(self, **kwargs):
         return 0
 
-    def _moment_raw(self, order, **kwargs):
+    def _moment_raw_formula(self, order, **kwargs):
         raw_moments = {0: 1, 1: 0, 2: 1, 3: 0, 4: 3, 5: 0}
         return raw_moments.get(order, None)
 
-    def _moment_central(self, order, **kwargs):
-        return self._moment_raw(order, **kwargs)
+    def _moment_central_formula(self, order, **kwargs):
+        return self._moment_raw_formula(order, **kwargs)
 
-    def _moment_standard(self, order, **kwargs):
-        return self._moment_raw(order, **kwargs)
+    def _moment_standard_formula(self, order, **kwargs):
+        return self._moment_raw_formula(order, **kwargs)
 
     def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):
         return rng.normal(size=full_shape)[()]
@@ -152,7 +152,7 @@ class LogUniform(ContinuousDistribution):
     # def _cdf_formula(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
 
-    def _moment_raw(self, order, log_a, log_b, **kwargs):
+    def _moment_raw_formula(self, order, log_a, log_b, **kwargs):
         if order == 0:
             return 1
         t1 = 1 / (log_b - log_a) / order

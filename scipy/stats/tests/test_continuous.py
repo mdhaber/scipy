@@ -120,11 +120,15 @@ def draw_distribution_from_family(family, data, rng, proportions):
     x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
                             proportions=proportions)
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
+    y_shape = data.draw(npst.broadcastable_shapes(x_result_shape, min_side=0))
+    y = dist._variable.draw(y_shape, parameter_values=dist._parameters,
+                            proportions=proportions)
+    xy_result_shape = np.broadcast_shapes(y_shape, x_result_shape)
     p_domain = _RealDomain((0, 1), (True, True))
     p = p_domain.draw(x_shape, proportions=proportions)
     logp = np.log(p)
 
-    return dist, x, p, logp, result_shape, x_result_shape
+    return dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape
 
 
 class TestDistributions:
@@ -133,15 +137,12 @@ class TestDistributions:
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
-        # strengthen this test by letting min_side=0 for both broadcasted shapes
-        # check for scalar output if all inputs are scalar
-        # inject bad parameters and x-values, check NaN pattern
         rng = np.random.default_rng(seed)
 
         # relative proportions of valid, endpoint, out of bounds, and NaN params
         proportions = (1, 1, 1, 1)
         tmp = draw_distribution_from_family(family, data, rng, proportions)
-        dist, x, p, logp, result_shape, x_result_shape = tmp
+        dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape = tmp
         sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=0,
                                                    max_side=20))
 
@@ -176,6 +177,9 @@ class TestDistributions:
         check_dist_func(dist, 'logccdf', x, x_result_shape, methods)
         check_dist_func(dist, 'ccdf', x, x_result_shape, methods)
 
+        methods = {'quadrature', 'log_quadrature'}
+        check_cdf2(dist, x, y, xy_result_shape, methods)
+
         methods = {'complementarity', 'inversion'}
         check_dist_func(dist, 'ilogcdf', logp, x_result_shape, methods)
         check_dist_func(dist, 'icdf', p, x_result_shape, methods)
@@ -187,7 +191,7 @@ def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape):
     full_shape = sample_shape + result_shape
     sample_method = getattr(dist, fname)
     methods = {'inverse_transform'}
-    if dist._overrides(f'_{fname}'):
+    if dist._overrides(f'_{fname}_formula'):
         methods.add('formula')
 
     for method in methods:
@@ -240,7 +244,7 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
         # because math
         tol_override = {'atol': 1e-8}
 
-    if dist._overrides(f'_{fname}'):
+    if dist._overrides(f'_{fname}_formula'):
         methods.add('formula')
 
     np.testing.assert_equal(ref.shape, result_shape)
@@ -260,6 +264,36 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
         np.testing.assert_equal(res.shape, result_shape)
         if result_shape == tuple():
             assert np.isscalar(res)
+
+def check_cdf2(dist, x, y, result_shape, methods):
+    # Specialized test for 2-arg cdf since the interface is a bit different
+    # from the other methods. Here, we'll use 1-arg cdf as a reference, and
+    # since we have already checked 1-arg cdf in `check_nans_and_edges`, this
+    # checks the equivalent of both `check_dist_func` and
+    # `check_nans_and_edges`.
+    methods = methods.copy()
+
+    if dist._overrides(f'_cdf2_formula'):
+        methods.add('formula')
+    if dist._overrides(f'_cdf_formula') or dist._overrides(f'_ccdf_formula'):
+        methods.add('naive')
+    if (dist._overrides(f'_logcdf_formula')
+            or dist._overrides(f'_logccdf_formula')):
+        methods.add('log/exp')
+
+    ref = dist.cdf(y) - dist.cdf(x)
+    np.testing.assert_equal(ref.shape, result_shape)
+
+    if result_shape == tuple():
+        assert np.isscalar(ref)
+
+    for method in methods:
+        res = dist.cdf(x, y, method=method)
+        np.testing.assert_allclose(res, ref, atol=1e-15)
+        np.testing.assert_equal(res.shape, result_shape)
+        if result_shape == tuple():
+            assert np.isscalar(res)
+
 
 def check_nans_and_edges(dist, fname, arg, res):
 
@@ -349,9 +383,9 @@ def check_moment_funcs(dist, result_shape):
             with pytest.raises(NotImplementedError):
                 moment(order, method=method)
 
-    formula_raw = dist._overrides('_moment_raw')
-    formula_central = dist._overrides('_moment_central')
-    formula_standard = dist._overrides('_moment_standard')
+    formula_raw = dist._overrides('_moment_raw_formula')
+    formula_central = dist._overrides('_moment_central_formula')
+    formula_standard = dist._overrides('_moment_standard_formula')
     dist.reset_cache()
 
     ### Check Raw Moments ###

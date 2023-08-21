@@ -835,6 +835,7 @@ def _log1mexp(x):
 
 def _logexpxmexpy(x, y):
     # TODO: properly avoid NaN when y is negative infinity
+    # TODO: silence warning with taking log of complex nan
     i = np.isneginf(np.real(y))
     if np.any(i):
         y = y.copy()
@@ -1406,9 +1407,33 @@ class ContinuousDistribution:
             return self._cdf2(x, y, method=method)
 
     def _cdf2(self, x, y, *, method):
-        # needs input validation, and it needs to be customized to this method
+        # Input validation needs to be customized to this method.
         # Let's keep it simple; no special cases for speed right now.
-        return self._cdf2_dispatch(x, y, method=method, **self._parameters)
+        # The strategy is a bit different than for `cdf` (and other methods
+        # covered by `_set_invalid_nan`). For `cdf`, elements of `x` that
+        # are outside (or at the edge of) the support get replaced by `nan`,
+        # and then the results get replaced by the appropriate value (0 or 1).
+        # We *could* do something similar, dispatching to `_cdf1` in these
+        # cases. That would be a bit more robust, but it would also be quite
+        # a bit more complex, since we'd have to do different things when
+        # `x` and `y` are both out of bounds, when just `x` is out of bounds,
+        # when jusy `y` is out of bounds, and when both are out of bounds.
+        # I'm not going to do that right now. Instead, simply replace values
+        # outside the support by those at the edge of the support.
+        low, high = self.support()
+        x, y, low, high = np.broadcast_arrays(x, y, low, high)
+        dtype = np.result_type(x.dtype, y.dtype, self._dtype)
+        x, y = np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype)
+        i = x < low
+        x[i] = low[i]
+        i = y < low
+        y[i] = low[i]
+        i = x > high
+        x[i] = high[i]
+        i = y > high
+        y[i] = high[i]
+        res = self._cdf2_dispatch(x, y, method=method, **self._parameters)
+        return np.clip(res, -1, 1)
 
     @_dispatch
     def _cdf2_dispatch(self, x, y, *, method=None, **kwargs):
@@ -1456,7 +1481,7 @@ class ContinuousDistribution:
     def _cdf2_log_quadrature(self, x, y, **kwargs):
         logres = self._quadrature(self._logpdf_dispatch, limits=(x, y),
                                   log=True, kwargs=kwargs)
-        return np.exp(logres)
+        return np.real(np.exp(logres))
 
     @_set_invalid_nan
     def _cdf1(self, x, *, method):
@@ -1756,7 +1781,7 @@ class ContinuousDistribution:
             moment = self._moment_raw_cache.get(order, None)
 
         if moment is None and 'formula' in methods:
-            moment = self._moment_raw(order, **kwargs)
+            moment = self._moment_raw_formula(order, **kwargs)
 
         if moment is None and 'transform' in methods and order > 1:
             moment = self._moment_raw_transform(order, **kwargs)
@@ -1772,7 +1797,7 @@ class ContinuousDistribution:
 
         return moment
 
-    def _moment_raw(self, order, **kwargs):
+    def _moment_raw_formula(self, order, **kwargs):
         return None
 
     def _moment_raw_transform(self, order, **kwargs):
@@ -1815,7 +1840,7 @@ class ContinuousDistribution:
             moment = self._moment_central_cache.get(order, None)
 
         if moment is None and 'formula' in methods:
-            moment = self._moment_central(order, **kwargs)
+            moment = self._moment_central_formula(order, **kwargs)
 
         if moment is None and 'transform' in methods:
             moment = self._moment_central_transform(order, **kwargs)
@@ -1836,7 +1861,7 @@ class ContinuousDistribution:
 
         return moment
 
-    def _moment_central(self, order, **kwargs):
+    def _moment_central_formula(self, order, **kwargs):
         return None
 
     def _moment_central_transform(self, order, **kwargs):
@@ -1885,26 +1910,26 @@ class ContinuousDistribution:
             moment = self._moment_standard_cache.get(order, None)
 
         if moment is None and 'formula' in methods:
-            moment = self._moment_standard(order, **kwargs)
+            moment = self._moment_standard_formula(order, **kwargs)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_transform(order, False, **kwargs)
+            moment = self._moment_standard_normalize(order, False, **kwargs)
 
         if moment is None and 'general' in methods:
             moment = self._moment_standard_general(order, **kwargs)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_transform(order, True, **kwargs)
+            moment = self._moment_standard_normalize(order, True, **kwargs)
 
         if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
             self._moment_standard_cache[order] = moment
 
         return moment
 
-    def _moment_standard(self, order, **kwargs):
+    def _moment_standard_formula(self, order, **kwargs):
         return None
 
-    def _moment_standard_transform(self, order, use_quadrature, **kwargs):
+    def _moment_standard_normalize(self, order, use_quadrature, **kwargs):
         methods = ({'quadrature'} if use_quadrature
                    else {'cache', 'formula', 'transform'})
         central_moment = self._moment_central_dispatch(order, **kwargs,
