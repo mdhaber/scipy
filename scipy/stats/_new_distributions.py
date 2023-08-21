@@ -46,46 +46,46 @@ class Normal(ContinuousDistribution):
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
 
-    def _logpdf(self, x, **kwargs):
+    def _logpdf_formula(self, x, **kwargs):
         return -(np.log(2*np.pi)/2 + x**2/2)
 
-    def _pdf(self, x, **kwargs):
+    def _pdf_formula(self, x, **kwargs):
         return 1/np.sqrt(2*np.pi) * np.exp(-x**2/2)
 
-    def _logcdf(self, x, **kwargs):
+    def _logcdf_formula(self, x, **kwargs):
         return special.log_ndtr(x)
 
-    def _cdf(self, x, **kwargs):
+    def _cdf_formula(self, x, **kwargs):
         return special.ndtr(x)
 
-    def _logccdf(self, x, **kwargs):
+    def _logccdf_formula(self, x, **kwargs):
         return special.log_ndtr(-x)
 
-    def _ccdf(self, x, **kwargs):
+    def _ccdf_formula(self, x, **kwargs):
         return special.ndtr(-x)
 
-    def _icdf(self, x, **kwargs):
+    def _icdf_formula(self, x, **kwargs):
         return special.ndtri(x)
 
-    def _ilogcdf(self, x, **kwargs):
+    def _ilogcdf_formula(self, x, **kwargs):
         return special.ndtri_exp(x)
 
-    def _iccdf(self, x, **kwargs):
+    def _iccdf_formula(self, x, **kwargs):
         return -special.ndtri(x)
 
-    def _ilogccdf(self, x, **kwargs):
+    def _ilogccdf_formula(self, x, **kwargs):
         return -special.ndtri_exp(x)
 
-    def _entropy(self, **kwargs):
+    def _entropy_formula(self, **kwargs):
         return (1 + np.log(2*np.pi))/2
 
-    def _logentropy(self, **kwargs):
+    def _logentropy_formula(self, **kwargs):
         return np.log1p(np.log(2*np.pi)) - np.log(2)
 
-    def _median(self, **kwargs):
+    def _median_formula(self, **kwargs):
         return 0
 
-    def _mode(self, **kwargs):
+    def _mode_formula(self, **kwargs):
         return 0
 
     def _moment_raw(self, order, **kwargs):
@@ -98,7 +98,7 @@ class Normal(ContinuousDistribution):
     def _moment_standard(self, order, **kwargs):
         return self._moment_raw(order, **kwargs)
 
-    def _sample(self, sample_shape, full_shape, rng, **kwargs):
+    def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):
         return rng.normal(size=full_shape)[()]
 
 
@@ -143,13 +143,13 @@ class LogUniform(ContinuousDistribution):
         log_b = np.log(b) if log_b is None else log_b
         return dict(a=a, b=b, log_a=log_a, log_b=log_b)
 
-    # def _logpdf(self, x, *, log_a, log_b, **kwargs):
+    # def _logpdf_formula(self, x, *, log_a, log_b, **kwargs):
     #     return -np.log(x) - np.log(log_b - log_a)
 
-    def _pdf(self, x, *, log_a, log_b, **kwargs):
+    def _pdf_formula(self, x, *, log_a, log_b, **kwargs):
         return ((log_b - log_a)*x)**-1
 
-    # def _cdf(self, x, *, log_a, log_b, **kwargs):
+    # def _cdf_formula(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
 
     def _moment_raw(self, order, log_a, log_b, **kwargs):
