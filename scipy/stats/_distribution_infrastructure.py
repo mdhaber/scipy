@@ -25,6 +25,8 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
+#  refactor remaining dispatch methods
+#  see if we can replace `_methods` dictionary in __init__
 #  _parameterizations cannot be a class variable if it is modified
 #  test loc/scale distribution
 #  address name collisions in transformed distributions
@@ -869,6 +871,16 @@ class ContinuousDistribution:
         )
         self._original_parameters = {}
 
+        # Assembling this dictionary increases instantiation time but makes
+        # the dispatch methods easier to read and improves method call time.
+        # There are a few things we could do to avoid increasing the
+        # instantiation time:
+        # - make all of these classmethods (so we only get hit at import time)
+        # - amortize the creation of this dict by adding the methods
+        #   as they are called (e.g. this information could go in the
+        #   `_dispatch` wrapper)
+        # - compute the name of the method we want to call in @_dispatch, e.g.
+        #   func_name.replace('dispatch', method).
         self._methods = {
             '_logentropy_dispatch': {
                 'formula': self._logentropy,
