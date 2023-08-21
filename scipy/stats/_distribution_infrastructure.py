@@ -1405,48 +1405,58 @@ class ContinuousDistribution:
         else:
             return self._cdf2(x, y, method=method)
 
-    def _cdf2(self, x, y, *, method=None):
-        # Draft logic here. Not really correct, and method names are poor.
-        if ((self._tol is _null and self._overrides('_cdf')
-             and self._overrides('_ccdf') and method is None)
-                or method=='formula'):
-            return self._cdf2_formula(x, y)
-        elif ((self._overrides('_logcdf')
-               and self._overrides('_logccdf') and method is None)
-              or method=='log/exp'):
-            return self._cdf2_logexp(x, y)
-        else:
-            return self._cdf2_quadrature(x, y)
+    def _cdf2(self, x, y, *, method):
+        # needs input validation, and it needs to be customized to this method
+        # Let's keep it simple; no special cases for speed right now.
+        return self._cdf2_dispatch(x, y, method=method, **self._parameters)
 
-    def _cdf2_formula(self, x, y):
-        # Quick draft. Lots of optimizations possible.
-        # - do (custom) input validation once instead of four times
-        # - lazy evaluation of ccdf only where it's needed
-        # - add logic/options for using logcdf, quadrature
-        # - we could stack x and y to reduce number of function calls
-        cdf_x = self.cdf(x)
-        cdf_y = self.cdf(y)
-        ccdf_x = self.ccdf(x)
-        ccdf_y = self.ccdf(y)
+    @_dispatch
+    def _cdf2_dispatch(self, x, y, *, method=None, **kwargs):
+        if self._overrides('_cdf2_formula'):
+            method = self._cdf2_formula
+        elif (self._tol is _null
+              and self._overrides('_cdf_formula')
+              or self._overrides('_ccdf_formula')):
+            method = self._cdf2_naive
+        elif (self._overrides('_logcdf_formula')
+              or self._overrides('_logccdf_formula')):
+            method = self._cdf2_logexp
+        elif self._tol is _null:
+            method = self._cdf2_quadrature
+        else:
+            method = self._cdf2_log_quadrature
+        return method
+
+    def _cdf2_formula(self, x, y, **kwargs):
+        raise NotImplementedError(self._not_implemented)
+
+    def _cdf2_naive(self, x, y, **kwargs):
+        # Improvements:
+        # Lazy evaluation of ccdf only where needed
+        # Stack x and y to reduce function calls?
+        cdf_x = self._cdf_dispatch(x, **kwargs)
+        cdf_y = self._cdf_dispatch(y, **kwargs)
+        ccdf_x = self._ccdf_dispatch(x, **kwargs)
+        ccdf_y = self._ccdf_dispatch(y, **kwargs)
         i = (cdf_x < 0.5) & (cdf_y < 0.5)
         return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
 
-    def _cdf2_logexp(self, x, y):
-        logcdf_x = self.logcdf(x)
-        logcdf_y = self.logcdf(y)
-        logccdf_x = self.logccdf(x)
-        logccdf_y = self.logccdf(y)
+    def _cdf2_logexp(self, x, y, **kwargs):
+        logcdf_x = self._logcdf_dispatch(x, **kwargs)
+        logcdf_y = self._logcdf_dispatch(y, **kwargs)
+        logccdf_x = self._logccdf_dispatch(x, **kwargs)
+        logccdf_y = self._logccdf_dispatch(y, **kwargs)
         i = (logcdf_x < -1) & (logcdf_y < -1)
         return np.real(np.exp(np.where(i, _logexpxmexpy(logcdf_y, logcdf_x),
                                        _logexpxmexpy(logccdf_x, logccdf_y))))
 
-    def _cdf2_quadrature(self, x, y):
-        x, y = np.broadcast_arrays(x, y)
-        shape = np.broadcast_shapes(x.shape, self._shape)
-        x = np.broadcast_to(x, self._shape)
-        y = np.broadcast_to(y, self._shape)
-        return self._quadrature(self._pdf_dispatch, limits=(x, y),
-                                kwargs=self._parameters)
+    def _cdf2_quadrature(self, x, y, **kwargs):
+        return self._quadrature(self._pdf_dispatch, limits=(x, y), kwargs=kwargs)
+
+    def _cdf2_log_quadrature(self, x, y, **kwargs):
+        logres = self._quadrature(self._logpdf_dispatch, limits=(x, y),
+                                  log=True, kwargs=kwargs)
+        return np.exp(logres)
 
     @_set_invalid_nan
     def _cdf1(self, x, *, method):
