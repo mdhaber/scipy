@@ -163,7 +163,8 @@ class TestDistributions:
         assert_allclose(dist.std()**2, dist.var())
 
         check_moment_funcs(dist, result_shape)
-        check_sample_shape_NaNs(dist, sample_shape, result_shape)
+        check_sample_shape_NaNs(dist, 'sample', sample_shape, result_shape)
+        check_sample_shape_NaNs(dist, 'qmc_sample', sample_shape, result_shape)
 
         methods = {'log/exp'}
         check_dist_func(dist, 'pdf', x, x_result_shape, methods);
@@ -182,23 +183,31 @@ class TestDistributions:
         check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
 
 
-def check_sample_shape_NaNs(dist, sample_shape, result_shape):
+def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape):
+    full_shape = sample_shape + result_shape
+    sample_method = getattr(dist, fname)
     methods = {'inverse_transform'}
-    if dist._overrides('_sample'):
+    if dist._overrides(f'_{fname}'):
         methods.add('formula')
 
     for method in methods:
-        res = dist.sample(sample_shape, method=method)
+        res = sample_method(sample_shape, method=method)
         valid_parameters = np.broadcast_to(get_valid_parameters(dist),
                                            res.shape)
-        assert_equal(res.shape, sample_shape + result_shape)
+        assert_equal(res.shape, full_shape)
+        if full_shape == ():
+            # NumPy random makes a distinction between a 0d array and a scalar.
+            # In stats, we consistently turn 0d arrays into scalars, so
+            # maintain that behavior here. (With Array API arrays, this will
+            # change.)
+            assert np.isscalar(res)
         assert np.all(np.isfinite(res[valid_parameters]))
         assert_equal(res[~valid_parameters], np.nan)
 
-        sample1 = dist.sample(sample_shape, method=method,
-                              rng=np.random.default_rng(42))
-        sample2 = dist.sample(sample_shape, method=method,
-                              rng=np.random.default_rng(42))
+        sample1 = sample_method(sample_shape, method=method,
+                                rng=np.random.default_rng(42))
+        sample2 = sample_method(sample_shape, method=method,
+                                rng=np.random.default_rng(42))
         assert not np.any(np.equal(res, sample1))
         assert_equal(sample1, sample2)
 
@@ -434,7 +443,8 @@ def check_moment_funcs(dist, result_shape):
 @pytest.mark.parametrize('family', (LogUniform, Normal))
 @pytest.mark.parametrize('x_shape', [tuple(), (2, 3)])
 @pytest.mark.parametrize('dist_shape', [tuple(), (4, 1)])
-def test_sample_against_cdf(family, dist_shape, x_shape):
+@pytest.mark.parametrize('sample_method', ['qmc_sample', 'sample'])
+def test_sample_against_cdf(family, dist_shape, x_shape, sample_method):
     rng = np.random.default_rng(842582438235635)
     num_parameters = family._num_parameters()
 
@@ -447,7 +457,8 @@ def test_sample_against_cdf(family, dist_shape, x_shape):
     sample_size = (n,) + x_shape
     sample_array_shape = sample_size + dist_shape
 
-    x = dist.sample(sample_size, rng=rng)
+    sample_method = getattr(dist, sample_method)
+    x = sample_method(sample_size, rng=rng)
     assert x.shape == sample_array_shape
 
     # probably should give `axis` argument to ks_1samp, review that separately

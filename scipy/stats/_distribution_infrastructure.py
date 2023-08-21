@@ -25,7 +25,7 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  refactor remaining dispatch methods
+#  baseline 2-arg cdf
 #  see if we can replace `_methods` dictionary in __init__
 #  _parameterizations cannot be a class variable if it is modified
 #  test loc/scale distribution
@@ -952,6 +952,14 @@ class ContinuousDistribution:
                 'complementarity': self._iccdf_icdf1m,
                 'inversion': self._iccdf_solve_ccdf,
             },
+            '_sample_dispatch': {
+                'formula': self._sample,
+                'inverse_transform': self._sample_inverse_transform,
+            },
+            '_qmc_sample_dispatch': {
+                'formula': self._qmc_sample,
+                'inverse_transform': self._qmc_sample_inverse_transform,
+            },
         }
 
         self.update_parameters(**parameters)
@@ -1708,15 +1716,17 @@ class ContinuousDistribution:
         return self._sample_dispatch(sample_shape, full_shape, method=method,
                                      rng=rng, **self._parameters)
 
+    @_dispatch
     def _sample_dispatch(self, sample_shape, full_shape, *, method, rng, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_sample'):
-            return np.asarray(self._sample(sample_shape, full_shape, rng=rng,
-                                           **kwargs))[()]
-        elif method in {None, 'inverse_transform'}:
-            return self._sample_inverse_transform(sample_shape, full_shape,
-                                                  rng=rng, **kwargs)
+        # make sure that tests catch if sample is 0d array
+        if self._overrides('_sample'):
+            method = 'formula'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'inverse_transform'
+        return method
+
+    def _sample(self, sample_shape, full_shape, *, rng, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _sample_inverse_transform(self, sample_shape, full_shape, *, rng, **kwargs):
         uniform = rng.uniform(size=full_shape)
@@ -1728,21 +1738,23 @@ class ContinuousDistribution:
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = sample_shape + self._shape
         d = int(np.prod(full_shape[1:]))
-        length = full_shape[0]
+        length = full_shape[0] if full_shape else 1
         qrng = qrng(d=d, seed=rng)
         return self._qmc_sample_dispatch(
             length, full_shape, method=method, qrng=qrng,
             **self._parameters)
 
+    @_dispatch
     def _qmc_sample_dispatch(self, length, full_shape, *, method, qrng, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_qmc_sample'):
-            return np.asarray(self._qmc_sample(
-                length, full_shape, qrng=qrng, **kwargs))[()]
-        elif method in {None, 'inverse_transform'}:
-            return self._qmc_sample_inverse_transform(
-                length, full_shape, qrng=qrng, **kwargs)
+        # make sure that tests catch if sample is 0d array
+        if self._overrides('_qmc_sample'):
+            method = 'formula'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'inverse_transform'
+        return method
+
+    def _qmc_sample(self, length, full_shape, *, qrng, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _qmc_sample_inverse_transform(self, length, full_shape, *, qrng, **kwargs):
         uniform = qrng.random(length)

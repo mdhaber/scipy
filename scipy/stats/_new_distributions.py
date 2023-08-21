@@ -99,7 +99,7 @@ class Normal(ContinuousDistribution):
         return self._moment_raw(order, **kwargs)
 
     def _sample(self, sample_shape, full_shape, rng, **kwargs):
-        return rng.normal(size=full_shape)
+        return rng.normal(size=full_shape)[()]
 
 
 class ShiftedScaledNormal(ContinuousDistribution):
