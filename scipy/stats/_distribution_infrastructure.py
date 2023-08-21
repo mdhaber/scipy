@@ -932,6 +932,26 @@ class ContinuousDistribution:
                 'complementarity': self._ccdf_1mcdf,
                 'quadrature': self._ccdf_integrate_pdf,
             },
+            '_ilogcdf_dispatch': {
+                'formula': self._ilogcdf,
+                'complementarity': self._ilogcdf_ilogccdf1m,
+                'inversion': self._ilogcdf_solve_logcdf,
+            },
+            '_icdf_dispatch': {
+                'formula': self._icdf,
+                'complementarity': self._icdf_iccdf1m,
+                'inversion': self._icdf_solve_cdf,
+            },
+            '_ilogccdf_dispatch': {
+                'formula': self._ilogccdf,
+                'complementarity': self._ilogccdf_ilogcdf1m,
+                'inversion': self._ilogccdf_solve_logccdf,
+            },
+            '_iccdf_dispatch': {
+                'formula': self._iccdf,
+                'complementarity': self._iccdf_icdf1m,
+                'inversion': self._iccdf_solve_ccdf,
+            },
         }
 
         self.update_parameters(**parameters)
@@ -1591,15 +1611,18 @@ class ContinuousDistribution:
     def ilogcdf(self, x, *, method=None):
         return self._ilogcdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _ilogcdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_ilogcdf'):
-            return self._ilogcdf(x, **kwargs)
-        elif (self._overrides('_ilogccdf') and method is None) or method=='complementarity':
-            return self._ilogcdf_ilogccdf1m(x, **kwargs)
-        elif method in {None, 'inversion'}:
-            return self._ilogcdf_solve_logcdf(x, **kwargs)
+        if self._overrides('_ilogcdf'):
+            method = 'formula'
+        elif self._overrides('_ilogccdf'):
+            method = 'complementarity'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'inversion'
+        return method
+
+    def _ilogcdf(self, x, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _ilogcdf_ilogccdf1m(self, x, **kwargs):
         return self._ilogccdf_dispatch(_log1mexp(x), **kwargs)
@@ -1611,15 +1634,18 @@ class ContinuousDistribution:
     def icdf(self, x, *, method=None):
         return self._icdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _icdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_icdf'):
-            return self._icdf(x, **kwargs)
-        elif (self.tol is _null and self._overrides('_iccdf') and method is None) or method=='complementarity':
-            return self._icdf_iccdf1m(x, **kwargs)
-        elif method in {None, 'inversion'}:
-            return self._icdf_solve_cdf(x, **kwargs)
+        if self._overrides('_icdf'):
+            method = 'formula'
+        elif self.tol is _null and self._overrides('_iccdf'):
+            method = 'complementarity'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'inversion'
+        return method
+
+    def _icdf(self, x, **kwargs):
+        return NotImplementedError(self._not_implemented)
 
     def _icdf_iccdf1m(self, x, **kwargs):
         return self._iccdf_dispatch(1 - x, **kwargs)
@@ -1631,15 +1657,18 @@ class ContinuousDistribution:
     def ilogccdf(self, x, *, method=None):
         return self._ilogccdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _ilogccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_ilogccdf'):
-            return self._ilogccdf(x, **kwargs)
-        elif (self._overrides('_ilogcdf') and method is None) or method=='complementarity':
-            return self._ilogccdf_ilogcdf1m(x, **kwargs)
-        elif method in {None, 'inversion'}:
-            return self._ilogccdf_solve_logccdf(x, **kwargs)
+        if self._overrides('_ilogccdf'):
+            method = 'formula'
+        elif self._overrides('_ilogcdf'):
+            method = 'complementarity'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'inversion'
+        return method
+
+    def _ilogccdf(self, x, **kwargs):
+        return NotImplementedError(self._not_implemented)
 
     def _ilogccdf_ilogcdf1m(self, x, **kwargs):
         return self._ilogcdf_dispatch(_log1mexp(x), **kwargs)
@@ -1651,15 +1680,18 @@ class ContinuousDistribution:
     def iccdf(self, x, *, method=None):
         return self._iccdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _iccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_iccdf'):
-            return self._iccdf(x, **kwargs)
-        elif (self.tol is _null and self._overrides('_icdf') and method is None) or method=='complementarity':
-            return self._iccdf_icdf1m(x, **kwargs)
-        elif method in {None, 'inversion'}:
-            return self._iccdf_solve_ccdf(x, **kwargs)
+        if self._overrides('_iccdf'):
+            method = 'formula'
+        elif self.tol is _null and self._overrides('_icdf'):
+            method = 'complementarity'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'inversion'
+        return method
+
+    def _iccdf(self, x, **kwargs):
+        return NotImplementedError(self._not_implemented)
 
     def _iccdf_icdf1m(self, x, **kwargs):
         return self._icdf_dispatch(1 - x, **kwargs)
