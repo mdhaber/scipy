@@ -659,7 +659,7 @@ def _set_invalid_nan(f):
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
     replacements = {'logpdf': (-oo, -oo), 'pdf': (0, 0),
                     'logcdf': (-oo, 0), 'logccdf': (0, -oo),
-                    'cdf': (0, 1), 'ccdf': (1, 0), '_cdf_1arg': (0, 1)}
+                    'cdf': (0, 1), 'ccdf': (1, 0), '_cdf1': (0, 1)}
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
@@ -907,6 +907,30 @@ class ContinuousDistribution:
             '_pdf_dispatch': {
                 'formula': self._pdf,
                 'log/exp': self._pdf_exp_logpdf,
+            },
+            '_logcdf_dispatch': {
+                'formula': self._logcdf,
+                'log/exp': self._logcdf_log_cdf,
+                'complementarity': self._logcdf_log1mexpccdf,
+                'quadrature': self._logcdf_integrate_logpdf,
+            },
+            '_cdf_dispatch': {
+                'formula': self._cdf,
+                'log/exp': self._cdf_exp_logcdf,
+                'complementarity': self._cdf_1mccdf,
+                'quadrature': self._cdf_integrate_pdf,
+            },
+            '_logccdf_dispatch': {
+                'formula': self._logccdf,
+                'log/exp': self._logccdf_log_ccdf,
+                'complementarity': self._logccdf_log1mexpcdf,
+                'quadrature': self._logccdf_integrate_logpdf,
+            },
+            '_ccdf_dispatch': {
+                'formula': self._ccdf,
+                'log/exp': self._ccdf_exp_logccdf,
+                'complementarity': self._ccdf_1mcdf,
+                'quadrature': self._ccdf_integrate_pdf,
             },
         }
 
@@ -1398,24 +1422,26 @@ class ContinuousDistribution:
     def logcdf(self, x, *, method=None):
         return self._logcdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _logcdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logcdf'):
-            return self._logcdf(x, **kwargs)
-        elif (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
-            return self._logcdf_log_cdf(x, **kwargs)
-        elif (self._overrides('_logccdf') and method is None) or method=='complementarity':
-            return self._logcdf_log1mexpccdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return self._logcdf_integrate_logpdf(x, **kwargs)
+        if self._overrides('_logcdf'):
+            method = 'formula'
+        elif self.tol is _null and self._overrides('_cdf'):
+            method = 'log/exp'
+        elif self._overrides('_logccdf'):
+            method = 'complementarity'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'quadrature'
+        return method
+
+    def _logcdf(self, x, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _logcdf_log_cdf(self, x, **kwargs):
         return np.log(self._cdf_dispatch(x, **kwargs))
 
     def _logcdf_log1mexpccdf(self, x, **kwargs):
         return _log1mexp(self._logccdf_dispatch(x, **kwargs))
-
 
     def _logcdf_integrate_logpdf(self, x, **kwargs):
         a, _ = self._support(**kwargs)
@@ -1424,24 +1450,24 @@ class ContinuousDistribution:
 
     def cdf(self, x, y=None, *, method=None):
         if y is None:
-            return self._cdf_1arg(x, method=method)
+            return self._cdf1(x, method=method)
         else:
-            return self._cdf_2arg(x, y, method=method)
+            return self._cdf2(x, y, method=method)
 
-    def _cdf_2arg(self, x, y, *, method=None):
+    def _cdf2(self, x, y, *, method=None):
         # Draft logic here. Not really correct, and method names are poor.
         if ((self._tol is _null and self._overrides('_cdf')
              and self._overrides('_ccdf') and method is None)
                 or method=='formula'):
-            return self._cdf_2arg_formula(x, y)
+            return self._cdf2_formula(x, y)
         elif ((self._overrides('_logcdf')
                and self._overrides('_logccdf') and method is None)
               or method=='log/exp'):
-            return self._cdf_2arg_logexp(x, y)
+            return self._cdf2_logexp(x, y)
         else:
-            return self._cdf_2arg_quadrature(x, y)
+            return self._cdf2_quadrature(x, y)
 
-    def _cdf_2arg_formula(self, x, y):
+    def _cdf2_formula(self, x, y):
         # Quick draft. Lots of optimizations possible.
         # - do (custom) input validation once instead of four times
         # - lazy evaluation of ccdf only where it's needed
@@ -1454,7 +1480,7 @@ class ContinuousDistribution:
         i = (cdf_x < 0.5) & (cdf_y < 0.5)
         return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
 
-    def _cdf_2arg_logexp(self, x, y):
+    def _cdf2_logexp(self, x, y):
         logcdf_x = self.logcdf(x)
         logcdf_y = self.logcdf(y)
         logccdf_x = self.logccdf(x)
@@ -1463,7 +1489,7 @@ class ContinuousDistribution:
         return np.real(np.exp(np.where(i, _logexpxmexpy(logcdf_y, logcdf_x),
                                        _logexpxmexpy(logccdf_x, logccdf_y))))
 
-    def _cdf_2arg_quadrature(self, x, y):
+    def _cdf2_quadrature(self, x, y):
         x, y = np.broadcast_arrays(x, y)
         shape = np.broadcast_shapes(x.shape, self._shape)
         x = np.broadcast_to(x, self._shape)
@@ -1472,20 +1498,23 @@ class ContinuousDistribution:
                                 kwargs=self._parameters)
 
     @_set_invalid_nan
-    def _cdf_1arg(self, x, *, method):
+    def _cdf1(self, x, *, method):
         return self._cdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _cdf_dispatch(self, x, *, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_cdf'):
-            return self._cdf(x, **kwargs)
-        elif (self._overrides('_logcdf') and method is None) or method=='log/exp':
-            return self._cdf_exp_logcdf(x, **kwargs)
-        elif (self._tol is _null and self._overrides('_ccdf') and method is None) or method=='complementarity':
-            return self._cdf_1mccdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return self._cdf_integrate_pdf(x, **kwargs)
+        if self._overrides('_cdf'):
+            method = 'formula'
+        elif self._overrides('_logcdf'):
+            method = 'log/exp'
+        elif self._tol is _null and self._overrides('_ccdf'):
+            method = 'complementarity'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'quadrature'
+        return method
+
+    def _cdf(self, x, **kwargs):
+        raise NotImplementedError(self._not_implemented)
 
     def _cdf_exp_logcdf(self, x, **kwargs):
         return np.exp(self._logcdf_dispatch(x, **kwargs))
@@ -1502,17 +1531,20 @@ class ContinuousDistribution:
     def logccdf(self, x, *, method=None):
         return self._logccdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _logccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_logccdf'):
-            return self._logccdf(x, **kwargs)
-        if (self.tol is _null and self._overrides('_cdf') and method is None) or method=='log/exp':
-            return self._logccdf_log_ccdf(x, **kwargs)
-        elif (self._overrides('_logcdf') and method is None) or method=='complementarity':
-            return self._logccdf_log1mexpcdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return self._logccdf_integrate_logpdf(x, **kwargs)
+        if self._overrides('_logccdf'):
+            method = 'formula'
+        elif self.tol is _null and self._overrides('_ccdf'):
+            method = 'log/exp'
+        elif self._overrides('_logcdf'):
+            method = 'complementarity'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'quadrature'
+        return method
+
+    def _logccdf(self):
+        return NotImplementedError(self._not_implemented)
 
     def _logccdf_log_ccdf(self, x, **kwargs):
         return np.log(self._ccdf_dispatch(x, **kwargs))
@@ -1529,17 +1561,20 @@ class ContinuousDistribution:
     def ccdf(self, x, *, method=None):
         return self._ccdf_dispatch(x, method=method, **self._parameters)
 
+    @_dispatch
     def _ccdf_dispatch(self, x, method=None, **kwargs):
-        if method in {None, 'formula'} and self._overrides('_ccdf'):
-            return self._ccdf(x, **kwargs)
-        elif (self._overrides('_logccdf') and method is None) or method=='log/exp':
-            return self._ccdf_exp_logccdf(x, **kwargs)
-        elif (self._tol is _null and self._overrides('_cdf') and method is None) or method=='complementarity':
-            return self._ccdf_1mcdf(x, **kwargs)
-        elif method in {'quadrature', None}:
-            return self._ccdf_integrate_pdf(x, **kwargs)
+        if self._overrides('_ccdf'):
+            method = 'formula'
+        elif self._overrides('_logccdf'):
+            method = 'log/exp'
+        elif self._tol is _null and self._overrides('_cdf'):
+            method = 'complementarity'
         else:
-            raise NotImplementedError(self._not_implemented)
+            method = 'quadrature'
+        return method
+
+    def _ccdf(self, x, **kwargs):
+        return NotImplementedError(self._not_implemented)
 
     def _ccdf_exp_logccdf(self, x, **kwargs):
         return np.exp(self._logccdf_dispatch(x, **kwargs))
