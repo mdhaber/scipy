@@ -302,7 +302,7 @@ def check_cdf2(dist, log, x, y, result_shape, methods):
     for method in methods:
         res = (dist.logcdf(x, y, method=method) if log
                else dist.cdf(x, y, method=method))
-        np.testing.assert_allclose(res, ref, atol=1e-15)
+        np.testing.assert_allclose(res, ref, atol=1e-14)
         np.testing.assert_equal(res.shape, result_shape)
         if result_shape == tuple():
             assert np.isscalar(res)

@@ -32,6 +32,9 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #  Add bounds to `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
+#  implement wrapped distribution
+#  implement folded distribution
+#  implement double distribution
 #  check behavior of moment methods when moments are undefined/infinite
 #  Be consistent about options passed to distributions/methods: tols, skip_iv,
 #    cache, rng. Also check for issues with transformed distributions.
@@ -153,6 +156,9 @@ class _Domain:
     contains(x)
         Determine whether the argument is contained within the domain (True)
         or not (False). Used for input validation.
+    get_numerical_endpoints()
+        Gets the numerical values of the domain endpoints, which may have been
+        defined symbolically.
     __str__()
         Returns a text representation of the domain (e.g. `[-π, ∞)`).
         Used for generating documentation.
@@ -161,6 +167,9 @@ class _Domain:
     symbols = {np.inf: "∞", -np.inf: "-∞", np.pi: "π", -np.pi: "-π"}
 
     def contains(self, x):
+        raise NotImplementedError()
+
+    def get_numerical_endpoints(self, x):
         raise NotImplementedError()
 
     def __str__(self):
@@ -194,10 +203,17 @@ class _SimpleDomain(_Domain):
     -------
     define_parameters(*parameters)
         Records any parameters used to define the endpoints of the domain
+    get_numerical_endpoints(parameter_values)
+        Gets the numerical values of the domain endpoints, which may have been
+        defined symbolically.
     contains(item, parameter_values)
         Determines whether the argument is contained within the domain
 
     """
+    def __init__(self, endpoints=(-oo, oo), inclusive=(False, False)):
+        a, b = endpoints
+        self.endpoints = np.asarray(a)[()], np.asarray(b)[()]
+        self.inclusive = inclusive
 
     def define_parameters(self, *parameters):
         r""" Records any parameters used to define the endpoints of the domain
@@ -290,11 +306,25 @@ class _RealDomain(_SimpleDomain):
     Completes the implementation of the `_SimpleDomain` class for simple
     domains on the real line.
 
+    Methods
+    -------
+    define_parameters(*parameters)
+        (Inherited) Records any parameters used to define the endpoints of the
+        domain.
+    get_numerical_endpoints(parameter_values)
+        (Inherited) Gets the numerical values of the domain endpoints, which
+        may have been defined symbolically.
+    contains(item, parameter_values)
+        (Inherited) Determines whether the argument is contained within the
+        domain
+    __str__()
+        Returns a string representation of the domain, e.g. "[a, b)".
+    draw(size, rng, proportions, parameter_values)
+        Draws random values based on the domain. Proportions of values within
+        the domain, on the endpoints of the domain, outside the domain,
+        and having value NaN are specified by `proportions`.
+
     """
-    def __init__(self, endpoints=(-oo, oo), inclusive=(False, False)):
-        a, b = endpoints
-        self.endpoints = np.asarray(a)[()], np.asarray(b)[()]
-        self.inclusive = inclusive
 
     def __str__(self):
         a, b = self.endpoints
@@ -313,10 +343,7 @@ class _RealDomain(_SimpleDomain):
         Parameters
         ----------
         size : tuple of ints
-            The shape of the array of valid values to be drawn. For now,
-            all values are uniformly sampled, but we should add options for
-            picking more challenging values (e.g. including endpoints if the
-            domain is inclusive; out-of-bounds values; extreme values).
+            The shape of the array of valid values to be drawn.
         rng : np.Generator
             The Generator used for drawing random values.
         proportions : tuple of numbers
@@ -328,11 +355,11 @@ class _RealDomain(_SimpleDomain):
             - are strictly outside the domain, and
             - are NaN,
 
-            respectively. Default is (1, 0, 0, 0). The number of elements in each category
-            is drawn from the multinomial distribution with `np.prod(size)` as
-            the number of trials and `proportions` as the event probabilities.
-            The values in `proportions` are automatically normalized to sum to
-            1.
+            respectively. Default is (1, 0, 0, 0). The number of elements in
+            each category is drawn from the multinomial distribution with
+            `np.prod(size)` as the number of trials and `proportions` as the
+            event probabilities. The values in `proportions` are automatically
+            normalized to sum to 1.
         parameter_values : dict
             Map between the names of parameters (that define the endpoints)
             and numerical values (arrays).
@@ -419,7 +446,7 @@ class _IntegerDomain(_SimpleDomain):
     Completes the implementation of the `_SimpleDomain` class for domains
     composed of consecutive integer values.
 
-    To be completed.
+    To be completed when needed.
     """
     pass
 
@@ -448,6 +475,20 @@ class _Parameter:
     typical : 2-tuple of floats or strings (consider making a _Domain)
         Defines the endpoints of a typical range of values of the parameter.
         Used for sampling.
+
+    Methods
+    -------
+    __str__():
+        Returns a string description of the variable for use in documentation,
+        including the keyword used to represent it in code, the symbol used to
+        represent it mathemtatically, and a description of the valid domain.
+    draw(size, *, rng, domain, proportions)
+        Draws random values of the parameter. Proportions of values within
+        the valid domain, on the endpoints of the domain, outside the domain,
+        and having value NaN are specified by `proportions`.
+    validate(x):
+        Validates and standardizes the argument for use as numerical values
+        of the parameter.
 
    """
     def __init__(self, name, *, domain, symbol=None, typical=None):
@@ -488,11 +529,11 @@ class _Parameter:
             - are strictly outside the domain, and
             - are NaN,
 
-            respectively. Default is (1, 0, 0, 0). The number of elements in each category
-            is drawn from the multinomial distribution with `np.prod(size)` as
-            the number of trials and `proportions` as the event probabilities.
-            The values in `proportions` are automatically normalized to sum to
-            1.
+            respectively. Default is (1, 0, 0, 0). The number of elements in
+            each category is drawn from the multinomial distribution with
+            `np.prod(size)` as the number of trials and `proportions` as the
+            event probabilities. The values in `proportions` are automatically
+            normalized to sum to 1.
         parameter_values : dict
             Map between the names of parameters (that define the endpoints of
             `typical`) and numerical values (arrays).
@@ -530,8 +571,10 @@ class _RealParameter(_Parameter):
         arr : ndarray
             The argument array that has been validated and standardized
             (converted to an appropriate dtype, if necessary).
-        valid_dtype : boolean ndarray
-            Logical array indicating which elements are valid reals (True) and
+        dtype : NumPy dtype
+            The appropriate floating point dtype of the parameter.
+        valid : boolean ndarray
+            Logical array indicating which elements are valid (True) and
             which are not (False). The arrays of all distribution parameters
             will be broadcasted, and elements for which any parameter value
             does not meet the requirements will be replaced with NaN.
@@ -578,6 +621,20 @@ class _Parameterization:
     parameters : dict
         String names (of keyword arguments) and the corresponding _Parameters.
 
+    Methods
+    -------
+    __len__()
+        Returns the number of parameters in the parameterization.
+    __str__()
+        Returns a string representation of the parameterization.
+    matches(parameters)
+        Checks whether the keyword arguments match the parameterization.
+    validation(parameter_values)
+        Input validation / standardization of parameterization. Validates the
+        numerical values of all parameters.
+    draw(sizes, rng, proportions)
+        Draw random values of all parameters of the parameterization for use
+        in testing.
     """
     def __init__(self, *parameters):
         self.parameters = {param.name: param for param in parameters}
@@ -633,13 +690,37 @@ class _Parameterization:
         return all_valid, dtype
 
     def __str__(self):
+        """Returns a string representation of the parameterization."""
         messages = [str(param) for name, param in self.parameters.items()]
         return " ".join(messages)
 
     def draw(self, sizes=None, rng=None, proportions=None):
+        """Draw random values of all parameters for use in testing
+
+        Arguments
+        ---------
+        sizes : iterable of shape tuples
+            The size of the array to be generated for each parameter in the
+            parameterization. Note that the order of sizes is arbitary; the
+            size of the array generated for a specific parameter is not
+            controlled individually as written.
+        rng : NumPy Generator
+            The generator used to draw random values.
+        proportions : tuple
+            A tuple of four non-negative numbers that indicate the expected
+            relative proportion of elements that are within the parameter's
+            domain, are on the boundary of the parameter's domain, are outside
+            the parameter's domain, and have value NaN. For more information,
+            see the `draw` method of the _Parameter subclasses.
+
+        Returns
+        -------
+        parameter_values : dict (string: array)
+            A dictionary of parameter name/value pairs.
+        """
         # ENH: be smart about the order. The domains of some parameters
         # depend on others. If the relationshp is simple (e.g. a < b < c),
-        # we could just draw values in order a, b, c.
+        # we can draw values in order a, b, c.
         parameter_values = {}
 
         if not len(sizes) or not np.iterable(sizes[0]):
