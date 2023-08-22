@@ -78,6 +78,45 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #  Make ShiftedScaledDistribution more efficient - only process underlying
 #   distribution parameters as necessary.
 
+# Questions:
+# 1.  I override `__getattr__` so that distribution parameters can be read as
+#     attributes. We don't want uses to try to change them.
+#     - To prevent replacements (dist.a = b), I could override `__setattr__`.
+#     - To prevent in-place modifications, `__getattr__` could return a copy,
+#       or it could set the WRITEABLE flag of the array to false.
+#     Which should I do?
+# 2.  `cache_policy` is supported in several methods where I imagine it being
+#     useful, but it needs to be tested. Before doing that:
+#     - What should the default value be?
+#     - What should the other values be? Currently there is an enum, but
+#       I find this to be cumbersome.
+# 3.  `iv_policy` is supported in a few places, but it should be checked for
+#     consistency. I have the same questions as for `cache_policy`.
+# 4.  `tol` is currently notional. I think there needs to be way to set
+#     separate `atol` and `rtol`. Some ways I imagine it being used:
+#     - Values can be passed to iterative functions (quadrature, root-finder).
+#     - To control which "method" of a distribution function is used. For
+#       example, if `atol` is set to `1e-12`, it may be acceptable to compute
+#       the complementary CDF as 1 - CDF even when CDF is nearly 1; otherwise,
+#       a (potentially more time-consuming) method would need to be used.
+#     I'm looking for unified suggestions for the interface, not individual
+#     ideas like "you could do this here."
+# 5.  I also envision that accuracy estimates should be reported to the user
+#     somehow. I think my preference would be to return a subclass of an array
+#     with an `error` attribute - yes, really. But this is unlikely to be
+#     popular, so what are other ideas? Again, we need a unified vision here,
+#     not just pointing out difficulties (not all errors are known or easy
+#     to estimate, what to do when errors could compound, etc.).
+# 6.  `kwargs` is used in many places to refer to the dictionary of
+#      distribution parameters (e.g. as passed from the public function to a
+#      private function). Shall I change this to `parameters`?
+# 7.  The term "method" is used to refer to public instance functions,
+#     private instance functions, the "method" string argument, and the means
+#     of calculating the desired quantity (represented by the string argument).
+#     For the sake of disambiguation, shall I rename the "method" string to
+#     "strategy" and refer to the means of calculating the quantity as the
+#     "strategy"?
+
 # Originally, I planned to filter out invalid distribution parameters for the
 # author of the distribution; they would always work with "compressed",
 # 1D arrays containing only valid distribution parameters. There are two
@@ -735,6 +774,21 @@ class _Parameterization:
 
 
 def _set_invalid_nan(f):
+    # Wrapper for input / output validation and standardization of distribution
+    # functions that accept either the quantile or percentile as an argument:
+    # logpdf, pdf
+    # logcdf, cdf
+    # logccdf, ccdf
+    # ilogcdf, icdf
+    # ilogccdf, iccdf
+    # Arguments that are outside the required range are replaced by NaN before
+    # passing them into the underlying function. The corresponding outputs
+    # are replaced by the appropriate value before being returned to the user.
+    # For example, when the argument of `cdf` exceeds the right end of the
+    # distribution's support, the wrapper replaces the argument with NaN,
+    # ignores the output of the underlying function, and returns 1.0. It also
+    # ensures that output is of the appropriate shape and dtype.
+
     endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
     replacements = {'logpdf': (-oo, -oo), 'pdf': (0, 0),
@@ -836,7 +890,13 @@ def _set_invalid_nan(f):
 
 
 def _set_invalid_nan_property(f):
-    # maybe implement the cache here?
+    # Wrapper for input / output validation and standardization of distribution
+    # functions that represent properties of the distribution itself:
+    # logentropy, entropy
+    # median, mode
+    # moment_raw, moment_central, moment_standard
+    # It ensures that the output is of the correct shape and dtype and that
+    # there are NaNs wherever the distribution parameters were invalid.
 
     @functools.wraps(f)
     def filtered(self, *args, method=None, iv_policy=None, **kwargs):
@@ -874,9 +934,25 @@ def _set_invalid_nan_property(f):
 
 
 def _dispatch(f):
+    # For each public method (instance function) of a distribution (e.g. ccdf),
+    # there may be several ways ("method"s) that it can be computed (e.g. a
+    # formula, as the complement of the CDF, or via numerical integration).
+    # Each "method" is implemented by a different private method (instance
+    # function).
+    # This wrapper calls the appropriate private method based on the public
+    # method and any specified `method` keyword option.
+    # - If `method` is specified as a string (by the user), the appropriate
+    #   private method is called.
+    # - If `method` is None:
+    #   - The appropriate private method for the public method is looked up
+    #     in a cache.
+    #   - If the cache does not have an entry for the public method, the
+    #     appropriate "dispatch " function is called to determine which method
+    #     is most appropriate given the available private methods and
+    #     settings (e.g. tolerance).
 
     @functools.wraps(f)
-    def wrapped(self, *args, method=None, **kwargs):
+    def wrapped(self, *args, method=None, cache_policy=None, **kwargs):
         func_name = f.__name__
         method = method or self._method_cache.get(func_name, None)
         if callable(method):
@@ -887,27 +963,35 @@ def _dispatch(f):
             method = getattr(self, method_name)
         else:
             method = f(self, *args, method=method, **kwargs)
-            self._method_cache[func_name] = method
+            cache_policy = cache_policy or self.cache_policy
+            if cache_policy != CACHE_POLICY.NO_CACHE:
+                self._method_cache[func_name] = method
 
-        return self._call_selected_method(method, *args, **kwargs)
+        try:
+            return method(*args, **kwargs)
+        except KeyError as e:
+            raise NotImplementedError(self._not_implemented) from e
 
     return wrapped
 
 
 def _cdf2_input_validation(f):
-    # Input validation needs to be customized to the 2-arg cdf methods.
+    # Wrapper that does the job of `_set_invalid_nan` when `cdf` or `logcdf`
+    # is called with two quantile arguments.
     # Let's keep it simple; no special cases for speed right now.
-    # The strategy is a bit different than for `cdf` (and other methods
-    # covered by `_set_invalid_nan`). For `cdf`, elements of `x` that
+    # The strategy is a bit different than for 1-arg `cdf` (and other methods
+    # covered by `_set_invalid_nan`). For 1-arg `cdf`, elements of `x` that
     # are outside (or at the edge of) the support get replaced by `nan`,
     # and then the results get replaced by the appropriate value (0 or 1).
     # We *could* do something similar, dispatching to `_cdf1` in these
     # cases. That would be a bit more robust, but it would also be quite
     # a bit more complex, since we'd have to do different things when
     # `x` and `y` are both out of bounds, when just `x` is out of bounds,
-    # when jusy `y` is out of bounds, and when both are out of bounds.
+    # when just `y` is out of bounds, and when both are out of bounds.
     # I'm not going to do that right now. Instead, simply replace values
-    # outside the support by those at the edge of the support.
+    # outside the support by those at the edge of the support. Here, we also
+    # omit some of the optimizations that make `_set_invalid_nan` faster for
+    # simple arguments (e.g. float64 scalars).
 
     @functools.wraps(f)
     def wrapped(self, x, y, *args, **kwargs):
@@ -928,10 +1012,15 @@ def _cdf2_input_validation(f):
     return wrapped
 
 
-def kwargs2args(f, args=[], kwargs={}):
-    # this is a temporary workaround until the scalar algorithms `_tanhsinh`,
-    # `_chandrupatla`, etc., accept `kwargs` or can operate with compressing
-    # arguments to the callable
+def _kwargs2args(f, args=[], kwargs={}):
+    # Wraps a function that accepts a primary argument `x`, secondary
+    # arguments `args`, and secondary keyward arguments `kwargs` such that the
+    # wrapper accepts only `x` and `args`. The keyword arguments are extracted
+    # from `args` passed into the wrapper, and these are passed to the
+    # underlying function as `kwargs`.
+    # This is a temporary workaround until the scalar algorithms `_tanhsinh`,
+    # `_chandrupatla`, etc., support `kwargs` or can operate with compressing
+    # arguments to the callable.
     names = list(kwargs.keys())
     n_args = len(args)
 
@@ -944,16 +1033,50 @@ def kwargs2args(f, args=[], kwargs={}):
 
 
 def _log1mexp(x):
+    r"""Compute the log of the complement of the exponential
+
+    This function is equivalent to::
+
+        log1mexp(x) = np.log(1-np.exp(x))
+
+    but avoids loss of precision when ``np.exp(x)`` is nearly 0 or 1.
+
+    Parameters
+    ----------
+    x : array_like
+        Input array.
+
+    Returns
+    -------
+    y : ndarray
+        An array of the same shape as `x`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from scipy.special import log1m
+    >>> x = 1e-300  # log of a number very close to 1
+    >>> log1mexp(x)  # log of the complement of a number very close to 1
+    -690.7755278982137
+    >>> # p.log(1 - np.exp(x))  # -inf; emits warning
+
+    """
     def f1(x):
+        # good for exp(x) close to 0
         return np.log1p(-np.exp(x))
 
     def f2(x):
+        # good for exp(x) close to 1
         return np.real(np.log(-special.expm1(x + 0j)))
 
     return _lazywhere(x < -1, (x,), f=f1, f2=f2)
 
 
 def _logexpxmexpy(x, y):
+    """ Compute the log of the difference of the exponentials of two arguments
+
+    Avoids over/underflow, but does not prevent loss of precision otherwise.
+    """
     # TODO: properly avoid NaN when y is negative infinity
     # TODO: silence warning with taking log of complex nan
     # TODO: deal with x == y better
@@ -968,10 +1091,17 @@ def _logexpxmexpy(x, y):
     return res
 
 def _log_real_standardize(x):
-    # log of a negative number has imaginary part that is a multiple of pi*1j,
-    # which indicates the sign of the original number. Standardize so that the
-    # log of a positive real has 0 imaginary part and the log of a negative
-    # real has pi*1j imaginary part.
+    """" Standardizes the (complex) logarithm of a real number.
+
+    The logarithm of a real number may be represented by a complex number with
+    imaginary part that is a multiple of pi*1j. Even multiples correspond with
+    a positive real and odd multiples correspond with a negative real.
+
+    Given a logarithm of a real number `x`, this function returns an equivalent
+    representation in a standard form: the log of a positive real has imaginary
+    part `0` and the log of a negative real has imaginary part `pi`.
+
+    """
     shape = x.shape
     x = np.atleast_1d(x)
     real = np.real(x).astype(x.dtype)
@@ -983,7 +1113,14 @@ def _log_real_standardize(x):
 
 
 class ContinuousDistribution:
+    """ Class that represents a continuous statistical distribution.
+
+    We might wish to adjust this to represent a continuous *random variable*,
+    which is a slight change in perspective with some nice advantages.
+    """
     _parameterizations = []
+
+    ### Initialization
 
     def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
                  rng=None, **parameters):
@@ -999,19 +1136,22 @@ class ContinuousDistribution:
         )
         self._original_parameters = {}
 
-        # Assembling this dictionary increases instantiation time but makes
-        # the dispatch methods easier to read and improves method call time.
-        # There are a few things we could do to avoid increasing the
-        # instantiation time:
-        # - make all of these classmethods (so we only get hit at import time)
-        # - amortize the creation of this dict by adding the methods
-        #   as they are called (e.g. this information could go in the
-        #   `_dispatch` wrapper)
-        # - compute the name of the method we want to call in @_dispatch, e.g.
-        #   func_name.replace('dispatch', method).
         self.update_parameters(**parameters)
 
     def update_parameters(self, *, iv_policy=None, **kwargs):
+        """ Update the numerical values of distribution parameters.
+
+        Arguments
+        ---------
+        **kwargs : array
+            Desired numerical values of the distribution parameters. Any or all
+            of the parameters initially used to instantiate the distribution
+            may be modified. Parameters used in alternative parameterizations
+            are not accepted.
+
+        iv_policy : ?
+            To be documented. See Question 3 at the top.
+        """
 
         parameters = original_parameters = self._original_parameters.copy()
         parameters.update(**kwargs)
@@ -1030,13 +1170,13 @@ class ContinuousDistribution:
                            f"`{set(parameters)}` were provided.")
                 raise ValueError(message)
         else:
-            # This is default behavior, which re-runs all the parameter
-            # validation whenever a parameter is modified. For many
-            # distributions, the domain of a parameter doesn't depend on
-            # other parameters, so parameters could safely be modified
-            # withuout validating the other parameters again. To handle
-            # these cases more efficiently, we could allow the developer
-            # to override this behavior.
+            # This is default behavior, which re-runs all parameter validations
+            # even when only a single parameter is modified. For many
+            # distributions, the domain of a parameter doesn't depend on other
+            # parameters, so parameters could safely be modified without
+            # re-validating all other parameters. To handle these cases more
+            # efficiently, we could allow the developer  to override this
+            # behavior.
 
             # Currently the user can only update the original parameterization.
             # Even though that parameterization is already known,
@@ -1050,8 +1190,8 @@ class ContinuousDistribution:
 
             parameterization = self._identify_parameterization(parameters)
             parameters, shape = self._broadcast(parameters)
-            parameters, invalid, any_invalid, dtype = self._validate(
-                parameterization, parameters)
+            parameters, invalid, any_invalid, dtype = (
+                self._validate(parameterization, parameters))
             parameters = self._process_parameters(**parameters)
 
             self._invalid = invalid
@@ -1064,20 +1204,17 @@ class ContinuousDistribution:
         self._parameterization = parameterization
         self._original_parameters = original_parameters
 
-    def __getattr__(self, item):
-        # This might be needed in __init__ to ensure that `_parameters` exists
-        # super().__setattr__('_parameters', dict())
-
-        # This is needed for deepcopy/pickling
-        if '_parameters' not in vars(self):
-            return super().__getattribute__(item)
-
-        if item in self._parameters:
-            return self._parameters[item]
-
-        return super().__getattribute__(item)
-
     def reset_cache(self):
+        """ Clear all cached values.
+
+        To improve the speed of some calculations, the distribution's support
+        and moments are cached.
+
+        This functionn is called automatically whenever the distribution
+        parameters are updated.
+
+        """
+        # We could offer finer control over what is cleared.
         # For simplicity, these will still exist even if cache_policy is
         # NO_CACHE; they just won't be populated. This allows caching to be
         # turned on and off easily.
@@ -1087,35 +1224,11 @@ class ContinuousDistribution:
         self._support_cache = None
         self._method_cache = {}
 
-    def __repr__(self):
-        class_name = self.__class__.__name__
-        parameters = list(self._original_parameters)
-        info = []
-        if parameters:
-            parameters.sort()
-            info.append(f"{', '.join(parameters)}")
-        if self._shape:
-            info.append(f"shape={self._shape}")
-        if self._dtype != np.float64:
-            info.append(f"dtype={self._dtype}")
-        return f"{class_name}({', '.join(info)})"
-
-    def _validate_rng(self, rng, iv_policy=None):
-        # _validate_rng returns None if rng is None. `default_rng()` takes
-        # ~30 µs on my machine.
-        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
-            return rng
-
-        if rng is not None and not isinstance(rng, np.random.Generator):
-            message = ("Argument `rng` passed to the "
-                       f"`{self.__class__.__name__}` distribution family is "
-                       f"of type `{type(rng)}`, but it must be a NumPy "
-                       "`Generator`.")
-            raise ValueError(message)
-        return rng
-
-    @classmethod
-    def _identify_parameterization(cls, parameters):
+    def _identify_parameterization(self, parameters):
+        # Determine whether a `parameters` dictionary matches is consistent
+        # with one of the parameterizations of the distribution. If so,
+        # return that parameterization object; if not, raise an error.
+        #
         # I've come back to this a few times wanting to avoid this explicit
         # loop. I've considered several possibilities, but they've all been a
         # little unusual. For example, we could override `_eq_` so we can
@@ -1125,105 +1238,97 @@ class ContinuousDistribution:
         # I haven't been sure enough of these approaches to implement them.
         parameter_names_set = set(parameters)
 
-        for parameterization in cls._parameterizations:
+        for parameterization in self._parameterizations:
             if parameterization.matches(parameter_names_set):
                 break
         else:
             if not parameter_names_set:
-                message = (f"The `{cls.__name__}` distribution family "
-                           "requires parameters, but none were provided.")
+                message = (f"The `{self.__class__.__name__}` distribution "
+                           "family requires parameters, but none were "
+                           "provided.")
             else:
-                parameter_names = cls._get_parameter_str(parameters)
+                parameter_names = self._get_parameter_str(parameters)
                 message = (f"The provided parameters `{parameter_names}` "
                            "do not match a supported parameterization of the "
-                           f"`{cls.__name__}` distribution family.")
+                           f"`{self.__class__.__name__}` distribution family.")
             raise ValueError(message)
 
         return parameterization
 
-    @classmethod
-    def _broadcast(cls, parameters):
-        # broadcast parameters
-
-        # It's much faster to check whether broadcasting is necessary than to
-        # broadcast when it's not necessary.
-        # We should always make sure that the parameters *are* the same shape
-        # and not just broadcastble, though. Users can access parameters as
+    def _broadcast(self, parameters):
+        # Broadcast the distribution parameters to the same shape. If the
+        # arrays are not broadcastable, raise a meaningful error.
+        #
+        # We always make sure that the parameters *are* the same shape
+        # and not just broadcastable. Users can access parameters as
         # attributes, and I think they should see the arrays as the same shape.
         # More importantly, broadcasting can be important before logical
         # indexing operations, which are needed in infrastructure code when
-        # there are invalid paramters, and may be needed in
+        # there are invalid parameters, and may be needed in
         # distribution-specific code. We don't want developers to need to
         # broadcast in distribution functions.
 
-        # list(map(np.asarray, parameters.values())) is more compact but less familiar
-        parameter_vals = [np.asarray(parameter) for parameter in parameters.values()]
-        parameter_shapes = set((parameter.shape for parameter in parameter_vals))
+        # It's much faster to check whether broadcasting is necessary than to
+        # broadcast when it's not necessary.
+        parameter_vals = [np.asarray(parameter)
+                          for parameter in parameters.values()]
+        parameter_shapes = set((parameter.shape
+                                for parameter in parameter_vals))
         if len(parameter_shapes) == 1:
             return parameters, parameter_vals[0].shape
 
         try:
             parameter_vals = np.broadcast_arrays(*parameters.values())
         except ValueError as e:
-            parameter_names = cls._get_parameter_str(parameters)
+            parameter_names = self._get_parameter_str(parameters)
             message = (f"The parameters `{parameter_names}` provided to the "
-                       f"`{cls.__name__}` distribution family "
+                       f"`{self.__class__.__name__}` distribution family "
                        "cannot be broadcast to the same shape.")
             raise ValueError(message) from e
         return (dict(zip(parameters.keys(), parameter_vals)),
                 parameter_vals[0].shape)
 
-    @classmethod
-    def _get_parameter_str(cls, parameters):
-        # Sorting for the sake of input validation tests
-        parameter_names_list = list(parameters.keys())
-        parameter_names_list.sort()
-        return f"{{{', '.join(parameter_names_list)}}}"
-
-    @classmethod
-    def _validate(cls, parameterization, parameters):
-        # Replace invalid parameters with `np.nan` and get NaN pattern
+    def _validate(self, parameterization, parameters):
+        # Broadcasts distribution parameter arrays and converts them to a
+        # consistent dtype. Replaces invalid parameters with `np.nan`.
+        # Returns the validated parameters, a boolean mask indicated *which*
+        # elements are invalid, a bolean scalar indicating whether *any*
+        # are invalid (to skip special treatments if none are invalid), and
+        # the common dtype.
         valid, dtype = parameterization.validation(parameters)
         invalid = ~valid
         any_invalid = invalid if invalid.shape == () else np.any(invalid)
         # If necessary, make the arrays contiguous and replace invalid with NaN
         if any_invalid:
             for parameter_name in parameters:
-                parameters[parameter_name] = np.copy(parameters[parameter_name])
+                parameters[parameter_name] = np.copy(
+                    parameters[parameter_name])
                 parameters[parameter_name][invalid] = np.nan
 
         return parameters, invalid, any_invalid, dtype
 
     def _process_parameters(self, **kwargs):
+        """ Process and cache distribution parameters for reuse.
+
+        This is intended to be overridden by subclasses. It allows distribution
+        authors to pre-process parameters for re-use. For instance, when a user
+        parameterizes a LogUniform distribution with `a` and `b`, it makes
+        sense to calculate `log(a)` and `log(b)` because these values will be
+        used in almost all distribution methods. The dictionary returned by
+        this method is passed to all private methods that calculate functions
+        of the distribution.
+        """
         return kwargs
 
-    @classmethod
-    def _draw(cls, sizes=None, rng=None, i_parameterization=None,
-              proportions=None):
-        if len(cls._parameterizations) == 0:
-            return cls()
-        if i_parameterization is None:
-            n = cls._num_parameterizations()
-            i_parameterization = rng.integers(0, max(0, n - 1), endpoint=True)
+    def _get_parameter_str(self, parameters):
+        # Get a string representation of the parameters like "{a, b, c}".
+        parameter_names_list = list(parameters.keys())
+        parameter_names_list.sort()
+        return f"{{{', '.join(parameter_names_list)}}}"
 
-        parameterization = cls._parameterizations[i_parameterization]
-        parameters = parameterization.draw(sizes, rng, proportions=proportions)
-        return cls(**parameters)
+    ### Attributes
 
-    @classmethod
-    def _num_parameterizations(cls):
-        return len(cls._parameterizations)
-
-    @classmethod
-    def _num_parameters(cls):
-        return (0 if not cls._num_parameterizations()
-                else len(cls._parameterizations[0]))
-
-    def _overrides(self, method_name):
-        method = getattr(self.__class__, method_name, None)
-        super_method = getattr(ContinuousDistribution, method_name, None)
-        return method is not super_method
-
+    # `tol` attribute is just notional right now. See Question 4 above.
     @property
     def tol(self):
         return self._tol
@@ -1242,82 +1347,266 @@ class ContinuousDistribution:
             raise ValueError(message)
         self._tol = tol[()]
 
-    def plot(self, ax=None, funcs=None, cdf=0.001, ccdf=0.001):
+    def __getattr__(self, item):
+        # This override allows distribution parameters to be accessed as
+        # attributes. See Question 1 at the top.
+
+        # This might be needed in __init__ to ensure that `_parameters` exists
+        # super().__setattr__('_parameters', dict())
+
+        # This is needed for deepcopy/pickling
+        if '_parameters' not in vars(self):
+            return super().__getattribute__(item)
+
+        if item in self._parameters:
+            return self._parameters[item]
+
+        return super().__getattribute__(item)
+
+    ### Other magic methods
+
+    def __repr__(self):
+        """ Returns a string to represent the distribution. """
+        class_name = self.__class__.__name__
+        parameters = list(self._original_parameters)
+        info = []
+        if parameters:
+            parameters.sort()
+            info.append(f"{', '.join(parameters)}")
+        if self._shape:
+            info.append(f"shape={self._shape}")
+        if self._dtype != np.float64:
+            info.append(f"dtype={self._dtype}")
+        return f"{class_name}({', '.join(info)})"
+
+    ### Utilities
+
+    ## Input validation
+
+    def _validate_rng(self, rng, iv_policy=None):
+        # Yet another RNG validating function. Unlike others in SciPy, if `rng
+        # is None`, this returns `None`. This reduces overhead (~30 µs on my
+        # machine) of distribution initialization by delaying a call to
+        # `default_rng()` until the RNG will actually be used. It also
+        # raises a distribution-specific error message to facilitate
+        #  identification of the source of the error.
+        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
+            return rng
+
+        if rng is not None and not isinstance(rng, np.random.Generator):
+            message = (
+                f"Argument `rng` passed to the `{self.__class__.__name__}` "
+                f"distribution family is of type `{type(rng)}`, but it must "
+                "be a NumPy `Generator`.")
+            raise ValueError(message)
+        return rng
+
+    def _validate_order(self, order, f_name, iv_policy=None):
+        # Yet another integer validating function. Unlike others in SciPy, it
+        # Is quite flexible about what is allowed as an integer, and it
+        # raises a distribution-specific error message to facilitate
+        # identification of the source of the error.
+        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
+            return order
+
+        order = np.asarray(order, dtype=self._dtype)[()]
+        message = (f"Argument `order` of `{self.__class__.__name__}.{f_name}` "
+                   "must be a finite, positive integer.")
         try:
-            import matplotlib  # noqa
-        except ModuleNotFoundError as exc:
-            message = ("`matplotlib` must be installed to use "
-                       f"`{self.__class__.__name__}.plot`.")
-            raise ModuleNotFoundError(message) from exc
+            order_int = round(order.item())
+            # If this fails for any reason (e.g. it's an array, it's infinite)
+            # it's not a valid `order`.
+        except Exception as e:
+            raise ValueError(message) from e
 
-        if ax is None:
-            import matplotlib.pyplot as plt
-            ax = plt.gca()
+        if order_int <0 or order_int != order:
+            raise ValueError(message)
 
-        funcs = funcs or ['pdf']
-        funcs = [funcs] if type(funcs) == str else funcs
+        return order
 
-        # Should also offer control over absolute `x` instead of probability
-        a, b = self.support()
-        a = np.where(np.isinf(a), self.icdf(cdf), a)
-        b = np.where(np.isinf(b), self.iccdf(ccdf), b)
-        x = np.linspace(a, b, 300)
+    ## Testing
 
-        for method in funcs:
-            f = getattr(self, method)
+    @classmethod
+    def _draw(cls, sizes=None, rng=None, i_parameterization=None,
+              proportions=None):
+        """ Draw a specific (fully-defined) distribution from the family.
 
-            def hist_plot(x, *args, **kwargs):
-                sample = f(1000)
-                # should cut off at user-specified limits
-                ax.hist(sample, bins=30, density=True,
-                        histtype='step', *args, **kwargs)
+        See _Parameterization.draw for documentation details.
+        """
+        if len(cls._parameterizations) == 0:
+            return cls()
+        if i_parameterization is None:
+            n = cls._num_parameterizations()
+            i_parameterization = rng.integers(0, max(0, n - 1), endpoint=True)
 
-            def fun_plot(x, *args, **kwargs):
-                y = f(x)
-                ax.plot(x, y, *args, **kwargs)
+        parameterization = cls._parameterizations[i_parameterization]
+        parameters = parameterization.draw(sizes, rng, proportions=proportions)
+        return cls(**parameters)
 
-            plot = (hist_plot if method in {'sample', 'qmc_sample'}
-                    else fun_plot)
+    @classmethod
+    def _num_parameterizations(cls):
+        # Returns the number of parameterizations accepted by the family.
+        return len(cls._parameterizations)
 
-            if len(funcs) > 1:
-                # Would be good to have different ylabel scales
-                # if there are two methods; create different plots
-                # depending on shape of methods nested lists
-                plot(x, label=method)
-            else:
-                # would be good to show parameters as label
-                plot(x)
+    @classmethod
+    def _num_parameters(cls):
+        # Returns the number of parameters used in parameterizations.
+        # Note: assumes the number of parameters is the same for all
+        # parameterizations. This is not quite right for
+        # ShiftedScaleDistribution and may need to be generalized.
+        return (0 if not cls._num_parameterizations()
+                else len(cls._parameterizations[0]))
 
-        # should use LaTeX; use symbols
-        ax.set_xlabel('x')
-        ax.set_ylabel('pdf(x)')
-        if len(funcs) > 1:
-            ax.legend()
-        method_str = (f".{funcs[0]}" if len(funcs) == 1
-                      else f" functions {funcs}")
-        title = str(self) + method_str
-        ax.set_title(title)
-        return ax
+    ## Algorithms
+
+    def _quadrature(self, integrand, limits=None, args=None,
+                    kwargs=None, log=False):
+        # Performs numerical integration of an integrand between limits.
+        # Much of this should be added to `_tanhsinh`.
+        a, b = self._support(**kwargs) if limits is None else limits
+        a, b = np.broadcast_arrays(a, b)
+        if not a.size:
+            # maybe need to figure out result type from a, b
+            return np.empty(a.shape, dtype=self._dtype)
+        args = [] if args is None else args
+        kwargs = {} if kwargs is None else kwargs
+        f, args = _kwargs2args(integrand, args=args, kwargs=kwargs)
+        args = np.broadcast_arrays(*args)
+        # If we know the median or mean, consider breaking up the interval
+        res = _tanhsinh(f, a, b, args=args, log=log)
+        return res.integral
+
+    def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
+        # Finds the argument of a function that produces the desired output.
+        # Much of this should be added to _bracket_root / _chandrupatla.
+        min, max = self._support(**kwargs) if bounds is None else bounds
+        kwargs = {} if kwargs is None else kwargs
+
+        p, min, max = np.broadcast_arrays(p, min, max)
+        if not p.size:
+            # might need to figure out result type based on p
+            return np.empty(p.shape, dtype=self._dtype)
+
+        def f2(x, p, **kwargs):
+            return f(x, **kwargs) - p
+
+        f3, args = _kwargs2args(f2, args=[p], kwargs=kwargs)
+        # If we know the median or mean, should use it
+
+        # Any operations between 0d array and a scalar produces a scalar, so...
+        shape = min.shape
+        min, max = np.atleast_1d(min, max)
+
+        a = -np.ones_like(min)
+        b = np.ones_like(max)
+        d = max - min
+
+        i = np.isfinite(min) & np.isfinite(max)
+        a[i] = min[i] + 0.25 * d[i]
+        b[i] = max[i] - 0.25 * d[i]
+
+        i = np.isfinite(min) & ~np.isfinite(max)
+        a[i] = min[i] + 1
+        b[i] = min[i] + 2
+
+        i = np.isfinite(max) & ~np.isfinite(min)
+        a[i] = max[i] - 2
+        b[i] = max[i] - 1
+
+        min = min.reshape(shape)
+        max = max.reshape(shape)
+        a = a.reshape(shape)
+        b = b.reshape(shape)
+
+        res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
+        return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
+
+    ## Other
+
+    def _overrides(self, method_name):
+        # Determines whether a class overrides a specified method.
+        # Returns True if the method implementation exists and is the same as
+        # that of the `ContinuousDistribution` class; otherwise returns False.
+        method = getattr(self.__class__, method_name, None)
+        super_method = getattr(ContinuousDistribution, method_name, None)
+        return method is not super_method
+
+    ### Distribution properties
+    # The following "distribution properties" are exposed via a public method
+    # that accepts only options (not distribution parameters or quantile/
+    # percentile argument).
+    # support
+    # logentropy, entropy,
+    # median, mode, mean,
+    # variance, std
+    # skewness, kurtosis
+    # Common options are:
+    # method - a string that indicates which method should be used to compute
+    #          the quantity (e.g. a formula or numerical integration).
+    # cache_policy - an enum that indicates whether the value should be cached
+    #                for later retrieval.
+    # Input/output validation is provided by the `_set_invalid_nan_property`
+    # decorator. These are the methods meant to be called by users.
+    #
+    # Each public method calls a private "dispatch" method that
+    # determines which "method" (strategy for calculating the desired quantity)
+    # to use by default and, via the `@_dispatch` decorator, calls the
+    # method and computes the result.
+    # Dispatch methods always accept:
+    # method - as passed from the public method
+    # kwargs - a dictionary of distribution shape parameters passed by
+    #          the public method.
+    # Dispatch methods accept `kwargs` rather than relying on the state of the
+    # object because iterative algorithms like `_tanhsinh` and `_chandrupatla`
+    # need their callable to follow a strict elementwise protocol: each element
+    # of the output is determined solely by the values of the inputs at the
+    # corresponding location. The public methods do not satisfy this protocol
+    # because they do not accept the parameters as arguments, producing an
+    # output that generally has a different shape than that of the input. Also,
+    # by calling "dispatch" methods rather than the public methods, the
+    # iterative algorithms avoid the overhead of input validation.
+    #
+    # Each dispatch method can designate the responsibility of computing
+    # the required value to any of several "implementation" methods. These
+    # methods accept only `**kwargs`, the parameter dictionaries passed from
+    # the public method via the dispatch method. We separate the implementation
+    # methods from the dispatch methods for the sake of simplicity (via
+    # compartmentalization) and to allow subclasses to override certain
+    # implementation methods (typically only the "formula" methods). The names
+    # of implementation methods are combinations of the public method name and
+    # the name of the "method" (strategy for calculating the desired quantity)
+    # string. (In fact, the name of the implementation method is calculated
+    # from these two strings in the `_dispatch` decorator.) Common method
+    # strings are:
+    # formula - distribution-specific analytical expressions to be implemented
+    #           by subclasses.
+    # log/exp - Compute the log of a value and then exponentiate it or vice
+    #           versa.
+    # quadrature - Compute the value via numerical integration.
+    #
+    # The default method (strategy) is determined based on what implementation
+    # methods are available and the error tolerance of the user. Typically,
+    # a formula is always used if available. We fall back to "log/exp" if a
+    # formula for the logarithm or exponential of the quantity is available,
+    # and we use quadrature otherwise.
 
     def support(self):
-        # We manually cache this instead of using `cached_property` for two
-        # reasons:
-        # - make it easier for users to remember what is a method and what is
-        #   an attribute: anything the user can set (e.g. an attribute, policy,
-        #   or tolerance) is an attribute; everything that can only return
-        #   information is a method.
-        # - If this were a `cached_property`, we couldn't update the value
-        #   when the distribution parameters change.
+        # If this were a `cached_property`, we couldn't update the value
+        # when the distribution parameters change.
         # Caching is important, though, because calls to _support take 1~2 µs
         # even when `a` and `b` are already the same shape.
         if self._support_cache is not None:
             return self._support_cache
+
         support = self._support(**self._parameters)
+
         if self.cache_policy != CACHE_POLICY.NO_CACHE:
             self._support_cache = support
+
         return support
 
     def _support(self, **kwargs):
+        # Computes the support given distribution parameters
         a, b = self._variable.domain.get_numerical_endpoints(kwargs)
         if a.shape != b.shape:
             a, b = np.broadcast_arrays(a, b)
@@ -1326,12 +1615,6 @@ class ContinuousDistribution:
     @_set_invalid_nan_property
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
-
-    def _call_selected_method(self, method, *args, **kwargs):
-        try:
-            return method(*args, **kwargs)
-        except KeyError as e:
-            raise NotImplementedError(self._not_implemented) from e
 
     @_dispatch
     def _logentropy_dispatch(self, method=None, **kwargs):
@@ -1455,6 +1738,8 @@ class ContinuousDistribution:
     def kurtosis(self, *, method=None, cache_policy=None):
         return self.moment_standard(4, method=method, cache_policy=cache_policy)
 
+    ### Probability density functions
+
     @_set_invalid_nan
     def logpdf(self, x, *, method=None):
         return self._logpdf_dispatch(x, method=method, **self._parameters)
@@ -1490,6 +1775,8 @@ class ContinuousDistribution:
 
     def _pdf_logexp(self, x, **kwargs):
         return np.exp(self._logpdf_dispatch(x, **kwargs))
+
+    ### Cumulative Distribution Functions
 
     def logcdf(self, x, y=None, *, method=None):
         if y is None:
@@ -1712,6 +1999,8 @@ class ContinuousDistribution:
         return self._quadrature(self._pdf_dispatch, limits=(x, b),
                                 kwargs=kwargs)
 
+    ### Inverse distribution functions
+
     @_set_invalid_nan
     def ilogcdf(self, x, *, method=None):
         return self._ilogcdf_dispatch(x, method=method, **self._parameters)
@@ -1804,6 +2093,8 @@ class ContinuousDistribution:
     def _iccdf_inversion(self, x, **kwargs):
         return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
+    ### Sampling
+
     def sample(self, shape=(), *, method=None, rng=None):
         # needs output validation to ensure that developer returns correct
         # dtype and shape
@@ -1858,45 +2149,7 @@ class ContinuousDistribution:
         uniform = np.reshape(uniform, full_shape)
         return self._icdf_dispatch(uniform, **kwargs)
 
-    def _logmoment(self, order=1, *, logcenter=None, standardized=False):
-        # make this private until it is worked into moment
-        if logcenter is None or standardized is True:
-            logmean = self._logmoment_quad(1, -np.inf, **self._parameters)
-        else:
-            logmean = None
-
-        logcenter = logmean if logcenter is None else logcenter
-        res = self._logmoment_quad(order, logcenter, **self._parameters)
-        if standardized:
-            logvar = self._logmoment_quad(2, logmean, **self._parameters)
-            res = res - logvar * (order/2)
-        return res
-
-    def _logmoment_quad(self, order, logcenter, **kwargs):
-        def logintegrand(x, order, logcenter, **kwargs):
-            logpdf = self._logpdf_dispatch(x, **kwargs)
-            return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)
-        return self._quadrature(logintegrand, args=(order, logcenter),
-                                kwargs=kwargs, log=True)
-
-    def _validate_order(self, order, f_name, iv_policy=None):
-        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
-            return order
-
-        order = np.asarray(order, dtype=self._dtype)[()]
-        message = (f"Argument `order` of `{self.__class__.__name__}.{f_name}` "
-                   "must be a finite, positive integer.")
-        try:
-            order_int = round(order.item())
-            # If this fails for any reason (e.g. it's an array, it's infinite)
-            # it's not a valid `order`.
-        except Exception as e:
-            raise ValueError(message) from e
-
-        if order_int <0 or order_int != order:
-            raise ValueError(message)
-
-        return order
+    ### Moments
 
     @cached_property
     def _moment_methods(self):
@@ -2097,62 +2350,86 @@ class ContinuousDistribution:
         moment_b = np.sum(n_choose_i*moment_as*(a-b)**(n-i), axis=0)
         return moment_b
 
-    def _quadrature(self, integrand, limits=None, args=None, kwargs=None, log=False):
-        a, b = self._support(**kwargs) if limits is None else limits
-        a, b = np.broadcast_arrays(a, b)
-        if not a.size:
-            # maybe need to figure out result type from a, b
-            return np.empty(a.shape, dtype=self._dtype)
-        args = [] if args is None else args
-        kwargs = {} if kwargs is None else kwargs
-        f, args = kwargs2args(integrand, args=args, kwargs=kwargs)
-        args = np.broadcast_arrays(*args)
-        res = _tanhsinh(f, a, b, args=args, log=log)
-        return res.integral
+    def _logmoment(self, order=1, *, logcenter=None, standardized=False):
+        # make this private until it is worked into moment
+        if logcenter is None or standardized is True:
+            logmean = self._logmoment_quad(1, -np.inf, **self._parameters)
+        else:
+            logmean = None
 
-    def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
-        # should modify _bracket_root and _chandrupatla so we don't need all this
-        min, max = self._support(**kwargs) if bounds is None else bounds
-        kwargs = {} if kwargs is None else kwargs
+        logcenter = logmean if logcenter is None else logcenter
+        res = self._logmoment_quad(order, logcenter, **self._parameters)
+        if standardized:
+            logvar = self._logmoment_quad(2, logmean, **self._parameters)
+            res = res - logvar * (order/2)
+        return res
 
-        p, min, max = np.broadcast_arrays(p, min, max)
-        if not p.size:
-            # might need to figure out result type based on p
-            return np.empty(p.shape, dtype=self._dtype)
+    def _logmoment_quad(self, order, logcenter, **kwargs):
+        def logintegrand(x, order, logcenter, **kwargs):
+            logpdf = self._logpdf_dispatch(x, **kwargs)
+            return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)
+        return self._quadrature(logintegrand, args=(order, logcenter),
+                                kwargs=kwargs, log=True)
 
-        def f2(x, p, **kwargs):
-            return f(x, **kwargs) - p
+    ### Convenience
+    def plot(self, ax=None, funcs=None, cdf=0.001, ccdf=0.001):
+        try:
+            import matplotlib  # noqa
+        except ModuleNotFoundError as exc:
+            message = ("`matplotlib` must be installed to use "
+                       f"`{self.__class__.__name__}.plot`.")
+            raise ModuleNotFoundError(message) from exc
 
-        f3, args = kwargs2args(f2, args=[p], kwargs=kwargs)
-        # If we know the median or mean, should use it
+        if ax is None:
+            import matplotlib.pyplot as plt
+            ax = plt.gca()
 
-        # Any operations between 0d array and a scalar produces a scalar, so...
-        shape = min.shape
-        min, max = np.atleast_1d(min, max)
+        funcs = funcs or ['pdf']
+        funcs = [funcs] if type(funcs) == str else funcs
 
-        a = -np.ones_like(min)
-        b = np.ones_like(max)
-        d = max - min
+        # Should also offer control over absolute `x` instead of probability
+        a, b = self.support()
+        a = np.where(np.isinf(a), self.icdf(cdf), a)
+        b = np.where(np.isinf(b), self.iccdf(ccdf), b)
+        x = np.linspace(a, b, 300)
 
-        i = np.isfinite(min) & np.isfinite(max)
-        a[i] = min[i] + 0.25 * d[i]
-        b[i] = max[i] - 0.25 * d[i]
+        for method in funcs:
+            f = getattr(self, method)
 
-        i = np.isfinite(min) & ~np.isfinite(max)
-        a[i] = min[i] + 1
-        b[i] = min[i] + 2
+            def hist_plot(x, *args, **kwargs):
+                sample = f(1000)
+                # should cut off at user-specified limits
+                ax.hist(sample, bins=30, density=True,
+                        histtype='step', *args, **kwargs)
 
-        i = np.isfinite(max) & ~np.isfinite(min)
-        a[i] = max[i] - 2
-        b[i] = max[i] - 1
+            def fun_plot(x, *args, **kwargs):
+                y = f(x)
+                ax.plot(x, y, *args, **kwargs)
 
-        min = min.reshape(shape)
-        max = max.reshape(shape)
-        a = a.reshape(shape)
-        b = b.reshape(shape)
+            plot = (hist_plot if method in {'sample', 'qmc_sample'}
+                    else fun_plot)
 
-        res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
-        return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
+            if len(funcs) > 1:
+                # Would be good to have different ylabel scales
+                # if there are two methods; create different plots
+                # depending on shape of methods nested lists
+                plot(x, label=method)
+            else:
+                # would be good to show parameters as label
+                plot(x)
+
+        # should use LaTeX; use symbols
+        ax.set_xlabel('x')
+        ax.set_ylabel('pdf(x)')
+        if len(funcs) > 1:
+            ax.legend()
+        method_str = (f".{funcs[0]}" if len(funcs) == 1
+                      else f" functions {funcs}")
+        title = str(self) + method_str
+        ax.set_title(title)
+        return ax
+
+    ### Fitting
 
     # At first glance, it would seem ideal for `fit` were a classmethod,
     # called like `LogUniform.fit(sample=sample)`.
@@ -2217,6 +2494,7 @@ class ContinuousDistribution:
         res = optimize.minimize(objective, x0)
         return res
 
+
 # Rough sketch of how we might shift/scale distributions. The purpose of
 # making it a separate class is just for
 # a) simplicity of the ContinuousDistribution class and
@@ -2231,10 +2509,12 @@ class ContinuousDistribution:
 
 class ShiftedScaledDistribution(ContinuousDistribution):
     _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
-    _loc_param = _RealParameter('loc', symbol='µ', domain=_loc_domain, typical=(1, 2))
+    _loc_param = _RealParameter('loc', symbol='µ',
+                                domain=_loc_domain, typical=(1, 2))
 
     _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
-    _scale_param = _RealParameter('scale', symbol='σ', domain=_scale_domain, typical=(0.1, 10))
+    _scale_param = _RealParameter('scale', symbol='σ',
+                                  domain=_scale_domain, typical=(0.1, 10))
 
     _parameterizations = [_Parameterization(_loc_param, _scale_param),
                           _Parameterization(_loc_param),
@@ -2283,10 +2563,13 @@ class ShiftedScaledDistribution(ContinuousDistribution):
     # long as they would otherwise. Perhaps support for negative scale
     # should be an option.
     def __getattribute__(self, item):
-        if item in {'_logcdf_dispatch', '_cdf_dispatch', '_logccdf_dispatch', '_ccdf_dispatch'}:
+        if item in {'_logcdf_dispatch', '_cdf_dispatch',
+                    '_logccdf_dispatch', '_ccdf_dispatch'}:
             f = getattr(self._dist, item)
-            citem = {'_logcdf_dispatch': '_logccdf_dispatch', '_cdf_dispatch': '_ccdf_dispatch',
-                     '_logccdf_dispatch': '_logcdf_dispatch', '_ccdf_dispatch': '_cdf_dispatch'}
+            citem = {'_logcdf_dispatch': '_logccdf_dispatch',
+                     '_cdf_dispatch': '_ccdf_dispatch',
+                     '_logccdf_dispatch': '_logcdf_dispatch',
+                     '_ccdf_dispatch': '_cdf_dispatch'}
             cf = getattr(self._dist, citem[item])
 
             def wrapped(x, *args, loc, scale, sign, **kwargs):
@@ -2296,10 +2579,13 @@ class ShiftedScaledDistribution(ContinuousDistribution):
 
             return wrapped
 
-        elif item in {'_ilogcdf_dispatch', '_icdf_dispatch', '_ilogccdf_dispatch', '_iccdf_dispatch'}:
+        elif item in {'_ilogcdf_dispatch', '_icdf_dispatch',
+                      '_ilogccdf_dispatch', '_iccdf_dispatch'}:
             f = getattr(self._dist, item)
-            citem = {'_ilogcdf_dispatch': '_ilogccdf_dispatch', '_icdf_dispatch': '_iccdf_dispatch',
-                     '_ilogccdf_dispatch': '_ilogcdf_dispatch', '_iccdf_dispatch': '_icdf_dispatch'}
+            citem = {'_ilogcdf_dispatch': '_ilogccdf_dispatch',
+                     '_icdf_dispatch': '_iccdf_dispatch',
+                     '_ilogccdf_dispatch': '_ilogcdf_dispatch',
+                     '_iccdf_dispatch': '_icdf_dispatch'}
             cf = getattr(self._dist, citem[item])
 
             def wrapped(x, *args, loc, scale, sign, **kwargs):
@@ -2317,7 +2603,8 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         return np.where(sign, a, b)[()], np.where(sign, b, a)[()]
 
     def _entropy_dispatch(self, *args, loc, scale, sign, **kwargs):
-        return self._dist._entropy_dispatch(*args, **kwargs) + np.log(abs(scale))
+        return (self._dist._entropy_dispatch(*args, **kwargs)
+                + np.log(abs(scale)))
 
     def _logentropy_dispatch(self, *args, loc, scale, sign, **kwargs):
         lH0 = self._dist._logentropy_dispatch(*args, **kwargs)
@@ -2333,24 +2620,29 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         return self._itransform(raw, loc, scale)
 
     def _logpdf_dispatch(self, x, *args, loc, scale, sign, **kwargs):
-        return (self._dist._logpdf_dispatch(self._transform(x, loc, scale), *args, **kwargs)
-                - np.log(abs(scale)))
+        x = self._transform(x, loc, scale)
+        logpdf = self._dist._logpdf_dispatch(x, *args, **kwargs)
+        return logpdf - np.log(abs(scale))
 
     def _pdf_dispatch(self, x, *args, loc, scale, sign, **kwargs):
-        return (self._dist._pdf_dispatch(self._transform(x, loc, scale), *args, **kwargs)
-                / abs(scale))
+        x = self._transform(x, loc, scale)
+        pdf = self._dist._pdf_dispatch(x, *args, **kwargs)
+        return pdf / abs(scale)
 
-    def _moment_standard_dispatch(self, order, *, loc, scale, methods, cache_policy=None, **kwargs):
+    def _moment_standard_dispatch(self, order, *, loc, scale, methods,
+                                  cache_policy=None, **kwargs):
         return (self._dist._moment_standard_dispatch(
             order, methods=methods, cache_policy=cache_policy, **kwargs)
                 * np.sign(scale)**order)
 
-    def _moment_central_dispatch(self, order, *, loc, scale, methods, cache_policy=None, **kwargs):
+    def _moment_central_dispatch(self, order, *, loc, scale, methods,
+                                 cache_policy=None, **kwargs):
         return (self._dist._moment_central_dispatch(
             order, methods=methods, cache_policy=cache_policy, **kwargs)
                 * scale**order)
 
-    def _moment_raw_dispatch(self, order, *, loc, scale, methods, cache_policy=None, **kwargs):
+    def _moment_raw_dispatch(self, order, *, loc, scale, methods,
+                             cache_policy=None, **kwargs):
         raw_moments = []
         for i in range(int(order) + 1):
             raw = self._dist._moment_raw_dispatch(
@@ -2361,18 +2653,20 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         return self._moment_transform_center(
             order, raw_moments, loc, 0)
 
-    def _sample_dispatch(self, sample_shape, full_shape, *, method, rng, **kwargs):
+    def _sample_dispatch(self, sample_shape, full_shape, *,
+                         method, rng, **kwargs):
         rvs = self._dist._sample_dispatch(
             sample_shape, full_shape, method=method, rng=rng, **kwargs)
         return rvs*self.scale + self.loc
 
-    def _qmc_sample_dispatch(self, length, full_shape, *, method, qrng, **kwargs):
+    def _qmc_sample_dispatch(self, length, full_shape, *,
+                             method, qrng, **kwargs):
         rvs = self._dist._qmc_sample_dispatch(
             length, full_shape, method=method, qrng=qrng, **kwargs)
         return rvs*self.scale + self.loc
 
-    # Add these methods to ContinuousDistribution so they can return a
-    # ShiftedScaledDistribution
+    # TODO: Add these methods to ContinuousDistribution so they can return a
+    #       ShiftedScaledDistribution
     def __add__(self, loc):
         self.update_parameters(loc=self.loc + loc)
         return self
