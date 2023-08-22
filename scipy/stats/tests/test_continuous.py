@@ -13,7 +13,7 @@ from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
     oo, _Domain, _RealDomain, _RealParameter, ContinuousDistribution,
-    _Parameterization, CACHE_POLICY, IV_POLICY)
+    _Parameterization, CACHE_POLICY, IV_POLICY, _logexpxmexpy)
 from scipy.stats._new_distributions import LogUniform, Normal
 
 class Test_RealDomain:
@@ -132,8 +132,9 @@ def draw_distribution_from_family(family, data, rng, proportions):
 
 
 class TestDistributions:
-
     @pytest.mark.filterwarnings("ignore")
+    # @pytest.mark.parametrize('family', (LogUniform,))
+    # @pytest.mark.parametrize('family', (Normal,))
     @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
@@ -177,8 +178,9 @@ class TestDistributions:
         check_dist_func(dist, 'logccdf', x, x_result_shape, methods)
         check_dist_func(dist, 'ccdf', x, x_result_shape, methods)
 
-        methods = {'quadrature', 'log_quadrature'}
-        check_cdf2(dist, x, y, xy_result_shape, methods)
+        methods = {'quadrature'}
+        check_cdf2(dist, False, x, y, xy_result_shape, methods)
+        check_cdf2(dist, True, x, y, xy_result_shape, methods)
 
         methods = {'complementarity', 'inversion'}
         check_dist_func(dist, 'ilogcdf', logp, x_result_shape, methods)
@@ -265,7 +267,7 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
         if result_shape == tuple():
             assert np.isscalar(res)
 
-def check_cdf2(dist, x, y, result_shape, methods):
+def check_cdf2(dist, log, x, y, result_shape, methods):
     # Specialized test for 2-arg cdf since the interface is a bit different
     # from the other methods. Here, we'll use 1-arg cdf as a reference, and
     # since we have already checked 1-arg cdf in `check_nans_and_edges`, this
@@ -273,22 +275,33 @@ def check_cdf2(dist, x, y, result_shape, methods):
     # `check_nans_and_edges`.
     methods = methods.copy()
 
-    if dist._overrides(f'_cdf2_formula'):
-        methods.add('formula')
-    if dist._overrides(f'_cdf_formula') or dist._overrides(f'_ccdf_formula'):
-        methods.add('naive')
-    if (dist._overrides(f'_logcdf_formula')
-            or dist._overrides(f'_logccdf_formula')):
-        methods.add('log/exp')
+    if log:
+        if dist._overrides(f'_logcdf2_formula'):
+            methods.add('formula')
+        if dist._overrides(f'_logcdf_formula') or dist._overrides(f'_logccdf_formula'):
+            methods.add('subtraction')
+        if (dist._overrides(f'_cdf_formula')
+                or dist._overrides(f'_ccdf_formula')):
+            methods.add('log/exp')
+        ref = np.log(dist.cdf(y) - dist.cdf(x) + 0j)
+    else:
+        if dist._overrides(f'_cdf2_formula'):
+            methods.add('formula')
+        if dist._overrides(f'_cdf_formula') or dist._overrides(f'_ccdf_formula'):
+            methods.add('subtraction')
+        if (dist._overrides(f'_logcdf_formula')
+                or dist._overrides(f'_logccdf_formula')):
+            methods.add('log/exp')
+        ref = dist.cdf(y) - dist.cdf(x)
 
-    ref = dist.cdf(y) - dist.cdf(x)
     np.testing.assert_equal(ref.shape, result_shape)
 
     if result_shape == tuple():
         assert np.isscalar(ref)
 
     for method in methods:
-        res = dist.cdf(x, y, method=method)
+        res = (dist.logcdf(x, y, method=method) if log
+               else dist.cdf(x, y, method=method))
         np.testing.assert_allclose(res, ref, atol=1e-15)
         np.testing.assert_equal(res.shape, result_shape)
         if result_shape == tuple():

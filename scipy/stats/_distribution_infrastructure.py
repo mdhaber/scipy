@@ -25,8 +25,6 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  add logcdf 2-arg
-#  double check cdf 2-arg logic against truncnorm
 #  figure out dtypes of log methods
 #  _parameterizations cannot be a class variable if it is modified
 #  test loc/scale distribution
@@ -659,11 +657,12 @@ def _set_invalid_nan(f):
     endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
     replacements = {'logpdf': (-oo, -oo), 'pdf': (0, 0),
-                    'logcdf': (-oo, 0), 'logccdf': (0, -oo),
-                    'cdf': (0, 1), 'ccdf': (1, 0), '_cdf1': (0, 1)}
+                    '_logcdf1': (-oo, 0), 'logccdf': (0, -oo),
+                    '_cdf1': (0, 1), 'ccdf': (1, 0)}
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
+    @functools.wraps(f)
     def filtered(self, x, *args, iv_policy=None, **kwargs):
         if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, x, *args, **kwargs)
@@ -754,8 +753,11 @@ def _set_invalid_nan(f):
 
     return filtered
 
+
 def _set_invalid_nan_property(f):
     # maybe implement the cache here?
+
+    @functools.wraps(f)
     def filtered(self, *args, method=None, iv_policy=None, **kwargs):
         if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
             return f(self, *args, method=method, **kwargs)
@@ -789,8 +791,10 @@ def _set_invalid_nan_property(f):
 
     return filtered
 
+
 def _dispatch(f):
 
+    @functools.wraps(f)
     def wrapped(self, *args, method=None, **kwargs):
         func_name = f.__name__
         method = method or self._method_cache.get(func_name, None)
@@ -805,6 +809,40 @@ def _dispatch(f):
             self._method_cache[func_name] = method
 
         return self._call_selected_method(method, *args, **kwargs)
+
+    return wrapped
+
+
+def _cdf2_input_validation(f):
+    # Input validation needs to be customized to the 2-arg cdf methods.
+    # Let's keep it simple; no special cases for speed right now.
+    # The strategy is a bit different than for `cdf` (and other methods
+    # covered by `_set_invalid_nan`). For `cdf`, elements of `x` that
+    # are outside (or at the edge of) the support get replaced by `nan`,
+    # and then the results get replaced by the appropriate value (0 or 1).
+    # We *could* do something similar, dispatching to `_cdf1` in these
+    # cases. That would be a bit more robust, but it would also be quite
+    # a bit more complex, since we'd have to do different things when
+    # `x` and `y` are both out of bounds, when just `x` is out of bounds,
+    # when jusy `y` is out of bounds, and when both are out of bounds.
+    # I'm not going to do that right now. Instead, simply replace values
+    # outside the support by those at the edge of the support.
+
+    @functools.wraps(f)
+    def wrapped(self, x, y, *args, **kwargs):
+        low, high = self.support()
+        x, y, low, high = np.broadcast_arrays(x, y, low, high)
+        dtype = np.result_type(x.dtype, y.dtype, self._dtype)
+        x, y = np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype)
+        i = x < low
+        x[i] = low[i]
+        i = y < low
+        y[i] = low[i]
+        i = x > high
+        x[i] = high[i]
+        i = y > high
+        y[i] = high[i]
+        return f(self, x, y, *args, **kwargs)
 
     return wrapped
 
@@ -837,13 +875,16 @@ def _log1mexp(x):
 def _logexpxmexpy(x, y):
     # TODO: properly avoid NaN when y is negative infinity
     # TODO: silence warning with taking log of complex nan
+    # TODO: deal with x == y better
     i = np.isneginf(np.real(y))
     if np.any(i):
         y = y.copy()
         y[i] = np.finfo(y.dtype).min
     x, y = np.broadcast_arrays(x, y)
-    return special.logsumexp([x, y+np.pi*1j], axis=0)
-
+    res = np.asarray(special.logsumexp([x, y+np.pi*1j], axis=0))
+    i = (x == y)
+    res[i] = -np.inf
+    return res
 
 def _log_real_standardize(x):
     # log of a negative number has imaginary part that is a multiple of pi*1j,
@@ -1205,13 +1246,11 @@ class ContinuousDistribution:
     def logentropy(self, *, method=None):
         return self._logentropy_dispatch(method=method, **self._parameters)
 
-
     def _call_selected_method(self, method, *args, **kwargs):
         try:
             return method(*args, **kwargs)
         except KeyError as e:
             raise NotImplementedError(self._not_implemented) from e
-
 
     @_dispatch
     def _logentropy_dispatch(self, method=None, **kwargs):
@@ -1371,8 +1410,63 @@ class ContinuousDistribution:
     def _pdf_logexp(self, x, **kwargs):
         return np.exp(self._logpdf_dispatch(x, **kwargs))
 
+    def logcdf(self, x, y=None, *, method=None):
+        if y is None:
+            return self._logcdf1(x, method=method)
+        else:
+            return self._logcdf2(x, y, method=method)
+
+    @_cdf2_input_validation
+    def _logcdf2(self, x, y, *, method):
+        res = self._logcdf2_dispatch(x, y, method=method, **self._parameters)
+        return res  # clip? it can be complex with imag part pi
+
+    @_dispatch
+    def _logcdf2_dispatch(self, x, y, *, method=None, **kwargs):
+        # Should revisit this logic.
+        if self._overrides('_logcdf2_formula'):
+            method = self._logcdf2_formula
+        elif (self._overrides('_logcdf_formula')
+              or self._overrides('_logccdf_formula')):
+            method = self._logcdf2_subtraction
+        elif self.tol is _null and (self._overrides('_cdf_formula')
+                                    or self._overrides('_ccdf_formula')):
+            method = self._logcdf2_logexp
+        else:
+            method = self._logcdf2_quadrature
+        return method
+
+    def _logcdf2_formula(self, x, y, **kwargs):
+        raise NotImplementedError(self._not_implemented)
+
+    def _logcdf2_subtraction(self, x, y, **kwargs):
+        # Can't think of a good name for the method.
+        flip_sign = x > y
+        x, y = np.minimum(x, y), np.maximum(x, y)
+        logcdf_x = self._logcdf_dispatch(x, **kwargs)
+        logcdf_y = self._logcdf_dispatch(y, **kwargs)
+        logccdf_x = self._logccdf_dispatch(x, **kwargs)
+        logccdf_y = self._logccdf_dispatch(y, **kwargs)
+        case_left = (logcdf_x < -1) & (logcdf_y < -1)
+        case_right = (logccdf_x < -1) & (logccdf_y < -1)
+        case_central = ~(case_left | case_right)
+        log_mass = _logexpxmexpy(logcdf_y, logcdf_x)
+        log_mass[case_right] = _logexpxmexpy(logccdf_x, logccdf_y)[case_right]
+        log_tail = np.logaddexp(logcdf_x, logccdf_y)[case_central]
+        log_mass[case_central] = _log1mexp(log_tail)
+        log_mass[flip_sign] += np.pi * 1j
+        return log_mass[()]
+
+    def _logcdf2_logexp(self, x, y, **kwargs):
+        return np.log(self._cdf2_dispatch(x, y, **kwargs) + 0j)
+
+    def _logcdf2_quadrature(self, x, y, **kwargs):
+        logres = self._quadrature(self._logpdf_dispatch, limits=(x, y),
+                                  log=True, kwargs=kwargs)
+        return logres
+
     @_set_invalid_nan
-    def logcdf(self, x, *, method=None):
+    def _logcdf1(self, x, *, method=None):
         return self._logcdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -1407,56 +1501,33 @@ class ContinuousDistribution:
         else:
             return self._cdf2(x, y, method=method)
 
+    @_cdf2_input_validation
     def _cdf2(self, x, y, *, method):
-        # Input validation needs to be customized to this method.
-        # Let's keep it simple; no special cases for speed right now.
-        # The strategy is a bit different than for `cdf` (and other methods
-        # covered by `_set_invalid_nan`). For `cdf`, elements of `x` that
-        # are outside (or at the edge of) the support get replaced by `nan`,
-        # and then the results get replaced by the appropriate value (0 or 1).
-        # We *could* do something similar, dispatching to `_cdf1` in these
-        # cases. That would be a bit more robust, but it would also be quite
-        # a bit more complex, since we'd have to do different things when
-        # `x` and `y` are both out of bounds, when just `x` is out of bounds,
-        # when jusy `y` is out of bounds, and when both are out of bounds.
-        # I'm not going to do that right now. Instead, simply replace values
-        # outside the support by those at the edge of the support.
-        low, high = self.support()
-        x, y, low, high = np.broadcast_arrays(x, y, low, high)
-        dtype = np.result_type(x.dtype, y.dtype, self._dtype)
-        x, y = np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype)
-        i = x < low
-        x[i] = low[i]
-        i = y < low
-        y[i] = low[i]
-        i = x > high
-        x[i] = high[i]
-        i = y > high
-        y[i] = high[i]
         res = self._cdf2_dispatch(x, y, method=method, **self._parameters)
         return np.clip(res, -1, 1)
 
     @_dispatch
     def _cdf2_dispatch(self, x, y, *, method=None, **kwargs):
+        # Should revisit this logic.
         if self._overrides('_cdf2_formula'):
             method = self._cdf2_formula
-        elif (self._tol is _null
-              and self._overrides('_cdf_formula')
-              or self._overrides('_ccdf_formula')):
-            method = self._cdf2_naive
         elif (self._overrides('_logcdf_formula')
               or self._overrides('_logccdf_formula')):
             method = self._cdf2_logexp
-        elif self._tol is _null:
-            method = self._cdf2_quadrature
+        elif self._tol is _null and (self._overrides('_cdf_formula')
+                                     or self._overrides('_ccdf_formula')):
+            method = self._cdf2_subtraction
         else:
-            method = self._cdf2_log_quadrature
+            method = self._cdf2_quadrature
         return method
 
     def _cdf2_formula(self, x, y, **kwargs):
         raise NotImplementedError(self._not_implemented)
 
-    def _cdf2_naive(self, x, y, **kwargs):
+    def _cdf2_logexp(self, x, y, **kwargs):
+        return np.real(np.exp(self._logcdf2_dispatch(x, y, **kwargs)))
+
+    def _cdf2_subtraction(self, x, y, **kwargs):
         # Improvements:
         # Lazy evaluation of cdf/ccdf only where needed
         # Stack x and y to reduce function calls?
@@ -1467,31 +1538,8 @@ class ContinuousDistribution:
         i = (cdf_x < 0.5) & (cdf_y < 0.5)
         return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
 
-    def _cdf2_logexp(self, x, y, **kwargs):
-        # The central case is only really needed if we return the logcdf
-        flip_sign = x > y
-        x, y = np.minimum(x, y), np.maximum(x, y)
-        logcdf_x = self._logcdf_dispatch(x, **kwargs)
-        logcdf_y = self._logcdf_dispatch(y, **kwargs)
-        logccdf_x = self._logccdf_dispatch(x, **kwargs)
-        logccdf_y = self._logccdf_dispatch(y, **kwargs)
-        case_left = (logcdf_x < -1) & (logcdf_y < -1)
-        case_right = (logccdf_x < -1) & (logccdf_y < -1)
-        case_central = ~(case_left | case_right)
-        log_mass = np.asarray(_logexpxmexpy(logcdf_y, logcdf_x))
-        log_mass[case_right] = _logexpxmexpy(logccdf_x, logccdf_y)[case_right]
-        log_tail = np.logaddexp(logcdf_x, logccdf_y)[case_central]
-        log_mass[case_central] = _log1mexp(log_tail)
-        log_mass[flip_sign] += np.pi * 1j
-        return np.real(np.exp(log_mass))
-
     def _cdf2_quadrature(self, x, y, **kwargs):
         return self._quadrature(self._pdf_dispatch, limits=(x, y), kwargs=kwargs)
-
-    def _cdf2_log_quadrature(self, x, y, **kwargs):
-        logres = self._quadrature(self._logpdf_dispatch, limits=(x, y),
-                                  log=True, kwargs=kwargs)
-        return np.real(np.exp(logres))
 
     @_set_invalid_nan
     def _cdf1(self, x, *, method):
