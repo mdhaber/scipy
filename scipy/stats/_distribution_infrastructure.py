@@ -25,7 +25,8 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  baseline 2-arg cdf
+#  add logcdf 2-arg
+#  double check cdf 2-arg logic against truncnorm
 #  figure out dtypes of log methods
 #  _parameterizations cannot be a class variable if it is modified
 #  test loc/scale distribution
@@ -1457,7 +1458,7 @@ class ContinuousDistribution:
 
     def _cdf2_naive(self, x, y, **kwargs):
         # Improvements:
-        # Lazy evaluation of ccdf only where needed
+        # Lazy evaluation of cdf/ccdf only where needed
         # Stack x and y to reduce function calls?
         cdf_x = self._cdf_dispatch(x, **kwargs)
         cdf_y = self._cdf_dispatch(y, **kwargs)
@@ -1467,13 +1468,22 @@ class ContinuousDistribution:
         return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
 
     def _cdf2_logexp(self, x, y, **kwargs):
+        # The central case is only really needed if we return the logcdf
+        flip_sign = x > y
+        x, y = np.minimum(x, y), np.maximum(x, y)
         logcdf_x = self._logcdf_dispatch(x, **kwargs)
         logcdf_y = self._logcdf_dispatch(y, **kwargs)
         logccdf_x = self._logccdf_dispatch(x, **kwargs)
         logccdf_y = self._logccdf_dispatch(y, **kwargs)
-        i = (logcdf_x < -1) & (logcdf_y < -1)
-        return np.real(np.exp(np.where(i, _logexpxmexpy(logcdf_y, logcdf_x),
-                                       _logexpxmexpy(logccdf_x, logccdf_y))))
+        case_left = (logcdf_x < -1) & (logcdf_y < -1)
+        case_right = (logccdf_x < -1) & (logccdf_y < -1)
+        case_central = ~(case_left | case_right)
+        log_mass = np.asarray(_logexpxmexpy(logcdf_y, logcdf_x))
+        log_mass[case_right] = _logexpxmexpy(logccdf_x, logccdf_y)[case_right]
+        log_tail = np.logaddexp(logcdf_x, logccdf_y)[case_central]
+        log_mass[case_central] = _log1mexp(log_tail)
+        log_mass[flip_sign] += np.pi * 1j
+        return np.real(np.exp(log_mass))
 
     def _cdf2_quadrature(self, x, y, **kwargs):
         return self._quadrature(self._pdf_dispatch, limits=(x, y), kwargs=kwargs)
