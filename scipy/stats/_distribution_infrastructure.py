@@ -2550,42 +2550,28 @@ class ContinuousDistribution:
     # variable argument may be a quantile or probability. The fitting functions
     # are fundamentally different because the quantiles (often observations)
     # are considered to be fixed, and the distribution parameters are the
-    # varables.
+    # variables. In a sense, they are like an inverse of the sampling
+    # functions.
     #
-    # At first glance, it would seem ideal for `fit` were a classmethod,
+    # At first glance, it would seem ideal for `fit` to be a classmethod,
     # called like `LogUniform.fit(sample=sample)`.
-    # I tried this. I insisted on it for a while. Consider the following:
-    # * if `fit` is a classmethod, it cannot call instance methods. If we
-    #   want to support MLE, MPS, MoM, MoLM, then we end up with most of the
-    #   private methods needing to be classmethods, too. There are two issues
-    #   with this.
-    #   - Although they are nearly independent of state and get called with
-    #     the parameters as keyword arguments, they do depend on some instance
-    #     attributes like `tol` and the cache policy. These sorts of things
-    #     can be passed in, but then there are other cases like the overridden
-    #     methods of `OrderStatisticDistribution` and
-    #     `ShiftedScaledDistribution`, which naturally want to have access to
-    #     `self._dist`, the distribution they modify. If we want to pass that
-    #     in, we would have to modify the public methods to do so. Do we
-    #     really want to modify all that just for `fit`, `llf`? And do we
-    #     really want to see the @classmethod decorator on pretty much every
-    #     method we write, including the overrides for specified
-    #     distributions?
-    #   - Even more importantly: we will want to `fit` and get the LLF for
-    #     distributions that aren't simple instances of named classes, but they
-    #     are transformed from standard distributions. Does it make sense to
-    #     call `ShiftedScaledDistribution.fit...` and pass in the class of the
-    #     distribution that is shifted/scaled as an addtitional argument?
-    #     In such cases, I think it is more intuitive for the user to
-    #     generate such a transformed distribution `dist` and call `dist.fit`.
-    #     Fortunately, this essentially *requires* the user to provide a guess
-    #     of the parameters, which is actually a good thing in the general
-    #     case (no analytical formula).
-    # There are ways of getting around these issues, and I've explored them.
-    # But the fact is that this infrastructure is object-oriented. There are a
-    # *lot* of advantages to this, so I would rather not fight it for the few
-    # cases where we might prefer a slightly different invocation as a matter
-    # of principle.
+    # I tried this. I insisted on it for a while. But if `fit` is a
+    # classmethod, it cannot call instance methods. If we want to support MLE,
+    # MPS, MoM, MoLM, then we end up with most of the distribution functions
+    # above needing to be classmethods, too. All state information, such as
+    # tolerances and the underlying distribution of `ShiftedScaledDistribution`
+    # and `OrderStatisticDistribution`, would need to be passed into all
+    # methods. And I'm not really sure how we would call `fit` as a
+    # classmethod of a transformed distribution - maybe
+    # ShiftedScaledDistribution.fit would accept the class of the
+    # shifted/scaled distribution as an argument?
+    #
+    # In any case, it was a conscious decision for the infrastructure to
+    # treat the parameters as "fixed" and the quantile/percentile arguments
+    # as "variable". There are a lot of advantages to this structure, and I
+    # don't think the fact that a few methods reverse the fixed and variable
+    # quantities should make us question that choice. It can still accomodate
+    # these methods reasonably efficiently.
 
     def llf(self, parameters={}, *, sample, axis=-1):
         self.update_parameters(**parameters)
@@ -2608,6 +2594,7 @@ class ContinuousDistribution:
         # unbounded parameter and argument domains.
         names = list(self._original_parameters.keys())
         x0 = list(self._original_parameters.values())
+
         def objective(x):
             self.update_parameters(**dict(zip(names, x)))
             return -self.llf(sample=sample)
@@ -2680,9 +2667,10 @@ class ShiftedScaledDistribution(ContinuousDistribution):
     def _itransform(self, x, loc, scale, **kwargs):
         return x * scale + loc
 
-    # Because we're supporting negative scale, these methods take twice as
-    # long as they would otherwise. Perhaps support for negative scale
-    # should be an option.
+    # Because we're supporting negative scale, these methods take about twice
+    # as long as they would otherwise. With `_lazywhere`, that could be
+    # improved in the slowest cases, but still, perhaps support for negative
+    # scale should be an option rather than the default.
     def __getattribute__(self, item):
         if item in {'_logcdf_dispatch', '_cdf_dispatch',
                     '_logccdf_dispatch', '_ccdf_dispatch'}:
@@ -2763,7 +2751,7 @@ class ShiftedScaledDistribution(ContinuousDistribution):
                 * scale**order)
 
     def _moment_raw_dispatch(self, order, *, loc, scale, methods,
-                             cache_policy=None, **kwargs):
+                             cache_policy=None, ** kwargs):
         raw_moments = []
         for i in range(int(order) + 1):
             raw = self._dist._moment_raw_dispatch(
