@@ -1366,7 +1366,13 @@ class ContinuousDistribution:
     ### Other magic methods
 
     def __repr__(self):
-        """ Returns a string to represent the distribution. """
+        """ Returns a string representation of the distribution.
+
+        Includes the name of the distribution family, the names of the
+        parameters, and the broadcasted shape and result dtype of the
+        parameters.
+
+        """
         class_name = self.__class__.__name__
         parameters = list(self._original_parameters)
         info = []
@@ -1474,7 +1480,10 @@ class ContinuousDistribution:
         args = np.broadcast_arrays(*args)
         # If we know the median or mean, consider breaking up the interval
         res = _tanhsinh(f, a, b, args=args, log=log)
+        # For now, we ignore the status, but I want to return the error
+        # estimate - see question 5 at the top.
         return res.integral
+
 
     def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
         # Finds the argument of a function that produces the desired output.
@@ -1519,6 +1528,8 @@ class ContinuousDistribution:
         b = b.reshape(shape)
 
         res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
+        # For now, we ignore the status, but I want to use the bracket width
+        # as an error estimate - see question 5 at the top.
         return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
 
     ## Other
@@ -1568,7 +1579,7 @@ class ContinuousDistribution:
     #
     # Each dispatch method can designate the responsibility of computing
     # the required value to any of several "implementation" methods. These
-    # methods accept only `**kwargs`, the parameter dictionaries passed from
+    # methods accept only `**kwargs`, the parameter dictionary passed from
     # the public method via the dispatch method. We separate the implementation
     # methods from the dispatch methods for the sake of simplicity (via
     # compartmentalization) and to allow subclasses to override certain
@@ -1738,7 +1749,41 @@ class ContinuousDistribution:
     def kurtosis(self, *, method=None, cache_policy=None):
         return self.moment_standard(4, method=method, cache_policy=cache_policy)
 
-    ### Probability density functions
+    ### Distribution functions
+    # The following functions related to the distribution PDF and CDF are
+    # exposed via a public method that accepts one positional argument - the
+    # quantile - and keyword options (but not distribution parameters).
+    # logpdf, pdf
+    # logcdf, cdf
+    # logccdf, ccdf
+    # All of the cumulative distribution functions have inverse functions,
+    # which accept one positional argument - the percentile.
+    # ilogcdf, icdf
+    # ilogccdf, iccdf
+    # The `logcdf` and `cdf` functions are unique in that they can also be
+    # called with two positional arguments - lower and upper quantiles -
+    # and they return the probability mass (integral of the PDF) between them.
+    # Common keyword options include:
+    # method - a string that indicates which method should be used to compute
+    #          the quantity (e.g. a formula or numerical integration).
+    # Tolerance options should be added. `cache_policy` is not as important
+    # as for the distribution properties, since these functions depend on an
+    # argument other than the parameters.
+    # Input/output validation is provided by the `_set_invalid_nan`
+    # decorator. These are the methods meant to be called by users.
+    #
+    # Each public method calls a private "dispatch" method that
+    # determines which "method" (strategy for calculating the desired quantity)
+    # to use by default and, via the `@_dispatch` decorator, calls the
+    # method and computes the result.
+    # Each dispatch method can designate the responsibility of computing
+    # the required value to any of several "implementation" methods. These
+    # methods accept only `**kwargs`, the parameter dictionary passed from
+    # the public method via the dispatch method.
+    # See the note corresponding with the "Distribution Parameters" for more
+    # information.
+
+    ## Probability Density Functions
 
     @_set_invalid_nan
     def logpdf(self, x, *, method=None):
@@ -1776,7 +1821,7 @@ class ContinuousDistribution:
     def _pdf_logexp(self, x, **kwargs):
         return np.exp(self._logpdf_dispatch(x, **kwargs))
 
-    ### Cumulative Distribution Functions
+    ## Cumulative Distribution Functions
 
     def logcdf(self, x, y=None, *, method=None):
         if y is None:
@@ -1808,7 +1853,6 @@ class ContinuousDistribution:
         raise NotImplementedError(self._not_implemented)
 
     def _logcdf2_subtraction(self, x, y, **kwargs):
-        # Can't think of a good name for the method.
         flip_sign = x > y
         x, y = np.minimum(x, y), np.maximum(x, y)
         logcdf_x = self._logcdf_dispatch(x, **kwargs)
@@ -1999,7 +2043,7 @@ class ContinuousDistribution:
         return self._quadrature(self._pdf_dispatch, limits=(x, b),
                                 kwargs=kwargs)
 
-    ### Inverse distribution functions
+    ## Inverse cumulative distribution functions
 
     @_set_invalid_nan
     def ilogcdf(self, x, *, method=None):
@@ -2093,7 +2137,33 @@ class ContinuousDistribution:
     def _iccdf_inversion(self, x, **kwargs):
         return self._solve_bounded(self._ccdf_dispatch, x, kwargs=kwargs)
 
-    ### Sampling
+    ### Sampling Functions
+    # The following functions for drawing samples from the distribution are
+    # exposed via a public method that accepts one positional argument - the
+    # shape of the sample - and keyword options (but not distribution
+    # parameters).
+    # sample
+    # qmc_sample
+    #
+    # Common keyword options include:
+    # method - a string that indicates which method should be used to compute
+    #          the quantity (e.g. a formula or numerical integration).
+    # rng - the NumPy Generator object to used for drawing random numbers.
+    #
+    # Input/output validation is included in each function, since there is
+    # little code to be shared.
+    # These are the methods meant to be called by users.
+    #
+    # Each public method calls a private "dispatch" method that
+    # determines which "method" (strategy for calculating the desired quantity)
+    # to use by default and, via the `@_dispatch` decorator, calls the
+    # method and computes the result.
+    # Each dispatch method can designate the responsibility of sampling to any
+    # of several "implementation" methods. These methods accept only
+    # `**kwargs`, the parameter dictionary passed from the public method via
+    # the "dispatch" method.
+    # See the note corresponding with the "Distribution Parameters" for more
+    # information.
 
     def sample(self, shape=(), *, method=None, rng=None):
         # needs output validation to ensure that developer returns correct
@@ -2150,6 +2220,47 @@ class ContinuousDistribution:
         return self._icdf_dispatch(uniform, **kwargs)
 
     ### Moments
+    # The moment calculation functions are exposed via a public method that
+    # accepts only one positional argument - the order of the moment - and
+    # keyword options (not distribution parameters or quantile/percentile
+    # argument).
+    # moment_raw
+    # moment_central
+    # moment_standard
+    #
+    # Common options are:
+    # method - a string that indicates which method should be used to compute
+    #          the quantity (e.g. a formula or numerical integration).
+    # cache_policy - an enum that indicates whether the value should be cached
+    #                for later retrieval.
+    # Like the distribution properties, input/output validation is provided by
+    # the `_set_invalid_nan_property` decorator.
+    #
+    # Like most public methods above, each public method calls a private
+    # "dispatch" method that determines which "method" (strategy for
+    # calculating the desired quantity) to use. Also, each dispatch method can
+    # designate the responsibility computing the moment to one of several
+    # "implementation" methods.
+    # Unlike the dispatch methods above, however, the `@_dispatch` decorator
+    # is not used, and both logic and method calls are included in the function
+    # itself.
+    # Instead of determining which method will be used based solely on the
+    # implementation methods available and calling only the corresponding
+    # implementation method, *all* the implementation methods are called
+    # in sequence until one returns the desired information. When an
+    # implementation methods cannot provide the requested information, it
+    # returns the object None (which is distinct from arrays with NaNs or infs,
+    # which are valid values of moments).
+    # The reason for this approach is that although formulae for the first
+    # few moments of a distribution may be found, general formulae that work
+    # for all orders are not always easy to find. This approach allows the
+    # developer to write "formula" implementation functions that return the
+    # desired moment when it is available and None otherwise.
+    #
+    # Note that the first implementation method called is a cache. This is
+    # important because lower-order moments are often needed to compute
+    # higher moments from formulae, so we eliminate redundant calculations
+    # when moments of several orders are needed.
 
     @cached_property
     def _moment_methods(self):
@@ -2158,6 +2269,9 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_raw(self, order=1, *, method=None, cache_policy=None):
+        # Consider exposing the point about which moments are taken as an
+        # option. This is easy to support, since `_moment_transform_center`
+        # does all the work.
         order = self._validate_order(order, "moment_raw")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
@@ -2165,8 +2279,6 @@ class ContinuousDistribution:
             order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
     def _moment_raw_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
-        # How to indicate to the user if the requested methods could not be used?
-        # Rather than returning None when a moment is not available, raise?
         moment = None
 
         if 'cache' in methods:
@@ -2372,6 +2484,11 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     ### Convenience
+
+    # I've included a rough draft of one convenience function - plot - that is
+    # useful for visualizing a distribution. Of course, at the very least, it
+    # will save some lines in documentation examples.
+
     def plot(self, ax=None, funcs=None, cdf=0.001, ccdf=0.001):
         try:
             import matplotlib  # noqa
@@ -2387,7 +2504,6 @@ class ContinuousDistribution:
         funcs = funcs or ['pdf']
         funcs = [funcs] if type(funcs) == str else funcs
 
-        # Should also offer control over absolute `x` instead of probability
         a, b = self.support()
         a = np.where(np.isinf(a), self.icdf(cdf), a)
         b = np.where(np.isinf(b), self.iccdf(ccdf), b)
@@ -2430,7 +2546,12 @@ class ContinuousDistribution:
         return ax
 
     ### Fitting
-
+    # All methods above treat the distribution parameters as fixed, and the
+    # variable argument may be a quantile or probability. The fitting functions
+    # are fundamentally different because the quantiles (often observations)
+    # are considered to be fixed, and the distribution parameters are the
+    # varables.
+    #
     # At first glance, it would seem ideal for `fit` were a classmethod,
     # called like `LogUniform.fit(sample=sample)`.
     # I tried this. I insisted on it for a while. Consider the following:
