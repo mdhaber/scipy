@@ -201,6 +201,8 @@ def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape):
         valid_parameters = np.broadcast_to(get_valid_parameters(dist),
                                            res.shape)
         assert_equal(res.shape, full_shape)
+        np.testing.assert_equal(res.dtype, dist._dtype)
+
         if full_shape == ():
             # NumPy random makes a distinction between a 0d array and a scalar.
             # In stats, we consistently turn 0d arrays into scalars, so
@@ -263,6 +265,9 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
         else:
             np.testing.assert_allclose(res, ref, **tol_override)
 
+        # for now, make sure dtypes are consistent; later, we can check whether
+        # they are correct.
+        np.testing.assert_equal(res.dtype, ref.dtype)
         np.testing.assert_equal(res.shape, result_shape)
         if result_shape == tuple():
             assert np.isscalar(res)
@@ -291,8 +296,8 @@ def check_cdf2(dist, log, x, y, result_shape, methods):
         if (dist._overrides(f'_logcdf_formula')
                 or dist._overrides(f'_logccdf_formula')):
             methods.add('log/exp')
-    ref = dist.cdf(y) - dist.cdf(x)
 
+    ref = dist.cdf(y) - dist.cdf(x)
     np.testing.assert_equal(ref.shape, result_shape)
 
     if result_shape == tuple():
@@ -302,6 +307,10 @@ def check_cdf2(dist, log, x, y, result_shape, methods):
         res = (np.exp(dist.logcdf(x, y, method=method)) if log
                else dist.cdf(x, y, method=method))
         np.testing.assert_allclose(res, ref, atol=1e-14)
+        if log and np.any(x > y):
+            np.testing.assert_equal(res.dtype, (ref + 0j).dtype)
+        else:
+            np.testing.assert_equal(res.dtype, ref.dtype)
         np.testing.assert_equal(res.shape, result_shape)
         if result_shape == tuple():
             assert np.isscalar(res)
@@ -323,7 +332,6 @@ def check_nans_and_edges(dist, fname, arg, res):
     valid_arg, endpoint_arg, outside_arg, nan_arg = classified_args
     all_valid = valid_arg & valid_parameters
 
-    params = dist._parameters
     # Check NaN pattern and edge cases
     assert_equal(res[~valid_parameters], np.nan)
     assert_equal(res[nan_arg], np.nan)

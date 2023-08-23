@@ -102,10 +102,9 @@ class Normal(ContinuousDistribution):
         return rng.normal(size=full_shape)[()]
 
 
-class ShiftedScaledNormal(ContinuousDistribution):
-    def __new__(cls, *, loc, scale, **kwargs):
-        return ShiftedScaledDistribution(
-            Normal(), loc=loc, scale=scale, **kwargs)
+class ShiftedScaledNormal(ShiftedScaledDistribution):
+    def __init__(self, *args, **kwargs):
+        super().__init__(Normal(), *args, **kwargs)
 
 
 def _log_diff(log_p, log_q):

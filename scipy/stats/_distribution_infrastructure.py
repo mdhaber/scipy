@@ -25,10 +25,8 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  figure out dtypes of log methods
-#  _parameterizations cannot be a class variable if it is modified
+#  investigate use of median
 #  test loc/scale distribution
-#  address name collisions in transformed distributions
 #  Add bounds to `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
@@ -1635,7 +1633,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def logentropy(self, *, method=None):
-        return self._logentropy_dispatch(method=method, **self._parameters)
+        return self._logentropy_dispatch(method=method, **self._parameters) + 0j
 
     @_dispatch
     def _logentropy_dispatch(self, method=None, **kwargs):
@@ -1651,7 +1649,7 @@ class ContinuousDistribution:
         raise NotImplementedError(self._not_implemented)
 
     def _logentropy_logexp(self, **kwargs):
-        res = np.log(self._entropy_dispatch(**kwargs) + 0j)
+        res = np.log(self._entropy_dispatch(**kwargs)+0j)
         return _log_real_standardize(res)
 
     def _logentropy_quadrature(self, **kwargs):
@@ -1679,7 +1677,7 @@ class ContinuousDistribution:
         raise NotImplementedError(self._not_implemented)
 
     def _entropy_logexp(self, **kwargs):
-        return np.exp(self._logentropy_dispatch(**kwargs))
+        return np.real(np.exp(self._logentropy_dispatch(**kwargs)))
 
     def _entropy_quadrature(self, **kwargs):
         def integrand(x, **kwargs):
@@ -1846,6 +1844,7 @@ class ContinuousDistribution:
 
     @_dispatch
     def _logcdf2_dispatch(self, x, y, *, method=None, **kwargs):
+        # dtype is complex if any x > y, else real
         # Should revisit this logic.
         if self._overrides('_logcdf2_formula'):
             method = self._logcdf2_formula
@@ -1877,10 +1876,12 @@ class ContinuousDistribution:
         log_tail = np.logaddexp(logcdf_x, logccdf_y)[case_central]
         log_mass[case_central] = _log1mexp(log_tail)
         log_mass[flip_sign] += np.pi * 1j
-        return log_mass[()]
+        return np.real_if_close(log_mass[()])
 
     def _logcdf2_logexp(self, x, y, **kwargs):
-        return np.log(self._cdf2_dispatch(x, y, **kwargs) + 0j)
+        expres = self._cdf2_dispatch(x, y, **kwargs)
+        expres = expres + 0j if np.any(expres < 0) else expres
+        return np.log(expres)
 
     def _logcdf2_quadrature(self, x, y, **kwargs):
         logres = self._quadrature(self._logpdf_dispatch, limits=(x, y),
@@ -2669,16 +2670,23 @@ class ShiftedScaledDistribution(ContinuousDistribution):
     _scale_param = _RealParameter('scale', symbol='σ',
                                   domain=_scale_domain, typical=(0.1, 10))
 
-    _parameterizations = [_Parameterization(_loc_param, _scale_param),
-                          _Parameterization(_loc_param),
-                          _Parameterization(_scale_param)]
-
     def __init__(self, dist, *args, **kwargs):
+        self._parameterizations = [_Parameterization(self._loc_param,
+                                                     self._scale_param),
+                                   _Parameterization(self._loc_param),
+                                   _Parameterization(self._scale_param)]
         self._dist = dist
         if dist._parameterization:
             # Add standard distribution parameters to our parameterization
             dist_parameters = dist._parameterization.parameters
+            set_params = set(dist_parameters)
             for parameterization in self._parameterizations:
+                if set_params.intersection(parameterization.parameters):
+                    message = (f"One or more of the parameters of {dist} has "
+                               "the same name as a parameter of "
+                               f"{self.__class__.__name__}. Name collisions "
+                               "create ambiguities and are not supported.")
+                    raise ValueError(message)
                 parameterization.parameters.update(dist_parameters)
         super().__init__(*args, **kwargs)
 
@@ -2724,7 +2732,7 @@ class ShiftedScaledDistribution(ContinuousDistribution):
 
     def _logentropy_dispatch(self, *args, loc, scale, sign, **kwargs):
         lH0 = self._dist._logentropy_dispatch(*args, **kwargs)
-        lls = np.log(np.log(abs(scale)))
+        lls = np.log(np.log(abs(scale))+0j)
         return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
 
     def _median_dispatch(self, *, method, loc, scale, **kwargs):
