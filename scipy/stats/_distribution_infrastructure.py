@@ -77,6 +77,7 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #   modified when caching is turned off?
 #  Make ShiftedScaledDistribution more efficient - only process underlying
 #   distribution parameters as necessary.
+#  Reconsider `all_inclusive`
 
 # Questions:
 # 1.  I override `__getattr__` so that distribution parameters can be read as
@@ -253,6 +254,8 @@ class _SimpleDomain(_Domain):
         a, b = endpoints
         self.endpoints = np.asarray(a)[()], np.asarray(b)[()]
         self.inclusive = inclusive
+        self.all_inclusive = (endpoints == (-oo, oo)
+                              and inclusive == (True, True))
 
     def define_parameters(self, *parameters):
         r""" Records any parameters used to define the endpoints of the domain
@@ -331,6 +334,12 @@ class _SimpleDomain(_Domain):
             True if `item` is within the domain; False otherwise.
 
         """
+        if self.all_inclusive:
+            # Returning a 0d value here makes things much faster.
+            # I'm not sure if it's safe, though. If it causes a bug someday,
+            # I guess it wasn't.
+            return np.asarray(True)
+
         a, b = self.get_numerical_endpoints(parameter_values)
         left_inclusive, right_inclusive = self.inclusive
 
@@ -830,6 +839,7 @@ def _set_invalid_nan(f):
                 raise ValueError(message) from e
 
         low, high = endpoints.get(method_name, self.support())
+
         mask_low = x < low if method_name in replace_strict else x <= low
         mask_high = x > high if method_name in replace_strict else x >= high
         mask_invalid = (mask_low | mask_high)
@@ -1162,7 +1172,7 @@ class ContinuousDistribution:
         self._dtype = np.float64
 
         if (iv_policy or self.iv_policy) == IV_POLICY.SKIP_ALL:
-            pass
+            parameters = self._process_parameters(**parameters)
         elif not len(self._parameterizations):
             if parameters:
                 message = (f"The `{self.__class__.__name__}` distribution "
@@ -1262,11 +1272,11 @@ class ContinuousDistribution:
         # We always make sure that the parameters *are* the same shape
         # and not just broadcastable. Users can access parameters as
         # attributes, and I think they should see the arrays as the same shape.
-        # More importantly, broadcasting can be important before logical
+        # More importantly, arrays should be the same shape before logical
         # indexing operations, which are needed in infrastructure code when
         # there are invalid parameters, and may be needed in
         # distribution-specific code. We don't want developers to need to
-        # broadcast in distribution functions.
+        # broadcast in implementation functions.
 
         # It's much faster to check whether broadcasting is necessary than to
         # broadcast when it's not necessary.
@@ -1278,7 +1288,7 @@ class ContinuousDistribution:
             return parameters, parameter_vals[0].shape
 
         try:
-            parameter_vals = np.broadcast_arrays(*parameters.values())
+            parameter_vals = np.broadcast_arrays(*parameter_vals)
         except ValueError as e:
             parameter_names = self._get_parameter_str(parameters)
             message = (f"The parameters `{parameter_names}` provided to the "
@@ -1292,7 +1302,7 @@ class ContinuousDistribution:
         # Broadcasts distribution parameter arrays and converts them to a
         # consistent dtype. Replaces invalid parameters with `np.nan`.
         # Returns the validated parameters, a boolean mask indicated *which*
-        # elements are invalid, a bolean scalar indicating whether *any*
+        # elements are invalid, a boolean scalar indicating whether *any*
         # are invalid (to skip special treatments if none are invalid), and
         # the common dtype.
         valid, dtype = parameterization.validation(parameters)
@@ -2615,14 +2625,49 @@ class ContinuousDistribution:
 # accommodate different orders if the transformation is built up from
 # components rather than all built into `ContinuousDistribution`.
 
+def _shift_scale_distribution_function(func):
+    citem = {'_logcdf_dispatch': '_logccdf_dispatch',
+             '_cdf_dispatch': '_ccdf_dispatch',
+             '_logccdf_dispatch': '_logcdf_dispatch',
+             '_ccdf_dispatch': '_cdf_dispatch'}
+    def wrapped(self, x, *args, loc, scale, sign, **kwargs):
+        item = func.__name__
+
+        f = getattr(self._dist, item)
+        cf = getattr(self._dist, citem[item])
+
+        fx = f(self._transform(x, loc, scale), *args, **kwargs)
+        cfx = cf(self._transform(x, loc, scale), *args, **kwargs)
+        return np.where(sign, fx, cfx)[()]
+
+    return wrapped
+
+def _shift_scale_inverse_function(func):
+    citem = {'_ilogcdf_dispatch': '_ilogccdf_dispatch',
+             '_icdf_dispatch': '_iccdf_dispatch',
+             '_ilogccdf_dispatch': '_ilogcdf_dispatch',
+             '_iccdf_dispatch': '_icdf_dispatch'}
+    def wrapped(self, x, *args, loc, scale, sign, **kwargs):
+        item = func.__name__
+
+        f = getattr(self._dist, item)
+        cf = getattr(self._dist, citem[item])
+
+        fx = self._itransform(f(x, *args, **kwargs), loc, scale)
+        cfx = self._itransform(cf(x, *args, **kwargs), loc, scale)
+        return np.where(sign, fx, cfx)[()]
+
+    return wrapped
+
 class ShiftedScaledDistribution(ContinuousDistribution):
-    _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
+    # Unclear whether infinite loc/scale will work reasonably in all cases
+    _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _loc_param = _RealParameter('loc', symbol='µ',
                                 domain=_loc_domain, typical=(1, 2))
 
-    _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
+    _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _scale_param = _RealParameter('scale', symbol='σ',
-                                  domain=_scale_domain, typical=(0.1, 10))
+                                  domain=_scale_domain, typical=(True, True))
 
     _parameterizations = [_Parameterization(_loc_param, _scale_param),
                           _Parameterization(_loc_param),
@@ -2667,46 +2712,8 @@ class ShiftedScaledDistribution(ContinuousDistribution):
     def _itransform(self, x, loc, scale, **kwargs):
         return x * scale + loc
 
-    # Because we're supporting negative scale, these methods take about twice
-    # as long as they would otherwise. With `_lazywhere`, that could be
-    # improved in the slowest cases, but still, perhaps support for negative
-    # scale should be an option rather than the default.
-    def __getattribute__(self, item):
-        if item in {'_logcdf_dispatch', '_cdf_dispatch',
-                    '_logccdf_dispatch', '_ccdf_dispatch'}:
-            f = getattr(self._dist, item)
-            citem = {'_logcdf_dispatch': '_logccdf_dispatch',
-                     '_cdf_dispatch': '_ccdf_dispatch',
-                     '_logccdf_dispatch': '_logcdf_dispatch',
-                     '_ccdf_dispatch': '_cdf_dispatch'}
-            cf = getattr(self._dist, citem[item])
-
-            def wrapped(x, *args, loc, scale, sign, **kwargs):
-                fx = f(self._transform(x, loc, scale), *args, **kwargs)
-                cfx = cf(self._transform(x, loc, scale), *args, **kwargs)
-                return np.where(sign, fx, cfx)[()]
-
-            return wrapped
-
-        elif item in {'_ilogcdf_dispatch', '_icdf_dispatch',
-                      '_ilogccdf_dispatch', '_iccdf_dispatch'}:
-            f = getattr(self._dist, item)
-            citem = {'_ilogcdf_dispatch': '_ilogccdf_dispatch',
-                     '_icdf_dispatch': '_iccdf_dispatch',
-                     '_ilogccdf_dispatch': '_ilogcdf_dispatch',
-                     '_iccdf_dispatch': '_icdf_dispatch'}
-            cf = getattr(self._dist, citem[item])
-
-            def wrapped(x, *args, loc, scale, sign, **kwargs):
-                fx = self._itransform(f(x, *args, **kwargs), loc, scale)
-                cfx = self._itransform(cf(x, *args, **kwargs), loc, scale)
-                return np.where(sign, fx, cfx)[()]
-
-            return wrapped
-
-        return super().__getattribute__(item)
-
     def _support(self, loc, scale, sign, **kwargs):
+        # Add shortcut for infinite support?
         a, b = self._dist._support(**kwargs)
         a, b = self._itransform(a, loc, scale), self._itransform(b, loc, scale)
         return np.where(sign, a, b)[()], np.where(sign, b, a)[()]
@@ -2737,6 +2744,39 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         x = self._transform(x, loc, scale)
         pdf = self._dist._pdf_dispatch(x, *args, **kwargs)
         return pdf / abs(scale)
+
+    # Sorry about the magic. This is just a draft to show the behavior.
+    @_shift_scale_distribution_function
+    def _logcdf_dispatch(self, x, *, method=None, **kwargs):
+        pass
+
+    @_shift_scale_distribution_function
+    def _cdf_dispatch(self, x, *, method=None, **kwargs):
+        pass
+
+    @_shift_scale_distribution_function
+    def _logccdf_dispatch(self, x, *, method=None, **kwargs):
+        pass
+
+    @_shift_scale_distribution_function
+    def _ccdf_dispatch(self, x, *, method=None, **kwargs):
+        pass
+
+    @_shift_scale_inverse_function
+    def _ilogcdf_dispatch(self, x, *, method=None, **kwargs):
+        pass
+
+    @_shift_scale_inverse_function
+    def _icdf_dispatch(self, x, *, method=None, **kwargs):
+        pass
+
+    @_shift_scale_inverse_function
+    def _ilogccdf_dispatch(self, x, *, method=None, **kwargs):
+        pass
+
+    @_shift_scale_inverse_function
+    def _iccdf_dispatch(self, x, *, method=None, **kwargs):
+        pass
 
     def _moment_standard_dispatch(self, order, *, loc, scale, methods,
                                   cache_policy=None, **kwargs):
