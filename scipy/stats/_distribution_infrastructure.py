@@ -2667,7 +2667,7 @@ class ShiftedScaledDistribution(ContinuousDistribution):
 
     _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _scale_param = _RealParameter('scale', symbol='σ',
-                                  domain=_scale_domain, typical=(True, True))
+                                  domain=_scale_domain, typical=(0.1, 10))
 
     _parameterizations = [_Parameterization(_loc_param, _scale_param),
                           _Parameterization(_loc_param),

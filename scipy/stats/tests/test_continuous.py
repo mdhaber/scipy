@@ -283,7 +283,6 @@ def check_cdf2(dist, log, x, y, result_shape, methods):
         if (dist._overrides(f'_cdf_formula')
                 or dist._overrides(f'_ccdf_formula')):
             methods.add('log/exp')
-        ref = np.log(dist.cdf(y) - dist.cdf(x) + 0j)
     else:
         if dist._overrides(f'_cdf2_formula'):
             methods.add('formula')
@@ -292,7 +291,7 @@ def check_cdf2(dist, log, x, y, result_shape, methods):
         if (dist._overrides(f'_logcdf_formula')
                 or dist._overrides(f'_logccdf_formula')):
             methods.add('log/exp')
-        ref = dist.cdf(y) - dist.cdf(x)
+    ref = dist.cdf(y) - dist.cdf(x)
 
     np.testing.assert_equal(ref.shape, result_shape)
 
@@ -300,7 +299,7 @@ def check_cdf2(dist, log, x, y, result_shape, methods):
         assert np.isscalar(ref)
 
     for method in methods:
-        res = (dist.logcdf(x, y, method=method) if log
+        res = (np.exp(dist.logcdf(x, y, method=method)) if log
                else dist.cdf(x, y, method=method))
         np.testing.assert_allclose(res, ref, atol=1e-14)
         np.testing.assert_equal(res.shape, result_shape)
