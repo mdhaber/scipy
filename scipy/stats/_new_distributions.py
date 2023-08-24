@@ -45,12 +45,14 @@ class Normal(ContinuousDistribution):
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
+    normalization = 1/np.sqrt(2*np.pi)
+    log_normalization = np.log(2*np.pi)/2
 
     def _logpdf_formula(self, x, **kwargs):
-        return -(np.log(2*np.pi)/2 + x**2/2)
+        return -(self.log_normalization + x**2/2)
 
     def _pdf_formula(self, x, **kwargs):
-        return 1/np.sqrt(2*np.pi) * np.exp(-x**2/2)
+        return self.normalization * np.exp(-x**2/2)
 
     def _logcdf_formula(self, x, **kwargs):
         return special.log_ndtr(x)
@@ -103,6 +105,18 @@ class Normal(ContinuousDistribution):
 
 
 class ShiftedScaledNormal(ShiftedScaledDistribution):
+    _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _loc_param = _RealParameter('loc', symbol='µ',
+                                domain=_loc_domain, typical=(1, 2))
+
+    _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _scale_param = _RealParameter('scale', symbol='σ',
+                                  domain=_scale_domain, typical=(0.1, 10))
+
+    _parameterizations = [_Parameterization(_loc_param,
+                                            _scale_param),
+                          _Parameterization(_loc_param),
+                          _Parameterization(_scale_param)]
     def __init__(self, *args, **kwargs):
         super().__init__(Normal(), *args, **kwargs)
 

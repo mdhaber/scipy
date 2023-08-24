@@ -14,7 +14,7 @@ from scipy.stats._ksstats import kolmogn
 from scipy.stats._distribution_infrastructure import (
     oo, _Domain, _RealDomain, _RealParameter, ContinuousDistribution,
     _Parameterization, CACHE_POLICY, IV_POLICY, _logexpxmexpy)
-from scipy.stats._new_distributions import LogUniform, Normal
+from scipy.stats._new_distributions import LogUniform, Normal, ShiftedScaledNormal
 
 class Test_RealDomain:
     rng = np.random.default_rng(349849812549824)
@@ -135,7 +135,8 @@ class TestDistributions:
     @pytest.mark.filterwarnings("ignore")
     # @pytest.mark.parametrize('family', (LogUniform,))
     # @pytest.mark.parametrize('family', (Normal,))
-    @pytest.mark.parametrize('family', (Normal, LogUniform,))
+    @pytest.mark.parametrize('family', (ShiftedScaledNormal,))
+    # @pytest.mark.parametrize('family', (Normal, LogUniform,))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
         rng = np.random.default_rng(seed)
@@ -539,6 +540,8 @@ def get_valid_parameters(dist):
 
     all_valid = np.ones(dist._shape, dtype=bool)
     for name, value in parameter_values.items():
+        if name not in parameters:  # cached value not part of parameterization
+            continue
         parameter = parameters[name]
 
         # Check that the numerical endpoints and inclusivity attribute

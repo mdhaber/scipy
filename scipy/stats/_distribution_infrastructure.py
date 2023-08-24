@@ -332,11 +332,11 @@ class _SimpleDomain(_Domain):
             True if `item` is within the domain; False otherwise.
 
         """
-        if self.all_inclusive:
-            # Returning a 0d value here makes things much faster.
-            # I'm not sure if it's safe, though. If it causes a bug someday,
-            # I guess it wasn't.
-            return np.asarray(True)
+        # if self.all_inclusive:
+        #     # Returning a 0d value here makes things much faster.
+        #     # I'm not sure if it's safe, though. If it causes a bug someday,
+        #     # I guess it wasn't.
+        #     return np.asarray(True)
 
         a, b = self.get_numerical_endpoints(parameter_values)
         left_inclusive, right_inclusive = self.inclusive
@@ -2675,6 +2675,7 @@ class ShiftedScaledDistribution(ContinuousDistribution):
                                                      self._scale_param),
                                    _Parameterization(self._loc_param),
                                    _Parameterization(self._scale_param)]
+        self._variable = dist._variable
         self._dist = dist
         if dist._parameterization:
             # Add standard distribution parameters to our parameterization
@@ -2788,15 +2789,15 @@ class ShiftedScaledDistribution(ContinuousDistribution):
 
     def _moment_standard_dispatch(self, order, *, loc, scale, methods,
                                   cache_policy=None, **kwargs):
-        return (self._dist._moment_standard_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **kwargs)
-                * np.sign(scale)**order)
+        res = (self._dist._moment_standard_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **kwargs))
+        return None if res is None else res * np.sign(scale)**order
 
     def _moment_central_dispatch(self, order, *, loc, scale, methods,
                                  cache_policy=None, **kwargs):
-        return (self._dist._moment_central_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **kwargs)
-                * scale**order)
+        res = (self._dist._moment_central_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **kwargs))
+        return None if res is None else res * scale**order
 
     def _moment_raw_dispatch(self, order, *, loc, scale, methods,
                              cache_policy=None, ** kwargs):
@@ -2804,6 +2805,8 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         for i in range(int(order) + 1):
             raw = self._dist._moment_raw_dispatch(
                 i, methods=methods, cache_policy=cache_policy, **kwargs)
+            if raw is None:
+                return None
             moment_i = raw * scale**i
             raw_moments.append(moment_i)
 
