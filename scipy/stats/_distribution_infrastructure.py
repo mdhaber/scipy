@@ -26,7 +26,9 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
 #  investigate use of median
-#  test loc/scale distribution
+#  add 2-arg complementary distribution functions
+#  add cdf2 to shifted/scaled distribution
+#  use _formula methods for shifted/scaled distribution?
 #  Add bounds to `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
@@ -252,8 +254,8 @@ class _SimpleDomain(_Domain):
         a, b = endpoints
         self.endpoints = np.asarray(a)[()], np.asarray(b)[()]
         self.inclusive = inclusive
-        self.all_inclusive = (endpoints == (-oo, oo)
-                              and inclusive == (True, True))
+        # self.all_inclusive = (endpoints == (-oo, oo)
+        #                       and inclusive == (True, True))
 
     def define_parameters(self, *parameters):
         r""" Records any parameters used to define the endpoints of the domain
@@ -332,11 +334,14 @@ class _SimpleDomain(_Domain):
             True if `item` is within the domain; False otherwise.
 
         """
-        if self.all_inclusive:
-            # Returning a 0d value here makes things much faster.
-            # I'm not sure if it's safe, though. If it causes a bug someday,
-            # I guess it wasn't.
-            return np.asarray(True)
+        # if self.all_inclusive:
+        #     # Returning a 0d value here makes things much faster.
+        #     # I'm not sure if it's safe, though. If it causes a bug someday,
+        #     # I guess it wasn't.
+        #     # Even if there is no bug because of the shape, it is incorrect for
+        #     # `contains` to return True when there are invalid (e.g. NaN)
+        #     # parameters.
+        #     return np.asarray(True)
 
         a, b = self.get_numerical_endpoints(parameter_values)
         left_inclusive, right_inclusive = self.inclusive
@@ -673,6 +678,9 @@ class _Parameterization:
         Returns the number of parameters in the parameterization.
     __str__()
         Returns a string representation of the parameterization.
+    copy
+        Returns a copy of the parameterization. This is needed for transformed
+        distributions that add parameters to the parameterization.
     matches(parameters)
         Checks whether the keyword arguments match the parameterization.
     validation(parameter_values)
@@ -687,6 +695,9 @@ class _Parameterization:
 
     def __len__(self):
         return len(self.parameters)
+
+    def copy(self):
+        return _Parameterization(*self.parameters.values())
 
     def matches(self, parameters):
         """ Checks whether the keyword arguments match the parameterization
@@ -1334,6 +1345,11 @@ class ContinuousDistribution:
         parameter_names_list.sort()
         return f"{{{', '.join(parameter_names_list)}}}"
 
+    def _copy_parameterization(self):
+        self._parameterizations = self._parameterizations.copy()
+        for i in range(len(self._parameterizations)):
+            self._parameterizations[i] = self._parameterizations[i].copy()
+
     ### Attributes
 
     # `tol` attribute is just notional right now. See Question 4 above.
@@ -1463,13 +1479,11 @@ class ContinuousDistribution:
         return len(cls._parameterizations)
 
     @classmethod
-    def _num_parameters(cls):
-        # Returns the number of parameters used in parameterizations.
-        # Note: assumes the number of parameters is the same for all
-        # parameterizations. This is not quite right for
-        # ShiftedScaleDistribution and may need to be generalized.
+    def _num_parameters(cls, i_parameterization=0):
+        # Returns the number of parameters used in the specified
+        # parameterization.
         return (0 if not cls._num_parameterizations()
-                else len(cls._parameterizations[0]))
+                else len(cls._parameterizations[i_parameterization]))
 
     ## Algorithms
 
@@ -2626,6 +2640,23 @@ class ContinuousDistribution:
 # accommodate different orders if the transformation is built up from
 # components rather than all built into `ContinuousDistribution`.
 
+def _shift_scale_distribution_function_2arg(func):
+    citem = {'_logcdf_dispatch': '_logccdf_dispatch',
+             '_cdf_dispatch': '_ccdf_dispatch',
+             '_logccdf_dispatch': '_logcdf_dispatch',
+             '_ccdf_dispatch': '_cdf_dispatch'}
+    def wrapped(self, x, *args, loc, scale, sign, **kwargs):
+        item = func.__name__
+
+        f = getattr(self._dist, item)
+        cf = getattr(self._dist, citem[item])
+
+        fx = f(self._transform(x, loc, scale), *args, **kwargs)
+        cfx = cf(self._transform(x, loc, scale), *args, **kwargs)
+        return np.where(sign, fx, cfx)[()]
+
+    return wrapped
+
 def _shift_scale_distribution_function(func):
     citem = {'_logcdf_dispatch': '_logccdf_dispatch',
              '_cdf_dispatch': '_ccdf_dispatch',
@@ -2670,11 +2701,13 @@ class ShiftedScaledDistribution(ContinuousDistribution):
     _scale_param = _RealParameter('scale', symbol='σ',
                                   domain=_scale_domain, typical=(0.1, 10))
 
+    _parameterizations = [_Parameterization(_loc_param, _scale_param),
+                          _Parameterization(_loc_param),
+                          _Parameterization(_scale_param)]
+
     def __init__(self, dist, *args, **kwargs):
-        self._parameterizations = [_Parameterization(self._loc_param,
-                                                     self._scale_param),
-                                   _Parameterization(self._loc_param),
-                                   _Parameterization(self._scale_param)]
+        self._copy_parameterization()
+        self._variable = dist._variable
         self._dist = dist
         if dist._parameterization:
             # Add standard distribution parameters to our parameterization
@@ -2697,6 +2730,14 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         parameters = self._dist._process_parameters(**kwargs)
         parameters.update(dict(loc=loc, scale=scale, sign=sign))
         return parameters
+
+    def _overrides(self, method_name):
+        return (self._dist._overrides(method_name)
+                or super()._overrides(method_name))
+
+    def reset_cache(self):
+        self._dist.reset_cache()
+        super().reset_cache()
 
     def update_parameters(self, *, iv_policy=None, **kwargs):
         # maybe broadcast everything before processing?
@@ -2735,11 +2776,11 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         lls = np.log(np.log(abs(scale))+0j)
         return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
 
-    def _median_dispatch(self, *, method, loc, scale, **kwargs):
+    def _median_dispatch(self, *, method, loc, scale, sign, **kwargs):
         raw = self._dist._median_dispatch(method=method, **kwargs)
         return self._itransform(raw, loc, scale)
 
-    def _mode_dispatch(self, *, method, loc, scale, **kwargs):
+    def _mode_dispatch(self, *, method, loc, scale, sign, **kwargs):
         raw = self._dist._mode_dispatch(method=method, **kwargs)
         return self._itransform(raw, loc, scale)
 
@@ -2786,24 +2827,29 @@ class ShiftedScaledDistribution(ContinuousDistribution):
     def _iccdf_dispatch(self, x, *, method=None, **kwargs):
         pass
 
-    def _moment_standard_dispatch(self, order, *, loc, scale, methods,
+    def _moment_standard_dispatch(self, order, *, loc, scale, sign, methods,
                                   cache_policy=None, **kwargs):
-        return (self._dist._moment_standard_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **kwargs)
-                * np.sign(scale)**order)
+        res = (self._dist._moment_standard_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **kwargs))
+        return None if res is None else res * np.sign(scale)**order
 
-    def _moment_central_dispatch(self, order, *, loc, scale, methods,
+    def _moment_central_dispatch(self, order, *, loc, scale, sign, methods,
                                  cache_policy=None, **kwargs):
-        return (self._dist._moment_central_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **kwargs)
-                * scale**order)
+        res = (self._dist._moment_central_dispatch(
+            order, methods=methods, cache_policy=cache_policy, **kwargs))
+        return None if res is None else res * scale**order
 
-    def _moment_raw_dispatch(self, order, *, loc, scale, methods,
+    def _moment_raw_dispatch(self, order, *, loc, scale, sign, methods,
                              cache_policy=None, ** kwargs):
         raw_moments = []
+        methods_highest_order = methods
         for i in range(int(order) + 1):
+            methods = (self._moment_methods if i < order
+                       else methods_highest_order)
             raw = self._dist._moment_raw_dispatch(
                 i, methods=methods, cache_policy=cache_policy, **kwargs)
+            if raw is None:
+                return None
             moment_i = raw * scale**i
             raw_moments.append(moment_i)
 

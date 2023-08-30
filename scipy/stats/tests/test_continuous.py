@@ -13,8 +13,8 @@ from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
     oo, _Domain, _RealDomain, _RealParameter, ContinuousDistribution,
-    _Parameterization, CACHE_POLICY, IV_POLICY, _logexpxmexpy)
-from scipy.stats._new_distributions import LogUniform, Normal
+    _Parameterization, CACHE_POLICY, ShiftedScaledDistribution)
+from scipy.stats._new_distributions import LogUniform, Normal, ShiftedScaledNormal
 
 class Test_RealDomain:
     rng = np.random.default_rng(349849812549824)
@@ -104,12 +104,15 @@ class Test_RealDomain:
 def draw_distribution_from_family(family, data, rng, proportions):
     # If the distribution has parameters, choose a parameterization and
     # draw broadcastable shapes for the parameter arrays.
-    n_parameters = family._num_parameters()
-    if n_parameters > 0:
+    n_parameterizations = family._num_parameterizations()
+    if n_parameterizations > 0:
+        i = data.draw(strategies.integers(0, max_value=n_parameterizations-1))
+        n_parameters = family._num_parameters(i)
         shapes, result_shape = data.draw(
             npst.mutually_broadcastable_shapes(num_shapes=n_parameters,
                                                min_side=0))
-        dist = family._draw(shapes, rng=rng, proportions=proportions)
+        dist = family._draw(shapes, rng=rng, proportions=proportions,
+                            i_parameterization=i)
     else:
         dist = family._draw(rng=rng)
         result_shape = tuple()
@@ -135,7 +138,8 @@ class TestDistributions:
     @pytest.mark.filterwarnings("ignore")
     # @pytest.mark.parametrize('family', (LogUniform,))
     # @pytest.mark.parametrize('family', (Normal,))
-    @pytest.mark.parametrize('family', (Normal, LogUniform,))
+    # @pytest.mark.parametrize('family', (ShiftedScaledNormal,))
+    @pytest.mark.parametrize('family', (Normal, LogUniform, ShiftedScaledNormal))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
         rng = np.random.default_rng(seed)
@@ -179,8 +183,9 @@ class TestDistributions:
         check_dist_func(dist, 'ccdf', x, x_result_shape, methods)
 
         methods = {'quadrature'}
-        check_cdf2(dist, False, x, y, xy_result_shape, methods)
-        check_cdf2(dist, True, x, y, xy_result_shape, methods)
+        if not isinstance(dist, ShiftedScaledDistribution):
+            check_cdf2(dist, False, x, y, xy_result_shape, methods)
+            check_cdf2(dist, True, x, y, xy_result_shape, methods)
 
         methods = {'complementarity', 'inversion'}
         check_dist_func(dist, 'ilogcdf', logp, x_result_shape, methods)
@@ -463,23 +468,25 @@ def check_moment_funcs(dist, result_shape):
         dist.moment_standard(i)  # build up the cache
         check(dist.moment_central, i, 'normalize', ref)
 
-    dist.reset_cache()
-
     ### Check Standard Moments ###
 
     var = dist.moment_central(2, method='quadrature')
-    del dist._moment_central_cache[2]
+    dist.reset_cache()
 
     for i in range(6):
         check(dist.moment_standard, i, 'cache', success=False)
         ref = dist.moment_central(i, method='quadrature') / var ** (i / 2)
         check_nans_and_edges(dist, 'moment_standard', None, ref)
-        del dist._moment_central_cache[i]
         assert ref.shape == result_shape
         check(dist.moment_standard, i, 'formula', ref,
               success=formula_standard)
         check(dist.moment_standard, i, 'general', ref, success=i <= 2)
         check(dist.moment_standard, i, 'normalize', ref)
+
+    if isinstance(dist, ShiftedScaledDistribution):
+        # logmoment is not fully fleshed out; no need to test
+        # ShiftedScaledDistribution here
+        return
 
     ### Check Against _logmoment ###
     logmean = dist._logmoment(1, logcenter=-np.inf)
@@ -539,6 +546,8 @@ def get_valid_parameters(dist):
 
     all_valid = np.ones(dist._shape, dtype=bool)
     for name, value in parameter_values.items():
+        if name not in parameters:  # cached value not part of parameterization
+            continue
         parameter = parameters[name]
 
         # Check that the numerical endpoints and inclusivity attribute
