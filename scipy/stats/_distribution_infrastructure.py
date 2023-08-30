@@ -25,10 +25,10 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
+#  test loc/scale more
 #  investigate use of median
 #  add 2-arg complementary distribution functions
 #  add cdf2 to shifted/scaled distribution
-#  use _formula methods for shifted/scaled distribution?
 #  Add bounds to `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
@@ -78,6 +78,8 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #  Make ShiftedScaledDistribution more efficient - only process underlying
 #   distribution parameters as necessary.
 #  Reconsider `all_inclusive`
+#  Should process_parameters update kwargs rather than returning? Should we
+#   update parameters rather than setting to what process_parameters returns?
 
 # Questions:
 # 1.  I override `__getattr__` so that distribution parameters can be read as
@@ -173,6 +175,8 @@ CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 #   - result_dtype
 #   - is_subdtype
 #   It is much faster to check whether these are necessary than to do them.
+#
+
 
 
 class _Domain:
@@ -2691,20 +2695,8 @@ def _shift_scale_inverse_function(func):
 
     return wrapped
 
-class ShiftedScaledDistribution(ContinuousDistribution):
-    # Unclear whether infinite loc/scale will work reasonably in all cases
-    _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
-    _loc_param = _RealParameter('loc', symbol='µ',
-                                domain=_loc_domain, typical=(1, 2))
 
-    _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
-    _scale_param = _RealParameter('scale', symbol='σ',
-                                  domain=_scale_domain, typical=(0.1, 10))
-
-    _parameterizations = [_Parameterization(_loc_param, _scale_param),
-                          _Parameterization(_loc_param),
-                          _Parameterization(_scale_param)]
-
+class TransformedDistribution(ContinuousDistribution):
     def __init__(self, dist, *args, **kwargs):
         self._copy_parameterization()
         self._variable = dist._variable
@@ -2722,14 +2714,6 @@ class ShiftedScaledDistribution(ContinuousDistribution):
                     raise ValueError(message)
                 parameterization.parameters.update(dist_parameters)
         super().__init__(*args, **kwargs)
-
-    def _process_parameters(self, loc=None, scale=None, **kwargs):
-        loc = loc if loc is not None else np.zeros_like(scale)
-        scale = scale if scale is not None else np.ones_like(loc)
-        sign = scale > 0
-        parameters = self._dist._process_parameters(**kwargs)
-        parameters.update(dict(loc=loc, scale=scale, sign=sign))
-        return parameters
 
     def _overrides(self, method_name):
         return (self._dist._overrides(method_name)
@@ -2750,6 +2734,32 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         parameters.update(kwargs)
         super().update_parameters(iv_policy=iv_policy, **parameters)
 
+    def _process_parameters(self, **kwargs):
+        return self._dist._process_parameters(**kwargs)
+
+
+class ShiftedScaledDistribution(TransformedDistribution):
+    # Unclear whether infinite loc/scale will work reasonably in all cases
+    _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _loc_param = _RealParameter('loc', symbol='µ',
+                                domain=_loc_domain, typical=(1, 2))
+
+    _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _scale_param = _RealParameter('scale', symbol='σ',
+                                  domain=_scale_domain, typical=(0.1, 10))
+
+    _parameterizations = [_Parameterization(_loc_param, _scale_param),
+                          _Parameterization(_loc_param),
+                          _Parameterization(_scale_param)]
+
+    def _process_parameters(self, loc=None, scale=None, **kwargs):
+        loc = loc if loc is not None else np.zeros_like(scale)[()]
+        scale = scale if scale is not None else np.ones_like(loc)[()]
+        sign = scale > 0
+        parameters = self._dist._process_parameters(**kwargs)
+        parameters.update(dict(loc=loc, scale=scale, sign=sign))
+        return parameters
+
     def __repr__(self):
         s = super().__repr__()
         return s.replace('ShiftedScaledDistribution',
@@ -2766,6 +2776,19 @@ class ShiftedScaledDistribution(ContinuousDistribution):
         a, b = self._dist._support(**kwargs)
         a, b = self._itransform(a, loc, scale), self._itransform(b, loc, scale)
         return np.where(sign, a, b)[()], np.where(sign, b, a)[()]
+
+    # Here, we override all the `_dispatch` methods rather than the public
+    # methods or _function methods. Why not the public methods?
+    # If we were to override the public methods, then other
+    # TransformedDistribution classes (which could transform a
+    # ShiftedScaledDistribution) would need to call the public methods of
+    # ShiftedScaledDistribution, which would run the input validation again.
+    # Why not the _function methods? For distributions that rely on the
+    # default implementation of methods (e.g. `quadrature`, `inversion`),
+    # the implementation would "see" the location and scale like other
+    # distribution parameters, so they could affect the accuracy of the
+    # calculations. I think it is cleaner if `loc` and `scale` do not affect
+    # the underlying calculations at all.
 
     def _entropy_dispatch(self, *args, loc, scale, sign, **kwargs):
         return (self._dist._entropy_dispatch(*args, **kwargs)

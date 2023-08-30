@@ -3,14 +3,14 @@ import numpy as np
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
-    oo, _null, ShiftedScaledDistribution)
+    oo, _null, ShiftedScaledDistribution, TransformedDistribution)
 
 
 def factorial(n):
     return special.gamma(n + 1)
 
 
-class OrderStatisticDistribution(ContinuousDistribution):
+class OrderStatisticDistribution(TransformedDistribution):
 
     # These should really be _IntegerDomain/_IntegerParameter
     _r_domain = _RealDomain(endpoints=(1, 'n'), inclusive=(True, True))
@@ -23,14 +23,8 @@ class OrderStatisticDistribution(ContinuousDistribution):
 
     _parameterizations = [_Parameterization(_r_param, _n_param)]
 
-    def __init__(self, *args, dist, **kwargs):
-        # This needs some careful thought, but I think it can work.
-        self._dist = dist
-        self._variable = dist._variable
-        super().__init__(*args, **kwargs)
-        self._parameters.update(dist._parameters)
-        self._shape = np.broadcast_shapes(self._shape, dist._shape)
-        self._invalid = np.broadcast_to(self._invalid, self._shape)
+    def _overrides(self, method_name):
+        return method_name == '_pdf_formula'
 
     def _pdf_formula(self, x, r, n, **kwargs):
         factor = factorial(n) / (factorial(r-1) * factorial(n-r))
@@ -137,12 +131,13 @@ class LogUniform(ContinuousDistribution):
                           _Parameterization(_a_param, _b_param)]
     _variable = _x_param
 
-    def _process_parameters(self, a=None, b=None, log_a=None, log_b=None):
+    def _process_parameters(self, a=None, b=None, log_a=None, log_b=None, **kwargs):
         a = np.exp(log_a) if a is None else a
         b = np.exp(log_b) if b is None else b
         log_a = np.log(a) if log_a is None else log_a
         log_b = np.log(b) if log_b is None else log_b
-        return dict(a=a, b=b, log_a=log_a, log_b=log_b)
+        kwargs.update(dict(a=a, b=b, log_a=log_a, log_b=log_b))
+        return kwargs
 
     # def _logpdf_formula(self, x, *, log_a, log_b, **kwargs):
     #     return -np.log(x) - np.log(log_b - log_a)
