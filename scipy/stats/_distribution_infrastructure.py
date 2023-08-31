@@ -813,8 +813,8 @@ def _set_invalid_nan(f):
     endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
     replacements = {'logpdf': (-oo, -oo), 'pdf': (0, 0),
-                    '_logcdf1': (-oo, 0), 'logccdf': (0, -oo),
-                    '_cdf1': (0, 1), 'ccdf': (1, 0)}
+                    '_logcdf1': (-oo, 0), '_logccdf1': (0, -oo),
+                    '_cdf1': (0, 1), '_ccdf1': (1, 0)}
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
 
@@ -1781,13 +1781,14 @@ class ContinuousDistribution:
     # logpdf, pdf
     # logcdf, cdf
     # logccdf, ccdf
-    # All of the cumulative distribution functions have inverse functions,
-    # which accept one positional argument - the percentile.
+    # The `logcdf` and `cdf` functions can also be called with two positional
+    # arguments - lower and upper quantiles - and they return the probability
+    # mass (integral of the PDF) between them. The 2-arg versions of `logccdf`
+    # and `ccdf` return the complement of this quantity.
+    # All the (1-arg) cumulative distribution functions have inverse
+    # functions, which accept one positional argument - the percentile.
     # ilogcdf, icdf
     # ilogccdf, iccdf
-    # The `logcdf` and `cdf` functions are unique in that they can also be
-    # called with two positional arguments - lower and upper quantiles -
-    # and they return the probability mass (integral of the PDF) between them.
     # Common keyword options include:
     # method - a string that indicates which method should be used to compute
     #          the quantity (e.g. a formula or numerical integration).
@@ -2011,8 +2012,36 @@ class ContinuousDistribution:
         return self._quadrature(self._pdf_dispatch, limits=(a, x),
                                 kwargs=kwargs)
 
+    def logccdf(self, x, y=None, *, method=None):
+        if y is None:
+            return self._logccdf1(x, method=method)
+        else:
+            return self._logccdf2(x, y, method=method)
+
+    @_cdf2_input_validation
+    def _logccdf2(self, x, y, *, method):
+        return self._logccdf2_dispatch(x, y, method=method, **self._parameters)
+
+    @_dispatch
+    def _logccdf2_dispatch(self, x, y, *, method=None, **kwargs):
+        # if _logccdf2_formula exists, we could use complementarity
+        # if _ccdf2_formula exists, we could use log/exp
+        if self._overrides('_logccdf2_formula'):
+            method = self._logccdf2_formula
+        else:
+            method = self._logccdf2_addition
+        return method
+
+    def _logccdf2_formula(self, x, y, **kwargs):
+        raise NotImplementedError(self._not_implemented)
+
+    def _logccdf2_addition(self, x, y, **kwargs):
+        logcdf_x = self._logcdf_dispatch(x, **kwargs)
+        logccdf_y = self._logccdf_dispatch(y, **kwargs)
+        return special.logsumexp([logcdf_x, logccdf_y], axis=0)
+
     @_set_invalid_nan
-    def logccdf(self, x, *, method=None):
+    def _logccdf1(self, x, *, method=None):
         return self._logccdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -2041,8 +2070,35 @@ class ContinuousDistribution:
         return self._quadrature(self._logpdf_dispatch, limits=(x, b),
                                 kwargs=kwargs, log=True)
 
+    def ccdf(self, x, y=None, *, method=None):
+        if y is None:
+            return self._ccdf1(x, method=method)
+        else:
+            return self._ccdf2(x, y, method=method)
+
+    @_cdf2_input_validation
+    def _ccdf2(self, x, y, *, method):
+        return self._ccdf2_dispatch(x, y, method=method, **self._parameters)
+
+    @_dispatch
+    def _ccdf2_dispatch(self, x, y, *, method=None, **kwargs):
+        if self._overrides('_ccdf2_formula'):
+            method = self._ccdf2_formula
+        else:
+            method = self._ccdf2_addition
+        return method
+
+    def _ccdf2_formula(self, x, y, **kwargs):
+        raise NotImplementedError(self._not_implemented)
+
+    def _ccdf2_addition(self, x, y, **kwargs):
+        cdf_x = self._cdf_dispatch(x, **kwargs)
+        ccdf_y = self._ccdf_dispatch(y, **kwargs)
+        # even if x > y, cdf(x, y) + ccdf(x,y) sums to 1
+        return cdf_x + ccdf_y
+
     @_set_invalid_nan
-    def ccdf(self, x, *, method=None):
+    def _ccdf1(self, x, *, method):
         return self._ccdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
