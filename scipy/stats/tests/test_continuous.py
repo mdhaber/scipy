@@ -8,6 +8,7 @@ from numpy.testing import assert_allclose, assert_equal
 from hypothesis import strategies, given, reproduce_failure  # noqa
 import hypothesis.extra.numpy as npst
 
+from scipy import stats
 from scipy.stats._fit import _kolmogorov_smirnov
 from scipy.stats._ksstats import kolmogn
 
@@ -101,7 +102,7 @@ class Test_RealDomain:
         assert str(domain) == ref
 
 
-def draw_distribution_from_family(family, data, rng, proportions):
+def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
     # If the distribution has parameters, choose a parameterization and
     # draw broadcastable shapes for the parameter arrays.
     n_parameterizations = family._num_parameterizations()
@@ -110,7 +111,7 @@ def draw_distribution_from_family(family, data, rng, proportions):
         n_parameters = family._num_parameters(i)
         shapes, result_shape = data.draw(
             npst.mutually_broadcastable_shapes(num_shapes=n_parameters,
-                                               min_side=0))
+                                               min_side=min_side))
         dist = family._draw(shapes, rng=rng, proportions=proportions,
                             i_parameterization=i)
     else:
@@ -119,16 +120,18 @@ def draw_distribution_from_family(family, data, rng, proportions):
 
     # Draw a broadcastable shape for the arguments, and draw values for the
     # arguments.
-    x_shape = data.draw(npst.broadcastable_shapes(result_shape, min_side=0))
+    x_shape = data.draw(npst.broadcastable_shapes(result_shape,
+                                                  min_side=min_side))
     x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
-                            proportions=proportions)
+                            proportions=proportions, rng=rng)
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
-    y_shape = data.draw(npst.broadcastable_shapes(x_result_shape, min_side=0))
+    y_shape = data.draw(npst.broadcastable_shapes(x_result_shape,
+                                                  min_side=min_side))
     y = dist._variable.draw(y_shape, parameter_values=dist._parameters,
-                            proportions=proportions)
+                            proportions=proportions, rng=rng)
     xy_result_shape = np.broadcast_shapes(y_shape, x_result_shape)
     p_domain = _RealDomain((0, 1), (True, True))
-    p = p_domain.draw(x_shape, proportions=proportions)
+    p = p_domain.draw(x_shape, proportions=proportions, rng=rng)
     logp = np.log(p)
 
     return dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape
@@ -723,3 +726,75 @@ def test_cache_policy():
     dist.reset_cache()
     with pytest.raises(NotImplementedError, match=message):
         dist.mean(method='cache')
+
+
+class TestTransforms:
+    @pytest.mark.filterwarnings("ignore")
+    @given(data=strategies.data(), seed=strategies.integers(min_value=0))
+    def test_loc_scale(self, data, seed):
+        rng = np.random.default_rng(seed)
+
+        tmp = draw_distribution_from_family(
+            ShiftedScaledNormal, data, rng, proportions=(1, 0, 0, 0), min_side=1)
+        dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape = tmp
+        sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=1,
+                                                   max_side=20))
+        loc = dist.loc
+        scale = dist.scale
+        dist0 = Normal()
+        dist_ref = stats.norm(loc=loc, scale=scale)
+
+        x0 = (x - loc) / scale
+
+        assert_allclose(dist.logentropy(), np.log(dist.entropy() + 0j))
+        assert_allclose(dist.entropy(), dist_ref.entropy())
+        assert_allclose(dist.median(), dist0.median() + loc)
+        assert_allclose(dist.mode(), dist0.mode() + loc)
+        assert_allclose(dist.logpdf(x), dist0.logpdf(x0) - np.log(scale))
+        assert_allclose(dist.pdf(x), dist0.pdf(x0) / scale)
+        assert_allclose(dist.logcdf(x), dist0.logcdf(x0))
+        assert_allclose(dist.cdf(x), dist0.cdf(x0))
+        assert_allclose(dist.logccdf(x), dist0.logccdf(x0))
+        assert_allclose(dist.ccdf(x), dist0.ccdf(x0))
+        assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp)*scale + loc)
+        assert_allclose(dist.icdf(p), dist0.icdf(p)*scale + loc)
+        assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp)*scale + loc)
+        assert_allclose(dist.iccdf(p), dist0.iccdf(p)*scale + loc)
+        for i in range(1, 5):
+            assert_allclose(dist.moment_raw(i), dist_ref.moment(i))
+            assert_allclose(dist.moment_central(i),
+                            dist0.moment_central(i)*scale**i)
+            assert_allclose(dist.moment_standard(i),
+                            dist0.moment_standard(i) * np.sign(scale) ** i)
+
+
+        dist = (dist - 2*loc) + loc
+        dist = dist/scale**2 * scale
+        z = np.zeros(dist._shape)  # compact broadcasting
+
+        assert_allclose(dist.logentropy(), dist0.logentropy() + z)
+        assert_allclose(dist.entropy(), dist0.entropy() + z)
+        assert_allclose(dist.median(), dist0.median() + z)
+        assert_allclose(dist.mode(), dist0.mode() + z)
+        assert_allclose(dist.logpdf(x), dist0.logpdf(x)+z)
+        assert_allclose(dist.pdf(x), dist0.pdf(x) + z)
+        assert_allclose(dist.logcdf(x), dist0.logcdf(x) + z)
+        assert_allclose(dist.cdf(x), dist0.cdf(x) + z)
+        assert_allclose(dist.logccdf(x), dist0.logccdf(x) + z)
+        assert_allclose(dist.ccdf(x), dist0.ccdf(x) + z)
+        assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp) + z)
+        assert_allclose(dist.icdf(p), dist0.icdf(p) + z)
+        assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp) + z)
+        assert_allclose(dist.iccdf(p), dist0.iccdf(p) + z)
+        for i in range(1, 5):
+            assert_allclose(dist.moment_raw(i), dist0.moment_raw(i))
+            assert_allclose(dist.moment_central(i), dist0.moment_central(i))
+            assert_allclose(dist.moment_standard(i), dist0.moment_standard(i))
+
+        # These are tough to compare because of the way the shape works
+        # rng = np.random.default_rng(seed)
+        # rng0 = np.random.default_rng(seed)
+        # assert_allclose(dist.sample(x_result_shape, rng=rng),
+        #                 dist0.sample(x_result_shape, rng=rng0) * scale + loc)
+        # assert_allclose(dist.qmc_sample(x_result_shape, rng=rng),
+        #                 dist0.qmc_sample(x_result_shape, rng=rng0) * scale + loc)

@@ -25,7 +25,6 @@ IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
 CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
 
 # TODO:
-#  test loc/scale more
 #  investigate use of median
 #  add 2-arg complementary distribution functions
 #  add cdf2 to shifted/scaled distribution
