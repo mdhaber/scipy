@@ -2752,6 +2752,11 @@ def _shift_scale_inverse_function(func):
 
 
 class TransformedDistribution(ContinuousDistribution):
+    # TODO: This may need some sort of default `_parameterizations` with a
+    #       single `_Parameterization` that has no parameters. The reason is
+    #       that `dist`'s parameters need to get added to it. If they're not
+    #       added, then those parameter kwargs are not recognized in
+    #       `update_parameters`.
     def __init__(self, dist, *args, **kwargs):
         self._copy_parameterization()
         self._variable = dist._variable
@@ -2792,6 +2797,11 @@ class TransformedDistribution(ContinuousDistribution):
     def _process_parameters(self, **kwargs):
         return self._dist._process_parameters(**kwargs)
 
+    def __repr__(self):
+        s = super().__repr__()
+        return s.replace(self.__class__.__name__,
+                         self._dist.__class__.__name__)
+
 
 class ShiftedScaledDistribution(TransformedDistribution):
     # Unclear whether infinite loc/scale will work reasonably in all cases
@@ -2814,11 +2824,6 @@ class ShiftedScaledDistribution(TransformedDistribution):
         parameters = self._dist._process_parameters(**kwargs)
         parameters.update(dict(loc=loc, scale=scale, sign=sign))
         return parameters
-
-    def __repr__(self):
-        s = super().__repr__()
-        return s.replace('ShiftedScaledDistribution',
-                         self._dist.__class__.__name__)
 
     def _transform(self, x, loc, scale, **kwargs):
         return (x - loc)/scale
@@ -2938,13 +2943,13 @@ class ShiftedScaledDistribution(TransformedDistribution):
                          method, rng, **kwargs):
         rvs = self._dist._sample_dispatch(
             sample_shape, full_shape, method=method, rng=rng, **kwargs)
-        return rvs*self.scale + self.loc
+        return self._itransform(rvs, **kwargs)
 
     def _qmc_sample_dispatch(self, length, full_shape, *,
                              method, qrng, **kwargs):
         rvs = self._dist._qmc_sample_dispatch(
             length, full_shape, method=method, qrng=qrng, **kwargs)
-        return rvs*self.scale + self.loc
+        return self._itransform(rvs, **kwargs)
 
     # TODO: Add these methods to ContinuousDistribution so they can return a
     #       ShiftedScaledDistribution
