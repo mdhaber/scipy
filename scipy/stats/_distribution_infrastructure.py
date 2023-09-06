@@ -320,7 +320,7 @@ class _SimpleDomain(_Domain):
 
         return a, b
 
-    def contains(self, item, parameter_values={}):
+    def contains(self, item, parameter_values=None):
         """Determine whether the argument is contained within the domain
 
         Parameters
@@ -337,6 +337,7 @@ class _SimpleDomain(_Domain):
             True if `item` is within the domain; False otherwise.
 
         """
+        parameter_values = parameter_values or {}
         # if self.all_inclusive:
         #     # Returning a 0d value here makes things much faster.
         #     # I'm not sure if it's safe, though. If it causes a bug someday,
@@ -391,7 +392,7 @@ class _RealDomain(_SimpleDomain):
 
         return f"{left}{a}, {b}{right}"
 
-    def draw(self, size=None, rng=None, proportions=None, parameter_values={}):
+    def draw(self, size=None, rng=None, proportions=None, parameter_values=None):
         """ Draw random values from the domain
 
         Parameters
@@ -419,6 +420,7 @@ class _RealDomain(_SimpleDomain):
             and numerical values (arrays).
 
         """
+        parameter_values = parameter_values or {}
         rng = rng or np.random.default_rng()
         proportions = (1, 0, 0, 0) if proportions is None else proportions
         pvals = np.abs(proportions)/np.sum(proportions)
@@ -558,7 +560,7 @@ class _Parameter(ABC):
         return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
 
     def draw(self, size=None, *, rng=None, domain='typical', proportions=None,
-             parameter_values={}):
+             parameter_values=None):
         """ Draw random values of the parameter for use in testing
 
         Parameters
@@ -593,6 +595,7 @@ class _Parameter(ABC):
             `typical`) and numerical values (arrays).
 
         """
+        parameter_values = parameter_values or {}
         domain = getattr(self, domain)
         proportions = (1, 0, 0, 0) if proportions is None else proportions
         return domain.draw(size=size, rng=rng, proportions=proportions,
@@ -1038,7 +1041,7 @@ def _cdf2_input_validation(f):
     return wrapped
 
 
-def _kwargs2args(f, args=[], kwargs={}):
+def _kwargs2args(f, args=None, kwargs=None):
     # Wraps a function that accepts a primary argument `x`, secondary
     # arguments `args`, and secondary keyward arguments `kwargs` such that the
     # wrapper accepts only `x` and `args`. The keyword arguments are extracted
@@ -1047,6 +1050,8 @@ def _kwargs2args(f, args=[], kwargs={}):
     # This is a temporary workaround until the scalar algorithms `_tanhsinh`,
     # `_chandrupatla`, etc., support `kwargs` or can operate with compressing
     # arguments to the callable.
+    args = args or []
+    kwargs = kwargs or {}
     names = list(kwargs.keys())
     n_args = len(args)
 
@@ -2643,11 +2648,13 @@ class ContinuousDistribution:
     # quantities should make us question that choice. It can still accomodate
     # these methods reasonably efficiently.
 
-    def llf(self, parameters={}, *, sample, axis=-1):
+    def llf(self, parameters=None, *, sample, axis=-1):
+        parameters = parameters or {}
         self.update_parameters(**parameters)
         return np.sum(self.logpdf(sample), axis=axis)
 
-    def dllf(self, parameters={}, *, sample, var):
+    def dllf(self, parameters=None, *, sample, var):
+        parameters = parameters or {}
         self.update_parameters(**parameters)
 
         def f(x):
