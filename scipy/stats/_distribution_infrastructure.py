@@ -2569,11 +2569,13 @@ class ContinuousDistribution:
 
     ### Convenience
 
-    # I've included a rough draft of one convenience function - plot - that is
-    # useful for visualizing a distribution. Of course, at the very least, it
-    # will save some lines in documentation examples.
+    # I've included a rough draft of one convenience function, `plot`, that is
+    # useful for visualizing a distribution. At the very least, it will save
+    # some lines in documentation examples. We would not reproduce the
+    # `matplotlib` interface here; users can modify the returned `ax` directly
+    # if they want to customize the plot.
 
-    def plot(self, ax=None, funcs=None, cdf=0.001, ccdf=0.001):
+    def plot(self, func='pdf', *, ax=None, cdf=0.001, ccdf=0.001):
         try:
             import matplotlib  # noqa
         except ModuleNotFoundError as exc:
@@ -2585,48 +2587,32 @@ class ContinuousDistribution:
             import matplotlib.pyplot as plt
             ax = plt.gca()
 
-        funcs = funcs or ['pdf']
-        funcs = [funcs] if type(funcs) == str else funcs
-
         a, b = self.support()
         a = np.where(np.isinf(a), self.icdf(cdf), a)
         b = np.where(np.isinf(b), self.iccdf(ccdf), b)
         x = np.linspace(a, b, 300)
 
-        for method in funcs:
-            f = getattr(self, method)
+        f = getattr(self, func)
 
-            def hist_plot(x, *args, **kwargs):
-                sample = f(1000)
-                # should cut off at user-specified limits
-                ax.hist(sample, bins=30, density=True,
-                        histtype='step', *args, **kwargs)
+        def hist_plot(x, *args, **kwargs):
+            sample = f(1000)
+            # should cut off at user-specified limits
+            ax.hist(sample, bins=30, density=True,
+                    histtype='step', *args, **kwargs)
 
-            def fun_plot(x, *args, **kwargs):
-                y = f(x)
-                ax.plot(x, y, *args, **kwargs)
+        def fun_plot(x, *args, **kwargs):
+            y = f(x)
+            ax.plot(x, y, *args, **kwargs)
 
-            plot = (hist_plot if method in {'sample', 'qmc_sample'}
-                    else fun_plot)
-
-            if len(funcs) > 1:
-                # Would be good to have different ylabel scales
-                # if there are two methods; create different plots
-                # depending on shape of methods nested lists
-                plot(x, label=method)
-            else:
-                # would be good to show parameters as label
-                plot(x)
+        plot = (hist_plot if func in {'sample', 'qmc_sample'}
+                else fun_plot)
+        plot(x, label=func)
 
         # should use LaTeX; use symbols
         ax.set_xlabel('x')
-        ax.set_ylabel('pdf(x)')
-        if len(funcs) > 1:
-            ax.legend()
-        method_str = (f".{funcs[0]}" if len(funcs) == 1
-                      else f" functions {funcs}")
-        title = str(self) + method_str
-        ax.set_title(title)
+        ax.legend()
+        ax.set_title(str(self))
+        ax.set_xlim((a, b))
         return ax
 
     ### Fitting
