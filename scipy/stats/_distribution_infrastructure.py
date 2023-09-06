@@ -1,14 +1,14 @@
 import functools
-import sys
-import enum
+from abc import ABC, abstractmethod
 from functools import cached_property
+
 from scipy._lib._util import _lazywhere
 from scipy import special, optimize
 from scipy.integrate._tanhsinh import _tanhsinh
 from scipy.optimize._zeros_py import (_chandrupatla, _bracket_root,
                                       _differentiate)
 from scipy.optimize._chandrupatla import _chandrupatla_minimize
-from scipy.stats.qmc import Halton
+
 import numpy as np
 _null = object()
 oo = np.inf
@@ -175,7 +175,7 @@ _NO_CACHE = "no_cache"
 
 
 
-class _Domain:
+class _Domain(ABC):
     """ Representation of the applicable domain of a parameter or variable
 
     A `_Domain` object is responsible for storing information about the
@@ -206,12 +206,15 @@ class _Domain:
     """
     symbols = {np.inf: "∞", -np.inf: "-∞", np.pi: "π", -np.pi: "-π"}
 
+    @abstractmethod
     def contains(self, x):
         raise NotImplementedError()
 
+    @abstractmethod
     def get_numerical_endpoints(self, x):
         raise NotImplementedError()
 
+    @abstractmethod
     def __str__(self):
         raise NotImplementedError()
 
@@ -502,7 +505,7 @@ class _IntegerDomain(_SimpleDomain):
     pass
 
 
-class _Parameter:
+class _Parameter(ABC):
     """ Representation of a distribution parameter or variable
 
     A `_Parameter` object is responsible for storing information about a
@@ -594,6 +597,10 @@ class _Parameter:
         proportions = (1, 0, 0, 0) if proportions is None else proportions
         return domain.draw(size=size, rng=rng, proportions=proportions,
                            parameter_values=parameter_values)
+
+    @abstractmethod
+    def validate(self, arr):
+        raise NotImplementedError()
 
 
 class _RealParameter(_Parameter):
