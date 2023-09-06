@@ -2227,7 +2227,7 @@ class ContinuousDistribution:
     # shape of the sample - and keyword options (but not distribution
     # parameters).
     # sample
-    # qmc_sample
+    # ~~qmc_sample~~ built into sample now
     #
     # Common keyword options include:
     # method - a string that indicates which method should be used to compute
@@ -2249,14 +2249,23 @@ class ContinuousDistribution:
     # See the note corresponding with the "Distribution Parameters" for more
     # information.
 
-    def sample(self, shape=(), *, method=None, rng=None):
+    def sample(self, shape=(), *, method=None, rng=None, qmc_engine=None):
         # needs output validation to ensure that developer returns correct
         # dtype and shape
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = sample_shape + self._shape
         rng = self._validate_rng(rng) or self._rng or np.random.default_rng()
-        return self._sample_dispatch(sample_shape, full_shape, method=method,
-                                     rng=rng, **self._parameters)
+
+        if qmc_engine is None:
+            return self._sample_dispatch(sample_shape, full_shape, method=method,
+                                         rng=rng, **self._parameters)
+        else:
+            # needs input validation for qrng
+            d = int(np.prod(full_shape[1:]))
+            length = full_shape[0] if full_shape else 1
+            qrng = qmc_engine(d=d, seed=rng)
+            return self._qmc_sample_dispatch(length, full_shape, method=method,
+                                             qrng=qrng, **self._parameters)
 
     @_dispatch
     def _sample_dispatch(self, sample_shape, full_shape, *, method, rng, **kwargs):
@@ -2273,18 +2282,6 @@ class ContinuousDistribution:
     def _sample_inverse_transform(self, sample_shape, full_shape, *, rng, **kwargs):
         uniform = rng.uniform(size=full_shape)
         return self._icdf_dispatch(uniform, **kwargs)
-
-    def qmc_sample(self, shape=(), *, method=None, qrng=Halton, rng=None):
-        # Any shape is allowed, but observations along the 0th dimension are
-        # not independent.
-        sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
-        full_shape = sample_shape + self._shape
-        d = int(np.prod(full_shape[1:]))
-        length = full_shape[0] if full_shape else 1
-        qrng = qrng(d=d, seed=rng)
-        return self._qmc_sample_dispatch(
-            length, full_shape, method=method, qrng=qrng,
-            **self._parameters)
 
     @_dispatch
     def _qmc_sample_dispatch(self, length, full_shape, *, method, qrng, **kwargs):

@@ -1,3 +1,4 @@
+import functools
 import warnings
 import pickle
 from copy import deepcopy
@@ -202,7 +203,11 @@ class TestDistributions:
 
 def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape):
     full_shape = sample_shape + result_shape
-    sample_method = getattr(dist, fname)
+    if fname == 'sample':
+        sample_method = dist.sample
+    elif fname == 'qmc_sample':
+        sample_method = functools.partial(dist.sample,
+                                          qmc_engine=stats.qmc.Halton)
     methods = {'inverse_transform'}
     if dist._overrides(f'_{fname}_formula'):
         methods.add('formula')
@@ -535,8 +540,8 @@ def check_moment_funcs(dist, result_shape):
 @pytest.mark.parametrize('family', (LogUniform, Normal))
 @pytest.mark.parametrize('x_shape', [tuple(), (2, 3)])
 @pytest.mark.parametrize('dist_shape', [tuple(), (4, 1)])
-@pytest.mark.parametrize('sample_method', ['qmc_sample', 'sample'])
-def test_sample_against_cdf(family, dist_shape, x_shape, sample_method):
+@pytest.mark.parametrize('fname', ['qmc_sample', 'sample'])
+def test_sample_against_cdf(family, dist_shape, x_shape, fname):
     rng = np.random.default_rng(842582438235635)
     num_parameters = family._num_parameters()
 
@@ -549,7 +554,11 @@ def test_sample_against_cdf(family, dist_shape, x_shape, sample_method):
     sample_size = (n,) + x_shape
     sample_array_shape = sample_size + dist_shape
 
-    sample_method = getattr(dist, sample_method)
+    if fname == 'sample':
+        sample_method = dist.sample
+    elif fname == 'qmc_sample':
+        sample_method = functools.partial(dist.sample,
+                                          qmc_engine=stats.qmc.Halton)
     x = sample_method(sample_size, rng=rng)
     assert x.shape == sample_array_shape
 
