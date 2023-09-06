@@ -17,12 +17,9 @@ oo = np.inf
 # For instance, when edge case handling is known not to be needed, it's much
 # faster to turn it off, but it might still be nice to have array conversion
 # and shaping done so the user doesn't need to be so carefuly.
-IV_POLICY = enum.Enum('IV_POLICY', ['SKIP_ALL'])
-
-# Alternative to enums is max cache size per function like lru_cache
-# Currently, this is only used by `moment_...` methods, but it could be used
-# for all methods that don't require an argument (e.g. entropy)
-CACHE_POLICY = enum.Enum('CACHE_POLICY', ['NO_CACHE', 'CACHE'])
+_SKIP_ALL = "skip_all"
+# Other cache policies would be useful, too.
+_NO_CACHE = "no_cache"
 
 # TODO:
 #  investigate use of median
@@ -820,7 +817,7 @@ def _set_invalid_nan(f):
 
     @functools.wraps(f)
     def filtered(self, x, *args, iv_policy=None, **kwargs):
-        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
+        if str(self.iv_policy or iv_policy).lower() == _SKIP_ALL:
             return f(self, x, *args, **kwargs)
 
         method_name = f.__name__
@@ -922,7 +919,7 @@ def _set_invalid_nan_property(f):
 
     @functools.wraps(f)
     def filtered(self, *args, method=None, iv_policy=None, **kwargs):
-        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
+        if str(self.iv_policy or iv_policy).lower() == _SKIP_ALL:
             return f(self, *args, method=method, **kwargs)
 
         res = f(self, *args, method=method, **kwargs)
@@ -985,8 +982,8 @@ def _dispatch(f):
             method = getattr(self, method_name)
         else:
             method = f(self, *args, method=method, **kwargs)
-            cache_policy = cache_policy or self.cache_policy
-            if cache_policy != CACHE_POLICY.NO_CACHE:
+            cache_policy = str(cache_policy or self.cache_policy).lower()
+            if cache_policy != _NO_CACHE:
                 self._method_cache[func_name] = method
 
         try:
@@ -1147,9 +1144,8 @@ class ContinuousDistribution:
     def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
                  rng=None, **parameters):
         self.tol = tol
-        self.iv_policy = iv_policy
-        self.cache_policy = (cache_policy if cache_policy is not None
-                             else CACHE_POLICY.CACHE)
+        self.iv_policy = str(iv_policy).lower()
+        self.cache_policy = str(cache_policy).lower()
         self._rng = self._validate_rng(rng, iv_policy)
         self._not_implemented = (
             f"`{self.__class__.__name__}` does not provide an accurate "
@@ -1171,7 +1167,7 @@ class ContinuousDistribution:
             may be modified. Parameters used in alternative parameterizations
             are not accepted.
 
-        iv_policy : ?
+        iv_policy : str
             To be documented. See Question 3 at the top.
         """
 
@@ -1183,7 +1179,7 @@ class ContinuousDistribution:
         self._shape = tuple()
         self._dtype = np.float64
 
-        if (iv_policy or self.iv_policy) == IV_POLICY.SKIP_ALL:
+        if (iv_policy or self.iv_policy) == _SKIP_ALL:
             parameters = self._process_parameters(**parameters)
         elif not len(self._parameterizations):
             if parameters:
@@ -1423,7 +1419,7 @@ class ContinuousDistribution:
         # `default_rng()` until the RNG will actually be used. It also
         # raises a distribution-specific error message to facilitate
         #  identification of the source of the error.
-        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
+        if str(self.iv_policy or iv_policy).lower() == _SKIP_ALL:
             return rng
 
         if rng is not None and not isinstance(rng, np.random.Generator):
@@ -1439,7 +1435,7 @@ class ContinuousDistribution:
         # Is quite flexible about what is allowed as an integer, and it
         # raises a distribution-specific error message to facilitate
         # identification of the source of the error.
-        if (self.iv_policy or iv_policy) == IV_POLICY.SKIP_ALL:
+        if str(self.iv_policy or iv_policy).lower() == _SKIP_ALL:
             return order
 
         order = np.asarray(order, dtype=self._dtype)[()]
@@ -1636,7 +1632,7 @@ class ContinuousDistribution:
 
         support = self._support(**self._parameters)
 
-        if self.cache_policy != CACHE_POLICY.NO_CACHE:
+        if self.cache_policy != _NO_CACHE:
             self._support_cache = support
 
         return support
@@ -2377,7 +2373,7 @@ class ContinuousDistribution:
         if moment is None and 'quadrature' in methods:
             moment = self._moment_integrate_pdf(order, center=0, **kwargs)
 
-        if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
+        if moment is not None and cache_policy != _NO_CACHE:
             self._moment_raw_cache[order] = moment
 
         return moment
@@ -2441,7 +2437,7 @@ class ContinuousDistribution:
                                              methods=self._moment_methods)
             moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
 
-        if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
+        if moment is not None and cache_policy != _NO_CACHE:
             self._moment_central_cache[order] = moment
 
         return moment
@@ -2506,7 +2502,7 @@ class ContinuousDistribution:
         if moment is None and 'normalize' in methods:
             moment = self._moment_standard_normalize(order, True, **kwargs)
 
-        if moment is not None and cache_policy != CACHE_POLICY.NO_CACHE:
+        if moment is not None and cache_policy != _NO_CACHE:
             self._moment_standard_cache[order] = moment
 
         return moment

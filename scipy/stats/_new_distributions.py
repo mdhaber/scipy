@@ -3,7 +3,7 @@ import numpy as np
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
-    oo, _null, ShiftedScaledDistribution, TransformedDistribution, IV_POLICY)
+    oo, _null, ShiftedScaledDistribution, TransformedDistribution)
 
 
 def factorial(n):

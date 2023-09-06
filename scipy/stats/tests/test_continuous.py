@@ -15,7 +15,7 @@ from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
     oo, _Domain, _RealDomain, _RealParameter, ContinuousDistribution,
-    _Parameterization, CACHE_POLICY, ShiftedScaledDistribution)
+    _Parameterization, ShiftedScaledDistribution)
 from scipy.stats._new_distributions import LogUniform, Normal, ShiftedScaledNormal
 
 class Test_RealDomain:
@@ -729,7 +729,7 @@ def test_deepcopy_pickle(seed):
 
 
 def test_cache_policy():
-    dist = Normal(cache_policy=CACHE_POLICY.NO_CACHE)
+    dist = Normal(cache_policy="no_cache")
     # make error message more appropriate
     message = "`Normal` does not provide an accurate implementation of the "
     with pytest.raises(NotImplementedError, match=message):
@@ -739,7 +739,7 @@ def test_cache_policy():
         dist.mean(method='cache')
 
     # add to enum
-    dist.cache_policy = CACHE_POLICY.CACHE
+    dist.cache_policy = None
     with pytest.raises(NotImplementedError, match=message):
         dist.mean(method='cache')
     mean = dist.mean()  # method is 'formula' by default
@@ -754,7 +754,7 @@ def test_cache_policy():
 
     # We can turn the cache off, and it won't change, but the old cache is
     # still available
-    dist.cache_policy = CACHE_POLICY.NO_CACHE
+    dist.cache_policy = "no_cache"
     mean = dist.mean(method='formula')
     cached_mean = dist.mean(method='cache')
     assert_equal(cached_mean, quadrature_mean)
