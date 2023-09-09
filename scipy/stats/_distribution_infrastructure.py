@@ -13,6 +13,8 @@ import numpy as np
 _null = object()
 oo = np.inf
 
+__all__ = ['ContinuousDistribution', 'ShiftedScaledDistribution']
+
 # Could add other policies for broadcasting and edge/out-of-bounds case handling
 # For instance, when edge case handling is known not to be needed, it's much
 # faster to turn it off, but it might still be nice to have array conversion
@@ -764,8 +766,8 @@ class _Parameterization:
     def draw(self, sizes=None, rng=None, proportions=None):
         """Draw random values of all parameters for use in testing
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         sizes : iterable of shape tuples
             The size of the array to be generated for each parameter in the
             parameterization. Note that the order of sizes is arbitary; the
@@ -1146,8 +1148,16 @@ def _log_real_standardize(x):
 class ContinuousDistribution:
     """ Class that represents a continuous statistical distribution.
 
-    We might wish to adjust this to represent a continuous *random variable*,
-    which is a slight change in perspective with some nice advantages.
+    Instances of the class represent a random variable.
+
+    Attributes
+    ----------
+    tol : float
+        blah
+    iv_policy: {None, "skip_iv"}
+        blah
+    cache_policy: {None, "no_cache"}
+        blah
     """
     _parameterizations = []
 
@@ -1171,8 +1181,8 @@ class ContinuousDistribution:
     def update_parameters(self, *, iv_policy=None, **kwargs):
         """ Update the numerical values of distribution parameters.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         **kwargs : array
             Desired numerical values of the distribution parameters. Any or all
             of the parameters initially used to instantiate the distribution
@@ -1839,6 +1849,20 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def pdf(self, x, *, method=None):
+        """Probability density function
+
+        Parameters
+        ----------
+        x : Array
+            blah
+        method : {None, 'formula', 'logexp'}
+            blah
+
+        Returns
+        -------
+        out : Array
+            the pdf
+        """
         return self._pdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch

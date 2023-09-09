@@ -32,6 +32,20 @@ are:
 Probability distributions
 =========================
 
+Random Variables
+----------------
+
+.. autosummary::
+   :toctree: generated/
+
+   ContinuousDistribution
+   ShiftedScaledDistribution
+   CircularDistribution
+   LogUniform
+   Normal
+   ShiftedScaledNormal
+
+
 Each univariate distribution is an instance of a subclass of `rv_continuous`
 (`rv_discrete` for discrete distributions):
 
@@ -627,6 +641,9 @@ from ._fit import fit, goodness_of_fit
 from ._covariance import Covariance
 from ._sensitivity_analysis import *
 from ._survival import *
+from ._new_distributions import (
+    LogUniform, Normal, ShiftedScaledNormal, ShiftedScaledDistribution,
+    CircularDistribution, ContinuousDistribution)
 
 # Deprecated namespaces, to be removed in v2.0.0
 from . import (

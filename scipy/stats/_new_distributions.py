@@ -5,6 +5,7 @@ from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
     oo, _null, ShiftedScaledDistribution, TransformedDistribution)
 
+__all__ = ['Normal', 'LogUniform', 'ShiftedScaledNormal', 'CircularDistribution']
 
 def factorial(n):
     return special.gamma(n + 1)
