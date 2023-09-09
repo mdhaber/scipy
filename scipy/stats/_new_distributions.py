@@ -36,7 +36,7 @@ class OrderStatisticDistribution(TransformedDistribution):
 
 
 class Normal(ContinuousDistribution):
-
+    """Standard normal distribution"""
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
@@ -100,6 +100,7 @@ class Normal(ContinuousDistribution):
 
 
 class ShiftedScaledNormal(ShiftedScaledDistribution):
+    """Normal distribution with prescribed mean and standard deviation"""
     def __init__(self, *args, **kwargs):
         super().__init__(Normal(), *args, **kwargs)
 
@@ -109,6 +110,7 @@ def _log_diff(log_p, log_q):
 
 
 class LogUniform(ContinuousDistribution):
+    """Log-uniform distribution"""
 
     _a_domain = _RealDomain(endpoints=(0, oo))
     _b_domain = _RealDomain(endpoints=('a', oo))
@@ -158,6 +160,7 @@ class LogUniform(ContinuousDistribution):
 
 
 class CircularDistribution(ShiftedScaledDistribution):
+    """Class that represents a circular statistical distribution."""
     # Define 2-arg cdf functions
     # Define 2-arg inverse CDF - one argument is left quantile
     # Define mean, median, mode, var, std, entropy

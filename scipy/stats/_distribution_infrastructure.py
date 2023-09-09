@@ -1645,6 +1645,7 @@ class ContinuousDistribution:
     # and we use quadrature otherwise.
 
     def support(self):
+        """Support of the distribution"""
         # If this were a `cached_property`, we couldn't update the value
         # when the distribution parameters change.
         # Caching is important, though, because calls to _support take 1~2 µs
@@ -1696,6 +1697,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def entropy(self, *, method=None):
+        """Distribution differential entropy"""
         return self._entropy_dispatch(method=method, **self._parameters)
 
     @_dispatch
@@ -1722,6 +1724,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def median(self, *, method=None):
+        """Distribution median"""
         return self._median_dispatch(method=method, **self._parameters)
 
     @_dispatch
@@ -1740,6 +1743,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def mode(self, *, method=None):
+        """Distribution mode"""
         return self._mode_dispatch(method=method, **self._parameters)
 
     @_dispatch
@@ -1778,18 +1782,28 @@ class ContinuousDistribution:
         return mode[()]
 
     def mean(self, *, method=None, cache_policy=None):
+        """Distribution mean"""
         return self.moment_raw(1, method=method, cache_policy=cache_policy)
 
     def var(self, *, method=None, cache_policy=None):
+        """Distribution variance"""
         return self.moment_central(2, method=method, cache_policy=cache_policy)
 
     def std(self, *, method=None, cache_policy=None):
+        """Distribution standard deviation"""
         return np.sqrt(self.var(method=method, cache_policy=cache_policy))
 
     def skewness(self, *, method=None, cache_policy=None):
+        """Distribution skewness (standardized third moment)"""
         return self.moment_standard(3, method=method, cache_policy=cache_policy)
 
     def kurtosis(self, *, method=None, cache_policy=None):
+        """Distribution Pearson kurtosis (standardized fourth moment)
+
+        This is the Pearson kurtosis, the standardized fourth moment, not the
+        "Fisher" or "Excess" kurtosis. The Pearson kurtosis of the normal
+        distribution is 3.
+        """
         return self.moment_standard(4, method=method, cache_policy=cache_policy)
 
     ### Distribution functions
@@ -1831,6 +1845,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logpdf(self, x, *, method=None):
+        """Log of the probability density function"""
         return self._logpdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -1882,6 +1897,7 @@ class ContinuousDistribution:
     ## Cumulative Distribution Functions
 
     def logcdf(self, x, y=None, *, method=None):
+        """Log of the cumulative distribution function"""
         if y is None:
             return self._logcdf1(x, method=method)
         else:
@@ -1969,6 +1985,7 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     def cdf(self, x, y=None, *, method=None):
+        """Cumulative distribution function"""
         if y is None:
             return self._cdf1(x, method=method)
         else:
@@ -2045,6 +2062,7 @@ class ContinuousDistribution:
                                 kwargs=kwargs)
 
     def logccdf(self, x, y=None, *, method=None):
+        """Log of the complementary cumulative distribution function"""
         if y is None:
             return self._logccdf1(x, method=method)
         else:
@@ -2103,6 +2121,7 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     def ccdf(self, x, y=None, *, method=None):
+        """Complementary cumulative distribution function"""
         if y is None:
             return self._ccdf1(x, method=method)
         else:
@@ -2163,6 +2182,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ilogcdf(self, x, *, method=None):
+        """Inverse of the log-cumulative distribution function"""
         return self._ilogcdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -2186,6 +2206,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def icdf(self, x, *, method=None):
+        """Inverse cumulative distribution function"""
         return self._icdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -2209,6 +2230,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ilogccdf(self, x, *, method=None):
+        """Inverse of the log-complementary cumulative distribution function"""
         return self._ilogccdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -2232,6 +2254,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def iccdf(self, x, *, method=None):
+        """Inverse complementary cumulative distribution function"""
         return self._iccdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -2282,6 +2305,7 @@ class ContinuousDistribution:
     # information.
 
     def sample(self, shape=(), *, method=None, rng=None, qmc_engine=None):
+        """Random or quasi-random sampling from the distribution"""
         # needs output validation to ensure that developer returns correct
         # dtype and shape
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
@@ -2382,6 +2406,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_raw(self, order=1, *, method=None, cache_policy=None):
+        """Raw distribution moment about the origin"""
         # Consider exposing the point about which moments are taken as an
         # option. This is easy to support, since `_moment_transform_center`
         # does all the work.
@@ -2444,6 +2469,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_central(self, order=1, *, method=None, cache_policy=None):
+        """Distribution moment about the mean"""
         order = self._validate_order(order, "moment_central")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
@@ -2514,6 +2540,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment_standard(self, order=1, *, method=None, cache_policy=None):
+        """Standardized distribution moment"""
         order = self._validate_order(order, "moment_standard")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
@@ -2605,6 +2632,7 @@ class ContinuousDistribution:
     # if they want to customize the plot.
 
     def plot(self, func='pdf', *, ax=None, cdf=0.001, ccdf=0.001):
+        """Plot a function of the distribution"""
         try:
             import matplotlib  # noqa
         except ModuleNotFoundError as exc:
@@ -2673,11 +2701,13 @@ class ContinuousDistribution:
     # these methods reasonably efficiently.
 
     def llf(self, parameters=None, *, sample, axis=-1):
+        """Log likelihood function"""
         parameters = parameters or {}
         self.update_parameters(**parameters)
         return np.sum(self.logpdf(sample), axis=axis)
 
     def dllf(self, parameters=None, *, sample, var):
+        """Partial derivative of the log likelihood function"""
         parameters = parameters or {}
         self.update_parameters(**parameters)
 
@@ -2691,6 +2721,7 @@ class ContinuousDistribution:
         return _differentiate(f, self._parameters[var]).df
 
     def fit(self, sample):
+        """Fit the distribution parameters to data"""
         # very basic `fit` method that only works for distributions with
         # unbounded parameter and argument domains.
         names = list(self._original_parameters.keys())
@@ -2821,6 +2852,7 @@ class TransformedDistribution(ContinuousDistribution):
 
 
 class ShiftedScaledDistribution(TransformedDistribution):
+    """Distribution with a standard shift/scale transformation"""
     # Unclear whether infinite loc/scale will work reasonably in all cases
     _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _loc_param = _RealParameter('loc', symbol='µ',
