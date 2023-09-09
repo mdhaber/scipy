@@ -846,8 +846,33 @@ class beta_gen(rv_continuous):
             t3 = -50/b - 10*b**-2.0 - b**-3.0 + b**-4.0
             return log_term + (t1 + t2 + t3) / 120
 
+        def asymptotic_b_large(a, b):
+            sum_ab = a + b
+            t1 = sc.gammaln(a) - (a - 1) * sc.psi(a)
+            t2 = (
+                - 1/(2*b) + 1/(12*b) - b**-2.0/12 - b**-3.0/120 + b**-4.0/120
+                + b**-5.0/252 - b**-6.0/252 + 1/sum_ab - 1/(12*sum_ab)
+                + sum_ab**-2.0/6 + sum_ab**-3.0/120 - sum_ab**-4.0/60
+                - sum_ab**-5.0/252 + sum_ab**-6.0/126
+            )
+            log_term = sum_ab*np.log1p(a/b) + np.log(b) - 2*np.log(sum_ab)
+            return t1 + t2 + log_term
+
+        def threshold_large(v):
+            if v == 1.0:
+                return 1000
+
+            j = np.log10(v)
+            digits = int(j)
+            d = int(v / 10 ** digits) + 2
+            return d*10**(7 + j)
+
         if a >= 4.96e6 and b >= 4.96e6:
             return asymptotic_ab_large(a, b)
+        elif a <= 4.9e6 and b - a >= 1e6 and b >= threshold_large(a):
+            return asymptotic_b_large(a, b)
+        elif b <= 4.9e6 and a - b >= 1e6 and a >= threshold_large(b):
+            return asymptotic_b_large(b, a)
         else:
             return regular(a, b)
 
@@ -5104,7 +5129,7 @@ class geninvgauss_gen(rv_continuous):
                    "involving scipy.special.kve. Values replaced by NaN to "
                    "avoid incorrect results.")
             warnings.warn(msg, RuntimeWarning)
-            m = np.full_like(num, np.nan, dtype=np.double)
+            m = np.full_like(num, np.nan, dtype=np.float64)
             m[~inf_vals] = num[~inf_vals] / denom[~inf_vals]
         else:
             m = num / denom
@@ -5332,6 +5357,103 @@ class invweibull_gen(rv_continuous):
 
 
 invweibull = invweibull_gen(a=0, name='invweibull')
+
+
+class jf_skew_t_gen(rv_continuous):
+    r"""Jones and Faddy skew-t distribution.
+
+    %(before_notes)s
+
+    Notes
+    -----
+    The probability density function for `jf_skew_t` is:
+
+    .. math::
+
+        f(x; a, b) = C_{a,b}^{-1}
+                    \left(1+\frac{x}{\left(a+b+x^2\right)^{1/2}}\right)^{a+1/2}
+                    \left(1-\frac{x}{\left(a+b+x^2\right)^{1/2}}\right)^{b+1/2}
+
+    for real numbers :math:`a>0` and :math:`b>0`, where
+    :math:`C_{a,b} = 2^{a+b-1}B(a,b)(a+b)^{1/2}`, and :math:`B` denotes the
+    beta function (`scipy.special.beta`).
+
+    When :math:`a<b`, the distribution is negatively skewed, and when
+    :math:`a>b`, the distribution is positively skewed. If :math:`a=b`, then
+    we recover the `t` distribution with :math:`2a` degrees of freedom.
+
+    `jf_skew_t` takes :math:`a` and :math:`b` as shape parameters.
+
+    %(after_notes)s
+
+    References
+    ----------
+    .. [1] M.C. Jones and M.J. Faddy. "A skew extension of the t distribution,
+           with applications" *Journal of the Royal Statistical Society*.
+           Series B (Statistical Methodology) 65, no. 1 (2003): 159-174.
+           :doi:`10.1111/1467-9868.00378`
+
+    %(example)s
+
+    """
+    def _shape_info(self):
+        ia = _ShapeInfo("a", False, (0, np.inf), (False, False))
+        ib = _ShapeInfo("b", False, (0, np.inf), (False, False))
+        return [ia, ib]
+
+    def _pdf(self, x, a, b):
+        c = 2 ** (a + b - 1) * sc.beta(a, b) * np.sqrt(a + b)
+        d1 = (1 + x / np.sqrt(a + b + x ** 2)) ** (a + 0.5)
+        d2 = (1 - x / np.sqrt(a + b + x ** 2)) ** (b + 0.5)
+        return d1 * d2 / c
+
+    def _rvs(self, a, b, size=None, random_state=None):
+        d1 = random_state.beta(a, b, size)
+        d2 = (2 * d1 - 1) * np.sqrt(a + b)
+        d3 = 2 * np.sqrt(d1 * (1 - d1))
+        return d2 / d3
+
+    def _cdf(self, x, a, b):
+        y = (1 + x / np.sqrt(a + b + x ** 2)) * 0.5
+        return sc.betainc(a, b, y)
+
+    def _ppf(self, q, a, b):
+        d1 = beta.ppf(q, a, b)
+        d2 = (2 * d1 - 1) * np.sqrt(a + b)
+        d3 = 2 * np.sqrt(d1 * (1 - d1))
+        return d2 / d3
+
+    def _munp(self, n, a, b):
+        """Returns the n-th moment(s) where all the following hold:
+            - n >= 0
+            - a > n / 2
+            - b > n / 2
+        The result is np.nan in all other cases.
+        """
+        def nth_moment(n_k, a_k, b_k):
+            """Computes E[T^(n_k)] where T is skew-t distributed with
+            parameters a_k and b_k.
+            """
+            num = (a_k + b_k) ** (0.5 * n_k)
+            denom = 2 ** n_k * sc.beta(a_k, b_k)
+
+            indices = np.arange(n_k + 1)
+            sgn = np.where(indices % 2 > 0, -1, 1)
+            d = sc.beta(a_k + 0.5 * n_k - indices, b_k - 0.5 * n_k + indices)
+            sum_terms = sc.comb(n_k, indices) * sgn * d
+
+            return num / denom * sum_terms.sum()
+
+        nth_moment_valid = (a > 0.5 * n) & (b > 0.5 * n) & (n >= 0)
+        return _lazywhere(
+            nth_moment_valid,
+            (n, a, b),
+            np.vectorize(nth_moment, otypes=[np.float64]),
+            np.nan,
+        )
+
+
+jf_skew_t = jf_skew_t_gen(name='jf_skew_t')
 
 
 class johnsonsb_gen(rv_continuous):
@@ -6252,6 +6374,8 @@ class lognorm_gen(rv_continuous):
     The logarithm of a log-normally distributed random variable is
     normally distributed:
 
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
     >>> from scipy import stats
     >>> fig, ax = plt.subplots(1, 1)
     >>> mu, sigma = 2, 0.5
@@ -8614,6 +8738,7 @@ class reciprocal_gen(rv_continuous):
     ``1``. This is best when the x-axis is log-scaled:
 
     >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
     >>> fig, ax = plt.subplots(1, 1)
     >>> ax.hist(np.log10(r))
     >>> ax.set_ylabel("Frequency")
