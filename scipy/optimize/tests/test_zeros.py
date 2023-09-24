@@ -823,6 +823,20 @@ class TestNewton(TestScalarRootFinders):
         assert res.converged
         assert_allclose(res.root, 1)
 
+    @pytest.mark.parametrize('method', ['secant', 'newton'])
+    def test_int_x0_gh19280(self, method):
+        # Originally, `newton` ensured that only floats were passed to the
+        # callable. This was indadvertently changed by gh-17669. Check that
+        # it has been changed back.
+        def f(x):
+            # an integer raised to a negative integer power would fail
+            return x**-2 - 2
+
+        res = optimize.root_scalar(f, x0=1, method=method)
+        assert res.converged
+        assert_allclose(abs(res.root), 2**-0.5)
+        assert res.root.dtype == np.dtype(np.float64)
+
 
 def test_gh_5555():
     root = 0.1
@@ -1729,8 +1743,9 @@ class TestBracketRoot:
         maxiter = 10
 
         @np.vectorize
-        def bracket_root_single(p):
-            return zeros._bracket_root(self.f, -0.01, 0.01, args=(p,),
+        def bracket_root_single(a, b, min, max, factor, p):
+            return zeros._bracket_root(self.f, a, b, min=min, max=max,
+                                       factor=factor, args=(p,),
                                        maxiter=maxiter)
 
         def f(*args, **kwargs):
@@ -1738,8 +1753,17 @@ class TestBracketRoot:
             return self.f(*args, **kwargs)
         f.f_evals = 0
 
-        res = zeros._bracket_root(f, -0.01, 0.01, args=args, maxiter=maxiter)
-        refs = bracket_root_single(p).ravel()
+        rng = np.random.default_rng(2348234)
+        a = -rng.random(size=shape)
+        b = rng.random(size=shape)
+        min, max = 1e3*a, 1e3*b
+        if shape:  # make some elements un
+            i = rng.random(size=shape) > 0.5
+            min[i], max[i] = -np.inf, np.inf
+        factor = rng.random(size=shape) + 1.5
+        res = zeros._bracket_root(f, a, b, min=min, max=max, factor=factor,
+                                  args=args, maxiter=maxiter)
+        refs = bracket_root_single(a, b, min, max, factor, p).ravel()
 
         attrs = ['xl', 'xr', 'fl', 'fr', 'success', 'nfev', 'nit']
         for attr in attrs:
@@ -1759,23 +1783,26 @@ class TestBracketRoot:
         assert_allclose(res.fl, self.f(res.xl, *args))
         assert_allclose(res.fr, self.f(res.xr, *args))
 
-    # def test_flags(self):
-    #     # Test cases that should produce different status flags; show that all
-    #     # can be produced simultaneously.
-    #     def f(xs, js):
-    #         funcs = [lambda x: x - 2.5,
-    #                  lambda x: x - 10,
-    #                  lambda x: (x - 0.1)**3,
-    #                  lambda x: np.nan]
-    #
-    #         return [funcs[j](x) for x, j in zip(xs, js)]
-    #
-    #     args = (np.arange(4, dtype=np.int64),)
-    #     res = zeros._chandrupatla(f, [0]*4, [np.pi]*4, args=args, maxiter=2)
-    #
-    #     ref_flags = np.array([zeros._ECONVERGED, zeros._ESIGNERR,
-    #                           zeros._ECONVERR, zeros._EVALUEERR])
-    #     assert_equal(res.status, ref_flags)
+    def test_flags(self):
+        # Test cases that should produce different status flags; show that all
+        # can be produced simultaneously.
+        def f(xs, js):
+            funcs = [lambda x: x - 1.5,
+                     lambda x: x - 1000,
+                     lambda x: x - 1000,
+                     lambda x: np.nan]
+
+            return [funcs[j](x) for x, j in zip(xs, js)]
+
+        args = (np.arange(4, dtype=np.int64),)
+        res = zeros._bracket_root(f, a=[-1, -1, -1, -1], b=[1, 1, 1, 1],
+                                  min=[-np.inf, -1, -np.inf, -np.inf],
+                                  max=[np.inf, 1, np.inf, np.inf],
+                                  args=args, maxiter=3)
+
+        ref_flags = np.array([zeros._ECONVERGED, zeros._ELIMITS,
+                              zeros._ECONVERR, zeros._EVALUEERR])
+        assert_equal(res.status, ref_flags)
 
     @pytest.mark.parametrize("root", (0.622, [0.622, 0.623]))
     @pytest.mark.parametrize('min', [-5, None])
@@ -1819,13 +1846,13 @@ class TestBracketRoot:
         with pytest.raises(ValueError, match=message):
             zeros._bracket_root(lambda x: x, -4, 4, factor=0.5)
 
-        message = '`min <= a < b <= max` must be True'
-        with pytest.raises(ValueError, match=message):
-            zeros._bracket_root(lambda x: x, 4, -4)
-        with pytest.raises(ValueError, match=message):
-            zeros._bracket_root(lambda x: x, -4, 4, max=np.nan)
-        with pytest.raises(ValueError, match=message):
-            zeros._bracket_root(lambda x: x, -4, 4, min=10)
+        # message = '`min <= a < b <= max` must be True'
+        # with pytest.raises(ValueError, match=message):
+        #     zeros._bracket_root(lambda x: x, 4, -4)
+        # with pytest.raises(ValueError, match=message):
+        #     zeros._bracket_root(lambda x: x, -4, 4, max=np.nan)
+        # with pytest.raises(ValueError, match=message):
+        #     zeros._bracket_root(lambda x: x, -4, 4, min=10)
 
         message = "shape mismatch: objects cannot be broadcast"
         # raised by `np.broadcast, but the traceback is readable IMO

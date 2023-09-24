@@ -15,13 +15,14 @@ __all__ = ['newton', 'bisect', 'ridder', 'brentq', 'brenth', 'toms748',
 
 # Must agree with CONVERGED, SIGNERR, CONVERR, ...  in zeros.h
 _ECONVERGED = 0
-_ESIGNERR = -1
-_EOTHERCONVERGED = -1
+_ESIGNERR = -1  # used in _chandrupatla
+_EERRORINCREASE = -1  # used in _differentiate
+_ELIMITS = -1  # used in _bracket_root
 _ECONVERR = -2
 _EVALUEERR = -3
 _ECALLBACK = -4
-_EERRORINCREASE = -1
 _EINPROGRESS = 1
+_ESTOPONESIDE = 2  # used in _bracket_root
 
 CONVERGED = 'converged'
 SIGNERR = 'sign error'
@@ -296,7 +297,10 @@ def newton(func, x0, fprime=None, args=(), tol=1.48e-8, maxiter=50,
                              full_output)
 
     # Convert to float (don't use float(x0); this works also for complex x0)
-    x0 = np.asarray(x0)[()]
+    # Use np.asarray because we want x0 to be a numpy object, not a Python
+    # object. e.g. np.complex(1+1j) > 0 is possible, but (1 + 1j) > 0 raises
+    # a TypeError
+    x0 = np.asarray(x0)[()] * 1.0
     p0 = x0
     funcalls = 0
     if fprime is not None:
@@ -1420,8 +1424,7 @@ def _bracket_root_iv(func, a, b, min, max, factor, args, maxiter):
     b = a + 1 if b is None else b
     min = -np.inf if min is None else min
     max = np.inf if max is None else max
-    # golden ratio as suggested in gh-18348, but higher values are faster.
-    factor = .5 + .5*5**.5 if factor is None else factor
+    factor = 2. if factor is None else factor
     a, b, min, max, factor = np.broadcast_arrays(a, b, min, max, factor)
 
     if not np.issubdtype(b.dtype, np.number) or np.iscomplex(b).any():
@@ -1457,17 +1460,28 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
                   args=(), maxiter=1000):
     """Bracket the root of a monotonic scalar function of one variable
 
+    This function works elementwise when `a`, `b`, `min`, `max`, `factor`, and
+    the elements of `args` are broadcastable arrays.
+
     Parameters
     ----------
     func : callable
         The function for which the root is to be bracketed.
-    a, b : float
-        Starting guess of bracket, which need not contain a root. Must be
-        broadcastable with one another. If `b` is not provided, ``b = a + 1``.
-    min, max : float, optional
+        The signature must be::
+
+            func(x: ndarray, *args) -> ndarray
+
+        where each element of ``x`` is a finite real and ``args`` is a tuple,
+        which may contain an arbitrary number of arrays that are broadcastable
+        with `x`. ``func`` must be an elementwise function: each element
+        ``func(x)[i]`` must equal ``func(x[i])`` for all indices ``i``.
+    a, b : float array_like
+        Starting guess of bracket, which need not contain a root. If `b` is
+        not provided, ``b = a + 1``. Must be broadcastable with one another.
+    min, max : float array_like, optional
         Minimum and maximum allowable endpoints of the bracket, inclusive. Must
         be broadcastable with `a` and `b`.
-    factor : float, default: golden ratio
+    factor : float array_like, default: 2
         The factor used to grow the bracket. See notes for details.
     args : tuple, optional
         Additional positional arguments to be passed to `func`.  Must be arrays
@@ -1489,6 +1503,8 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
         xl, xr : float
             The lower and upper ends of the bracket, if the algorithm
             terminated successfully.
+        fl, fr : float
+            The function value at the lower and upper ends of the bracket.
         nfev : int
             The number of function evaluations required to find the bracket.
             This is distinct from the number of times `func` is *called*
@@ -1498,16 +1514,20 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
             The number of iterations of the algorithm that were performed.
         status : int
             An integer representing the exit status of the algorithm.
-            ``0`` : The algorithm found a bracket.
-            ``-2`` : The maximum number of iterations was reached.
-            ``-3`` : A non-finite value was encountered.
+
+            - ``0`` : The algorithm produced a valid bracket.
+            - ``-1`` : The bracket expanded to the allowable limits without finding a bracket.
+            - ``-2`` : The maximum number of iterations was reached.
+            - ``-3`` : A non-finite value was encountered.
+            - ``-4`` : Iteration was terminated by `callback`.
+            - ``1`` : The algorithm is proceeding normally (in `callback` only).
+            - ``2`` : A bracket was found in the opposite search direction (in `callback` only).
+
         success : bool
             ``True`` when the algorithm terminated successfully (status ``0``).
-        fl, fr : float
-            The function value at the lower and upper ends of the bracket.
 
     Notes
-    -----
+    -----s
     This function generalizes an algorithm found in pieces throughout
     `scipy.stats`. The strategy is to iteratively grow the bracket `(l, r)`
      until ``func(l) < 0 < func(r)``. The bracket grows to the left as follows.
@@ -1532,8 +1552,6 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
 
     """
     # Todo:
-    # - check what happens when multiple brackets are found or if a bracket
-    #   and a root is found
     # - find bracket with sign change in specified direction
     # - Add tolerance
     # - allow factor < 1?
@@ -1546,8 +1564,6 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
     temp = _scalar_optimization_initialize(func, xs, args)
     xs, fs, args, shape, dtype = temp  # line split for PEP8
 
-    n = len(xs[0])
-
     # The approach is to treat the left and right searches as though they were
     # (almost) totally independent one-sided bracket searches. (The interaction
     # is considered when checking for termination and preparing the result
@@ -1555,6 +1571,8 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
     # `x` is the "moving" end of the bracket
     x = np.concatenate(xs)
     f = np.concatenate(fs)
+    n = len(x) // 2
+
     # `x_last` is the previous location of the moving end of the bracket. If
     # the signs of `f` and `f_last` are different, `x` and `x_last` form a
     # bracket.
@@ -1669,12 +1687,12 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
         i = np.zeros_like(stop)
         i[j] = True  # boolean indices of elements that can also stop
         i = i & ~stop
-        work.status[i] = _EOTHERCONVERGED
+        work.status[i] = _ESTOPONESIDE
         stop[i] = True
 
         # Condition 3: moving end of bracket reaches limit
         i = (work.x == work.limit) & ~stop
-        work.status[i] = _ECONVERR
+        work.status[i] = _ELIMITS
         stop[i] = True
 
         # Condition 4: non-finite value encountered
@@ -1749,14 +1767,9 @@ def _bracket_root(func, a, b=None, *, min=None, max=None, factor=None,
 
         res['nit'] = np.maximum(res['nit'][:n], res['nit'][n:])
         res['nfev'] = res['nfev'][:n] + res['nfev'][n:]
-        # I was conflicted about what to return for `status` because in
-        # reality there are separate statuses for leftward and rightward
-        # search. Choosing the maximum of the two is somewhat arbitrary, but
-        # it ensures that 0 is reported if the bracket is valid. (Another
-        # option would be to return the two separately, but I don't know if
-        # it's really useful. The status of the other side's search can always
-        # be added later.)
-        res['status'] = np.maximum(sa, sb)
+        # If the status on one side is zero, the status is zero. In any case,
+        # report the status from one side only.
+        res['status'] = np.choose(sa == 0, (sb, sa))
         res['success'] = (res['status'] == 0)
 
         del res['x']
