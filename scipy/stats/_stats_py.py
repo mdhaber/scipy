@@ -7845,6 +7845,13 @@ Power_divergenceResult = namedtuple('Power_divergenceResult',
                                     ('statistic', 'pvalue'))
 
 
+def _pd_chisquare_n_samples(kwargs):
+    return 2 if kwargs.get('f_exp', None) is not None else 1
+
+
+@_axis_nan_policy_factory(Power_divergenceResult, n_outputs=2,
+                          n_samples=_pd_chisquare_n_samples,
+                          too_small=-1)
 def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
     """Cressie-Read power divergence statistic and goodness of fit test.
 
@@ -8026,6 +8033,7 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
         bshape = np.broadcast_shapes(f_obs_float.shape, f_exp.shape)
         f_obs_float = _m_broadcast_to(f_obs_float, bshape)
         f_exp = _m_broadcast_to(f_exp, bshape)
+        rtol = 1e-8  # to pass existing tests
         rtol = 1e-8  # to pass existing tests
         with np.errstate(invalid='ignore'):
             f_obs_sum = f_obs_float.sum(axis=axis)
