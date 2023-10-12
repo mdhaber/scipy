@@ -8034,7 +8034,6 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
         f_obs_float = _m_broadcast_to(f_obs_float, bshape)
         f_exp = _m_broadcast_to(f_exp, bshape)
         rtol = 1e-8  # to pass existing tests
-        rtol = 1e-8  # to pass existing tests
         with np.errstate(invalid='ignore'):
             f_obs_sum = f_obs_float.sum(axis=axis)
             f_exp_sum = f_exp.sum(axis=axis)
@@ -8081,6 +8080,9 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
     return Power_divergenceResult(stat, p)
 
 
+@_axis_nan_policy_factory(Power_divergenceResult, n_outputs=2,
+                          n_samples=_pd_chisquare_n_samples,
+                          too_small=-1)
 def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
     """Calculate a one-way chi-square test.
 
@@ -8251,7 +8253,7 @@ def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
 
     """  # noqa
     return power_divergence(f_obs, f_exp=f_exp, ddof=ddof, axis=axis,
-                            lambda_="pearson")
+                            lambda_="pearson", _no_deco=True)
 
 
 KstestResult = _make_tuple_bunch('KstestResult', ['statistic', 'pvalue'],
