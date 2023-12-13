@@ -916,13 +916,15 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
     y : array_like
         Values to integrate.
     x : array_like, optional
-        The coordinate to integrate along. Must be monotonically increasing.
-        If None (default), use spacing `dx` between consecutive elements in 
-        `y`.
+        The coordinate to integrate along. Must have the same shape as `y` or
+        must be 1D with the same length as `y` along `axis`. x` must also be
+        non-decreasing along `axis`.
+        If `x` is None (default), integration is performed using spacing `dx`
+        between consecutive elements in `y`.
     dx : scalar or array_like, optional
         Spacing between elements of `y`. Only used if `x` is None. Can either 
         be a float, or an array with the same shape as `y`, but length 1 along
-        `axis`.
+        `axis`. Defaults to 1.0.
     axis : int, optional
         Specifies the axis to integrate along. Default is -1 (last axis).
     initial : scalar or array_like, optional
@@ -959,8 +961,6 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
 
     Consider three consecutive points: 
     :math:`(x_1, y_1), (x_2, y_2), (x_3, y_3)`.
-    where the widths of the 2 subintervals are:
-    :math:`h_1 = x_2 - x_1` and :math:`h_2 = x_3 - x_2`.
 
     Assuming a quadratic relationship over the 3 points, the integral over 
     the subinterval between :math:`x_1` and :math:`x_2` is given by formula
@@ -1053,7 +1053,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
         x = np.broadcast_to(x, y.shape) if x.ndim == 1 else np.swapaxes(x, axis, -1)
         dx = np.diff(x, axis=-1)
         if np.any(dx <= 0):
-            raise ValueError("Input x must be monotonically increasing.")
+            raise ValueError("Input x must be non-decreasing.")
         res = _cumulatively_sum_simpson_integrals(
             y, dx, _cumulative_simpson_unequal_intervals
         )
