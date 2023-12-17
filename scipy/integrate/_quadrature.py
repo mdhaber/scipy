@@ -914,7 +914,9 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
     Parameters
     ----------
     y : array_like
-        Values to integrate.
+        Values to integrate. Requires at least 1 point along `axis`. If 2 or fewer
+        points are provided along `axis`, Simpson's integration is not possible and the
+        result is calculated with `cumulative_trapezoid`.
     x : array_like, optional
         The coordinate to integrate along. Must have the same shape as `y` or
         must be 1D with the same length as `y` along `axis`. x` must also be
@@ -1029,20 +1031,22 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
     y = _ensure_float_array(y)
 
     # validate `axis` and standardize to work along the last axis
+    original_y = y.copy()
     original_shape = y.shape
     try:
         y = np.swapaxes(y, axis, -1)
     except IndexError as e:
         message = f"`axis={axis}` is not valid for `y` with `y.ndim={y.ndim}`."
         raise ValueError(message) from e
+    
+    if y.shape[-1] == 0:
+        raise ValueError("At least 1 point is required along axis.")
 
-    if y.shape[-1] < 3:
-        raise ValueError(
-            "At least 3 points are required along the axis of integration "
-            "to use the composite Simpson's method."
-        )
+    elif 0 < y.shape[-1] < 3:
+        res = cumulative_trapezoid(original_y, x, dx=dx, axis=axis, initial=None)
+        res = np.swapaxes(res, axis, -1)
 
-    if x is not None:
+    elif x is not None:
         x = _ensure_float_array(x)
         message = ("If given, shape of `x` must be the same as `y` or 1-D with "
                    "the same length as `y` along `axis`.")

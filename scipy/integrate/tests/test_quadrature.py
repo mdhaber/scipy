@@ -638,7 +638,7 @@ class TestCumulativeSimpson:
         ("x must be non-decreasing", dict(x=[2, 2, 3, 4])),
         ("x must be non-decreasing", dict(x=[x0, [2, 2, 4, 8]], y=[y0, y0])),
         ("x must be non-decreasing", dict(x=[x0, x0, x0], y=[y0, y0, y0], axis=0)),
-        ("At least 3 points are required", dict(x=x0[:2], y=y0[:2])),
+        ("At least 1 point is required", dict(x=[], y=[])),
         ("`axis=4` is not valid for `y` with `y.ndim=1`", dict(axis=4)),
         ("shape of `x` must be the same as `y` or 1-D", dict(x=np.arange(5))),
         ("`initial` must either be a scalar or...", dict(initial=np.arange(5))),
@@ -658,8 +658,44 @@ class TestCumulativeSimpson:
 
         # Should add tests of:
         # - all elements of `x` identical
-        # - y of size 1 and 2
         # These should work as they do for `simpson`
+
+    @pytest.mark.parametrize('axis', np.arange(-3, 3))
+    @pytest.mark.parametrize('x_ndim', (1, 3))
+    @pytest.mark.parametrize('x_len', (1, 2))
+    @pytest.mark.parametrize('i_ndim', (None, 0, 3))
+    @pytest.mark.parametrize('dx', (None, True))
+    def test_y_of_size_under_3(self, axis, x_ndim, x_len, i_ndim, dx):
+        """Test behavior of `cumulative_simpson` with `y` of length 1 or 2.
+        Internally these should match with cumulative_trapezoid.
+        """
+        rng = np.random.default_rng(82456839535679456794)
+
+        # determine shapes
+        shape = [5, 6, x_len]
+        shape[axis], shape[-1] = shape[-1], shape[axis]
+        shape_len_1 = shape.copy()
+        shape_len_1[axis] = 1
+        i_shape = shape_len_1 if i_ndim == 3 else ()
+
+        # initialize arguments
+        y = rng.random(size=shape)
+        x, dx = None, None
+        if dx:
+            dx = rng.random(size=shape_len_1) if x_ndim > 1 else rng.random()
+        else:
+            x = (np.sort(rng.random(size=shape), axis=axis) if x_ndim > 1
+                 else np.sort(rng.random(size=shape[axis])))
+        initial = None if i_ndim is None else rng.random(size=i_shape)
+
+        # compare results
+        res = cumulative_simpson(y, x=x, dx=dx, initial=initial, axis=axis)
+        if initial is None:
+            ref = cumulative_trapezoid(y, x=x, dx=dx, axis=axis, initial=None)
+        else:
+            ref = initial + cumulative_trapezoid(y, x=x, dx=dx, axis=axis, initial=0)
+        np.testing.assert_allclose(res, ref, rtol=1e-15)
+
 
     def _get_theoretical_diff_between_simps_and_cum_simps(self, y, x):
         """`cumulative_simpson` and `simpson` can be tested against other to verify
