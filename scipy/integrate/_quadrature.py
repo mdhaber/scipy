@@ -969,11 +969,11 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
     (8) of [2]_:
     
     .. math::
-        \int_{x_1}^{x_2} y(x) dx\ = \frac{x_2-x_1}{6}\left[\
+        \int_{x_1}^{x_2} y(x) dx\ &= \frac{x_2-x_1}{6}\left[\
         \left\{3-\frac{x_2-x_1}{x_3-x_1}\right\} y_1 + \
         \left\{3 + \frac{(x_2-x_1)^2}{(x_3-x_2)(x_3-x_1)} + \
-        \frac{x_2-x_1}{x_3-x_1}\right\} y_2 \\
-        - \frac{(x_2-x_1)^2}{(x_3-x_2)(x_3-x_1)} y_3\right]
+        \frac{x_2-x_1}{x_3-x_1}\right\} y_2\\
+        &- \frac{(x_2-x_1)^2}{(x_3-x_2)(x_3-x_1)} y_3\right]
 
     The integral between :math:`x_2` and :math:`x_3` is given by swapping
     appearances of :math:`x_1` and :math:`x_3`. The integral is estimated
@@ -1057,7 +1057,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
         x = np.broadcast_to(x, y.shape) if x.ndim == 1 else np.swapaxes(x, axis, -1)
         dx = np.diff(x, axis=-1)
         if np.any(dx <= 0):
-            raise ValueError("Input x must be non-decreasing.")
+            raise ValueError("Input x must be strictly increasing.")
         res = _cumulatively_sum_simpson_integrals(
             y, dx, _cumulative_simpson_unequal_intervals
         )

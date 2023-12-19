@@ -636,9 +636,9 @@ class TestCumulativeSimpson:
         np.testing.assert_allclose(res, ref, rtol=1e-15)
 
     @pytest.mark.parametrize(('message', 'kwarg_update'), [
-        ("x must be non-decreasing", dict(x=[2, 2, 3, 4])),
-        ("x must be non-decreasing", dict(x=[x0, [2, 2, 4, 8]], y=[y0, y0])),
-        ("x must be non-decreasing", dict(x=[x0, x0, x0], y=[y0, y0, y0], axis=0)),
+        ("x must be strictly increasing", dict(x=[2, 2, 3, 4])),
+        ("x must be strictly increasing", dict(x=[x0, [2, 2, 4, 8]], y=[y0, y0])),
+        ("x must be strictly increasing", dict(x=[x0, x0, x0], y=[y0, y0, y0], axis=0)),
         ("At least 1 point is required", dict(x=[], y=[])),
         ("`axis=4` is not valid for `y` with `y.ndim=1`", dict(axis=4)),
         ("shape of `x` must be the same as `y` or 1-D", dict(x=np.arange(5))),
