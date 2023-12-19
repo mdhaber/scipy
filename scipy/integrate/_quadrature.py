@@ -920,7 +920,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
     x : array_like, optional
         The coordinate to integrate along. Must have the same shape as `y` or
         must be 1D with the same length as `y` along `axis`. x` must also be
-        non-decreasing along `axis`.
+        strictly increasing along `axis`.
         If `x` is None (default), integration is performed using spacing `dx`
         between consecutive elements in `y`.
     dx : scalar or array_like, optional
