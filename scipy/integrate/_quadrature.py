@@ -973,7 +973,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
         \left\{3-\frac{x_2-x_1}{x_3-x_1}\right\} y_1 + \
         \left\{3 + \frac{(x_2-x_1)^2}{(x_3-x_2)(x_3-x_1)} + \
         \frac{x_2-x_1}{x_3-x_1}\right\} y_2\\
-        &- \frac{(x_2-x_1)^2}{(x_3-x_2)(x_3-x_1)} y_3\right]
+        - \frac{(x_2-x_1)^2}{(x_3-x_2)(x_3-x_1)} y_3\right]
 
     The integral between :math:`x_2` and :math:`x_3` is given by swapping
     appearances of :math:`x_1` and :math:`x_3`. The integral is estimated
