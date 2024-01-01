@@ -6715,6 +6715,9 @@ class TestTrim:
         assert_equal(stats.trimboth([], 3/11.), [])
         assert_equal(stats.trimboth([], 4/6.), [])
 
+
+class TestTrimMean:
+
     def test_trim_mean(self):
         # don't use pre-sorted arrays
         a = np.array([4, 8, 2, 0, 9, 5, 10, 1, 7, 3, 6])
@@ -6752,6 +6755,32 @@ class TestTrim:
         # empty input
         assert_equal(stats.trim_mean([], 0.0), np.nan)
         assert_equal(stats.trim_mean([], 0.6), np.nan)
+
+    def trim_mean_reference(self, a, proportiontocut, axis):
+        a = stats.trimboth(a, proportiontocut, axis=axis)
+        return np.mean(a, axis=axis)
+
+    @pytest.mark.parametrize('numbertocut', [1, 3])
+    @pytest.mark.parametrize('axis', list(range(-3, 3)) + [None])
+    def test_property_based(self, numbertocut, axis):
+        rng = np.random.default_rng(8234823482524)
+        shape = rng.integers(10, 20, size=3)
+
+        x = rng.random(size=shape)
+        n = np.prod(shape) if axis is None else shape[axis]
+        proportiontocut = numbertocut/n
+        eps = 1e-15
+
+        res1 = stats.trim_mean(x, proportiontocut + eps, axis=axis)
+        ref1 = self.trim_mean_reference(x, proportiontocut + eps, axis=axis)
+        assert_allclose(res1, ref1, rtol=1e-15)
+
+        res2 = stats.trim_mean(x, proportiontocut - eps, axis=axis)
+        ref2 = self.trim_mean_reference(x, proportiontocut - eps, axis=axis)
+        assert_allclose(res2, ref2, rtol=1e-15)
+
+        assert np.all(res1 != res2)
+
 
 
 class TestSigmaClip:

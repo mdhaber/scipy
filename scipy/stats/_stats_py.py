@@ -3890,8 +3890,8 @@ def trim_mean(a, proportiontocut, axis=0):
     """
     a = np.asarray(a)
 
-    if a.size == 0:
-        return np.nan
+    if a.size == 0:  # Let NumPy deal with it
+        return np.sum(a, axis=axis) * np.nan  # np.mean emits warning
 
     if axis is None:
         a = a.ravel()
