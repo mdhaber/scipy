@@ -363,6 +363,10 @@ class TestCumulative_trapezoid:
             res = cumulative_trapezoid(y, initial=initial)
         assert_allclose(res, [initial, *np.cumsum(y[1:] + y[:-1])/2])
 
+    def test_zero_len_y(self):
+        with pytest.raises(ValueError, match="At least one point is required"):
+            cumulative_trapezoid(y=[])
+
     def test_cumtrapz(self):
         # Basic coverage test for the alias
         x = np.arange(3 * 2 * 4).reshape(3, 2, 4)

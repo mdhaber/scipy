@@ -490,6 +490,8 @@ def cumulative_trapezoid(y, x=None, dx=1.0, axis=-1, initial=None):
 
     """
     y = np.asarray(y)
+    if y.shape[axis] == 0:
+        raise ValueError("At least one point is required along `axis`.")
     if x is None:
         d = dx
     else:
@@ -914,7 +916,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
     Parameters
     ----------
     y : array_like
-        Values to integrate. Requires at least 1 point along `axis`. If 2 or fewer
+        Values to integrate. Requires at least one point along `axis`. If two or fewer
         points are provided along `axis`, Simpson's integration is not possible and the
         result is calculated with `cumulative_trapezoid`.
     x : array_like, optional
@@ -925,7 +927,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
         between consecutive elements in `y`.
     dx : scalar or array_like, optional
         Spacing between elements of `y`. Only used if `x` is None. Can either 
-        be a float, or an array with the same shape as `y`, but length 1 along
+        be a float, or an array with the same shape as `y`, but of length one along
         `axis`. Default is 1.0.
     axis : int, optional
         Specifies the axis to integrate along. Default is -1 (last axis).
@@ -934,7 +936,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
         and add it to the rest of the result. Default is None, which means no
         value at ``x[0]`` is returned and `res` has one element less than `y`
         along the axis of integration. Can either be a float, or an array with
-        the same shape as `y`, but length 1 along `axis`.
+        the same shape as `y`, but of length one along `axis`.
 
     Returns
     -------
@@ -958,13 +960,13 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
 
     The composite Simpson's 1/3 method can be used to approximate the definite 
     integral of a sampled input function :math:`y(x)` [1]_. The method assumes 
-    a quadratic relationship over the interval containing any 3 consecutive 
+    a quadratic relationship over the interval containing any three consecutive 
     sampled points.
 
     Consider three consecutive points: 
     :math:`(x_1, y_1), (x_2, y_2), (x_3, y_3)`.
 
-    Assuming a quadratic relationship over the 3 points, the integral over 
+    Assuming a quadratic relationship over the three points, the integral over 
     the subinterval between :math:`x_1` and :math:`x_2` is given by formula
     (8) of [2]_:
     
@@ -981,8 +983,8 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
     the final result.
     
     For samples that are equally spaced, the result is exact if the function
-    is a polynomial of order 3 or less [1]_ and the number of subintervals
-    is even. Otherwise, the integral is exact for polynomials of order 2 or
+    is a polynomial of order three or less [1]_ and the number of subintervals
+    is even. Otherwise, the integral is exact for polynomials of order two or
     less. 
 
     References
@@ -1039,10 +1041,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
         message = f"`axis={axis}` is not valid for `y` with `y.ndim={y.ndim}`."
         raise ValueError(message) from e
     
-    if y.shape[-1] == 0:
-        raise ValueError("At least one point is required along `axis`.")
-
-    elif 0 < y.shape[-1] < 3:
+    if y.shape[-1] < 3:
         res = cumulative_trapezoid(original_y, x, dx=dx, axis=axis, initial=None)
         res = np.swapaxes(res, axis, -1)
 
