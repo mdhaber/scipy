@@ -538,6 +538,13 @@ class TestQMCQuad:
 
 
 def cumulative_simpson_nd_reference(y, *, x=None, dx=None, initial=None, axis=-1):
+    # Use cumulative_trapezoid if length of y < 3
+    if y.shape[axis] < 3:
+        if initial is None:
+            return cumulative_trapezoid(y, x=x, dx=dx, axis=axis, initial=None)
+        else:
+            return initial + cumulative_trapezoid(y, x=x, dx=dx, axis=axis, initial=0)
+
     # Ensure that working axis is last axis
     y = np.moveaxis(y, axis, -1)
     x = np.moveaxis(x, axis, -1) if np.ndim(x) > 1 else x
@@ -608,14 +615,16 @@ class TestCumulativeSimpson:
 
     @pytest.mark.parametrize('axis', np.arange(-3, 3))
     @pytest.mark.parametrize('x_ndim', (1, 3))
+    @pytest.mark.parametrize('x_len', (1, 2, 7))
     @pytest.mark.parametrize('i_ndim', (None, 0, 3,))
     @pytest.mark.parametrize('dx', (None, True))
-    def test_nd(self, axis, x_ndim, i_ndim, dx):
+    def test_nd(self, axis, x_ndim, x_len, i_ndim, dx):
         # Test behavior of `cumulative_simpson` with N-D `y`
         rng = np.random.default_rng(82456839535679456794)
 
         # determine shapes
-        shape = [5, 6, 7]
+        shape = [5, 6, x_len]
+        shape[axis], shape[-1] = shape[-1], shape[axis]
         shape_len_1 = shape.copy()
         shape_len_1[axis] = 1
         i_shape = shape_len_1 if i_ndim == 3 else ()
@@ -660,42 +669,6 @@ class TestCumulativeSimpson:
         # Should add tests of:
         # - all elements of `x` identical
         # These should work as they do for `simpson`
-
-    @pytest.mark.parametrize('axis', np.arange(-3, 3))
-    @pytest.mark.parametrize('x_ndim', (1, 3))
-    @pytest.mark.parametrize('x_len', (1, 2))
-    @pytest.mark.parametrize('i_ndim', (None, 0, 3))
-    @pytest.mark.parametrize('dx', (None, True))
-    def test_y_of_size_under_3(self, axis, x_ndim, x_len, i_ndim, dx):
-        """Test behavior of `cumulative_simpson` with `y` of length 1 or 2.
-        Internally these should match with cumulative_trapezoid.
-        """
-        rng = np.random.default_rng(82456839535679456794)
-
-        # determine shapes
-        shape = [5, 6, x_len]
-        shape[axis], shape[-1] = shape[-1], shape[axis]
-        shape_len_1 = shape.copy()
-        shape_len_1[axis] = 1
-        i_shape = shape_len_1 if i_ndim == 3 else ()
-
-        # initialize arguments
-        y = rng.random(size=shape)
-        x, dx = None, None
-        if dx:
-            dx = rng.random(size=shape_len_1) if x_ndim > 1 else rng.random()
-        else:
-            x = (np.sort(rng.random(size=shape), axis=axis) if x_ndim > 1
-                 else np.sort(rng.random(size=shape[axis])))
-        initial = None if i_ndim is None else rng.random(size=i_shape)
-
-        # compare results
-        res = cumulative_simpson(y, x=x, dx=dx, initial=initial, axis=axis)
-        if initial is None:
-            ref = cumulative_trapezoid(y, x=x, dx=dx, axis=axis, initial=None)
-        else:
-            ref = initial + cumulative_trapezoid(y, x=x, dx=dx, axis=axis, initial=0)
-        np.testing.assert_allclose(res, ref, rtol=1e-15)
 
 
     def _get_theoretical_diff_between_simps_and_cum_simps(self, y, x):
