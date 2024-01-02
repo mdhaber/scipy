@@ -919,14 +919,14 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
         result is calculated with `cumulative_trapezoid`.
     x : array_like, optional
         The coordinate to integrate along. Must have the same shape as `y` or
-        must be 1D with the same length as `y` along `axis`. x` must also be
+        must be 1D with the same length as `y` along `axis`. `x` must also be
         strictly increasing along `axis`.
         If `x` is None (default), integration is performed using spacing `dx`
         between consecutive elements in `y`.
     dx : scalar or array_like, optional
         Spacing between elements of `y`. Only used if `x` is None. Can either 
         be a float, or an array with the same shape as `y`, but length 1 along
-        `axis`. Defaults to 1.0.
+        `axis`. Default is 1.0.
     axis : int, optional
         Specifies the axis to integrate along. Default is -1 (last axis).
     initial : scalar or array_like, optional
@@ -1040,7 +1040,7 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
         raise ValueError(message) from e
     
     if y.shape[-1] == 0:
-        raise ValueError("At least 1 point is required along axis.")
+        raise ValueError("At least one point is required along `axis`.")
 
     elif 0 < y.shape[-1] < 3:
         res = cumulative_trapezoid(original_y, x, dx=dx, axis=axis, initial=None)
