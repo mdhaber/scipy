@@ -674,7 +674,6 @@ class TestCumulativeSimpson:
         # - all elements of `x` identical
         # These should work as they do for `simpson`
 
-
     def _get_theoretical_diff_between_simps_and_cum_simps(self, y, x):
         """`cumulative_simpson` and `simpson` can be tested against other to verify
         they give consistent results. `simpson` will iteratively be called with

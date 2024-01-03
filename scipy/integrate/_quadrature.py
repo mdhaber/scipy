@@ -1033,14 +1033,13 @@ def cumulative_simpson(y, *, x=None, dx=1.0, axis=-1, initial=None):
     y = _ensure_float_array(y)
 
     # validate `axis` and standardize to work along the last axis
-    original_y = y.copy()
+    original_y = y
     original_shape = y.shape
     try:
         y = np.swapaxes(y, axis, -1)
     except IndexError as e:
         message = f"`axis={axis}` is not valid for `y` with `y.ndim={y.ndim}`."
         raise ValueError(message) from e
-    
     if y.shape[-1] < 3:
         res = cumulative_trapezoid(original_y, x, dx=dx, axis=axis, initial=None)
         res = np.swapaxes(res, axis, -1)
