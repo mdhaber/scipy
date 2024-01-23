@@ -10,7 +10,7 @@ import pytest
 from scipy.interpolate import (
         BSpline, BPoly, PPoly, make_interp_spline, make_lsq_spline, _bspl,
         splev, splrep, splprep, splder, splantider, sproot, splint, insert,
-        CubicSpline, NdBSpline, make_smoothing_spline
+        CubicSpline, NdBSpline, make_smoothing_spline, RegularGridInterpolator,
 )
 import scipy.linalg as sl
 
@@ -19,6 +19,9 @@ from scipy.interpolate._bsplines import (_not_a_knot, _augknt,
                                          _make_interp_per_full_matr)
 import scipy.interpolate._fitpack_impl as _impl
 from scipy._lib._util import AxisError
+
+from scipy.interpolate import dfitpack
+from scipy.interpolate import _bsplines as _b
 
 
 class TestBSpline:
@@ -1076,7 +1079,7 @@ class TestInterp:
 
     @pytest.mark.parametrize('k', [2, 3, 4, 5])
     def test_periodic_splev(self, k):
-        # comparision values of periodic b-spline with splev
+        # comparison values of periodic b-spline with splev
         b = make_interp_spline(self.xx, self.yy, k=k, bc_type='periodic')
         tck = splrep(self.xx, self.yy, per=True, k=k)
         spl = splev(self.xx, tck)
@@ -1236,8 +1239,8 @@ class TestInterp:
             assert_allclose(b(xx), yy, atol=1e-14, rtol=1e-14)
 
     def test_int_xy(self):
-        x = np.arange(10).astype(np.int_)
-        y = np.arange(10).astype(np.int_)
+        x = np.arange(10).astype(int)
+        y = np.arange(10).astype(int)
 
         # Cython chokes on "buffer type mismatch" (construction) or
         # "no matching signature found" (evaluation)
@@ -1499,8 +1502,8 @@ class TestLSQ:
         assert_allclose(b(x), b_re(x) + 1.j*b_im(x), atol=1e-15, rtol=1e-15)
 
     def test_int_xy(self):
-        x = np.arange(10).astype(np.int_)
-        y = np.arange(10).astype(np.int_)
+        x = np.arange(10).astype(int)
+        y = np.arange(10).astype(int)
         t = _augknt(x, k=1)
         # Cython chokes on "buffer type mismatch"
         make_lsq_spline(x, y, t, k=1)
@@ -1566,10 +1569,10 @@ class TestSmoothingSpline:
         with assert_raises(ValueError):
             make_smoothing_spline(x_dupl, y)
 
-        # x and y length must be larger than 5
+        # x and y length must be >= 5
         x = np.arange(4)
         y = np.ones(4)
-        exception_message = "``x`` and ``y`` length must be larger than 5"
+        exception_message = "``x`` and ``y`` length must be at least 5"
         with pytest.raises(ValueError, match=exception_message):
             make_smoothing_spline(x, y)
 
@@ -1614,12 +1617,12 @@ class TestSmoothingSpline:
 
         """
         # load the data sample
-        data = np.load(data_file('gcvspl.npz'))
-        # data points
-        x = data['x']
-        y = data['y']
+        with np.load(data_file('gcvspl.npz')) as data:
+            # data points
+            x = data['x']
+            y = data['y']
 
-        y_GCVSPL = data['y_GCVSPL']
+            y_GCVSPL = data['y_GCVSPL']
         y_compr = make_smoothing_spline(x, y)(x)
 
         # such tolerance is explained by the fact that the spline is built
@@ -1944,6 +1947,26 @@ class TestNdBSpline:
         assert_allclose(bspl2(xi),
                         [bspl2_0(xp) for xp in xi], atol=1e-14)
 
+    def test_tx_neq_ty(self):
+        # 2D separable spline w/ len(tx) != len(ty)
+        x = np.arange(6)
+        y = np.arange(7) + 1.5
+
+        spl_x = make_interp_spline(x, x**3, k=3)
+        spl_y = make_interp_spline(y, y**2 + 2*y, k=3)
+        cc = spl_x.c[:, None] * spl_y.c[None, :]
+        bspl = NdBSpline((spl_x.t, spl_y.t), cc, (spl_x.k, spl_y.k))
+
+        values = (x**3)[:, None] * (y**2 + 2*y)[None, :]
+        rgi = RegularGridInterpolator((x, y), values)
+
+        xi = [(a, b) for a, b in itertools.product(x, y)]
+        bxi = bspl(xi)
+
+        assert not np.isnan(bxi).any()
+        assert_allclose(bxi, rgi(xi), atol=1e-14)
+        assert_allclose(bxi.reshape(values.shape), values, atol=1e-14)
+
     def make_3d_case(self):
         # make a 3D separable spline
         x = np.arange(6)
@@ -2128,7 +2151,6 @@ class TestNdBSpline:
         assert_allclose(bspl2(xi),
                         [bspl2_0(xp) for xp in xi], atol=1e-14)
 
-
     def test_readonly(self):
         t3, c3, k = self.make_3d_case()
         bspl3 = NdBSpline(t3, c3, k=3)
@@ -2140,3 +2162,168 @@ class TestNdBSpline:
         bspl3_ = NdBSpline(t3, c3, k=3)
 
         assert bspl3((1, 2, 3)) == bspl3_((1, 2, 3))
+
+
+class TestFpchec:
+    # https://github.com/scipy/scipy/blob/main/scipy/interpolate/fitpack/fpchec.f
+
+    def test_1D_x_t(self):
+        k = 1
+        t = np.arange(12).reshape(2, 6)
+        x = np.arange(12)
+
+        with pytest.raises(ValueError, match="1D sequence"):
+            _b.fpcheck(x, t, k)
+
+        with pytest.raises(ValueError, match="1D sequence"):
+            _b.fpcheck(t, x, k)
+
+    def test_condition_1(self):
+        # c      1) k+1 <= n-k-1 <= m
+        k = 3
+        n  = 2*(k + 1) - 1    # not OK
+        m = n + 11            # OK
+        t = np.arange(n)
+        x = np.arange(m)
+
+        assert dfitpack.fpchec(x, t, k) == 10
+        with pytest.raises(ValueError, match="Need k+1*"):
+            _b.fpcheck(x, t, k)
+
+        n = 2*(k+1) + 1   # OK
+        m = n - k - 2     # not OK
+        t = np.arange(n)
+        x = np.arange(m)
+
+        assert dfitpack.fpchec(x, t, k) == 10
+        with pytest.raises(ValueError, match="Need k+1*"):
+            _b.fpcheck(x, t, k)
+
+    def test_condition_2(self):
+        # c      2) t(1) <= t(2) <= ... <= t(k+1)
+        # c         t(n-k) <= t(n-k+1) <= ... <= t(n)
+        k = 3
+        t = [0]*(k+1) + [2] + [5]*(k+1)   # this is OK
+        x = [1, 2, 3, 4, 4.5]
+
+        assert dfitpack.fpchec(x, t, k) == 0
+        assert _b.fpcheck(x, t, k) is None    # does not raise
+
+        tt = t.copy()
+        tt[-1] = tt[0]   # not OK
+        assert dfitpack.fpchec(x, tt, k) == 20
+        with pytest.raises(ValueError, match="Last k knots*"):
+            _b.fpcheck(x, tt, k)
+
+        tt = t.copy()
+        tt[0] = tt[-1]   # not OK
+        assert dfitpack.fpchec(x, tt, k) == 20
+        with pytest.raises(ValueError, match="First k knots*"):
+            _b.fpcheck(x, tt, k)
+
+    def test_condition_3(self):
+        # c      3) t(k+1) < t(k+2) < ... < t(n-k)
+        k = 3
+        t = [0]*(k+1) + [2, 3] + [5]*(k+1)   # this is OK
+        x = [1, 2, 3, 3.5, 4, 4.5]
+        assert dfitpack.fpchec(x, t, k) == 0
+        assert _b.fpcheck(x, t, k) is None
+
+        t = [0]*(k+1) + [2, 2] + [5]*(k+1)   # this is not OK
+        assert dfitpack.fpchec(x, t, k) == 30
+        with pytest.raises(ValueError, match="Internal knots*"):
+            _b.fpcheck(x, t, k)
+
+    def test_condition_4(self):
+        # c      4) t(k+1) <= x(i) <= t(n-k)
+        # NB: FITPACK's fpchec only checks x[0] & x[-1], so we follow.
+        k = 3
+        t = [0]*(k+1) + [5]*(k+1)
+        x = [1, 2, 3, 3.5, 4, 4.5]      # this is OK
+        assert dfitpack.fpchec(x, t, k) == 0
+        assert _b.fpcheck(x, t, k) is None
+
+        xx = x.copy()
+        xx[0] = t[0]    # still OK
+        assert dfitpack.fpchec(xx, t, k) == 0
+        assert _b.fpcheck(x, t, k) is None
+
+        xx = x.copy()
+        xx[0] = t[0] - 1    # not OK
+        assert dfitpack.fpchec(xx, t, k) == 40
+        with pytest.raises(ValueError, match="Out of bounds*"):
+            _b.fpcheck(xx, t, k)
+
+        xx = x.copy()
+        xx[-1] = t[-1] + 1    # not OK
+        assert dfitpack.fpchec(xx, t, k) == 40
+        with pytest.raises(ValueError, match="Out of bounds*"):
+            _b.fpcheck(xx, t, k)
+
+    # ### Test the S-W condition (no 5)
+    # c      5) the conditions specified by schoenberg and whitney must hold
+    # c         for at least one subset of data points, i.e. there must be a
+    # c         subset of data points y(j) such that
+    # c             t(j) < y(j) < t(j+k+1), j=1,2,...,n-k-1
+    def test_condition_5_x1xm(self):
+        # x(1).ge.t(k2) .or. x(m).le.t(nk1)
+        k = 1
+        t = [0, 0, 1, 2, 2]
+        x = [1.1, 1.1, 1.1]
+        assert dfitpack.fpchec(x, t, k) == 50
+        with pytest.raises(ValueError, match="Schoenberg-Whitney*"):
+            _b.fpcheck(x, t, k)
+
+        x = [0.5, 0.5, 0.5]
+        assert dfitpack.fpchec(x, t, k) == 50
+        with pytest.raises(ValueError, match="Schoenberg-Whitney*"):
+            _b.fpcheck(x, t, k)
+
+    def test_condition_5_k1(self):
+        # special case nk3 (== n - k - 2) < 2
+        k = 1
+        t = [0, 0, 1, 1]
+        x = [0.5, 0.6]
+        assert dfitpack.fpchec(x, t, k) == 0
+        assert _b.fpcheck(x, t, k) is None
+
+    def test_condition_5_1(self):
+        # basically, there can't be an interval of t[j]..t[j+k+1] with no x
+        k = 3
+        t = [0]*(k+1) + [2] + [5]*(k+1)
+        x = [3]*5
+        assert dfitpack.fpchec(x, t, k) == 50
+        with pytest.raises(ValueError, match="Schoenberg-Whitney*"):
+            _b.fpcheck(x, t, k)
+
+        t = [0]*(k+1) + [2] + [5]*(k+1)
+        x = [1]*5
+        assert dfitpack.fpchec(x, t, k) == 50
+        with pytest.raises(ValueError, match="Schoenberg-Whitney*"):
+            _b.fpcheck(x, t, k)
+
+    def test_condition_5_2(self):
+        # same as _5_1, only the empty interval is in the middle
+        k = 3
+        t = [0]*(k+1) + [2, 3] + [5]*(k+1)
+        x = [1.1]*5 + [4]
+
+        assert dfitpack.fpchec(x, t, k) == 50
+        with pytest.raises(ValueError, match="Schoenberg-Whitney*"):
+            _b.fpcheck(x, t, k)
+
+        # and this one is OK
+        x = [1.1]*4 + [4, 4]
+        assert dfitpack.fpchec(x, t, k) == 0
+        assert _b.fpcheck(x, t, k) is None
+
+    def test_condition_5_3(self):
+        # similar to _5_2, covers a different failure branch
+        k = 1
+        t = [0, 0, 2, 3, 4, 5, 6, 7, 7]
+        x = [1, 1, 1, 5.2, 5.2, 5.2, 6.5]
+
+        assert dfitpack.fpchec(x, t, k) == 50
+        with pytest.raises(ValueError, match="Schoenberg-Whitney*"):
+            _b.fpcheck(x, t, k)
+
