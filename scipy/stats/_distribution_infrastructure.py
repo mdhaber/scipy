@@ -2669,7 +2669,7 @@ class ContinuousDistribution:
         ax.set_xlabel('x')
         ax.legend()
         ax.set_title(str(self))
-        ax.set_xlim((a, b))
+        # ax.set_xlim((np.min(a, b))
         return ax
 
     ### Fitting

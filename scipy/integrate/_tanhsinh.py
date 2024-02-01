@@ -233,9 +233,10 @@ def _tanhsinh(f, a, b, *, args=(), log=False, maxfun=None, maxlevel=None,
     # type promotion rules?
     with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
         c = ((a.ravel() + b.ravel())/2).reshape(a.shape)
-        c[np.isinf(a)] = b[np.isinf(a)]  # takes care of infinite a
-        c[np.isinf(b)] = a[np.isinf(b)]  # takes care of infinite b
-        c[np.isnan(c)] = 0  # takes care of infinite a and b
+        inf_a, inf_b = np.isinf(a), np.isinf(b)
+        c[inf_a] = b[inf_a]  # takes care of infinite a
+        c[inf_b] = a[inf_b]  # takes care of infinite b
+        c[inf_a & inf_b] = 0  # takes care of infinite a and b
         tmp = _scalar_optimization_initialize(f, (c,), args, complex_ok=True)
     xs, fs, args, shape, dtype = tmp
     a = np.broadcast_to(a, shape).astype(dtype).ravel()
