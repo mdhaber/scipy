@@ -93,7 +93,7 @@ __all__ = ['find_repeats', 'gmean', 'hmean', 'pmean', 'mode', 'tmean', 'tvar',
            'chisquare', 'power_divergence',
            'tiecorrect', 'ranksums', 'kruskal', 'friedmanchisquare',
            'rankdata', 'combine_pvalues', 'quantile_test',
-           'wasserstein_distance', 'energy_distance',
+           'wasserstein_distance', 'wasserstein_distance_nd', 'energy_distance',
            'brunnermunzel', 'alexandergovern',
            'expectile']
 
@@ -10189,9 +10189,9 @@ def quantile_test(x, *, q=0, p=0.5, alternative='two-sided'):
 #####################################
 
 
-def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
+def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
     r"""
-    Compute the Wasserstein-1 distance between two discrete distributions.
+    Compute the Wasserstein-1 distance between two 2D discrete distributions.
 
     The Wasserstein distance, also called the Earth mover's distance or the
     optimal transport distance, is a similarity metric between two probability
@@ -10201,18 +10201,18 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     amount of probability mass being moved and the distance it is being moved.
     A brief and intuitive introduction can be found at [2]_.
 
-    .. versionadded:: 1.0.0
+    .. versionadded:: 1.13.0
 
     Parameters
     ----------
-    u_values : 1d or 2d array_like
+    u_values : 2d array_like
         A sample from a probability distribution or the support (set of all
         possible values) of a probability distribution. Each element along
-        axis 0 is an observation or possible value. If two-dimensional, axis
-        1 represents the dimensionality of the distribution; i.e., each row is
-        a vector observation or possible value.
+        axis 0 is an observation or possible value, and axis 1 represents the
+        dimensionality of the distribution; i.e., each row is a vector
+        observation or possible value.
 
-    v_values : 1d or 2d array_like
+    v_values : 2d array_like
         A sample from or the support of a second distribution.
 
     u_weights, v_weights : 1d array_like, optional
@@ -10229,30 +10229,19 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     -----
     Given two probability mass functions, :math:`u`
     and :math:`v`, the first Wasserstein distance between the distributions
-    is:
+    using the Euclidean norm is:
 
     .. math::
 
-        l_1 (u, v) = \inf_{\pi \in \Gamma (u, v)} \int_{\mathbb{R} \times
-        \mathbb{R}} |x-y| \mathrm{d} \pi (x, y)
+        l_1 (u, v) = \inf_{\pi \in \Gamma (u, v)} \int \| x-y \|_2 \mathrm{d} \pi (x, y)
 
     where :math:`\Gamma (u, v)` is the set of (probability) distributions on
-    :math:`\mathbb{R} \times \mathbb{R}` whose marginals are :math:`u` and
+    :math:`\mathbb{R}^2 \times \mathbb{R}^2` whose marginals are :math:`u` and
     :math:`v` on the first and second factors respectively. For a given value
     :math:`x`, :math:`u(x)` gives the probabilty of :math:`u` at position
     :math:`x`, and the same for :math:`v(x)`.
 
-    In the 1-dimensional case, let :math:`U` and :math:`V` denote the
-    respective CDFs of :math:`u` and :math:`v`, this distance also equals to:
-
-    .. math::
-
-        l_1(u, v) = \int_{-\infty}^{+\infty} |U-V|
-
-    See [3]_ for a proof of the equivalence of both definitions.
-
-    In the more general (higher dimensional) and discrete case, it is also
-    called the optimal transport problem or the Monge problem.
+    This is also called the optimal transport problem or the Monge problem.
     Let the finite point sets :math:`\{x_i\}` and :math:`\{y_j\}` denote
     the support set of probability mass function :math:`u` and :math:`v`
     respectively. The Monge problem can be expressed as follows,
@@ -10337,20 +10326,17 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     .. [5] Hermann, Vincent. "Wasserstein GAN and the Kantorovich-Rubinstein
            Duality". https://vincentherrmann.github.io/blog/wasserstein/.
 
+    See Also
+    --------
+    wasserstein_distance: Compute the Wasserstein-1 distance between two
+        1D distributions.
+
     Examples
     --------
-    >>> from scipy.stats import wasserstein_distance
-    >>> wasserstein_distance([0, 1, 3], [5, 6, 8])
-    5.0
-    >>> wasserstein_distance([0, 1], [0, 1], [3, 1], [2, 2])
-    0.25
-    >>> wasserstein_distance([3.4, 3.9, 7.5, 7.8], [4.5, 1.4],
-    ...                      [1.4, 0.9, 3.1, 7.2], [3.2, 3.5])
-    4.0781331438047861
-
     Compute the Wasserstein distance between two three-dimensional samples,
     each with two observations.
 
+    >>> from scipy.stats import wasserstein_distance
     >>> wasserstein_distance([[0, 2, 3], [1, 2, 5]], [[3, 2, 3], [4, 2, 5]])
     3.0
 
@@ -10412,6 +10398,86 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     opt_res = milp(c=-b, constraints=constraints, bounds=(-np.inf, np.inf))
     return -opt_res.fun
 
+def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
+    r"""
+    Compute the Wasserstein-1 distance between two 1D distributions.
+
+    This distance is also known as the earth mover's distance, since it can be
+    seen as the minimum amount of "work" required to transform :math:`u` into
+    :math:`v`, where "work" is measured as the amount of distribution weight
+    that must be moved, multiplied by the distance it has to be moved.
+
+    .. versionadded:: 1.0.0
+
+    Parameters
+    ----------
+    u_values, v_values : array_like
+        Values observed in the (empirical) distribution.
+    u_weights, v_weights : array_like, optional
+        Weight for each value. If unspecified, each value is assigned the same
+        weight.
+        `u_weights` (resp. `v_weights`) must have the same length as
+        `u_values` (resp. `v_values`). If the weight sum differs from 1, it
+        must still be positive and finite so that the weights can be normalized
+        to sum to 1.
+
+    Returns
+    -------
+    distance : float
+        The computed distance between the distributions.
+
+    Notes
+    -----
+    The first Wasserstein distance between the distributions :math:`u` and
+    :math:`v` is:
+
+    .. math::
+
+        l_1 (u, v) = \inf_{\pi \in \Gamma (u, v)} \int_{\mathbb{R} \times
+        \mathbb{R}} |x-y| \mathrm{d} \pi (x, y)
+
+    where :math:`\Gamma (u, v)` is the set of (probability) distributions on
+    :math:`\mathbb{R} \times \mathbb{R}` whose marginals are :math:`u` and
+    :math:`v` on the first and second factors respectively.
+
+    If :math:`U` and :math:`V` are the respective CDFs of :math:`u` and
+    :math:`v`, this distance also equals to:
+
+    .. math::
+
+        l_1(u, v) = \int_{-\infty}^{+\infty} |U-V|
+
+    See [2]_ for a proof of the equivalence of both definitions.
+
+    The input distributions can be empirical, therefore coming from samples
+    whose values are effectively inputs of the function, or they can be seen as
+    generalized functions, in which case they are weighted sums of Dirac delta
+    functions located at the specified values.
+
+    References
+    ----------
+    .. [1] "Wasserstein metric", https://en.wikipedia.org/wiki/Wasserstein_metric
+    .. [2] Ramdas, Garcia, Cuturi "On Wasserstein Two Sample Testing and Related
+           Families of Nonparametric Tests" (2015). :arXiv:`1509.02237`.
+
+    See Also
+    --------
+    wasserstein_distance_nd: Compute the Wasserstein-1 distance between two 2D
+        discrete distributions.
+
+    Examples
+    --------
+    >>> from scipy.stats import wasserstein_distance
+    >>> wasserstein_distance([0, 1, 3], [5, 6, 8])
+    5.0
+    >>> wasserstein_distance([0, 1], [0, 1], [3, 1], [2, 2])
+    0.25
+    >>> wasserstein_distance([3.4, 3.9, 7.5, 7.8], [4.5, 1.4],
+    ...                      [1.4, 0.9, 3.1, 7.2], [3.2, 3.5])
+    4.0781331438047861
+
+    """
+    return _cdf_distance(1, u_values, v_values, u_weights, v_weights)
 
 def energy_distance(u_values, v_values, u_weights=None, v_weights=None):
     r"""Compute the energy distance between two 1D distributions.
