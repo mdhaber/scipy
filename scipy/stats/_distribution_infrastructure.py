@@ -24,8 +24,12 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
+#  test/fix dtypes? It is *so* hard without NEP50
+#  check use of cached_property - probably shouldn't use in case parameters change
+#  fix shape of `support`
+#  check behavior of moment methods when moments are undefined/infinite -
+#    basically OK but needs tests
 #  investigate use of median
-#  add 2-arg complementary distribution functions
 #  add cdf2 to shifted/scaled distribution
 #  Add bounds to `fit` method
 #  implement symmetric distribution
@@ -33,7 +37,6 @@ _NO_CACHE = "no_cache"
 #  implement wrapped distribution
 #  implement folded distribution
 #  implement double distribution
-#  check behavior of moment methods when moments are undefined/infinite
 #  Be consistent about options passed to distributions/methods: tols, skip_iv,
 #    cache, rng. Also check for issues with transformed distributions.
 #  profile/optimize
@@ -861,8 +864,11 @@ def _set_invalid_nan(f):
 
         low, high = endpoints.get(method_name, self.support())
 
-        mask_low = x < low if method_name in replace_strict else x <= low
-        mask_high = x > high if method_name in replace_strict else x >= high
+        left_inc, right_inc = self._variable.domain.inclusive
+        mask_low = (x < low if (method_name in replace_strict and left_inc)
+                    else x <= low)
+        mask_high = (x > high if (method_name in replace_strict and right_inc)
+                     else x >= high)
         mask_invalid = (mask_low | mask_high)
         any_invalid = (mask_invalid if mask_invalid.shape == ()
                        else np.any(mask_invalid))
@@ -952,7 +958,7 @@ def _set_invalid_nan_property(f):
             needs_copy = needs_copy or self._any_invalid
 
         if needs_copy:
-            res = np.asarray(res, dtype=dtype)
+            res = res.astype(dtype=dtype, copy=True)
 
         if self._any_invalid:
             # may be redundant when quadrature is used, but not necessarily
@@ -1475,6 +1481,12 @@ class ContinuousDistribution:
 
         return order
 
+    def _preserve_type(self, x):
+        x = np.asarray(x)
+        if x.dtype != self._dtype:
+            x = x.astype(self._dtype)
+        return x[()]
+
     ## Testing
 
     @classmethod
@@ -1653,7 +1665,12 @@ class ContinuousDistribution:
         if self._support_cache is not None:
             return self._support_cache
 
-        support = self._support(**self._parameters)
+        a, b = self._support(**self._parameters)
+        if a.shape != self._shape:
+            a = np.broadcast_to(a, self._shape)
+        if b.shape != self._shape:
+            b = np.broadcast_to(b, self._shape)
+        support = (a, b)
 
         if self.cache_policy != _NO_CACHE:
             self._support_cache = support
@@ -1665,7 +1682,7 @@ class ContinuousDistribution:
         a, b = self._variable.domain.get_numerical_endpoints(kwargs)
         if a.shape != b.shape:
             a, b = np.broadcast_arrays(a, b)
-        return a[()], b[()]
+        return self._preserve_type(a), self._preserve_type(b)
 
     @_set_invalid_nan_property
     def logentropy(self, *, method=None):
@@ -2404,6 +2421,14 @@ class ContinuousDistribution:
         return {'cache', 'formula', 'transform',
                 'normalize', 'general', 'quadrature'}
 
+    @cached_property
+    def _zero(self):
+        return self._preserve_type(0)
+
+    @cached_property
+    def _one(self):
+        return self._preserve_type(1)
+
     @_set_invalid_nan_property
     def moment_raw(self, order=1, *, method=None, cache_policy=None):
         """Raw distribution moment about the origin"""
@@ -2432,7 +2457,7 @@ class ContinuousDistribution:
             moment = self._moment_raw_general(order, **kwargs)
 
         if moment is None and 'quadrature' in methods:
-            moment = self._moment_integrate_pdf(order, center=0, **kwargs)
+            moment = self._moment_integrate_pdf(order, center=self._zero, **kwargs)
 
         if moment is not None and cache_policy != _NO_CACHE:
             self._moment_raw_cache[order] = moment
@@ -2455,17 +2480,17 @@ class ContinuousDistribution:
         # Doesn't make sense to get the mean by "transform", since that's
         # how we got here. Questionable whether 'quadrature' should be here.
         mean_methods = {'cache', 'formula', 'quadrature'}
-        mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
+        mean = self._moment_raw_dispatch(self._one, methods=mean_methods, **kwargs)
         if mean is None:
             return None
 
-        moment = self._moment_transform_center(order, central_moments, mean, 0)
+        moment = self._moment_transform_center(order, central_moments, mean, self._zero)
         return moment
 
     def _moment_raw_general(self, order, **kwargs):
         # This is the only general formula for a raw moment of a probability
         # distribution
-        return 1 if order == 0 else None
+        return self._one if order == 0 else None
 
     @_set_invalid_nan_property
     def moment_central(self, order=1, *, method=None, cache_policy=None):
@@ -2495,7 +2520,7 @@ class ContinuousDistribution:
             moment = self._moment_central_general(order, **kwargs)
 
         if moment is None and 'quadrature' in methods:
-            mean = self._moment_raw_dispatch(1, **kwargs,
+            mean = self._moment_raw_dispatch(self._one, **kwargs,
                                              methods=self._moment_methods)
             moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
 
@@ -2519,9 +2544,9 @@ class ContinuousDistribution:
             raw_moments.append(moment_i)
 
         mean_methods = self._moment_methods
-        mean = self._moment_raw_dispatch(1, methods=mean_methods, **kwargs)
+        mean = self._moment_raw_dispatch(self._one, methods=mean_methods, **kwargs)
 
-        moment = self._moment_transform_center(order, raw_moments, 0, mean)
+        moment = self._moment_transform_center(order, raw_moments, self._zero, mean)
         return moment
 
     def _moment_central_normalize(self, order, **kwargs):
@@ -2535,7 +2560,7 @@ class ContinuousDistribution:
         return standard_moment*var**(order/2)
 
     def _moment_central_general(self, order, **kwargs):
-        general_central_moments = {0: 1, 1: 0}
+        general_central_moments = {0: self._one, 1: self._zero}
         return general_central_moments.get(order, None)
 
     @_set_invalid_nan_property
@@ -2585,7 +2610,7 @@ class ContinuousDistribution:
         return central_moment/var**(order/2)
 
     def _moment_standard_general(self, order, **kwargs):
-        general_standard_moments = {0: 1, 1: 0, 2: 1}
+        general_standard_moments = {0: self._one, 1: self._zero, 2: self._one}
         return general_standard_moments.get(order, None)
 
     def _moment_integrate_pdf(self, order, center, **kwargs):
@@ -2598,6 +2623,7 @@ class ContinuousDistribution:
         a, b, *moment_as = np.broadcast_arrays(a, b, *moment_as)
         n = order
         i = np.arange(n+1).reshape([-1]+[1]*a.ndim)  # orthogonal to other axes
+        i = self._preserve_type(i)
         n_choose_i = special.binom(n, i)
         moment_b = np.sum(n_choose_i*moment_as*(a-b)**(n-i), axis=0)
         return moment_b
@@ -2605,7 +2631,7 @@ class ContinuousDistribution:
     def _logmoment(self, order=1, *, logcenter=None, standardized=False):
         # make this private until it is worked into moment
         if logcenter is None or standardized is True:
-            logmean = self._logmoment_quad(1, -np.inf, **self._parameters)
+            logmean = self._logmoment_quad(self._one, -np.inf, **self._parameters)
         else:
             logmean = None
 
@@ -2986,7 +3012,7 @@ class ShiftedScaledDistribution(TransformedDistribution):
             raw_moments.append(moment_i)
 
         return self._moment_transform_center(
-            order, raw_moments, loc, 0)
+            order, raw_moments, loc, self._zero)
 
     def _sample_dispatch(self, sample_shape, full_shape, *,
                          method, rng, **kwargs):

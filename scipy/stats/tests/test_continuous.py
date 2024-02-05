@@ -485,7 +485,7 @@ def check_moment_funcs(dist, result_shape):
         check(dist.moment_central, i, 'cache', ref, success=True)
         check(dist.moment_central, i, 'formula', ref, success=formula_central)
         check(dist.moment_central, i, 'general', ref, success=i <= 1)
-        check(dist.moment_central, i, 'transform', ref, success=formula_raw)
+        check(dist.moment_central, i, 'transform', ref, success=formula_raw or (i <= 1))
         if not formula_raw:
             dist.moment_raw(i)
             check(dist.moment_central, i, 'transform', ref)

@@ -151,12 +151,35 @@ class LogUniform(ContinuousDistribution):
     # def _cdf_formula(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
 
-    def _moment_raw_formula(self, order, log_a, log_b, **kwargs):
-        if order == 0:
-            return 1
-        t1 = 1 / (log_b - log_a) / order
-        t2 = np.real(np.exp(_log_diff(order * log_b, order * log_a)))
-        return t1 * t2
+    # def _moment_raw_formula(self, order, log_a, log_b, **kwargs):
+    #     if order == 0:
+    #         return 1
+    #     t1 = 1 / (log_b - log_a) / order
+    #     t2 = np.real(np.exp(_log_diff(order * log_b, order * log_a)))
+    #     return t1 * t2
+
+
+class LogLaplace(ContinuousDistribution):
+    """Log-uniform distribution"""
+
+    _mu_domain = _RealDomain(endpoints=(-oo, oo))
+    _b_domain = _RealDomain(endpoints=(0, oo))
+    _x_support = _RealDomain(endpoints=(0, np.inf), inclusive=(False, False))
+
+    _mu_param = _RealParameter('mu', domain=_mu_domain)
+    _b_param = _RealParameter('b', domain=_b_domain)
+    _x_param = _RealParameter('x', domain=_x_support)
+
+    _parameterizations = [_Parameterization(_mu_param, _b_param)]
+    _variable = _x_param
+
+    def _pdf_formula(self, x, *, mu, b, **kwargs):
+        return 1/(2*b*x) * np.exp(-np.abs(np.log(x) - mu)/b)
+
+    def _moment_raw_formula(self, order, *, mu, b, **kwargs):
+        with np.errstate(divide='ignore'):
+            c2, n2 = b**-2, order**2
+            return np.where(n2 < c2, c2 / (c2 - n2), np.inf)
 
 
 class CircularDistribution(ShiftedScaledDistribution):
