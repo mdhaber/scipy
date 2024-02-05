@@ -10337,13 +10337,13 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
     each with two observations.
 
     >>> from scipy.stats import wasserstein_distance
-    >>> wasserstein_distance([[0, 2, 3], [1, 2, 5]], [[3, 2, 3], [4, 2, 5]])
+    >>> wasserstein_distance_nd([[0, 2, 3], [1, 2, 5]], [[3, 2, 3], [4, 2, 5]])
     3.0
 
     Compute the Wasserstein distance between two two-dimensional distributions
     with three and two weighted observations, respectively.
 
-    >>> wasserstein_distance([[0, 2.75], [2, 209.3], [0, 0]],
+    >>> wasserstein_distance_nd([[0, 2.75], [2, 209.3], [0, 0]],
     ...                      [[0.2, 0.322], [4.5, 25.1808]],
     ...                      [0.4, 5.2, 0.114], [0.8, 1.5])
     174.15840245217169
