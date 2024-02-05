@@ -151,12 +151,12 @@ class LogUniform(ContinuousDistribution):
     # def _cdf_formula(self, x, *, log_a, log_b, **kwargs):
     #     return (np.log(x) - log_a)/(log_b - log_a)
 
-    # def _moment_raw_formula(self, order, log_a, log_b, **kwargs):
-    #     if order == 0:
-    #         return 1
-    #     t1 = 1 / (log_b - log_a) / order
-    #     t2 = np.real(np.exp(_log_diff(order * log_b, order * log_a)))
-    #     return t1 * t2
+    def _moment_raw_formula(self, order, log_a, log_b, **kwargs):
+        if order == 0:
+            return self._one
+        t1 = self._one / (log_b - log_a) / order
+        t2 = np.real(np.exp(_log_diff(order * log_b, order * log_a)))
+        return t1 * t2
 
 
 class LogLaplace(ContinuousDistribution):

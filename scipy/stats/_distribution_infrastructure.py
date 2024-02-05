@@ -25,7 +25,6 @@ _NO_CACHE = "no_cache"
 
 # TODO:
 #  test/fix dtypes? It is *so* hard without NEP50
-#  check use of cached_property - probably shouldn't use in case parameters change
 #  check behavior of moment methods when moments are undefined/infinite -
 #    basically OK but needs tests
 #  investigate use of median
@@ -1255,7 +1254,7 @@ class ContinuousDistribution:
         To improve the speed of some calculations, the distribution's support
         and moments are cached.
 
-        This functionn is called automatically whenever the distribution
+        This function is called automatically whenever the distribution
         parameters are updated.
 
         """
@@ -1268,6 +1267,7 @@ class ContinuousDistribution:
         self._moment_standard_cache = {}
         self._support_cache = None
         self._method_cache = {}
+        self._constant_cache = None
 
     def _identify_parameterization(self, parameters):
         # Determine whether a `parameters` dictionary matches is consistent
@@ -2420,13 +2420,24 @@ class ContinuousDistribution:
         return {'cache', 'formula', 'transform',
                 'normalize', 'general', 'quadrature'}
 
-    @cached_property
+    @property
     def _zero(self):
-        return self._preserve_type(0)
+        return self._constants()[0]
 
-    @cached_property
+    @property
     def _one(self):
-        return self._preserve_type(1)
+        return self._constants()[1]
+
+    def _constants(self):
+        if self._constant_cache is not None:
+            return self._constant_cache
+
+        constants = self._preserve_type([0, 1])
+
+        if self.cache_policy != _NO_CACHE:
+            self._constant_cache = constants
+
+        return constants
 
     @_set_invalid_nan_property
     def moment_raw(self, order=1, *, method=None, cache_policy=None):
