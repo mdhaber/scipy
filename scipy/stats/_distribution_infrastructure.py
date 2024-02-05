@@ -26,7 +26,6 @@ _NO_CACHE = "no_cache"
 # TODO:
 #  test/fix dtypes? It is *so* hard without NEP50
 #  check use of cached_property - probably shouldn't use in case parameters change
-#  fix shape of `support`
 #  check behavior of moment methods when moments are undefined/infinite -
 #    basically OK but needs tests
 #  investigate use of median

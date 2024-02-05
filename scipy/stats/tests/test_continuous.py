@@ -155,6 +155,8 @@ class TestDistributions:
         sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=0,
                                                    max_side=20))
 
+        check_support(dist)
+
         methods = {'log/exp', 'quadrature'}
         check_dist_func(dist, 'entropy', None, result_shape, methods)
         check_dist_func(dist, 'logentropy', None, result_shape, methods)
@@ -234,6 +236,16 @@ def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape):
                                 rng=np.random.default_rng(42))
         assert not np.any(np.equal(res, sample1))
         assert_equal(sample1, sample2)
+
+
+def check_support(dist):
+    a, b = dist.support()
+    check_nans_and_edges(dist, 'support', None, a)
+    check_nans_and_edges(dist, 'support', None, b)
+    assert a.shape == dist._shape
+    assert b.shape == dist._shape
+    assert a.dtype == dist._dtype
+    assert b.dtype == dist._dtype
 
 
 def check_dist_func(dist, fname, arg, result_shape, methods):
@@ -424,7 +436,7 @@ def check_nans_and_edges(dist, fname, arg, res):
         assert_equal(res[endpoint_arg == -1], b[endpoint_arg == -1])
         assert_equal(res[endpoint_arg == 1], a[endpoint_arg == 1])
 
-    if fname not in {'logmean', 'mean', 'logskewness', 'skewness'}:
+    if fname not in {'logmean', 'mean', 'logskewness', 'skewness', 'support'}:
         assert np.isfinite(res[all_valid & (endpoint_arg == 0)]).all()
 
 def check_moment_funcs(dist, result_shape):
@@ -621,13 +633,6 @@ def classify_arg(dist, arg, arg_domain):
     a, b = arg_domain.get_numerical_endpoints(
         parameter_values=dist._parameters)
 
-    # # Not sure if this belongs here
-    # adist, bdist = dist.support()
-    # assert_equal(a[~dist._invalid], adist[~dist._invalid])
-    # assert_equal(b[~dist._invalid], bdist[~dist._invalid])
-    # assert_equal(np.isnan(adist), dist._invalid)
-    # assert_equal(np.isnan(bdist), dist._invalid)
-
     a, b, arg = np.broadcast_arrays(a, b, arg)
     a_included, b_included = arg_domain.inclusive
 
@@ -636,7 +641,7 @@ def classify_arg(dist, arg, arg_domain):
     # TODO: add `supported` method and check here
     on = np.zeros(a.shape, dtype=int)
     on[a == arg] = -1
-    on[b == arg] =1
+    on[b == arg] = 1
     outside = np.zeros(a.shape, dtype=int)
     outside[(arg < a) if a_included else arg <= a] = -1
     outside[(b < arg) if b_included else b <= arg] = 1
