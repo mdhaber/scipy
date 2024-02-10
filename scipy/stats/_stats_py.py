@@ -10400,7 +10400,7 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
 
 def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     r"""
-    Compute the Wasserstein-1 distance between two 1D distributions.
+    Compute the Wasserstein-1 distance between two 1D discrete distributions.
 
     This distance is also known as the earth mover's distance, since it can be
     seen as the minimum amount of "work" required to transform :math:`u` into
