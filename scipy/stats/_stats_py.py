@@ -10398,14 +10398,18 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
     opt_res = milp(c=-b, constraints=constraints, bounds=(-np.inf, np.inf))
     return -opt_res.fun
 
+
 def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     r"""
     Compute the Wasserstein-1 distance between two 1D discrete distributions.
 
-    This distance is also known as the earth mover's distance, since it can be
-    seen as the minimum amount of "work" required to transform :math:`u` into
-    :math:`v`, where "work" is measured as the amount of distribution weight
-    that must be moved, multiplied by the distance it has to be moved.
+    The Wasserstein distance, also called the Earth mover's distance or the
+    optimal transport distance, is a similarity metric between two probability
+    distributions. In the discrete case, the Wasserstein distance can be
+    understood as the cost of an optimal transport plan to convert one
+    distribution into the other. The cost is calculated as the product of the
+    amount of probability mass being moved and the distance it is being moved.
+    A brief and intuitive introduction can be found at [2]_.
 
     .. versionadded:: 1.0.0
 
@@ -10428,8 +10432,8 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
 
     Notes
     -----
-    The first Wasserstein distance between the distributions :math:`u` and
-    :math:`v` is:
+    Given two probability mass functions, :math:`u` and :math:`v`, the first
+    Wasserstein distance between the distributions is:
 
     .. math::
 
@@ -10438,7 +10442,9 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
 
     where :math:`\Gamma (u, v)` is the set of (probability) distributions on
     :math:`\mathbb{R} \times \mathbb{R}` whose marginals are :math:`u` and
-    :math:`v` on the first and second factors respectively.
+    :math:`v` on the first and second factors respectively. For a given value
+    :math:`x`, :math:`u(x)` gives the probabilty of :math:`u` at position
+    :math:`x`, and the same for :math:`v(x)`.
 
     If :math:`U` and :math:`V` are the respective CDFs of :math:`u` and
     :math:`v`, this distance also equals to:
@@ -10447,7 +10453,7 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
 
         l_1(u, v) = \int_{-\infty}^{+\infty} |U-V|
 
-    See [2]_ for a proof of the equivalence of both definitions.
+    See [3]_ for a proof of the equivalence of both definitions.
 
     The input distributions can be empirical, therefore coming from samples
     whose values are effectively inputs of the function, or they can be seen as
@@ -10457,7 +10463,10 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     References
     ----------
     .. [1] "Wasserstein metric", https://en.wikipedia.org/wiki/Wasserstein_metric
-    .. [2] Ramdas, Garcia, Cuturi "On Wasserstein Two Sample Testing and Related
+    .. [2] Lili Weng, "What is Wasserstein distance?", Lil'log,
+           https://lilianweng.github.io/posts/2017-08-20-gan/#what-is-
+           wasserstein-distance.
+    .. [3] Ramdas, Garcia, Cuturi "On Wasserstein Two Sample Testing and Related
            Families of Nonparametric Tests" (2015). :arXiv:`1509.02237`.
 
     See Also
@@ -10478,6 +10487,7 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
 
     """
     return _cdf_distance(1, u_values, v_values, u_weights, v_weights)
+
 
 def energy_distance(u_values, v_values, u_weights=None, v_weights=None):
     r"""Compute the energy distance between two 1D distributions.
