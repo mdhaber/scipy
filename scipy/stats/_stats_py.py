@@ -10471,7 +10471,7 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
 
     See Also
     --------
-    wasserstein_distance_nd: Compute the Wasserstein-1 distance between two 2D
+    wasserstein_distance_nd: Compute the Wasserstein-1 distance between two N-D
         discrete distributions.
 
     Examples
