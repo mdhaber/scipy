@@ -10236,7 +10236,7 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
         l_1 (u, v) = \inf_{\pi \in \Gamma (u, v)} \int \| x-y \|_2 \mathrm{d} \pi (x, y)
 
     where :math:`\Gamma (u, v)` is the set of (probability) distributions on
-    :math:`\mathbb{R}^2 \times \mathbb{R}^2` whose marginals are :math:`u` and
+    :math:`\mathbb{R}^n \times \mathbb{R}^n` whose marginals are :math:`u` and
     :math:`v` on the first and second factors respectively. For a given value
     :math:`x`, :math:`u(x)` gives the probabilty of :math:`u` at position
     :math:`x`, and the same for :math:`v(x)`.
