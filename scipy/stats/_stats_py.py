@@ -10191,11 +10191,11 @@ def quantile_test(x, *, q=0, p=0.5, alternative='two-sided'):
 
 def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
     r"""
-    Compute the Wasserstein-1 distance between two N-D discrete distributions [1]_.
+    Compute the Wasserstein-1 distance between two N-D discrete distributions.
 
     The Wasserstein distance, also called the Earth mover's distance or the
     optimal transport distance, is a similarity metric between two probability
-    distributions. In the discrete case, the Wasserstein distance can be
+    distributions [1]_. In the discrete case, the Wasserstein distance can be
     understood as the cost of an optimal transport plan to convert one
     distribution into the other. The cost is calculated as the product of the
     amount of probability mass being moved and the distance it is being moved.
@@ -10397,11 +10397,11 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
 
 def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     r"""
-    Compute the Wasserstein-1 distance between two 1D discrete distributions [1]_.
+    Compute the Wasserstein-1 distance between two 1D discrete distributions.
 
     The Wasserstein distance, also called the Earth mover's distance or the
     optimal transport distance, is a similarity metric between two probability
-    distributions. In the discrete case, the Wasserstein distance can be
+    distributions [1]_. In the discrete case, the Wasserstein distance can be
     understood as the cost of an optimal transport plan to convert one
     distribution into the other. The cost is calculated as the product of the
     amount of probability mass being moved and the distance it is being moved.
