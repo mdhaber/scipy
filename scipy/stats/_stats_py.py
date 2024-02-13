@@ -10191,7 +10191,7 @@ def quantile_test(x, *, q=0, p=0.5, alternative='two-sided'):
 
 def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
     r"""
-    Compute the Wasserstein-1 distance between two N-D discrete distributions.
+    Compute the Wasserstein-1 distance between two N-D discrete distributions [1]_.
 
     The Wasserstein distance, also called the Earth mover's distance or the
     optimal transport distance, is a similarity metric between two probability
@@ -10315,8 +10315,7 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
     .. [1] "Wasserstein metric",
            https://en.wikipedia.org/wiki/Wasserstein_metric
     .. [2] Lili Weng, "What is Wasserstein distance?", Lil'log,
-           https://lilianweng.github.io/posts/2017-08-20-gan/#what-is-
-           wasserstein-distance.
+           https://lilianweng.github.io/posts/2017-08-20-gan/#what-is-wasserstein-distance.
     .. [3] Hermann, Vincent. "Wasserstein GAN and the Kantorovich-Rubinstein
            Duality". https://vincentherrmann.github.io/blog/wasserstein/.
     .. [4] Peyré, Gabriel, and Marco Cuturi. "Computational optimal
@@ -10398,7 +10397,7 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
 
 def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     r"""
-    Compute the Wasserstein-1 distance between two 1D discrete distributions.
+    Compute the Wasserstein-1 distance between two 1D discrete distributions [1]_.
 
     The Wasserstein distance, also called the Earth mover's distance or the
     optimal transport distance, is a similarity metric between two probability
@@ -10464,8 +10463,7 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     ----------
     .. [1] "Wasserstein metric", https://en.wikipedia.org/wiki/Wasserstein_metric
     .. [2] Lili Weng, "What is Wasserstein distance?", Lil'log,
-           https://lilianweng.github.io/posts/2017-08-20-gan/#what-is-
-           wasserstein-distance.
+           https://lilianweng.github.io/posts/2017-08-20-gan/#what-is-wasserstein-distance.
     .. [3] Ramdas, Garcia, Cuturi "On Wasserstein Two Sample Testing and Related
            Families of Nonparametric Tests" (2015). :arXiv:`1509.02237`.
 
