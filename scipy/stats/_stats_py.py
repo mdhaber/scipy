@@ -10302,7 +10302,7 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
     solution :math:`y^*`), the Wasserstein distance :math:`l_1 (u, v)` can
     be computed as :math:`b^T y^*`.
 
-    The above solution is inspired by Vincent Herrmann's blog [5]_ . For a
+    The above solution is inspired by Vincent Herrmann's blog [3]_ . For a
     more thorough explanation, see [4]_ .
 
     The input distributions can be empirical, therefore coming from samples
@@ -10317,19 +10317,16 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
     .. [2] Lili Weng, "What is Wasserstein distance?", Lil'log,
            https://lilianweng.github.io/posts/2017-08-20-gan/#what-is-
            wasserstein-distance.
-    .. [3] Ramdas, Garcia, Cuturi "On Wasserstein Two Sample Testing and
-           Related Families of Nonparametric Tests" (2015).
-           :arXiv:`1509.02237`.
+    .. [3] Hermann, Vincent. "Wasserstein GAN and the Kantorovich-Rubinstein
+           Duality". https://vincentherrmann.github.io/blog/wasserstein/.
     .. [4] Peyré, Gabriel, and Marco Cuturi. "Computational optimal
            transport." Center for Research in Economics and Statistics
            Working Papers 2017-86 (2017).
-    .. [5] Hermann, Vincent. "Wasserstein GAN and the Kantorovich-Rubinstein
-           Duality". https://vincentherrmann.github.io/blog/wasserstein/.
 
     See Also
     --------
     wasserstein_distance: Compute the Wasserstein-1 distance between two
-        1D distributions.
+        1D discrete distributions.
 
     Examples
     --------
@@ -10417,8 +10414,8 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
     ----------
     u_values : 1d array_like
         A sample from a probability distribution or the support (set of all
-        possible values) of a probability distribution. Each element along
-        axis 0 is an observation or possible value.
+        possible values) of a probability distribution. Each element is an
+        observation or possible value.
 
     v_values : 1d array_like
         A sample from or the support of a second distribution.
@@ -10427,17 +10424,6 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
         Weights or counts corresponding with the sample or probability masses
         corresponding with the support values. Sum of elements must be positive
         and finite. If unspecified, each value is assigned the same weight.
-    Parameters
-    ----------
-    u_values, v_values : array_like
-        Values observed in the (empirical) distribution.
-    u_weights, v_weights : array_like, optional
-        Weight for each value. If unspecified, each value is assigned the same
-        weight.
-        `u_weights` (resp. `v_weights`) must have the same length as
-        `u_values` (resp. `v_values`). If the weight sum differs from 1, it
-        must still be positive and finite so that the weights can be normalized
-        to sum to 1.
 
     Returns
     -------
