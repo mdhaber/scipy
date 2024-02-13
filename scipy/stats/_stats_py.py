@@ -10415,6 +10415,20 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
 
     Parameters
     ----------
+    u_values : 1d array_like
+        A sample from a probability distribution or the support (set of all
+        possible values) of a probability distribution. Each element along
+        axis 0 is an observation or possible value.
+
+    v_values : 1d array_like
+        A sample from or the support of a second distribution.
+
+    u_weights, v_weights : 1d array_like, optional
+        Weights or counts corresponding with the sample or probability masses
+        corresponding with the support values. Sum of elements must be positive
+        and finite. If unspecified, each value is assigned the same weight.
+    Parameters
+    ----------
     u_values, v_values : array_like
         Values observed in the (empirical) distribution.
     u_weights, v_weights : array_like, optional
