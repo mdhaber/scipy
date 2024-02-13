@@ -10432,7 +10432,7 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
 
     Notes
     -----
-    Given two probability mass functions, :math:`u` and :math:`v`, the first
+    Given two 1D probability mass functions, :math:`u` and :math:`v`, the first
     Wasserstein distance between the distributions is:
 
     .. math::
