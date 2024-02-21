@@ -205,8 +205,8 @@ def _correction_sign(z, alternative):
         return np.sign(z)
 
 
-def _wilcoxon_nd(x, y=None, zero_method='wilcox', correction=True, alternative='two-sided',
-                 method='auto', axis=0):
+def _wilcoxon_nd(x, y=None, zero_method='wilcox', correction=True,
+                 alternative='two-sided', method='auto', axis=0):
     # test wilcox/pratt with all zeros
     # change: respects specified method
     temp = _wilcoxon_iv(x, y, zero_method, correction, alternative, method, axis)

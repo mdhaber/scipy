@@ -3897,7 +3897,7 @@ def wilcoxon_outputs(kwds):
     n_samples=lambda kwds: 2 if kwds.get('y', None) is not None else 1,
     result_to_tuple=wilcoxon_result_unpacker, n_outputs=wilcoxon_outputs,
 )
-def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
+def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
              alternative="two-sided", method='auto'):
     """Calculate the Wilcoxon signed-rank test.
 
@@ -3940,9 +3940,9 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
           splits the zero rank between positive and negative ones.
 
     correction : bool, optional
-        If True, apply continuity correction by adjusting the Wilcoxon rank
+        If True (default), apply continuity correction by adjusting the Wilcoxon rank
         statistic by 0.5 towards the mean value when computing the
-        z-statistic if a normal approximation is used.  Default is False.
+        z-statistic if a normal approximation is used.
     alternative : {"two-sided", "greater", "less"}, optional
         Defines the alternative hypothesis. Default is 'two-sided'.
         In the following, let ``d`` represent the difference between the paired
@@ -4061,7 +4061,7 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=False,
 
     >>> res = wilcoxon(d, method='approx')
     >>> res.statistic, res.pvalue
-    (24.0, 0.04088813291185591)
+    (24.0, 0.043772323763041174)
 
     Note that the statistic changed to 96 in the one-sided case (the sum
     of ranks of positive differences) whereas it is 24 in the two-sided
