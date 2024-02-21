@@ -3886,7 +3886,7 @@ def wilcoxon_result_object(statistic, pvalue, zstatistic=None):
 
 def wilcoxon_outputs(kwds):
     method = kwds.get('method', 'auto')
-    if method == 'approx':
+    if method in {'asymptotic', 'approx'}:
         return 3
     return 2
 
@@ -3956,8 +3956,10 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
         * 'greater': the distribution underlying ``d`` is stochastically
           greater than a distribution symmetric about zero.
 
-    method : {"auto", "exact", "approx"}, optional
-        Method to calculate the p-value, see Notes. Default is "auto".
+    method : {"auto", "exact", "asymptotic"}, optional
+        Method to calculate the p-value, see Notes. For backward compatibility,
+        ``"approx"`` is accepted as an alias for ``"asymptotic"``.
+        Default is "auto".
 
     Returns
     -------
@@ -3970,14 +3972,14 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
     pvalue : array_like
         The p-value for the test depending on `alternative` and `method`.
     zstatistic : array_like
-        When ``method = 'approx'``, this is the normalized z-statistic::
+        When ``method = 'asymptotic'``, this is the normalized z-statistic::
 
             z = (T - mn - d) / se
 
         where ``T`` is `statistic` as defined above, ``mn`` is the mean of the
         distribution under the null hypothesis, ``d`` is a continuity
         correction, and ``se`` is the standard error.
-        When ``method != 'approx'``, this attribute is not available.
+        When ``method != 'asymptotic'``, this attribute is not available.
 
     See Also
     --------
@@ -3992,7 +3994,7 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
 
     - When ``len(d)`` is sufficiently large, the null distribution of the
       normalized test statistic (`zstatistic` above) is approximately normal,
-      and ``method = 'approx'`` can be used to compute the p-value.
+      and ``method = 'asymptotic'`` can be used to compute the p-value.
 
     - When ``len(d)`` is small, the normal approximation may not be accurate,
       and ``method='exact'`` is preferred (at the cost of additional
@@ -4005,7 +4007,7 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
     The presence of "ties" (i.e. not all elements of ``d`` are unique) and
     "zeros" (i.e. elements of ``d`` are zero) changes the null distribution
     of the test statistic, and ``method='exact'`` no longer calculates
-    the exact p-value. If ``method='approx'``, the z-statistic is adjusted
+    the exact p-value. If ``method='asymptotic'``, the z-statistic is adjusted
     for more accurate comparison against the standard normal, but still,
     for finite sample sizes, the standard normal is only an approximation of
     the true null distribution of the z-statistic. There is no clear
@@ -4013,7 +4015,7 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
     the p-value for small samples in the presence of zeros and/or ties. In any
     case, this is the behavior of `wilcoxon` when ``method='auto':
     ``method='exact'`` is used when ``len(d) <= 50`` *and there are no zeros*;
-    otherwise, ``method='approx'`` is used.
+    otherwise, ``method='asymptotic'`` is used.
 
     References
     ----------
@@ -4059,7 +4061,7 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
     the median is greater than zero. The p-values above are exact. Using the
     normal approximation gives very similar values:
 
-    >>> res = wilcoxon(d, method='approx')
+    >>> res = wilcoxon(d, method='asymptotic')
     >>> res.statistic, res.pvalue
     (24.0, 0.043772323763041174)
 
@@ -4108,7 +4110,7 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
     return _wilcoxon._wilcoxon_nd(x, y, zero_method, correction, alternative, method)
 
 
-def _wilcoxon_1d(x, y, zero_method, correction, alternative, method):
+def _wil(x, y, zero_method, correction, alternative, method):
     mode = method
 
     if mode not in ["auto", "approx", "exact"]:

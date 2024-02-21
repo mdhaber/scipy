@@ -97,11 +97,13 @@ def _wilcoxon_iv(x, y, zero_method, correction, alternative, method, axis):
         raise ValueError(message)
 
     if not isinstance(method, stats.PermutationMethod):
-        methods = {"auto", "approx", "exact"}
+        methods = {"auto", "asymptotic", "exact"}
         message = (f"`method` must be one of {methods} or "
                    "an instance of `stats.PermutationMethod`.")
-        if method not in methods:
+        if method not in methods.union({'approx'}):
             raise ValueError(message)
+        if method == 'approx':
+            method = 'asymptotic'
 
     # add tie check
     message = ("Zeros are present, but `method='exact'` does not compute "
@@ -112,10 +114,10 @@ def _wilcoxon_iv(x, y, zero_method, correction, alternative, method, axis):
         warnings.warn(message, stacklevel=2)
 
     # message = ("The sample size is small (fewer than 10 nonzero elements); "
-    #            "so `method='approx'` may not produce accurate p-values.")
+    #            "so `method='asymptotic'` may not produce accurate p-values.")
     # count = d.shape[-1] - n_zero
     # too_small = np.any(count < 10)
-    # if too_small and method == "approx":
+    # if too_small and method == "asymptotic":
     #     warnings.warn(message, stacklevel=2)
 
     if method == "auto":
@@ -123,7 +125,7 @@ def _wilcoxon_iv(x, y, zero_method, correction, alternative, method, axis):
             method = "exact"
         else:
         # elif not too_small:
-            method = "approx"
+            method = "asymptotic"
         # else:
         #     method = stats.PermutationMethod()
 
@@ -134,7 +136,7 @@ def _wilcoxon_iv(x, y, zero_method, correction, alternative, method, axis):
                       "when there are zeros. See Notes of documentation.",
                       stacklevel=2)
 
-    if (method == "approx" and zero_method in ["wilcox", "pratt"]
+    if (method == "asymptotic" and zero_method in ["wilcox", "pratt"]
             and n_zero == d.size and d.size > 0 and d.ndim==1):
         raise ValueError("zero_method 'wilcox' and 'pratt' do not "
                          "work if x - y is zero for all elements.")
@@ -214,13 +216,13 @@ def _wilcoxon_nd(x, y=None, zero_method='wilcox', correction=True,
     if d.size == 0:
         NaN = _get_nan(d)
         res = _morestats.WilcoxonResult(statistic=NaN, pvalue=NaN)
-        if method == 'approx':
+        if method == 'asymptotic':
             res.zstatistic = NaN
         return res
 
     r_plus, r_minus, se, z, count = _wilcoxon_statistic(d, zero_method)
 
-    if method == 'approx':
+    if method == 'asymptotic':
         if correction:
             sign = _correction_sign(z, alternative)
             z -= sign * 0.5 / se
@@ -241,9 +243,9 @@ def _wilcoxon_nd(x, y=None, zero_method='wilcox', correction=True,
 
     # for backward compatibility...
     statistic = np.minimum(r_plus, r_minus) if alternative=='two-sided' else r_plus
-    z = -np.abs(z) if (alternative == 'two-sided' and method == 'approx') else z
+    z = -np.abs(z) if (alternative == 'two-sided' and method == 'asymptotic') else z
 
     res = _morestats.WilcoxonResult(statistic=statistic, pvalue=p[()])
-    if method == 'approx':
+    if method == 'asymptotic':
         res.zstatistic = z[()]
     return res
