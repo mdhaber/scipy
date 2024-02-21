@@ -119,7 +119,7 @@ def _wilcoxon_iv(x, y, zero_method, correction, alternative, method, axis):
     #     warnings.warn(message, stacklevel=2)
 
     if method == "auto":
-        if d.shape[-1] <= 50: # and not has_zeros:
+        if d.shape[-1] <= 50 and not has_zeros:
             method = "exact"
         else:
         # elif not too_small:
@@ -130,9 +130,8 @@ def _wilcoxon_iv(x, y, zero_method, correction, alternative, method, axis):
     # for backward compatibility
     n_zero = np.sum(d == 0)
     if n_zero > 0 and method == "exact":
-        method = "approx"
-        warnings.warn("Exact p-value calculation does not work if there are "
-                      "zeros. Switching to normal approximation.",
+        warnings.warn("`method='exact'` does not compute an exact p-value "
+                      "when there are zeros. See Notes of documentation.",
                       stacklevel=2)
 
     if (method == "approx" and zero_method in ["wilcox", "pratt"]
