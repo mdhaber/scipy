@@ -1443,8 +1443,9 @@ class TestWilcoxon:
         assert_raises(ValueError, stats.wilcoxon, x, x, "pratt",
                       mode="asymptotic")
         # ranksum is n*(n+1)/2, split in half if zero_method == "zsplit"
-        assert_equal(stats.wilcoxon(x, x, "zsplit", mode="asymptotic"),
-                     (20*21/4, 1.0))
+        with pytest.warns(UserWarning, match="The sample size is small"):
+            assert_equal(stats.wilcoxon(x, x, "zsplit", mode="asymptotic"),
+                         (20*21/4, 1.0))
 
     def test_pratt(self):
         # regression test for gh-6805: p-value matches value from R package
@@ -1452,7 +1453,7 @@ class TestWilcoxon:
         x = [1, 2, 3, 4]
         y = [1, 2, 3, 5]
         with suppress_warnings() as sup:
-            sup.filter(UserWarning, message="Sample size too small")
+            sup.filter(UserWarning, message="The sample size is small")
             res = stats.wilcoxon(x, y, zero_method="pratt", mode="asymptotic",
                                  correction=False)
         assert_allclose(res, (0.0, 0.31731050786291415))
@@ -1552,29 +1553,30 @@ class TestWilcoxon:
         x = [125, 115, 130, 140, 140, 115, 140, 125, 140, 135]
         y = [110, 122, 125, 120, 140, 124, 123, 137, 135, 145]
 
+        message_small = "The sample size is small"
         with suppress_warnings() as sup:
-            sup.filter(UserWarning, message="Sample size too small")
+            sup.filter(UserWarning, message=message_small)
             w, p = stats.wilcoxon(x, y, alternative="less", mode="asymptotic",
                                   correction=False)
         assert_equal(w, 27)
         assert_almost_equal(p, 0.7031847, decimal=6)
 
         with suppress_warnings() as sup:
-            sup.filter(UserWarning, message="Sample size too small")
+            sup.filter(UserWarning, message=message_small)
             w, p = stats.wilcoxon(x, y, alternative="less", correction=True,
                                   mode="asymptotic")
         assert_equal(w, 27)
         assert_almost_equal(p, 0.7233656, decimal=6)
 
         with suppress_warnings() as sup:
-            sup.filter(UserWarning, message="Sample size too small")
+            sup.filter(UserWarning, message=message_small)
             w, p = stats.wilcoxon(x, y, alternative="greater", mode="asymptotic",
                                   correction=False)
         assert_equal(w, 27)
         assert_almost_equal(p, 0.2968153, decimal=6)
 
         with suppress_warnings() as sup:
-            sup.filter(UserWarning, message="Sample size too small")
+            sup.filter(UserWarning, message=message_small)
             w, p = stats.wilcoxon(x, y, alternative="greater", correction=True,
                                   mode="asymptotic")
         assert_equal(w, 27)

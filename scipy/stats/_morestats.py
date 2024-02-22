@@ -4110,7 +4110,7 @@ def wilcoxon(x, y=None, zero_method="wilcox", correction=True,
     return _wilcoxon._wilcoxon_nd(x, y, zero_method, correction, alternative, method)
 
 
-def _wil(x, y, zero_method, correction, alternative, method):
+def _wilcoxon_1d(x, y, zero_method, correction, alternative, method):
     mode = method
 
     if mode not in ["auto", "approx", "exact"]:
