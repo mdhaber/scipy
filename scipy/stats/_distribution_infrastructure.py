@@ -2756,18 +2756,31 @@ class ContinuousDistribution:
 
         return _differentiate(f, self._parameters[var]).df
 
-    def fit(self, sample):
-        """Fit the distribution parameters to data"""
-        # very basic `fit` method that only works for distributions with
-        # unbounded parameter and argument domains.
-        names = list(self._original_parameters.keys())
-        x0 = list(self._original_parameters.values())
+    def fit(self, function, parameters, output='maximize'):
+        """Fit the distribution parameters to meet objectives
 
-        def objective(x):
-            self.update_parameters(**dict(zip(names, x)))
-            return -self.llf(sample=sample)
+        The value added, compared to requiring the user to optimize/solve on their own:
+        - (potentially) more efficient calls to private rather than public functions
+        - (potentially) more efficient changes in parameter values
+        - (potentially) automatically include constraints
+        - convenience (least important)
+        """
 
-        res = optimize.minimize(objective, x0)
+        x0 = [getattr(self, parameter) for parameter in parameters]
+
+        if output == 'maximize':
+            def objective(x):
+                self.update_parameters(**dict(zip(parameters, x)))
+                return -function()
+
+            res = optimize.minimize(objective, x0)
+        else:
+            def objective(x):
+                self.update_parameters(**dict(zip(parameters, x)))
+                return [(function() - output) for function, output in zip(function, output)]
+
+            res = optimize.fsolve(objective, x0)
+
         return res
 
 
