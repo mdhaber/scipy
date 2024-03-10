@@ -431,8 +431,8 @@ class _RealDomain(_SimpleDomain):
 
         a, b = self.get_numerical_endpoints(parameter_values)
         a, b = np.broadcast_arrays(a, b)
-        min = np.maximum(a, np.finfo(a).min/10) if np.any(np.isinf(a)) else a
-        max = np.minimum(b, np.finfo(b).max/10) if np.any(np.isinf(b)) else b
+        min = np.maximum(a, _fiinfo(a).min/10) if np.any(np.isinf(a)) else a
+        max = np.minimum(b, _fiinfo(b).max/10) if np.any(np.isinf(b)) else b
 
         base_shape = min.shape
         extended_shape = np.broadcast_shapes(size, base_shape)
@@ -561,7 +561,7 @@ class _Parameter(ABC):
 
     def __str__(self):
         """ String representation of the parameter for use in documentation """
-        return f"Accepts `{self.name}` for ${self.symbol} ∈ {str(self.domain)}$."
+        return f"Accepts `{self.name}` for :math:`{self.symbol} ∈ {str(self.domain)}`."
 
     def draw(self, size=None, *, rng=None, domain='typical', proportions=None,
              parameter_values=None):
@@ -1048,6 +1048,13 @@ def _cdf2_input_validation(f):
     return wrapped
 
 
+def _fiinfo(x):
+    if np.issubdtype(x.dtype, np.inexact):
+        return np.finfo(x.dtype)
+    else:
+        return np.iinfo(x)
+
+
 def _kwargs2args(f, args=None, kwargs=None):
     # Wraps a function that accepts a primary argument `x`, secondary
     # arguments `args`, and secondary keyward arguments `kwargs` such that the
@@ -1155,13 +1162,162 @@ def _combine_docs(dist_family):
     fields = set(NumpyDocString.sections)
     fields.remove('index')
 
-    doc = ClassDoc(ContinuousDistribution)
-    subdoc = ClassDoc(dist_family)
+    doc = ClassDoc(dist_family)
+    superdoc = ClassDoc(ContinuousDistribution)
     for field in fields:
         if field in {"Methods", "Attributes"}:
-            continue
-        doc[field] += subdoc[field]
+            doc[field] = superdoc[field]
+        elif field in {"Summary"}:
+            pass
+        elif field == "Extended Summary":
+            doc[field].append(_generate_domain_support(dist_family))
+        elif field == 'Examples':
+            doc[field] = [_generate_example(dist_family)]
+        else:
+            doc[field] += superdoc[field]
     return str(doc)
+
+
+def _generate_domain_support(dist_family):
+    n_parameterizations = len(dist_family._parameterizations)
+
+    if n_parameterizations == 0:
+        text = """
+        This class accepts no distribution parameters.
+        """
+    elif n_parameterizations == 1:
+        text = f"""
+        This class accepts one parameterization:
+        {str(dist_family._parameterizations[0])}
+        """
+    else:
+        number = {2: 'two', 3: 'three', 4: 'four', 5: 'five'}[
+            n_parameterizations]
+        parameterizations = [f"- {str(p)}" for p in
+                             dist_family._parameterizations]
+        parameterizations = "\n".join(parameterizations)
+        text = f"""
+        This class accepts {number} parameterizations:
+
+        {parameterizations}
+        """
+    text = "\n".join([line.lstrip() for line in text.split("\n")][1:])
+    return text
+
+
+def _generate_example(dist_family):
+    n_parameters = dist_family._num_parameters(0)
+    shapes = [()] * n_parameters
+    rng = np.random.default_rng(615681484984984)
+    i = 0
+    dist = dist_family._draw(shapes, rng=rng, i_parameterization=i)
+
+    rng = np.random.default_rng(2354873452)
+    name = dist_family.__name__
+    if n_parameters:
+        parameter_names = list(dist._parameterizations[i].parameters)
+        parameter_values = [round(getattr(dist, name), 2) for name in
+                            parameter_names]
+        name_values = [f"{name}={value}" for name, value in
+                       zip(parameter_names, parameter_values)]
+        instantiation = f"{name}({', '.join(name_values)})"
+        attributes = ", ".join([f"{name}.{param}" for param in dist._parameters])
+    else:
+        instantiation = f"{name}()"
+
+    p = 0.32
+    x = round(dist.icdf(p), 2)
+    y = round(dist.icdf(2 * p), 2)
+    X = dist
+
+    example = f"""
+    To use the distribution class, it must be instantiated using keyword
+    parameters corresponding with one of the accepted parameterizations.
+
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+    >>> from scipy.stats import {name}
+    >>> X = {instantiation}
+
+    For convenience, the ``plot`` method can be used to visualize the density
+    and other functions of the distribution.
+
+    >>> X.plot()
+    >>> plt.show()
+
+    The support of the underlying distribution is available using the ``support``
+    method.
+
+    >>> X.support()
+    {X.support()}
+    """
+
+    if n_parameters:
+        example += f"""
+        The numerical values of parameters associated with all parameterizations
+        are available as attributes.
+
+        >>> {attributes}
+        {tuple(X._parameters.values())}
+        """
+
+    example += f"""
+    To evaluate the probability density function of the underlying distribution
+    at argument ``x={x}``:
+
+    >>> x = {x}
+    >>> X.pdf(x)
+    {X.pdf(x)}
+
+    The cumulative distribution function, its complement, and the logarithm
+    of these functions are evaluated similarly.
+
+    >>> np.allclose(np.exp(X.logccdf(x)), 1 - X.cdf(x))
+    True
+
+    The inverse of these functions with respect to the argument ``x`` is also
+    available.
+
+    >>> logp = np.log(1 - X.ccdf(x))
+    >>> np.allclose(X.ilogcdf(logp), x)
+
+    Note that distribution functions and their logarithms also have two-argument
+    versions for working with the probability mass between two arguments. The
+    result tends to be more accurate than the naive implementation because it avoids
+    subtractive cancellation.
+
+    >>> y = {y}
+    >>> np.allclose(X.ccdf(x, y), 1 - (X.cdf(y) - X.cdf(x)))
+    True
+
+    There are methods for computing measures of central tendency,
+    dispersion, higher moments, and entropy.
+
+    >>> X.mean(), X.median(), X.mode()
+    {X.mean(), X.median(), X.mode()}
+    >>> X.variance(), X.standard_deviation()
+    {X.variance(), X.standard_deviation()}
+    >>> X.skewness(), X.kurtosis()
+    {X.skewness(), X.kurtosis()}
+    >>> np.allclose(X.moment_standard(order=6),
+    ...             X.moment_central(order=6) / X.variance()**3)
+    True
+    >>> np.allclose(np.exp(X.logentropy()), X.entropy())
+    True
+
+    Pseudo-random and quasi-Monte Carlo random samples can be drawn from
+    the underlying distribution using ``sample``.
+
+    >>> rng = np.random.default_rng(2354873452)
+    >>> X.sample(shape=(4,), rng=rng)
+    {X.sample(shape=(4,), rng=rng)}
+    >>> n = 200
+    >>> s = X.sample(shape=(n,), rng=rng, qmc_engine=stats.qmc.Halton)
+    >>> assert np.count_nonzero(s < X.median()) == n/2
+    """
+    # remove the indentation due to use of block quote within function; eliminate blank first line
+    example = "\n".join([line.lstrip() for line in example.split("\n")][1:])
+    return example
 
 
 class ContinuousDistribution:
@@ -1207,9 +1363,6 @@ class ContinuousDistribution:
     median
     mode
 
-    entropy
-    logentropy
-
     variance
     standard_deviation
 
@@ -1231,17 +1384,21 @@ class ContinuousDistribution:
 
     sample
 
-	moment_raw
-	moment_central
-	moment_central
+    moment_raw
+    moment_central
+    moment_central
 
-	plot
+    entropy
+    logentropy
 
-	fit
+    plot
+
+    fit
 
     Examples
     --------
     This is where examples will go.
+
     """
     _parameterizations = []
 

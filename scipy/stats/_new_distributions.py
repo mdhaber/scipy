@@ -36,7 +36,15 @@ class OrderStatisticDistribution(TransformedDistribution):
 
 
 class Normal(ContinuousDistribution):
-    """Standard normal distribution"""
+    r"""Standard normal distribution
+
+    The probability density function of the standard normal distribution is:
+
+    ..math::
+
+        f(x) = \frac{1}{\sqrt{2 \pi}} \exp \left( -\frac{1}{2} x^2 \right)
+
+    """
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
@@ -110,7 +118,20 @@ def _log_diff(log_p, log_q):
 
 
 class LogUniform(ContinuousDistribution):
-    """Log-uniform distribution"""
+    r"""Log-uniform distribution
+
+    The probability density function of the log-uniform distribution is:
+
+    ..math::
+
+        f(x; a, b) = \frac{1}
+                          {x (\log(b) - \log(a))}
+
+    If :math:`\log(X)` is a random variable that follows a uniform distribution
+    between :math:`\log(a)` and :math:`\log(b)`, then :math:`X` is log-uniformly
+    distributed with shape parameters :math:`a` and :math:`b`.
+
+    """
 
     _a_domain = _RealDomain(endpoints=(0, oo))
     _b_domain = _RealDomain(endpoints=('a', oo))
@@ -176,9 +197,9 @@ class LogLaplace(ContinuousDistribution):
     _b_domain = _RealDomain(endpoints=(0, oo))
     _x_support = _RealDomain(endpoints=(0, np.inf), inclusive=(False, False))
 
-    _mu_param = _RealParameter('mu', domain=_mu_domain)
-    _b_param = _RealParameter('b', domain=_b_domain)
-    _x_param = _RealParameter('x', domain=_x_support)
+    _mu_param = _RealParameter('mu', domain=_mu_domain, symbol='µ', typical=(-1e2, 1e2))
+    _b_param = _RealParameter('b', domain=_b_domain, typical=(1, 10))
+    _x_param = _RealParameter('x', domain=_x_support, typical=(1, 10))
 
     _parameterizations = [_Parameterization(_mu_param, _b_param)]
     _variable = _x_param
@@ -271,6 +292,5 @@ class _VonMises(ContinuousDistribution):
         return rng.vonmises(mu=mu, kappa=kappa, size=full_shape)[()]
 
 
-Normal.__doc__ = _combine_docs((Normal))
+Normal.__doc__ = _combine_docs(Normal)
 LogUniform.__doc__ = _combine_docs(LogUniform)
-LogLaplace.__doc__ = _combine_docs(LogLaplace)
