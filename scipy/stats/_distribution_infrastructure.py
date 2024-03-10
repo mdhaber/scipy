@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 
 from scipy._lib._util import _lazywhere
+from scipy._lib._docscrape import ClassDoc, NumpyDocString
 from scipy import special, optimize
 from scipy.integrate._tanhsinh import _tanhsinh
 from scipy.optimize._zeros_py import (_chandrupatla, _bracket_root,
@@ -35,7 +36,7 @@ _NO_CACHE = "no_cache"
 #  implement wrapped distribution
 #  implement folded distribution
 #  implement double distribution
-#  Be consistent about options passed to distributions/methods: tols, skip_iv,
+#  Be consistent about options passed to distributions/methods: tols, iv_policy,
 #    cache, rng. Also check for issues with transformed distributions.
 #  profile/optimize
 #  general cleanup (choose keyword-only parameters)
@@ -1127,6 +1128,7 @@ def _logexpxmexpy(x, y):
     res[i] = -np.inf
     return res
 
+
 def _log_real_standardize(x):
     """" Standardizes the (complex) logarithm of a real number.
 
@@ -1149,19 +1151,96 @@ def _log_real_standardize(x):
     return y.reshape(shape)[()]
 
 
+def _combine_docs(dist_family):
+    fields = set(NumpyDocString.sections)
+    fields.remove('index')
+
+    doc = ClassDoc(ContinuousDistribution)
+    subdoc = ClassDoc(dist_family)
+    for field in fields:
+        if field in {"Methods", "Attributes"}:
+            continue
+        doc[field] += subdoc[field]
+    return str(doc)
+
+
 class ContinuousDistribution:
     """ Class that represents a continuous statistical distribution.
 
     Instances of the class represent a random variable.
 
+    Parameters
+    ----------
+    tol : positive float, optional
+        The desired relative tolerance of calculations. Left unspecified,
+        calculations may be faster; when provided, calculations may be
+        more likely to meet the desired accuracy.
+    iv_policy : {None, "skip_all"}
+        Specifies the level of input validation to perform. Left unspecified,
+        input validation is performed to ensure appropriate behavior in edge
+        case (e.g. parameters out of domain, argument outside of distribution
+        support, etc.) and improve consistency of output dtype, shape, etc.
+        Pass ``'skip_all'`` to avoid the computational overhead of these
+        checks when rough edges are acceptable.
+    cache_policy : {None, "no_cache"}
+        Specifies the extent to which intermediate results are cached. Left
+        unspecified, intermediate results of some calculations (e.g. distribution
+        support, moments, etc.) are cached to improve performance of future
+        calculations. Pass ``'no_cache'`` to reduce memory reserved by the class
+        instance.
+    rng : numpy.random.Generator
+        Random number generator to be used by any methods that require
+        pseudo-random numbers (e.g. `sample`).
+
     Attributes
     ----------
-    tol : float
-        blah
-    iv_policy: {None, "skip_iv"}
-        blah
-    cache_policy: {None, "no_cache"}
-        blah
+    tol
+    iv_policy
+    cache_policy
+    rng
+
+    Methods
+    -------
+    support
+
+    mean
+    median
+    mode
+
+    entropy
+    logentropy
+
+    variance
+    standard_deviation
+
+    skewness
+    kurtosis
+
+    pdf
+    logpdf
+
+    cdf
+    logcdf
+    icdf
+    ilogcdf
+
+    ccdf
+    logccdf
+    iccdf
+    ilogccdf
+
+    sample
+
+	moment_raw
+	moment_central
+	moment_central
+
+	plot
+
+	fit
+
+    Examples
+    --------
     """
     _parameterizations = []
 
@@ -1170,9 +1249,9 @@ class ContinuousDistribution:
     def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
                  rng=None, **parameters):
         self.tol = tol
-        self.iv_policy = str(iv_policy).lower()
-        self.cache_policy = str(cache_policy).lower()
-        self._rng = self._validate_rng(rng, iv_policy)
+        self.iv_policy = iv_policy
+        self.cache_policy = cache_policy
+        self.rng = rng
         self._not_implemented = (
             f"`{self.__class__.__name__}` does not provide an accurate "
             "implementation of the required method. Leave `tol` unspecified "
@@ -1381,6 +1460,11 @@ class ContinuousDistribution:
     # `tol` attribute is just notional right now. See Question 4 above.
     @property
     def tol(self):
+        """positive float:
+        The desired relative tolerance of calculations. Left unspecified,
+        calculations may be faster; when provided, calculations may be
+        more likely to meet the desired accuracy.
+        """
         return self._tol
 
     @tol.setter
@@ -1396,6 +1480,63 @@ class ContinuousDistribution:
                        "be a positive float, if specified.")
             raise ValueError(message)
         self._tol = tol[()]
+
+    @property
+    def cache_policy(self):
+        """{None, "no_cache"}:
+        Specifies the extent to which intermediate results are cached. Left
+        unspecified, intermediate results of some calculations (e.g. distribution
+        support, moments, etc.) are cached to improve performance of future
+        calculations. Pass ``'no_cache'`` to reduce memory reserved by the class
+        instance.
+        """
+        return self._cache_policy
+
+    @cache_policy.setter
+    def cache_policy(self, cache_policy):
+        cache_policy = str(cache_policy).lower() if cache_policy is not None else None
+        cache_policies = {None, 'no_cache'}
+        if cache_policy not in cache_policies:
+            message = (f"Attribute `cache_policy` of `{self.__class__.__name__}` "
+                       f"must be one of {cache_policies}, if specified.")
+            raise ValueError(message)
+        self._cache_policy = cache_policy
+
+    @property
+    def iv_policy(self):
+        """{None, "skip_all"}:
+        Specifies the level of input validation to perform. Left unspecified,
+        input validation is performed to ensure appropriate behavior in edge
+        case (e.g. parameters out of domain, argument outside of distribution
+        support, etc.) and improve consistency of output dtype, shape, etc.
+        Use ``'skip_all'`` to avoid the computational overhead of these
+        checks when rough edges are acceptable.
+        """
+        return self._iv_policy
+
+    @iv_policy.setter
+    def iv_policy(self, iv_policy):
+        iv_policy = str(iv_policy).lower() if iv_policy is not None else None
+        iv_policies = {None, 'skip_all'}
+        if iv_policy not in iv_policies:
+            message = (f"Attribute `iv_policy` of `{self.__class__.__name__}` "
+                       f"must be one of {iv_policies}, if specified.")
+            raise ValueError(message)
+        self._iv_policy = iv_policy
+
+    @property
+    def rng(self):
+        """numpy.random.Generator
+        Random number generator to be used by any methods that require
+        pseudo-random numbers (e.g. `sample`).
+        """
+        return self._rng
+
+    @rng.setter
+    def rng(self, rng):
+        rng = self._validate_rng(rng, self.iv_policy)
+        self._rng = rng
+
 
     def __getattr__(self, item):
         # This override allows distribution parameters to be accessed as
@@ -1603,7 +1744,7 @@ class ContinuousDistribution:
     # support
     # logentropy, entropy,
     # median, mode, mean,
-    # variance, std
+    # variance, standard_deviation
     # skewness, kurtosis
     # Common options are:
     # method - a string that indicates which method should be used to compute
@@ -1801,13 +1942,13 @@ class ContinuousDistribution:
         """Distribution mean"""
         return self.moment_raw(1, method=method, cache_policy=cache_policy)
 
-    def var(self, *, method=None, cache_policy=None):
+    def variance(self, *, method=None, cache_policy=None):
         """Distribution variance"""
         return self.moment_central(2, method=method, cache_policy=cache_policy)
 
-    def std(self, *, method=None, cache_policy=None):
+    def standard_deviation(self, *, method=None, cache_policy=None):
         """Distribution standard deviation"""
-        return np.sqrt(self.var(method=method, cache_policy=cache_policy))
+        return np.sqrt(self.variance(method=method, cache_policy=cache_policy))
 
     def skewness(self, *, method=None, cache_policy=None):
         """Distribution skewness (standardized third moment)"""
@@ -2326,7 +2467,7 @@ class ContinuousDistribution:
         # dtype and shape
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = sample_shape + self._shape
-        rng = self._validate_rng(rng) or self._rng or np.random.default_rng()
+        rng = self._validate_rng(rng) or self.rng or np.random.default_rng()
 
         if qmc_engine is None:
             return self._sample_dispatch(sample_shape, full_shape, method=method,

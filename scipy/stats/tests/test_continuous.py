@@ -169,10 +169,10 @@ class TestDistributions:
 
         methods = {'cache'}  #  weak test right now
         check_dist_func(dist, 'mean', None, result_shape, methods)
-        check_dist_func(dist, 'var', None, result_shape, methods)
+        check_dist_func(dist, 'variance', None, result_shape, methods)
         check_dist_func(dist, 'skewness', None, result_shape, methods)
         check_dist_func(dist, 'kurtosis', None, result_shape, methods)
-        assert_allclose(dist.std()**2, dist.var())
+        assert_allclose(dist.standard_deviation()**2, dist.variance())
 
         check_moment_funcs(dist, result_shape)
         check_sample_shape_NaNs(dist, 'sample', sample_shape, result_shape)
@@ -696,7 +696,7 @@ def test_input_validation():
                "parameterization of the `Test2` distribution family.")
     with pytest.raises(ValueError, match=message):
         Test2(a=1)
-        
+
     message = ("The `Test2` distribution family requires parameters, but none "
                "were provided.")
     with pytest.raises(ValueError, match=message):

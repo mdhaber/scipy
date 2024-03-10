@@ -3,9 +3,9 @@ import numpy as np
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
-    oo, _null, ShiftedScaledDistribution, TransformedDistribution)
+    oo, _null, ShiftedScaledDistribution, TransformedDistribution, _combine_docs)
 
-__all__ = ['Normal', 'LogUniform', 'ShiftedScaledNormal', 'CircularDistribution']
+__all__ = ['Normal', 'LogUniform', 'LogLaplace', 'ShiftedScaledNormal', 'CircularDistribution']
 
 def factorial(n):
     return special.gamma(n + 1)
@@ -40,14 +40,14 @@ class Normal(ContinuousDistribution):
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
-    normalization = 1/np.sqrt(2*np.pi)
-    log_normalization = np.log(2*np.pi)/2
+    _normalization = 1/np.sqrt(2*np.pi)
+    _log_normalization = np.log(2*np.pi)/2
 
     def _logpdf_formula(self, x, **kwargs):
-        return -(self.log_normalization + x**2/2)
+        return -(self._log_normalization + x**2/2)
 
     def _pdf_formula(self, x, **kwargs):
-        return self.normalization * np.exp(-x**2/2)
+        return self._normalization * np.exp(-x**2/2)
 
     def _logcdf_formula(self, x, **kwargs):
         return special.log_ndtr(x)
@@ -134,6 +134,16 @@ class LogUniform(ContinuousDistribution):
                           _Parameterization(_a_param, _b_param)]
     _variable = _x_param
 
+    # Would like to do this but needs its own commit. Parameter validation currently relies
+    # on unused parameters being unspecified
+    # # define init so IDE can give shape parameter recommendations
+    # def __init__(self, *, a=None, b=None, log_a=None, log_b=None,
+    #              tol=_null, iv_policy=None, cache_policy=None, rng=None):
+    #     # goes in infrastructure: parameters = {name:val for name, val in parameters
+    #                                             if val is not None}
+    #     super().__init__(a=a, b=b, log_a=log_a, log_b=log_b,
+    #                      tol=tol, iv_policy=iv_policy, cache_policy=cache_policy, rng=rng)
+
     def _process_parameters(self, a=None, b=None, log_a=None, log_b=None, **kwargs):
         a = np.exp(log_a) if a is None else a
         b = np.exp(log_b) if b is None else b
@@ -160,7 +170,7 @@ class LogUniform(ContinuousDistribution):
 
 
 class LogLaplace(ContinuousDistribution):
-    """Log-uniform distribution"""
+    """Log-Laplace distribution"""
 
     _mu_domain = _RealDomain(endpoints=(-oo, oo))
     _b_domain = _RealDomain(endpoints=(0, oo))
@@ -186,7 +196,7 @@ class CircularDistribution(ShiftedScaledDistribution):
     """Class that represents a circular statistical distribution."""
     # Define 2-arg cdf functions
     # Define 2-arg inverse CDF - one argument is left quantile
-    # Define mean, median, mode, var, std, entropy
+    # Define mean, median, mode, variance, standard_deviation, entropy
     # Raise error on use of moment functions?
     # Should support be -inf, inf because that is the range of values that
     #  produce nonzero pdf? Or should support be the left and right wrap
@@ -259,3 +269,8 @@ class _VonMises(ContinuousDistribution):
 
     def _sample_formula(self, sample_shape, full_shape, rng, mu, kappa, **kwargs):
         return rng.vonmises(mu=mu, kappa=kappa, size=full_shape)[()]
+
+
+Normal.__doc__ = _combine_docs((Normal))
+LogUniform.__doc__ = _combine_docs(LogUniform)
+LogLaplace.__doc__ = _combine_docs(LogLaplace)
