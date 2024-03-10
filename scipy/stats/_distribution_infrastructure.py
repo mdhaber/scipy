@@ -1241,6 +1241,7 @@ class ContinuousDistribution:
 
     Examples
     --------
+    This is where examples will go.
     """
     _parameterizations = []
 
@@ -1826,6 +1827,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def logentropy(self, *, method=None):
+        """Log of the distribution differential entropy"""
         return self._logentropy_dispatch(method=method, **self._parameters) + 0j
 
     @_dispatch
