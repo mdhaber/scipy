@@ -25,6 +25,7 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
+#  clip - ShiftedScaledNormal(loc=0, scale=0.01).ccdf(-7.32, method='quadrature') > 1
 #  test/fix dtypes? It is *so* hard without NEP50
 #  check behavior of moment methods when moments are undefined/infinite -
 #    basically OK but needs tests
@@ -1101,7 +1102,7 @@ def _log1mexp(x):
     >>> import numpy as np
     >>> from scipy.special import log1m
     >>> x = 1e-300  # log of a number very close to 1
-    >>> log1mexp(x)  # log of the complement of a number very close to 1
+    >>> _log1mexp(x)  # log of the complement of a number very close to 1
     -690.7755278982137
     >>> # p.log(1 - np.exp(x))  # -inf; emits warning
 
@@ -1114,7 +1115,7 @@ def _log1mexp(x):
         # good for exp(x) close to 1
         return np.real(np.log(-special.expm1(x + 0j)))
 
-    return _lazywhere(x < -1, (x,), f=f1, f2=f2)
+    return _lazywhere(x < -1, (x,), f=f1, f2=f2)[()]
 
 
 def _logexpxmexpy(x, y):
@@ -1221,14 +1222,15 @@ def _generate_example(dist_family):
         name_values = [f"{name}={value}" for name, value in
                        zip(parameter_names, parameter_values)]
         instantiation = f"{name}({', '.join(name_values)})"
-        attributes = ", ".join([f"{name}.{param}" for param in dist._parameters])
+        attributes = ", ".join([f"X.{param}" for param in dist._parameters])
+        X = dist_family(**dict(zip(parameter_names, parameter_values)))
     else:
         instantiation = f"{name}()"
+        X = dist
 
     p = 0.32
-    x = round(dist.icdf(p), 2)
-    y = round(dist.icdf(2 * p), 2)
-    X = dist
+    x = round(X.icdf(p), 2)
+    y = round(X.icdf(2 * p), 2)
 
     example = f"""
     To use the distribution class, it must be instantiated using keyword
@@ -1236,6 +1238,7 @@ def _generate_example(dist_family):
 
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
+    >>> from scipy import stats
     >>> from scipy.stats import {name}
     >>> X = {instantiation}
 
@@ -1280,6 +1283,7 @@ def _generate_example(dist_family):
 
     >>> logp = np.log(1 - X.ccdf(x))
     >>> np.allclose(X.ilogcdf(logp), x)
+    True
 
     Note that distribution functions and their logarithms also have two-argument
     versions for working with the probability mass between two arguments. The

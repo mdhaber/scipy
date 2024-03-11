@@ -143,6 +143,8 @@ class TestDistributions:
     # @pytest.mark.parametrize('family', (LogUniform,))
     # @pytest.mark.parametrize('family', (Normal,))
     # @pytest.mark.parametrize('family', (ShiftedScaledNormal,))
+    # @reproduce_failure('6.90.0',
+    #                    b'AAQBVCaHYp4BzU5WwQErykDaqAICAQEAAAAAAQABAQIBAQAAAA==')
     @pytest.mark.parametrize('family', (Normal, LogUniform, ShiftedScaledNormal))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
