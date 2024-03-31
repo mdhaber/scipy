@@ -1138,7 +1138,7 @@ def lstsq(a, b, cond=None, overwrite_a=False, overwrite_b=False,
         Least-squares solution.
     residues : (K,) ndarray or float
         Square of the 2-norm for each column in ``b - a x``, if ``M > N`` and
-        ``ndim(A) == n`` (returns a scalar if ``b`` is 1-D). Otherwise a
+        ``rank(A) == n`` (returns a scalar if ``b`` is 1-D). Otherwise a
         (0,)-shaped array is returned.
     rank : int
         Effective rank of `a`.
@@ -1523,7 +1523,7 @@ def pinvh(a, atol=None, rtol=None, lower=True, return_rank=False,
 
     """
     a = _asarray_validated(a, check_finite=check_finite)
-    s, u = _decomp.eigh(a, lower=lower, check_finite=False)
+    s, u = _decomp.eigh(a, lower=lower, check_finite=False, driver='ev')
     t = u.dtype.char.lower()
     maxS = np.max(np.abs(s))
 

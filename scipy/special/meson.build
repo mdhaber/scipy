@@ -14,14 +14,12 @@ _ufuncs_pxi_pxd_sources = [
   fs.copyfile('_ellip_harm.pxd'),
   fs.copyfile('_ellip_harm_2.pxd'),
   fs.copyfile('_ellipk.pxd'),
-  fs.copyfile('_evalpoly.pxd'),
   fs.copyfile('_exprel.pxd'),
   fs.copyfile('_factorial.pxd'),
   fs.copyfile('_hyp0f1.pxd'),
   fs.copyfile('_hyp2f1.pxd'),
   fs.copyfile('_hypergeometric.pxd'),
   fs.copyfile('_legacy.pxd'),
-  fs.copyfile('_loggamma.pxd'),
   fs.copyfile('_ndtri_exp.pxd'),
   fs.copyfile('_sici.pxd'),
   fs.copyfile('_spence.pxd'),
@@ -106,23 +104,11 @@ cephes_sources = [
   'cephes/zetac.c'
 ]
 
-mach_sources = [
-  'mach/d1mach.f',
-  'mach/i1mach.f',
-  'mach/xerror.f'
-]
-
-amos_lib = static_library('_amos',
-  ['_amos.c'],
-  c_args: use_math_defines,
-  include_directories: ['../_lib', '../_build_utils/src'],
-)
-
 ufuncs_sources = [
   '_cosine.c',
   'scaled_exp1.c',
-  'amos_wrappers.c',
-  'specfun_wrappers.c',
+  'amos_wrappers.cpp',
+  'specfun_wrappers.cpp',
   'sf_error.c'
 ]
 
@@ -142,28 +128,19 @@ cephes_lib = static_library('cephes',
   dependencies: [py3_dep, np_dep],
 )
 
-mach_lib = static_library('mach',
-  mach_sources,
-  fortran_args: [_fflag_Wno_unused_dummy_argument, _fflag_Wno_maybe_uninitialized]
-)
-
-specfun_lib = static_library('specfun',
-  'specfun/specfun.f',
-  fortran_args: _fflag_Wno_maybe_uninitialized
-)
-
-specfun_module = custom_target('specfun_module',
-  output: '_specfunmodule.c',
-  input: 'specfun.pyf',
-  command: [py3, generate_f2pymod, '@INPUT@', '-o', '@OUTDIR@']
+py3.extension_module('_special_ufuncs',
+  ['_special_ufuncs.cpp', '_special_ufuncs_docs.cpp', 'sf_error.cc'],
+  include_directories: ['../_lib', '../_build_utils/src'],
+  dependencies: [np_dep],
+  link_args: version_link_args,
+  install: true,
+  subdir: 'scipy/special'
 )
 
 py3.extension_module('_specfun',
-  specfun_module,
+  [cython_gen_cpp.process('_specfun.pyx')],
+  dependencies: [np_dep],
   link_args: version_link_args,
-  dependencies: [fortranobject_dep],
-  link_with: specfun_lib,
-  link_language: 'fortran',
   install: true,
   subdir: 'scipy/special'
 )
@@ -233,13 +210,9 @@ py3.extension_module('_ufuncs',
   ],
   link_args: version_link_args,
   link_with: [
-    amos_lib,
-    cephes_lib,
-    mach_lib,
-    specfun_lib
+    cephes_lib
   ],
   install: true,
-  link_language: 'fortran',
   subdir: 'scipy/special'
 )
 
@@ -296,8 +269,8 @@ py3.extension_module('cython_special',
     uf_cython_gen.process(cython_special[6]),  # cython_special.pyx
     '_cosine.c',
     'scaled_exp1.c',
-    'amos_wrappers.c',
-    'specfun_wrappers.c',
+    'amos_wrappers.cpp',
+    'specfun_wrappers.cpp',
     'sf_error.c'
   ],
   c_args: [cython_c_args, Wno_maybe_uninitialized],
@@ -305,13 +278,9 @@ py3.extension_module('cython_special',
   link_args: version_link_args,
   dependencies: [np_dep, npymath_lib, lapack],
   link_with: [
-    amos_lib,
-    cephes_lib,
-    mach_lib,
-    specfun_lib
+    cephes_lib
   ],
   install: true,
-  link_language: 'fortran',
   subdir: 'scipy/special'
 )
 
@@ -378,14 +347,21 @@ special_sources = [
   'special/error.h',
   'special/evalpoly.h',
   'special/lambertw.h',
-  'special/binom.h'
+  'special/binom.h',
+  'special/trig.h',
+  'special/zlog1.h',
+  'special/loggamma.h',
+  'special/digamma.h'
 ]
 
 special_cephes_sources = [
   'special/cephes/const.h',
   'special/cephes/polevl.h',
   'special/cephes/beta.h',
-  'special/cephes/gamma.h'
+  'special/cephes/gamma.h',
+  'special/cephes/trig.h',
+  'special/cephes/zeta.h',
+  'special/cephes/psi.h'
 ]
 
 py3.install_sources(special_sources, subdir: 'scipy/special/special')

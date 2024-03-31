@@ -6,9 +6,9 @@ from scipy._lib._util import _lazywhere
 from scipy._lib._docscrape import ClassDoc, NumpyDocString
 from scipy import special, optimize
 from scipy.integrate._tanhsinh import _tanhsinh
-from scipy.optimize._zeros_py import (_chandrupatla, _bracket_root,
-                                      _differentiate)
-from scipy.optimize._chandrupatla import _chandrupatla_minimize
+from scipy.optimize._differentiate import _differentiate
+from scipy.optimize._bracket import _bracket_root
+from scipy.optimize._chandrupatla import _chandrupatla, _chandrupatla_minimize
 
 import numpy as np
 _null = object()
@@ -1845,10 +1845,10 @@ class ContinuousDistribution:
     def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
         # Finds the argument of a function that produces the desired output.
         # Much of this should be added to _bracket_root / _chandrupatla.
-        min, max = self._support(**kwargs) if bounds is None else bounds
+        xmin, xmax = self._support(**kwargs) if bounds is None else bounds
         kwargs = {} if kwargs is None else kwargs
 
-        p, min, max = np.broadcast_arrays(p, min, max)
+        p, xmin, xmax = np.broadcast_arrays(p, xmin, xmax)
         if not p.size:
             # might need to figure out result type based on p
             return np.empty(p.shape, dtype=self._dtype)
@@ -1860,31 +1860,31 @@ class ContinuousDistribution:
         # If we know the median or mean, should use it
 
         # Any operations between 0d array and a scalar produces a scalar, so...
-        shape = min.shape
-        min, max = np.atleast_1d(min, max)
+        shape = xmin.shape
+        xmin, xmax = np.atleast_1d(xmin, xmax)
 
-        a = -np.ones_like(min)
-        b = np.ones_like(max)
-        d = max - min
+        a = -np.ones_like(xmin)
+        b = np.ones_like(xmax)
+        d = xmax - xmin
 
-        i = np.isfinite(min) & np.isfinite(max)
-        a[i] = min[i] + 0.25 * d[i]
-        b[i] = max[i] - 0.25 * d[i]
+        i = np.isfinite(xmin) & np.isfinite(xmax)
+        a[i] = xmin[i] + 0.25 * d[i]
+        b[i] = xmax[i] - 0.25 * d[i]
 
-        i = np.isfinite(min) & ~np.isfinite(max)
-        a[i] = min[i] + 1
-        b[i] = min[i] + 2
+        i = np.isfinite(xmin) & ~np.isfinite(xmax)
+        a[i] = xmin[i] + 1
+        b[i] = xmin[i] + 2
 
-        i = np.isfinite(max) & ~np.isfinite(min)
-        a[i] = max[i] - 2
-        b[i] = max[i] - 1
+        i = np.isfinite(xmax) & ~np.isfinite(xmin)
+        a[i] = xmax[i] - 2
+        b[i] = xmax[i] - 1
 
-        min = min.reshape(shape)
-        max = max.reshape(shape)
+        xmin = xmin.reshape(shape)
+        xmax = xmax.reshape(shape)
         a = a.reshape(shape)
         b = b.reshape(shape)
 
-        res = _bracket_root(f3, a=a, b=b, min=min, max=max, args=args)
+        res = _bracket_root(f3, xl0=a, xr0=b, xmin=xmin, xmax=xmax, args=args)
         # For now, we ignore the status, but I want to use the bracket width
         # as an error estimate - see question 5 at the top.
         return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x

@@ -102,7 +102,7 @@ def array_namespace(*arrays):
     1. Check for the global switch: SCIPY_ARRAY_API. This can also be accessed
        dynamically through ``_GLOBAL_CONFIG['SCIPY_ARRAY_API']``.
     2. `compliance_scipy` raise exceptions on known-bad subclasses. See
-       it's definition for more details.
+       its definition for more details.
 
     When the global switch is False, it defaults to the `numpy` namespace.
     In that case, there is no compliance check. This is a convenience to
@@ -216,11 +216,11 @@ def _strict_check(actual, desired, xp,
     desired = xp.asarray(desired)
 
     if check_dtype:
-        _msg = "dtypes do not match.\nActual: {actual.dtype}\nDesired: {desired.dtype}"
+        _msg = f"dtypes do not match.\nActual: {actual.dtype}\nDesired: {desired.dtype}"
         assert actual.dtype == desired.dtype, _msg
 
     if check_shape:
-        _msg = "Shapes do not match.\nActual: {actual.shape}\nDesired: {desired.shape}"
+        _msg = f"Shapes do not match.\nActual: {actual.shape}\nDesired: {desired.shape}"
         assert actual.shape == desired.shape, _msg
         _check_scalar(actual, desired, xp)
 
