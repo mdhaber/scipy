@@ -1836,9 +1836,7 @@ class ContinuousDistribution:
         f, args = _kwargs2args(integrand, args=args, kwargs=kwargs)
         args = np.broadcast_arrays(*args)
         # If we know the median or mean, consider breaking up the interval
-        eps = np.finfo(self._dtype).eps
-        rtol = 0.9 * np.log(eps) if log else eps ** 0.9
-        res = _tanhsinh(f, a, b, args=args, log=log, rtol=rtol)
+        res = _tanhsinh(f, a, b, args=args, log=log)
         # For now, we ignore the status, but I want to return the error
         # estimate - see question 5 at the top.
         return res.integral
