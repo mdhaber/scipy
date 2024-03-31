@@ -1836,7 +1836,9 @@ class ContinuousDistribution:
         f, args = _kwargs2args(integrand, args=args, kwargs=kwargs)
         args = np.broadcast_arrays(*args)
         # If we know the median or mean, consider breaking up the interval
-        res = _tanhsinh(f, a, b, args=args, log=log)
+        eps = np.finfo(self._dtype).eps
+        rtol = 0.9 * np.log(eps) if log else eps ** 0.9
+        res = _tanhsinh(f, a, b, args=args, log=log, rtol=rtol)
         # For now, we ignore the status, but I want to return the error
         # estimate - see question 5 at the top.
         return res.integral
@@ -1972,6 +1974,12 @@ class ContinuousDistribution:
             a = np.broadcast_to(a, self._shape)
         if b.shape != self._shape:
             b = np.broadcast_to(b, self._shape)
+
+        if self._any_invalid:
+            a, b = np.asarray(a).copy(), np.asarray(b).copy()
+            a[self._invalid], b[self._invalid] = np.nan, np.nan
+            a, b = a[()], b[()]
+
         support = (a, b)
 
         if self.cache_policy != _NO_CACHE:
@@ -1982,8 +1990,12 @@ class ContinuousDistribution:
     def _support(self, **kwargs):
         # Computes the support given distribution parameters
         a, b = self._variable.domain.get_numerical_endpoints(kwargs)
-        if a.shape != b.shape:
-            a, b = np.broadcast_arrays(a, b)
+        if len(kwargs):
+            # the parameters should all be of the same dtype and shape at this point
+            vals = list(kwargs.values())
+            shape = vals[0].shape
+            a = np.broadcast_to(a, shape) if a.shape != shape else a
+            b = np.broadcast_to(b, shape) if b.shape != shape else b
         return self._preserve_type(a), self._preserve_type(b)
 
     @_set_invalid_nan_property
@@ -2090,8 +2102,9 @@ class ContinuousDistribution:
         p_shape = (3,) + (1,)*len(self._shape)
         p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
         bracket = self._icdf_dispatch(p, **kwargs)
-        res = _chandrupatla_minimize(lambda x: -self._pdf_dispatch(x, **kwargs),
-                                     *bracket)
+        f, args = _kwargs2args(lambda x, **kwargs: -self._pdf_dispatch(x, **kwargs),
+                               args=(), kwargs=kwargs)
+        res = _chandrupatla_minimize(f, *bracket, args=args)
         mode = np.asarray(res.x)
         mode_at_boundary = ~res.success
         mode_at_left = mode_at_boundary & (res.fl <= res.fr)
@@ -2266,7 +2279,7 @@ class ContinuousDistribution:
 
     def _logcdf2_logexp(self, x, y, **kwargs):
         expres = self._cdf2_dispatch(x, y, **kwargs)
-        expres = expres + 0j if np.any(expres < 0) else expres
+        expres = expres + 0j if np.any(x > y) else expres
         return np.log(expres)
 
     def _logcdf2_quadrature(self, x, y, **kwargs):

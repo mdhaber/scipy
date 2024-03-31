@@ -35,7 +35,7 @@ class OrderStatisticDistribution(TransformedDistribution):
         return factor * fX * FX**(r-1) * cFX**(n-r)
 
 
-class Normal(ContinuousDistribution):
+class StandardNormal(ContinuousDistribution):
     r"""Standard normal distribution
 
     The probability density function of the standard normal distribution is:
@@ -106,11 +106,103 @@ class Normal(ContinuousDistribution):
     def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):
         return rng.normal(size=full_shape)[()]
 
+# class Normal(ContinuousDistribution):
+#     def __new__(cls, mu=None, sigma=None, **kwargs):
+#         if mu is None and sigma is None:
+#             return StandardNormal.__new__(StandardNormal, **kwargs)
+#         return super().__new__(cls)
+        # else:
+        #     mu = 0.0 if mu is None else mu
+        #     sigma = 1.0 if sigma is None else sigma
+        #     return ShiftedScaledNormal(mu=mu, sigma=sigma, **kwargs)
 
-class ShiftedScaledNormal(ShiftedScaledDistribution):
-    """Normal distribution with prescribed mean and standard deviation"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(Normal(), *args, **kwargs)
+
+class Normal(ContinuousDistribution):
+    r"""Normal distribution with prescribed mean and standard deviation
+
+    The probability density function of the standard normal distribution is:
+
+    ..math::
+
+        f(x) = \frac{1}{\sigma \sqrt{2 \pi}} \exp {
+            \left( -\frac{1}{2}\left( \frac{x - \mu}{\sigma} \right)^2 \right)}
+
+    """
+    # The normal distribution is so frequently used that it's worth a bit of code
+    # duplication to get a tiny bit better performance.
+    _mu_domain = _RealDomain(endpoints=(-oo, oo))
+    _sigma_domain = _RealDomain(endpoints=(0, oo))
+    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+
+    _mu_param = _RealParameter('mu',  symbol=r'\mu', domain=_mu_domain, typical=(-1, 1))
+    _sigma_param = _RealParameter('sigma', symbol=r'\sigma', domain=_sigma_domain, typical=(0.5, 1.5))
+    _x_param = _RealParameter('x', domain=_x_support, typical=(-1, 1))
+
+    _parameterizations = [_Parameterization(_mu_param, _sigma_param)]
+
+    _variable = _x_param
+    _normalization = 1/np.sqrt(2*np.pi)
+    _log_normalization = np.log(2*np.pi)/2
+
+    def __new__(cls, mu=None, sigma=None, **kwargs):
+        if mu is None and sigma is None:
+            return StandardNormal(**kwargs)
+        return super().__new__(cls)
+
+    def _logpdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._logpdf_formula(self, (x - mu)/sigma) - np.log(sigma)
+
+    def _pdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._pdf_formula(self, (x - mu)/sigma) / sigma
+
+    def _logcdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._logcdf_formula(self, (x - mu)/sigma)
+
+    def _cdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._cdf_formula(self, (x - mu)/sigma)
+
+    def _logccdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._logccdf_formula(self, (x - mu)/sigma)
+
+    def _ccdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._ccdf_formula(self, (x - mu)/sigma)
+
+    def _icdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._icdf_formula(self, x) * sigma + mu
+
+    def _ilogcdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._ilogcdf_formula(self, x) * sigma + mu
+
+    def _iccdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._iccdf_formula(self, x) * sigma + mu
+
+    def _ilogccdf_formula(self, x, *, mu, sigma, **kwargs):
+        return StandardNormal._ilogccdf_formula(self, x) * sigma + mu
+
+    def _entropy_formula(self, *, mu, sigma, **kwargs):
+        return StandardNormal._entropy_formula(self) + np.log(abs(sigma))
+
+    def _logentropy_formula(self, *, mu, sigma, **kwargs):
+        lH0 = StandardNormal._logentropy_formula(self)
+        lls = np.log(np.log(abs(sigma))+0j)
+        return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
+
+    def _median_formula(self, *, mu, sigma, **kwargs):
+        return mu
+
+    def _mode_formula(self, *, mu, sigma, **kwargs):
+        return mu
+
+    def _moment_central_formula(self, order, *, mu, sigma, **kwargs):
+        if order == 0:
+            return np.ones_like(mu)
+        elif order % 2:
+            return np.zeros_like(mu)
+        else:
+            return sigma**order * special.factorial2(int(order) - 1)
+
+    def _sample_formula(self, sample_shape, full_shape, rng, *, mu, sigma, **kwargs):
+        return rng.normal(loc=mu, scale=sigma, size=full_shape)[()]
 
 
 def _log_diff(log_p, log_q):
@@ -293,4 +385,4 @@ class _VonMises(ContinuousDistribution):
 
 
 Normal.__doc__ = _combine_docs(Normal)
-LogUniform.__doc__ = _combine_docs(LogUniform)
+# LogUniform.__doc__ = _combine_docs(LogUniform)

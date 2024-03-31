@@ -43,7 +43,6 @@ Random Variables
    CircularDistribution
    LogUniform
    Normal
-   ShiftedScaledNormal
 
 
 Each univariate distribution is an instance of a subclass of `rv_continuous`
@@ -646,8 +645,8 @@ from ._covariance import Covariance
 from ._sensitivity_analysis import *
 from ._survival import *
 from ._new_distributions import (
-    LogUniform, Normal, ShiftedScaledNormal, ShiftedScaledDistribution,
-    CircularDistribution, ContinuousDistribution)
+    LogUniform, StandardNormal, ShiftedScaledDistribution,
+    CircularDistribution, ContinuousDistribution, Normal)
 
 # Deprecated namespaces, to be removed in v2.0.0
 from . import (

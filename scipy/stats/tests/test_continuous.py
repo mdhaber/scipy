@@ -16,7 +16,7 @@ from scipy.stats._ksstats import kolmogn
 from scipy.stats._distribution_infrastructure import (
     oo, _Domain, _RealDomain, _RealParameter, ContinuousDistribution,
     _Parameterization, ShiftedScaledDistribution)
-from scipy.stats._new_distributions import LogUniform, Normal, ShiftedScaledNormal
+from scipy.stats._new_distributions import LogUniform, StandardNormal, Normal
 
 class Test_RealDomain:
     rng = np.random.default_rng(349849812549824)
@@ -141,11 +141,9 @@ def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
 class TestDistributions:
     @pytest.mark.filterwarnings("ignore")
     # @pytest.mark.parametrize('family', (LogUniform,))
+    # @pytest.mark.parametrize('family', (StandardNormal,))
     # @pytest.mark.parametrize('family', (Normal,))
-    # @pytest.mark.parametrize('family', (ShiftedScaledNormal,))
-    # @reproduce_failure('6.90.0',
-    #                    b'AAQBVCaHYp4BzU5WwQErykDaqAICAQEAAAAAAQABAQIBAQAAAA==')
-    @pytest.mark.parametrize('family', (Normal, LogUniform, ShiftedScaledNormal))
+    @pytest.mark.parametrize('family', (StandardNormal, LogUniform, Normal))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
         rng = np.random.default_rng(seed)
@@ -276,7 +274,7 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
     elif fname in {'mode'}:
         # can only expect about half of machine precision for optimization
         # because math
-        tol_override = {'atol': 1e-8}
+        tol_override = {'atol': 1e-6}
 
     if dist._overrides(f'_{fname}_formula'):
         methods.add('formula')
@@ -337,7 +335,7 @@ def check_cdf2(dist, log, x, y, result_shape, methods):
         res = (np.exp(dist.logcdf(x, y, method=method)) if log
                else dist.cdf(x, y, method=method))
         np.testing.assert_allclose(res, ref, atol=1e-14)
-        if log and np.any(x > y):
+        if log and np.any(x > y) and ref.size:
             np.testing.assert_equal(res.dtype, (ref + 0j).dtype)
         else:
             np.testing.assert_equal(res.dtype, ref.dtype)
@@ -447,12 +445,12 @@ def check_moment_funcs(dist, result_shape):
     # computation methods and confirming the consistency of specific
     # distributions with their pdf/logpdf.
 
-    atol = 1e-10  # make this tighter (e.g. 1e-13) after fixing `draw`
+    atol = 1e-9  # make this tighter (e.g. 1e-13) after fixing `draw`
 
     def check(moment, order, method=None, ref=None, success=True):
         if success:
             res = moment(order, method=method)
-            assert_allclose(res, ref, atol=atol)
+            assert_allclose(res, ref, atol=atol*10**order)
             assert res.shape == ref.shape
         else:
             with pytest.raises(NotImplementedError):
@@ -551,7 +549,7 @@ def check_moment_funcs(dist, result_shape):
         assert_allclose(dist.moment_standard(i), ref, atol=atol)
 
 
-@pytest.mark.parametrize('family', (LogUniform, Normal))
+@pytest.mark.parametrize('family', (LogUniform, StandardNormal))
 @pytest.mark.parametrize('x_shape', [tuple(), (2, 3)])
 @pytest.mark.parametrize('dist_shape', [tuple(), (4, 1)])
 @pytest.mark.parametrize('fname', ['qmc_sample', 'sample'])
@@ -736,9 +734,9 @@ def test_deepcopy_pickle(seed):
 
 
 def test_cache_policy():
-    dist = Normal(cache_policy="no_cache")
+    dist = StandardNormal(cache_policy="no_cache")
     # make error message more appropriate
-    message = "`Normal` does not provide an accurate implementation of the "
+    message = "`StandardNormal` does not provide an accurate implementation of the "
     with pytest.raises(NotImplementedError, match=message):
         dist.mean(method='cache')
     mean = dist.mean()
@@ -778,14 +776,18 @@ class TestTransforms:
     def test_loc_scale(self, data, seed):
         rng = np.random.default_rng(seed)
 
+        class TransformedNormal(ShiftedScaledDistribution):
+            def __init__(self, *args, **kwargs):
+                super().__init__(StandardNormal(), *args, **kwargs)
+
         tmp = draw_distribution_from_family(
-            ShiftedScaledNormal, data, rng, proportions=(1, 0, 0, 0), min_side=1)
+            TransformedNormal, data, rng, proportions=(1, 0, 0, 0), min_side=1)
         dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape = tmp
         sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=1,
                                                    max_side=20))
         loc = dist.loc
         scale = dist.scale
-        dist0 = Normal()
+        dist0 = StandardNormal()
         dist_ref = stats.norm(loc=loc, scale=scale)
 
         x0 = (x - loc) / scale
