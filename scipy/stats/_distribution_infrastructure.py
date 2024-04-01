@@ -1962,7 +1962,90 @@ class ContinuousDistribution:
     # and we use quadrature otherwise.
 
     def support(self):
-        """Support of the distribution"""
+        """Support of the random variable
+
+        The support of a random variable is set of all possible outcomes;
+        i.e., the subset of the domain of argument :math:`x` for which
+        the probability density function :math:`f(x)` is nonzero.
+
+        This function returns lower and upper bounds of the support.
+
+        Returns
+        -------
+        out : tuple of Array
+            The lower and upper bounds of the support.
+
+        See Also
+        --------
+        ContinuousDistribution.pdf
+
+        Notes
+        -----
+        Suppose a probability distribution has support ``(l, r)``.
+        The following table summarizes the value returned by methods
+        of ``ContinuousDistribution`` for arguments outside the support.
+
+        +----------------+---------------------+---------------------+
+        | Method         | Value for ``x < l`` | Value for ``x > r`` |
+        +================+=====================+=====================+
+        | ``pdf(x)``     | 0                   | 0                   |
+        | ``logpdf(x)``  | -inf                | -inf                |
+        | ``cdf(x)``     | 0                   | 1                   |
+        | ``logcdf(x)``  | -inf                | 0                   |
+        | ``ccdf(x)``    | 1                   | 0                   |
+        | ``logccdf(x)`` | 0                   | -inf                |
+        +----------------+---------------------+---------------------+
+
+        For the ``cdf`` and related methods, the inequality need not be
+        strict; i.e. the tabulated value is returned when the method is
+        evaluated *at* the corresponding boundary.
+
+        The following table summarizes the value returned by the inverse
+        methods of ``ContinuousDistribution`` for arguments at the boundaries
+        of the domain ``0`` to ``1``.
+
+        +-------------+-----------+-----------+
+        | Method      | ``x = 0`` | ``x = 1`` |
+        +=============+===========+===========+
+        | ``icdf(x)`` | ``l``     | ``r``     |
+        | ``icdf(x)`` | ``r``     | ``l``     |
+        +-------------+-----------+-----------+
+
+        For the inverse log-functions, the same values are returned for
+        for ``x = log(0)`` and ``x = log(1)``. All inverse functions return
+        ``nan`` when evaluated at an argument outside the domain ``0`` to ``1``.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Uniform(a=-0.5, b=0.5)
+
+        Retrieve the support of the distribution:
+
+        >>> X.support()
+        (-0.5, 0.5)
+
+        For a distribution with infinite support,
+
+        >>> X = stats.Normal()
+        >>> X.support()
+        (-inf, inf)
+
+        Due to underflow, the numerical value returned by the PDF may be zero
+        even for arguments within the support, even if the true value is
+        nonzero. In such cases, the log-PDF may be useful.
+
+        >>> X.pdf([-100., 100.])
+        array([0., 0.])
+        >>> X.logpdf([-100., 100.])
+        array([-5000.91893853, -5000.91893853])
+
+        Use cases for the log-CDF and related methods are analogous.
+
+        """
         # If this were a `cached_property`, we couldn't update the value
         # when the distribution parameters change.
         # Caching is important, though, because calls to _support take 1~2 µs
@@ -2352,7 +2435,7 @@ class ContinuousDistribution:
         Evaluate the log-PDF at the desired argument:
 
         >>> X.logpdf(1.)
-        0.0
+        -inf
         >>> np.allclose(X.logpdf(1.), np.log(X.pdf(1.)))
         True
 
@@ -2386,7 +2469,7 @@ class ContinuousDistribution:
 
             f(x) = \frac{d}{dx} F(x)
 
-        ``cdf`` accepts `x` for :math:`x`.
+        ``pdf`` accepts `x` for :math:`x`.
 
         Parameters
         ----------
