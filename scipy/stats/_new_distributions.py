@@ -5,7 +5,7 @@ from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
     oo, _null, ShiftedScaledDistribution, TransformedDistribution, _combine_docs)
 
-__all__ = ['Normal', 'LogUniform', 'LogLaplace', 'CircularDistribution']
+__all__ = ['Normal', 'LogUniform', 'LogLaplace', 'CircularDistribution', 'Uniform']
 
 def factorial(n):
     return special.gamma(n + 1)
@@ -110,7 +110,7 @@ class StandardNormal(ContinuousDistribution):
 class Normal(ContinuousDistribution):
     r"""Normal distribution with prescribed mean and standard deviation
 
-    The probability density function of the standard normal distribution is:
+    The probability density function of the normal distribution is:
 
     .. math::
 
@@ -118,8 +118,9 @@ class Normal(ContinuousDistribution):
             \left( -\frac{1}{2}\left( \frac{x - \mu}{\sigma} \right)^2 \right)}
 
     """
-    # The normal distribution is so frequently used that it's worth a bit of code
-    # duplication to get better performance.
+    # `ShiftedScaledDistribution` allows this to be generated automatically from
+    # an instance of `StandardNormal`, but the normal distribution is so frequently
+    # used that it's worth a bit of code duplication to get better performance.
     _mu_domain = _RealDomain(endpoints=(-oo, oo))
     _sigma_domain = _RealDomain(endpoints=(0, oo))
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
@@ -303,6 +304,41 @@ class LogLaplace(ContinuousDistribution):
         with np.errstate(divide='ignore'):
             c2, n2 = b**-2, order**2
             return np.where(n2 < c2, c2 / (c2 - n2), np.inf)
+
+
+class Uniform(ContinuousDistribution):
+    r"""Uniform distribution
+
+    The probability density function of the uniform distribution is:
+
+    ..math::
+
+        f(x; a, b) = \frac{1}
+                          {b - a}
+
+    """
+
+    _a_domain = _RealDomain(endpoints=(-oo, oo))
+    _b_domain = _RealDomain(endpoints=('a', oo))
+    _x_support = _RealDomain(endpoints=('a', 'b'), inclusive=(True, True))
+
+    _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 0.9))
+    _b_param = _RealParameter('b', domain=_b_domain, typical=(1.1, 1e3))
+    _x_param = _RealParameter('x', domain=_x_support, typical=('a', 'b'))
+
+    _b_domain.define_parameters(_a_param)
+    _x_support.define_parameters(_a_param, _b_param)
+
+    _parameterizations = [_Parameterization(_a_param, _b_param)]
+    _variable = _x_param
+
+    def _process_parameters(self, a=None, b=None, ab=None, **kwargs):
+        ab = b - a
+        kwargs.update(dict(a=a, b=b, ab=ab))
+        return kwargs
+
+    def _pdf_formula(self, x, *, ab, **kwargs):
+        return np.full(x.shape, 1/ab)
 
 
 class CircularDistribution(ShiftedScaledDistribution):
