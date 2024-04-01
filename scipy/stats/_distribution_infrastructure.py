@@ -1913,8 +1913,6 @@ class ContinuousDistribution:
     # Common options are:
     # method - a string that indicates which method should be used to compute
     #          the quantity (e.g. a formula or numerical integration).
-    # cache_policy - an enum that indicates whether the value should be cached
-    #                for later retrieval.
     # Input/output validation is provided by the `_set_invalid_nan_property`
     # decorator. These are the methods meant to be called by users.
     #
@@ -2114,30 +2112,30 @@ class ContinuousDistribution:
         mode[mode_at_right] = b[mode_at_right]
         return mode[()]
 
-    def mean(self, *, method=None, cache_policy=None):
+    def mean(self, *, method=None):
         """Distribution mean"""
-        return self.moment(1, kind='raw', method=method, cache_policy=cache_policy)
+        return self.moment(1, kind='raw', method=method)
 
-    def variance(self, *, method=None, cache_policy=None):
+    def variance(self, *, method=None):
         """Distribution variance"""
-        return self.moment(2, kind='central', method=method, cache_policy=cache_policy)
+        return self.moment(2, kind='central', method=method)
 
-    def standard_deviation(self, *, method=None, cache_policy=None):
+    def standard_deviation(self, *, method=None):
         """Distribution standard deviation"""
-        return np.sqrt(self.variance(method=method, cache_policy=cache_policy))
+        return np.sqrt(self.variance(method=method))
 
-    def skewness(self, *, method=None, cache_policy=None):
+    def skewness(self, *, method=None):
         """Distribution skewness (standardized third moment)"""
-        return self.moment(3, kind='standard', method=method, cache_policy=cache_policy)
+        return self.moment(3, kind='standard', method=method)
 
-    def kurtosis(self, *, method=None, cache_policy=None):
+    def kurtosis(self, *, method=None):
         """Distribution Pearson kurtosis (standardized fourth moment)
 
         This is the Pearson kurtosis, the standardized fourth moment, not the
         "Fisher" or "Excess" kurtosis. The Pearson kurtosis of the normal
         distribution is 3.
         """
-        return self.moment(4, kind='standard', method=method, cache_policy=cache_policy)
+        return self.moment(4, kind='standard', method=method)
 
     ### Distribution functions
     # The following functions related to the distribution PDF and CDF are
@@ -2157,9 +2155,7 @@ class ContinuousDistribution:
     # Common keyword options include:
     # method - a string that indicates which method should be used to compute
     #          the quantity (e.g. a formula or numerical integration).
-    # Tolerance options should be added. `cache_policy` is not as important
-    # as for the distribution properties, since these functions depend on an
-    # argument other than the parameters.
+    # Tolerance options should be added.
     # Input/output validation is provided by the `_set_invalid_nan`
     # decorator. These are the methods meant to be called by users.
     #
@@ -2691,11 +2687,9 @@ class ContinuousDistribution:
 
     ### Moments
     # The `moment` method accepts two positional arguments - the order and kind
-    # (raw, central, or standard) of the moment - and keyword options:
+    # (raw, central, or standard) of the moment - and a keyword option:
     # method - a string that indicates which method should be used to compute
     #          the quantity (e.g. a formula or numerical integration).
-    # cache_policy - an enum that indicates whether the value should be cached
-    #                for later retrieval.
     # Like the distribution properties, input/output validation is provided by
     # the `_set_invalid_nan_property` decorator.
     #
@@ -2751,13 +2745,13 @@ class ContinuousDistribution:
         return constants
 
     @_set_invalid_nan_property
-    def moment(self, order=1, kind='raw', *, method=None, cache_policy=None):
+    def moment(self, order=1, kind='raw', *, method=None):
         kinds = {'raw': self._moment_raw,
                  'central': self._moment_central,
                  'standard': self._moment_standard}
         order = self._validate_order_kind(order, kind, kinds)
         moment_kind = kinds[kind]
-        return moment_kind(order, method=method, cache_policy=cache_policy)
+        return moment_kind(order, method=method, cache_policy=self.cache_policy)
 
     def _moment_raw(self, order=1, *, method=None, cache_policy=None):
         """Raw distribution moment about the origin"""
@@ -2765,7 +2759,6 @@ class ContinuousDistribution:
         # option. This is easy to support, since `_moment_transform_center`
         # does all the work.
         methods = self._moment_methods if method is None else {method}
-        cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_raw_dispatch(
             order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
@@ -2823,7 +2816,6 @@ class ContinuousDistribution:
     def _moment_central(self, order=1, *, method=None, cache_policy=None):
         """Distribution moment about the mean"""
         methods = self._moment_methods if method is None else {method}
-        cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_central_dispatch(
             order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
@@ -2892,7 +2884,6 @@ class ContinuousDistribution:
     def _moment_standard(self, order=1, *, method=None, cache_policy=None):
         """Standardized distribution moment"""
         methods = self._moment_methods if method is None else {method}
-        cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_standard_dispatch(
             order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
