@@ -645,7 +645,7 @@ from ._covariance import Covariance
 from ._sensitivity_analysis import *
 from ._survival import *
 from ._new_distributions import (
-    LogUniform, StandardNormal, ShiftedScaledDistribution,
+    LogUniform, ShiftedScaledDistribution,
     CircularDistribution, ContinuousDistribution, Normal)
 
 # Deprecated namespaces, to be removed in v2.0.0

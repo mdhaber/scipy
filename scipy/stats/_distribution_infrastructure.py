@@ -2174,7 +2174,70 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def logpdf(self, x, *, method=None):
-        """Log of the probability density function"""
+        r"""Log of the probability density function
+
+        For more information about the probability density function,
+        see `ContinuousDistribution.pdf`.
+
+        Parameters
+        ----------
+        x : Array
+            The value of the random variable for which the log PDF is to be
+            evaluated.
+        method : {None, 'formula', 'logexp'}
+            The strategy used to evaluate the log PDF. By default (``None``), the
+            infrastructure chooses between the following options.
+
+            - ``'formula'``: use a formula for the log PDF itself
+            - ``'logexp'``: evaluate the PDF and takes its logarithm
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The log PDF evaluated at the argument `x`.
+
+        See Also
+        --------
+        ContinuousDistribution.pdf
+        ContinuousDistribution.logcdf
+
+        Notes
+        -----
+        Suppose a probability distribution has support :math:`[l, r]`.
+        By definition of the support, the log PDF evaluates to its minimum value
+        of :math:`-\infty` (i.e. :math:`\log(0)`) outside the support; i.e. for
+        :math:`x < l` or :math:`x > r`. The maximum of the log PDF may be less
+        than or greater than :math:`\log(1) = 0` because the maximum of the PDF
+        can be any positive real.
+
+        Even for distributions with infinite support, it is common for
+        `ContinuousDistribution.pdf` to return a value of `0` when the argument
+        is theoretically within the support; this can occur because the true value
+        of the PDF is too small to be represented by the chosen dtype. The log
+        of the PDF, however, will often be numerically nonzero over a much larger
+        domain. Consequently, it may be preferred to work with the logarithms of
+        probabilities and probability densities to avoid underflow.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the log PDF at the desired argument:
+
+        >>> X.logpdf(1.)
+        -1.612085713764618
+        >>> np.allclose(X.logpdf(1.), np.log(X.pdf(1.)))
+        True
+
+        """
         return self._logpdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -2193,16 +2256,18 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def pdf(self, x, *, method=None):
-        """Probability density function
+        r"""Probability density function
 
         The probability density function :math:`f(x)` is the probability *per
         unit interval* of :math:`x` that the random variable takes on the value
         :math:`x`. Mathematically, it is defined as the derivative of the
-        cumulative distribution function `F(x)`::
+        cumulative distribution function `F(x)`:
 
         .. math::
 
             f(x) = \frac{d}{dx} F(x)
+
+        ``cdf`` accepts `x` for :math:`x`.
 
         Parameters
         ----------
@@ -2210,31 +2275,35 @@ class ContinuousDistribution:
             The value of the random variable for which the PDF is to be
             evaluated.
         method : {None, 'formula', 'logexp'}
-            The strategy used to evaluate the probability density function.
-            By default (``None``), the infrastructure chooses between the
-            following options.
+            The strategy used to evaluate the PDF. By default (``None``), the
+            infrastructure chooses between the following options.
 
             - ``'formula'``: use a formula for the PDF itself
             - ``'logexp'``: evaluate the logarithm of the PDF directly and
               exponentiate
 
             Not all `method` options are available for all distributions.
-            If the selected `method` is not available, a `NotImplementedError`
+            If the selected `method` is not available, a ``NotImplementedError``
             will be raised.
 
         Returns
         -------
         out : Array
-            The probability density function evaluated at the argument `x`.
+            The PDF evaluated at the argument `x`.
 
         See Also
         --------
         ContinuousDistribution.cdf
+        ContinuousDistribution.logpdf
 
         Notes
         -----
-        By definition, the probability density function is zero outside
-        the support of the distribution.
+        Suppose a probability distribution has support :math:`[l, r]`.
+        By definition of the support, the PDF evaluates to its minimum value
+        of :math:`0` outside the support; i.e. for :math:`x < l` or
+        :math:`x > r`. The maximum of the PDF may be less than or greater than
+        :math:`1`; since the valus is a probability *density*, only its integral
+        over the support must equal :math:`1`.
 
         Examples
         --------
@@ -2269,7 +2338,77 @@ class ContinuousDistribution:
     ## Cumulative Distribution Functions
 
     def logcdf(self, x, y=None, *, method=None):
-        """Log of the cumulative distribution function"""
+        r"""Log of the cumulative distribution function
+
+        For more information about the cumulative distribution function,
+        see `ContinuousDistribution.cdf`.
+
+        Parameters
+        ----------
+        x, y : Array
+            The arguments of the log cumulative distribution function (log CDF).
+            `x` is required; `y` is optional.
+        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
+            The strategy used to evaluate the log CDF.
+            By default (``None``), the one-argument form of the function
+            chooses between the following options.
+
+            - ``'formula'``: use a formula for the log CDF itself
+            - ``'logexp'``: evaluate the CDF directly and take the logarithm
+            - ``'complementarity'``: evaluate the log complementary CDF directly
+              and take the logarithmic complement
+            - ``'quadrature'``: numerically log-integrate the log PDF
+
+            In place of ``'complementarity'``, the two-argument form accepts:
+
+            - ``'subtraction'``: compute the log CDF at each argument and take
+              the logarithmic difference.
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The log CDF evaluated at the provided argument(s).
+
+        See Also
+        --------
+        ContinuousDistribution.cdf
+        ContinuousDistribution.logccdf
+
+        Notes
+        -----
+        Suppose a probability distribution has support :math:`[l, r]`.
+        The log CDF evaluates to its minimum value of :math:`\log(0) = -\infty`
+        for :math:`x ≤ l` and its maximum value of :math:`\log(1) = 0` for
+        :math:`x ≥ r`.
+
+        Even for distributions with infinite support, it is common for
+        `ContinuousDistribution.cdf` to return a value of `0` when the argument
+        is theoretically within the support; this can occur because the true value
+        of the CDF is too small to be represented by the chosen dtype. The log
+        of the CDF, however, will often be numerically nonzero over a much larger
+        domain. Consequently, it may be preferred to work with the logarithms of
+        probabilities and probability densities to avoid underflow.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the log CDF at the desired argument:
+
+        >>> X.logcdf(0.)
+        -1.175911761593619
+        >>> np.allclose(X.logcdf(0.), np.log(X.cdf(0.)))
+        True
+
+        """  # noqa: E501
         if y is None:
             return self._logcdf1(x, method=method)
         else:
@@ -2357,7 +2496,7 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     def cdf(self, x, y=None, *, method=None):
-        """Cumulative distribution function
+        r"""Cumulative distribution function
 
         The cumulative distribution function :math:`F(x)` is the probability
         the random variable :math:`X` will take on a value less than or equal
@@ -2394,39 +2533,43 @@ class ContinuousDistribution:
               and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
-            The two-argument form chooses between:
+            In place of ``'complementarity'``, the two-argument form accepts:
 
-            - ``'formula'``: use a formula for the CDF itself
             - ``'subtraction'``: compute the CDF at each argument and take
               the difference.
 
             Not all `method` options are available for all distributions.
-            If the selected `method` is not available, a `NotImplementedError`
+            If the selected `method` is not available, a ``NotImplementedError``
             will be raised.
 
         Returns
         -------
         out : Array
             The CDF evaluated at the provided argument(s).
-
+            
+        See Also
+        --------
+        ContinuousDistribution.logcdf
+        ContinuousDistribution.ccdf
+        
         Notes
         -----
         Suppose a probability distribution has support :math:`[l, r]`.
-        The cumulative density function :math:`F(x)` is related to the
-        probability density function :math:`f(x)` by::
+        The CDF :math:`F(x)` is related to the probability density function
+        :math:`f(x)` by:
 
         .. math::
 
             F(b) = \int_l^b f(x) dx
 
-        The two argument version is::
+        The two argument version is:
 
         .. math::
 
             F(a, b) = \int_a^b f(x) dx = F(b) - F(a)
 
-        The CDF takes on its minimum value of zero for :math:`x <= l` and its
-        minimum value of one for :math:`x >= r`.
+        The CDF evaluates to its minimum value of :math:`0` for :math:`x ≤ l`
+        and its maximum value of :math:`1` for :math:`x ≥ r`.
 
         Examples
         --------
@@ -2436,7 +2579,7 @@ class ContinuousDistribution:
         >>> from scipy import stats
         >>> X = stats.Normal(mu=1., sigma=2.)
 
-        Evaluate the cumulative distribution function at the desired argument:
+        Evaluate the CDF at the desired argument:
 
         >>> X.cdf(0.)
         0.3085375387259869
@@ -2518,7 +2661,79 @@ class ContinuousDistribution:
                                 kwargs=kwargs)
 
     def logccdf(self, x, y=None, *, method=None):
-        """Log of the complementary cumulative distribution function"""
+        r"""Log of the complementary cumulative distribution function
+
+        For more information about the complementary cumulative distribution
+        function, see `ContinuousDistribution.cdf`.
+
+        Parameters
+        ----------
+        x, y : Array
+            The arguments of the log complementary cumulative distribution
+            function (log CCDF).
+            `x` is required; `y` is optional.
+        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
+            The strategy used to evaluate the log CCDF.
+            By default (``None``), the one-argument form of the function
+            chooses between the following options.
+
+            - ``'formula'``: use a formula for the log CCDF itself
+            - ``'logexp'``: evaluate the CCDF directly and take the logarithm
+            - ``'complementarity'``: evaluate the log CDF directly
+              and take the logarithmic complement
+            - ``'quadrature'``: numerically log-integrate the log PDF
+
+            The two-argument form chooses between:
+
+            - ``'formula'``: use a formula for the log CCDF itself
+            - ``'addition'``: compute the log CDF at `x` and the log CCDF at `y`,
+              then take the logarithmic sum
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The log CCDF evaluated at the provided argument(s).
+
+        See Also
+        --------
+        ContinuousDistribution.ccdf
+        ContinuousDistribution.logcdf
+
+        Notes
+        -----
+        Suppose a probability distribution has support :math:`[l, r]`.
+        The log CCDF takes on its minimum value of :math:`\log(0)=-\infty` for
+        :math:`x ≥ r` and its maximum value of :math:`\log(1) = 0` for
+        :math:`x ≤ l`.
+
+        Even for distributions with infinite support, it is common for
+        `ContinuousDistribution.ccdf` to return a value of `0` when the argument
+        is theoretically within the support; this can occur because the true value
+        of the CCDF is too small to be represented by the chosen dtype. The log
+        of the CCDF, however, will often be numerically nonzero over a much larger
+        domain. Consequently, it may be preferred to work with the logarithms of
+        probabilities and probability densities to avoid underflow.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the log CCDF at the desired argument:
+
+        >>> X.logccdf(0.)
+        -0.3689464152886563
+        >>> np.allclose(X.logccdf(0.), np.log(X.ccdf(0.)))
+        True
+
+        """  # noqa: E501
         if y is None:
             return self._logccdf1(x, method=method)
         else:
@@ -2577,18 +2792,18 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     def ccdf(self, x, y=None, *, method=None):
-        """Complementary cumulative distribution function
+        r"""Complementary cumulative distribution function
 
         The complementary cumulative distribution function :math:`G(x)` is the
         complement of the cumulative distribution function :math:`F(x)`; i.e.,
         probability the random variable :math:`X` will take on a value greater
-        than :math:`x`::
+        than :math:`x`:
 
         .. math::
 
             G(x) = 1 - F(x) = P(X > x)
 
-        A two-argument variant of this function is::
+        A two-argument variant of this function is:
 
         .. math::
 
@@ -2615,11 +2830,10 @@ class ContinuousDistribution:
             The two-argument form chooses between:
 
             - ``'formula'``: use a formula for the CCDF itself
-            - ``'subtraction'``: compute the CCDF at each argument and take
-              the difference.
+            - ``'addition'``: compute the CDF at `x` and the CCDF at `y`, then add
 
             Not all `method` options are available for all distributions.
-            If the selected `method` is not available, a `NotImplementedError`
+            If the selected `method` is not available, a ``NotImplementedError``
             will be raised.
 
         Returns
@@ -2627,24 +2841,29 @@ class ContinuousDistribution:
         out : Array
             The CCDF evaluated at the provided argument(s).
 
+        See Also
+        --------
+        ContinuousDistribution.cdf
+        ContinuousDistribution.logccdf
+        
         Notes
         -----
         Suppose a probability distribution has support :math:`[l, r]`.
-        The complementary cumulative density function :math:`G(x)` is related
-        to the probability density function :math:`f(x)` by::
+        The CCDF :math:`G(x)` is related to the probability density function
+        :math:`f(x)` by:
 
         .. math::
 
             G(a) = \int_a^r f(x) dx
 
-        The two argument version is::
+        The two argument version is:
 
         .. math::
 
             G(a, b) = \int_l^a f(x) dx + \int_b^r f(x) dx
 
-        The CDF takes on its minimum value of zero for :math:`x >= r` and its
-        minimum value of one for :math:`x <= l`.
+        The CCDF takes on its minimum value of :math:`0` for :math:`x ≥ r`
+        and its maximum value of :math:`1` for :math:`x ≤ l`.
 
         Examples
         --------
@@ -2654,8 +2873,7 @@ class ContinuousDistribution:
         >>> from scipy import stats
         >>> X = stats.Normal(mu=1., sigma=2.)
 
-        Evaluate the complementary cumulative distribution function at the
-        desired argument:
+        Evaluate the CCDF at the desired argument:
 
         >>> X.ccdf(0.)
         0.6914624612740131
@@ -2745,11 +2963,11 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def icdf(self, x, *, method=None):
-        """Inverse cumulative distribution function
+        r"""Inverse cumulative distribution function
 
         The inverse cumulative distribution function :math:`F^{-1}(x)` is the
         argument :math:`y` for which the cumulative distribution function
-        :math:`F(y) = x`.
+        :math:`F(y)` evaluates to :math:`x`.
 
         .. math::
 
@@ -2774,13 +2992,18 @@ class ContinuousDistribution:
               CDF is equal to `x`.
 
             Not all `method` options are available for all distributions.
-            If the selected `method` is not available, a `NotImplementedError`
+            If the selected `method` is not available, a ``NotImplementedError``
             will be raised.
 
         Returns
         -------
         out : Array
             The inverse CDF evaluated at the provided argument.
+
+        See Also
+        --------
+        ContinuousDistribution.cdf
+        ContinuousDistribution.ilogcdf
 
         Notes
         -----
@@ -2852,11 +3075,12 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def iccdf(self, x, *, method=None):
-        """Inverse complementary cumulative distribution function
+        r"""Inverse complementary cumulative distribution function
 
         The inverse complementary cumulative distribution function
         :math:`G^{-1}(x)` is the argument :math:`y` for which the
-        complementary cumulative distribution function :math:`G(y) = x`.
+        complementary cumulative distribution function :math:`G(y)`
+        evaluates to :math:`x`.
 
         .. math::
 
@@ -2875,13 +3099,13 @@ class ContinuousDistribution:
             following options.
 
             - ``'formula'``: use a formula for the inverse CCDF itself
-            - ``'complementarity'``: evaluate the inverse CDF at the
+            - ``'complementarity'``: evaluate the inverse CCDF at the
               complement of `x`; i.e. ``1 - x``.
             - ``'inversion'``: solve numerically for the argument at which the
               CCDF is equal to `x`.
 
             Not all `method` options are available for all distributions.
-            If the selected `method` is not available, a `NotImplementedError`
+            If the selected `method` is not available, a ``NotImplementedError``
             will be raised.
 
         Returns
@@ -2893,10 +3117,15 @@ class ContinuousDistribution:
         -----
         Suppose a probability distribution has support :math:`[l, r]`. The
         inverse CCDF takes on its minimum value of :math:`l` at :math:`x = 1`
-        and its maximum value of :math:`r` at :math:`x = 0`. Because the CDF
+        and its maximum value of :math:`r` at :math:`x = 0`. Because the CCDF
         has range :math:`[0, 1]`, the inverse CCDF is only defined on the
         domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, ``iccdf``
         returns ``nan``.
+
+        See Also
+        --------
+        ContinuousDistribution.icdf
+        ContinuousDistribution.ilogccdf
 
         Examples
         --------
@@ -3074,6 +3303,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment(self, order=1, kind='raw', *, method=None):
+        """Raw, central, or standard distribution moment"""
         kinds = {'raw': self._moment_raw,
                  'central': self._moment_central,
                  'standard': self._moment_standard}
