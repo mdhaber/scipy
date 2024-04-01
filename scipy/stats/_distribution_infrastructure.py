@@ -1309,12 +1309,12 @@ def _generate_example(dist_family):
     >>> np.allclose(np.exp(X.logentropy()), X.entropy())
     True
 
-    Pseudo-random and quasi-Monte Carlo random samples can be drawn from
+    Pseudo-random and quasi-Monte Carlo samples can be drawn from
     the underlying distribution using ``sample``.
 
     >>> rng = np.random.default_rng(2354873452)
     >>> X.sample(shape=(4,), rng=rng)
-    {X.sample(shape=(4,), rng=rng)}
+    {repr(X.sample(shape=(4,), rng=rng))}
     >>> n = 200
     >>> s = X.sample(shape=(n,), rng=rng, qmc_engine=stats.qmc.Halton)
     >>> assert np.count_nonzero(s < X.median()) == n/2
@@ -2195,17 +2195,60 @@ class ContinuousDistribution:
     def pdf(self, x, *, method=None):
         """Probability density function
 
+        The probability density function :math:`f(x)` is the probability *per
+        unit interval* of :math:`x` that the random variable takes on the value
+        :math:`x`. Mathematically, it is defined as the derivative of the
+        cumulative distribution function `F(x)`::
+
+        .. math::
+
+            f(x) = \frac{d}{dx} F(x)
+
         Parameters
         ----------
         x : Array
-            blah
+            The value of the random variable for which the PDF is to be
+            evaluated.
         method : {None, 'formula', 'logexp'}
-            blah
+            The strategy used to evaluate the probability density function.
+            By default (``None``), the infrastructure chooses between the
+            following options.
+
+            - ``'formula'``: use a formula for the PDF itself
+            - ``'logexp'``: evaluate the logarithm of the PDF directly and
+              exponentiate
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a `NotImplementedError`
+            will be raised.
 
         Returns
         -------
         out : Array
-            the pdf
+            The probability density function evaluated at the argument `x`.
+
+        See Also
+        --------
+        ContinuousDistribution.cdf
+
+        Notes
+        -----
+        By definition, the probability density function is zero outside
+        the support of the distribution.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the probability density function at the desired argument:
+
+        >>> X.pdf(1.)
+        0.19947114020071635
+
         """
         return self._pdf_dispatch(x, method=method, **self._parameters)
 
@@ -2314,7 +2357,91 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     def cdf(self, x, y=None, *, method=None):
-        """Cumulative distribution function"""
+        """Cumulative distribution function
+
+        The cumulative distribution function :math:`F(x)` is the probability
+        the random variable :math:`X` will take on a value less than or equal
+        to :math:`x`:
+
+        .. math::
+
+            F(x) = P(X ≤ x)
+
+        A two-argument variant of this function is also defined as the
+        probability the random variable :math:`X` will take on a value between
+        :math:`x` and :math:`y`.
+
+        .. math::
+
+            F(x, y) = P(x ≤ X ≤ y)
+
+        ``cdf`` accepts `x` for :math:`x` and `y` for :math:`y`.
+
+        Parameters
+        ----------
+        x, y : Array
+            The arguments of the cumulative distribution function (CDF). `x` is
+            required; `y` is optional.
+        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
+            The strategy used to evaluate the CDF.
+            By default (``None``), the one-argument form of the function
+            chooses between the following options.
+
+            - ``'formula'``: use a formula for the CDF itself
+            - ``'logexp'``: evaluate the logarithm of the CDF directly and
+              exponentiate
+            - ``'complementarity'``: evaluate the complementary CDF direcly
+              and take the complement
+            - ``'quadrature'``: numerically integrate the PDF
+
+            The two-argument form chooses between:
+
+            - ``'formula'``: use a formula for the CDF itself
+            - ``'subtraction'``: compute the CDF at each argument and take
+              the difference.
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a `NotImplementedError`
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The CDF evaluated at the provided argument(s).
+
+        Notes
+        -----
+        Suppose a probability distribution has support :math:`[l, r]`.
+        The cumulative density function :math:`F(x)` is related to the
+        probability density function :math:`f(x)` by::
+
+        .. math::
+
+            F(b) = \int_l^b f(x) dx
+
+        The two argument version is::
+
+        .. math::
+
+            F(a, b) = \int_a^b f(x) dx = F(b) - F(a)
+
+        The CDF takes on its minimum value of zero for :math:`x <= l` and its
+        minimum value of one for :math:`x >= r`.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the cumulative distribution function at the desired argument:
+
+        >>> X.cdf(0.)
+        0.3085375387259869
+
+        """  # noqa: E501
         if y is None:
             return self._cdf1(x, method=method)
         else:
@@ -2450,7 +2577,90 @@ class ContinuousDistribution:
                                 kwargs=kwargs, log=True)
 
     def ccdf(self, x, y=None, *, method=None):
-        """Complementary cumulative distribution function"""
+        """Complementary cumulative distribution function
+
+        The complementary cumulative distribution function :math:`G(x)` is the
+        complement of the cumulative distribution function :math:`F(x)`; i.e.,
+        probability the random variable :math:`X` will take on a value greater
+        than :math:`x`::
+
+        .. math::
+
+            G(x) = 1 - F(x) = P(X > x)
+
+        A two-argument variant of this function is::
+
+        .. math::
+
+            G(x, y) = 1 - F(x, y) = P(X < x \text{ or } X > y)
+
+        ``ccdf`` accepts `x` for :math:`x` and `y` for :math:`y`.
+
+        Parameters
+        ----------
+        x, y : Array
+            The arguments of the complementary cumulative distribution
+            function (CCDF). `x` is required; `y` is optional.
+        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
+            The strategy used to evaluate the CCDF.
+            By default (``None``), the infrastructure chooses between the
+            following options.
+
+            - ``'formula'``: use a formula for the CCDF itself
+            - ``'logexp'``: evaluate the logarithm of the CCDF directly and
+              exponentiate
+            - ``'complementarity'``: evaluate the CDF and take the complement
+            - ``'quadrature'``: numerically integrate the PDF
+
+            The two-argument form chooses between:
+
+            - ``'formula'``: use a formula for the CCDF itself
+            - ``'subtraction'``: compute the CCDF at each argument and take
+              the difference.
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a `NotImplementedError`
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The CCDF evaluated at the provided argument(s).
+
+        Notes
+        -----
+        Suppose a probability distribution has support :math:`[l, r]`.
+        The complementary cumulative density function :math:`G(x)` is related
+        to the probability density function :math:`f(x)` by::
+
+        .. math::
+
+            G(a) = \int_a^r f(x) dx
+
+        The two argument version is::
+
+        .. math::
+
+            G(a, b) = \int_l^a f(x) dx + \int_b^r f(x) dx
+
+        The CDF takes on its minimum value of zero for :math:`x >= r` and its
+        minimum value of one for :math:`x <= l`.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the complementary cumulative distribution function at the
+        desired argument:
+
+        >>> X.ccdf(0.)
+        0.6914624612740131
+
+        """  # noqa: E501
         if y is None:
             return self._ccdf1(x, method=method)
         else:
@@ -2535,7 +2745,66 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def icdf(self, x, *, method=None):
-        """Inverse cumulative distribution function"""
+        """Inverse cumulative distribution function
+
+        The inverse cumulative distribution function :math:`F^{-1}(x)` is the
+        argument :math:`y` for which the cumulative distribution function
+        :math:`F(y) = x`.
+
+        .. math::
+
+            F^{-1}(x) = y \text{ such that } F(y) = x`
+
+        ``icdf`` accepts `x` for :math:`x`.
+
+        Parameters
+        ----------
+        x : Array
+            The argument of the inverse cumulative distribution function
+            (inverse CDF).
+        method : {None, 'formula', 'complementarity', 'inversion'}
+            The strategy used to evaluate the inverse CDF.
+            By default (``None``), the infrastructure chooses between the
+            following options.
+
+            - ``'formula'``: use a formula for the inverse CDF itself
+            - ``'complementarity'``: evaluate the inverse CCDF at the
+              complement of `x`; i.e. ``1 - x``.
+            - ``'inversion'``: solve numerically for the argument at which the
+              CDF is equal to `x`.
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a `NotImplementedError`
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The inverse CDF evaluated at the provided argument.
+
+        Notes
+        -----
+        Suppose a probability distribution has support :math:`[l, r]`. The
+        inverse CDF takes on its minimum value of :math:`l` at :math:`x = 0`
+        and its maximum value of :math:`r` at :math:`x = 1`. Because the CDF
+        has range :math:`[0, 1]`, the inverse CDF is only defined on the
+        domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, ``icdf``
+        returns ``nan``.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the inverse CDF at the desired argument:
+
+        >>> X.icdf(0.3)
+        -0.04880102541608178
+
+        """
         return self._icdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
@@ -2583,7 +2852,66 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def iccdf(self, x, *, method=None):
-        """Inverse complementary cumulative distribution function"""
+        """Inverse complementary cumulative distribution function
+
+        The inverse complementary cumulative distribution function
+        :math:`G^{-1}(x)` is the argument :math:`y` for which the
+        complementary cumulative distribution function :math:`G(y) = x`.
+
+        .. math::
+
+            G^{-1}(x) = y \text{ such that } G(y) = x`
+
+        ``iccdf`` accepts `x` for :math:`x`.
+
+        Parameters
+        ----------
+        x : Array
+            The argument of the inverse complementary cumulative distribution
+            function (inverse CCDF).
+        method : {None, 'formula', 'complementarity', 'inversion'}
+            The strategy used to evaluate the inverse CCDF.
+            By default (``None``), the infrastructure chooses between the
+            following options.
+
+            - ``'formula'``: use a formula for the inverse CCDF itself
+            - ``'complementarity'``: evaluate the inverse CDF at the
+              complement of `x`; i.e. ``1 - x``.
+            - ``'inversion'``: solve numerically for the argument at which the
+              CCDF is equal to `x`.
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a `NotImplementedError`
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The inverse CCDF evaluated at the provided argument.
+
+        Notes
+        -----
+        Suppose a probability distribution has support :math:`[l, r]`. The
+        inverse CCDF takes on its minimum value of :math:`l` at :math:`x = 1`
+        and its maximum value of :math:`r` at :math:`x = 0`. Because the CDF
+        has range :math:`[0, 1]`, the inverse CCDF is only defined on the
+        domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, ``iccdf``
+        returns ``nan``.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the inverse CCDF at the desired argument:
+
+        >>> X.iccdf(0.3)
+        2.048801025416082
+
+        """
         return self._iccdf_dispatch(x, method=method, **self._parameters)
 
     @_dispatch
