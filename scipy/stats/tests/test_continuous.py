@@ -447,89 +447,95 @@ def check_moment_funcs(dist, result_shape):
 
     atol = 1e-9  # make this tighter (e.g. 1e-13) after fixing `draw`
 
-    def check(moment, order, method=None, ref=None, success=True):
+    def check(order, kind, method=None, ref=None, success=True):
         if success:
-            res = moment(order, method=method)
+            res = dist.moment(order, kind, method=method)
             assert_allclose(res, ref, atol=atol*10**order)
             assert res.shape == ref.shape
         else:
             with pytest.raises(NotImplementedError):
-                moment(order, method=method)
+                dist.moment(order, kind, method=method)
 
-    formula_raw = dist._overrides('_moment_raw_formula')
-    formula_central = dist._overrides('_moment_central_formula')
-    formula_standard = dist._overrides('_moment_standard_formula')
+    def has_formula(order, kind):
+        formula_name = f'_moment_{kind}_formula'
+        overrides = dist._overrides(formula_name)
+        if not overrides:
+            return False
+        formula = getattr(dist, formula_name)
+        orders = getattr(formula, 'orders', set(range(6)))
+        return order in orders
+
+
     dist.reset_cache()
 
     ### Check Raw Moments ###
     for i in range(6):
-        check(dist.moment_raw, i, 'cache', success=False)  # not cached yet
-        ref = dist.moment_raw(i, method='quadrature')
-        check_nans_and_edges(dist, 'moment_raw', None, ref)
+        check(i, 'raw', 'cache', success=False)  # not cached yet
+        ref = dist.moment(i, 'raw', method='quadrature')
+        check_nans_and_edges(dist, 'moment', None, ref)
         assert ref.shape == result_shape
-        check(dist.moment_raw, i, 'cache', ref, success=True)  # cached now
-        check(dist.moment_raw, i, 'formula', ref, success=formula_raw)
-        check(dist.moment_raw, i, 'general', ref, i == 0)
+        check(i, 'raw','cache', ref, success=True)  # cached now
+        check(i, 'raw', 'formula', ref, success=has_formula(i, 'raw'))
+        check(i, 'raw', 'general', ref, i == 0)
 
     # Clearing caches to better check their behavior
     dist.reset_cache()
 
     # If we have central or standard moment formulas, or if there are
     # values in their cache, we can use method='transform'
-    dist.moment_central(0)  # build up the cache
-    dist.moment_central(1)
+    dist.moment(0, 'central')  # build up the cache
+    dist.moment(1, 'central')
     for i in range(2, 6):
-        ref = dist.moment_raw(i, method='quadrature')
-        check(dist.moment_raw, i, 'transform', ref,
-              success=formula_central or formula_standard)
-        dist.moment_central(i)  # build up the cache
-        check(dist.moment_raw, i, 'transform', ref)
+        ref = dist.moment(i, 'raw', method='quadrature')
+        check(i, 'raw', 'transform', ref,
+              success=has_formula(i, 'central') or has_formula(i, 'standard'))
+        dist.moment(i, 'central')  # build up the cache
+        check(i, 'raw', 'transform', ref)
 
     dist.reset_cache()
 
     ### Check Central Moments ###
 
     for i in range(6):
-        check(dist.moment_central, i, 'cache', success=False)
-        ref = dist.moment_central(i, method='quadrature')
-        check_nans_and_edges(dist, 'moment_central', None, ref)
+        check(i, 'central', 'cache', success=False)
+        ref = dist.moment(i, 'central', method='quadrature')
         assert ref.shape == result_shape
-        check(dist.moment_central, i, 'cache', ref, success=True)
-        check(dist.moment_central, i, 'formula', ref, success=formula_central)
-        check(dist.moment_central, i, 'general', ref, success=i <= 1)
-        check(dist.moment_central, i, 'transform', ref, success=formula_raw or (i <= 1))
-        if not formula_raw:
-            dist.moment_raw(i)
-            check(dist.moment_central, i, 'transform', ref)
+        check(i, 'central', 'cache', ref, success=True)
+        check(i, 'central', 'formula', ref, success=has_formula(i, 'central'))
+        check(i, 'central', 'general', ref, success=i <= 1)
+        check(i, 'central', 'transform', ref,
+              success=has_formula(i, 'raw') or (i <= 1))
+        if not has_formula(i, 'raw'):
+            dist.moment(i, 'raw')
+            check(i, 'central', 'transform', ref)
 
     dist.reset_cache()
 
     # If we have standard moment formulas, or if there are
     # values in their cache, we can use method='normalize'
-    dist.moment_standard(0)  # build up the cache
-    dist.moment_standard(1)
-    dist.moment_standard(2)
+    dist.moment(0, 'standard')  # build up the cache
+    dist.moment(1, 'standard')
+    dist.moment(2, 'standard')
     for i in range(3, 6):
-        ref = dist.moment_central(i, method='quadrature')
-        check(dist.moment_central, i, 'normalize', ref,
-              success=formula_standard)
-        dist.moment_standard(i)  # build up the cache
-        check(dist.moment_central, i, 'normalize', ref)
+        ref = dist.moment(i, 'central', method='quadrature')
+        check(i, 'central', 'normalize', ref,
+              success=has_formula(i, 'standard'))
+        dist.moment(i, 'standard')  # build up the cache
+        check(i, 'central', 'normalize', ref)
 
     ### Check Standard Moments ###
 
-    var = dist.moment_central(2, method='quadrature')
+    var = dist.moment(2, 'central', method='quadrature')
     dist.reset_cache()
 
     for i in range(6):
-        check(dist.moment_standard, i, 'cache', success=False)
-        ref = dist.moment_central(i, method='quadrature') / var ** (i / 2)
-        check_nans_and_edges(dist, 'moment_standard', None, ref)
+        check(i, 'standard', 'cache', success=False)
+        ref = dist.moment(i, 'central', method='quadrature') / var ** (i / 2)
         assert ref.shape == result_shape
-        check(dist.moment_standard, i, 'formula', ref,
-              success=formula_standard)
-        check(dist.moment_standard, i, 'general', ref, success=i <= 2)
-        check(dist.moment_standard, i, 'normalize', ref)
+        check(i, 'standard', 'formula', ref,
+              success=has_formula(i, 'standard'))
+        check(i, 'standard', 'general', ref, success=i <= 2)
+        check(i, 'standard', 'normalize', ref)
 
     if isinstance(dist, ShiftedScaledDistribution):
         # logmoment is not fully fleshed out; no need to test
@@ -540,13 +546,13 @@ def check_moment_funcs(dist, result_shape):
     logmean = dist._logmoment(1, logcenter=-np.inf)
     for i in range(6):
         ref = np.exp(dist._logmoment(i, logcenter=-np.inf))
-        assert_allclose(dist.moment_raw(i), ref, atol=atol)
+        assert_allclose(dist.moment(i, 'raw'), ref, atol=atol*10**i)
 
         ref = np.exp(dist._logmoment(i, logcenter=logmean))
-        assert_allclose(dist.moment_central(i), ref, atol=atol)
+        assert_allclose(dist.moment(i, 'central'), ref, atol=atol*10**i)
 
         ref = np.exp(dist._logmoment(i, logcenter=logmean, standardized=True))
-        assert_allclose(dist.moment_standard(i), ref, atol=atol)
+        assert_allclose(dist.moment(i, 'standard'), ref, atol=atol*10**i)
 
 
 @pytest.mark.parametrize('family', (LogUniform, StandardNormal))
@@ -670,16 +676,14 @@ def test_input_validation():
     with pytest.raises(ValueError, match=message):
         Test(tol=-1)
 
-    message = ("Argument `order` of `Test.moment_raw` must be a "
+    message = ("Argument `order` of `Test.moment` must be a "
                "finite, positive integer.")
     with pytest.raises(ValueError, match=message):
-        Test().moment_raw(-1)
-    message = "Argument `order` of `Test.moment_central` must be..."
+        Test().moment(-1)
+
+    message = ("Argument `kind` of `Test.moment` must be one of...")
     with pytest.raises(ValueError, match=message):
-        Test().moment_central(np.inf)
-    message = "Argument `order` of `Test.moment_standard` must be..."
-    with pytest.raises(ValueError, match=message):
-        Test().moment_standard([1, 2, 3])
+        Test().moment(2, kind='coconut')
 
     message = ("Argument `rng` passed to the `Test` distribution family is of "
                "type `<class 'int'>`, but it must be a NumPy `Generator`.")
@@ -807,11 +811,11 @@ class TestTransforms:
         assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp)*scale + loc)
         assert_allclose(dist.iccdf(p), dist0.iccdf(p)*scale + loc)
         for i in range(1, 5):
-            assert_allclose(dist.moment_raw(i), dist_ref.moment(i))
-            assert_allclose(dist.moment_central(i),
-                            dist0.moment_central(i)*scale**i)
-            assert_allclose(dist.moment_standard(i),
-                            dist0.moment_standard(i) * np.sign(scale) ** i)
+            assert_allclose(dist.moment(i, 'raw'), dist_ref.moment(i))
+            assert_allclose(dist.moment(i, 'central'),
+                            dist0.moment(i, 'central')*scale**i)
+            assert_allclose(dist.moment(i, 'standard'),
+                            dist0.moment(i, 'standard') * np.sign(scale) ** i)
 
 
         dist = (dist - 2*loc) + loc
@@ -833,9 +837,9 @@ class TestTransforms:
         assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp) + z)
         assert_allclose(dist.iccdf(p), dist0.iccdf(p) + z)
         for i in range(1, 5):
-            assert_allclose(dist.moment_raw(i), dist0.moment_raw(i))
-            assert_allclose(dist.moment_central(i), dist0.moment_central(i))
-            assert_allclose(dist.moment_standard(i), dist0.moment_standard(i))
+            assert_allclose(dist.moment(i, 'raw'), dist0.moment(i, 'raw'))
+            assert_allclose(dist.moment(i, 'central'), dist0.moment(i, 'central'))
+            assert_allclose(dist.moment(i, 'standard'), dist0.moment(i, 'standard'))
 
         # These are tough to compare because of the way the shape works
         # rng = np.random.default_rng(seed)

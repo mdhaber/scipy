@@ -40,7 +40,7 @@ class StandardNormal(ContinuousDistribution):
 
     The probability density function of the standard normal distribution is:
 
-    ..math::
+    .. math::
 
         f(x) = \frac{1}{\sqrt{2 \pi}} \exp \left( -\frac{1}{2} x^2 \right)
 
@@ -106,30 +106,20 @@ class StandardNormal(ContinuousDistribution):
     def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):
         return rng.normal(size=full_shape)[()]
 
-# class Normal(ContinuousDistribution):
-#     def __new__(cls, mu=None, sigma=None, **kwargs):
-#         if mu is None and sigma is None:
-#             return StandardNormal.__new__(StandardNormal, **kwargs)
-#         return super().__new__(cls)
-        # else:
-        #     mu = 0.0 if mu is None else mu
-        #     sigma = 1.0 if sigma is None else sigma
-        #     return ShiftedScaledNormal(mu=mu, sigma=sigma, **kwargs)
-
 
 class Normal(ContinuousDistribution):
     r"""Normal distribution with prescribed mean and standard deviation
 
     The probability density function of the standard normal distribution is:
 
-    ..math::
+    .. math::
 
         f(x) = \frac{1}{\sigma \sqrt{2 \pi}} \exp {
             \left( -\frac{1}{2}\left( \frac{x - \mu}{\sigma} \right)^2 \right)}
 
     """
     # The normal distribution is so frequently used that it's worth a bit of code
-    # duplication to get a tiny bit better performance.
+    # duplication to get better performance.
     _mu_domain = _RealDomain(endpoints=(-oo, oo))
     _sigma_domain = _RealDomain(endpoints=(0, oo))
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
@@ -193,13 +183,23 @@ class Normal(ContinuousDistribution):
     def _mode_formula(self, *, mu, sigma, **kwargs):
         return mu
 
+    def _moment_raw_formula(self, order, *, mu, sigma, **kwargs):
+        if order == 0:
+            return np.ones_like(mu)
+        elif order == 1:
+            return mu
+        else:
+            return None
+    _moment_raw_formula.orders = [0, 1]
+
     def _moment_central_formula(self, order, *, mu, sigma, **kwargs):
         if order == 0:
             return np.ones_like(mu)
         elif order % 2:
             return np.zeros_like(mu)
         else:
-            return sigma**order * special.factorial2(int(order) - 1)
+            # exact is faster (and obviously more accurate) for reasonable orders
+            return sigma**order * special.factorial2(int(order) - 1, exact=True)
 
     def _sample_formula(self, sample_shape, full_shape, rng, *, mu, sigma, **kwargs):
         return rng.normal(loc=mu, scale=sigma, size=full_shape)[()]

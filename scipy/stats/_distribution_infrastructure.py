@@ -931,7 +931,7 @@ def _set_invalid_nan_property(f):
     # functions that represent properties of the distribution itself:
     # logentropy, entropy
     # median, mode
-    # moment_raw, moment_central, moment_standard
+    # moment
     # It ensures that the output is of the correct shape and dtype and that
     # there are NaNs wherever the distribution parameters were invalid.
 
@@ -1303,8 +1303,8 @@ def _generate_example(dist_family):
     {X.variance(), X.standard_deviation()}
     >>> X.skewness(), X.kurtosis()
     {X.skewness(), X.kurtosis()}
-    >>> np.allclose(X.moment_standard(order=6),
-    ...             X.moment_central(order=6) / X.variance()**3)
+    >>> np.allclose(X.moment(order=6, kind='standard'),
+    ...             X.moment(order=6, kind='central') / X.variance()**3)
     True
     >>> np.allclose(np.exp(X.logentropy()), X.entropy())
     True
@@ -1388,9 +1388,7 @@ class ContinuousDistribution:
 
     sample
 
-    moment_raw
-    moment_central
-    moment_central
+    moment
 
     entropy
     logentropy
@@ -1760,7 +1758,7 @@ class ContinuousDistribution:
             raise ValueError(message)
         return rng
 
-    def _validate_order(self, order, f_name, iv_policy=None):
+    def _validate_order_kind(self, order, kind, kinds, iv_policy=None):
         # Yet another integer validating function. Unlike others in SciPy, it
         # Is quite flexible about what is allowed as an integer, and it
         # raises a distribution-specific error message to facilitate
@@ -1769,7 +1767,7 @@ class ContinuousDistribution:
             return order
 
         order = np.asarray(order, dtype=self._dtype)[()]
-        message = (f"Argument `order` of `{self.__class__.__name__}.{f_name}` "
+        message = (f"Argument `order` of `{self.__class__.__name__}.moment` "
                    "must be a finite, positive integer.")
         try:
             order_int = round(order.item())
@@ -1779,6 +1777,11 @@ class ContinuousDistribution:
             raise ValueError(message) from e
 
         if order_int <0 or order_int != order:
+            raise ValueError(message)
+
+        message = (f"Argument `kind` of `{self.__class__.__name__}.moment` "
+                   f"must be one of {set(kinds)}.")
+        if kind.lower() not in kinds:
             raise ValueError(message)
 
         return order
@@ -1840,7 +1843,6 @@ class ContinuousDistribution:
         # For now, we ignore the status, but I want to return the error
         # estimate - see question 5 at the top.
         return res.integral
-
 
     def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
         # Finds the argument of a function that produces the desired output.
@@ -2114,11 +2116,11 @@ class ContinuousDistribution:
 
     def mean(self, *, method=None, cache_policy=None):
         """Distribution mean"""
-        return self.moment_raw(1, method=method, cache_policy=cache_policy)
+        return self.moment(1, kind='raw', method=method, cache_policy=cache_policy)
 
     def variance(self, *, method=None, cache_policy=None):
         """Distribution variance"""
-        return self.moment_central(2, method=method, cache_policy=cache_policy)
+        return self.moment(2, kind='central', method=method, cache_policy=cache_policy)
 
     def standard_deviation(self, *, method=None, cache_policy=None):
         """Distribution standard deviation"""
@@ -2126,7 +2128,7 @@ class ContinuousDistribution:
 
     def skewness(self, *, method=None, cache_policy=None):
         """Distribution skewness (standardized third moment)"""
-        return self.moment_standard(3, method=method, cache_policy=cache_policy)
+        return self.moment(3, kind='standard', method=method, cache_policy=cache_policy)
 
     def kurtosis(self, *, method=None, cache_policy=None):
         """Distribution Pearson kurtosis (standardized fourth moment)
@@ -2135,7 +2137,7 @@ class ContinuousDistribution:
         "Fisher" or "Excess" kurtosis. The Pearson kurtosis of the normal
         distribution is 3.
         """
-        return self.moment_standard(4, method=method, cache_policy=cache_policy)
+        return self.moment(4, kind='standard', method=method, cache_policy=cache_policy)
 
     ### Distribution functions
     # The following functions related to the distribution PDF and CDF are
@@ -2688,15 +2690,8 @@ class ContinuousDistribution:
         return self._icdf_dispatch(uniform, **kwargs)
 
     ### Moments
-    # The moment calculation functions are exposed via a public method that
-    # accepts only one positional argument - the order of the moment - and
-    # keyword options (not distribution parameters or quantile/percentile
-    # argument).
-    # moment_raw
-    # moment_central
-    # moment_standard
-    #
-    # Common options are:
+    # The `moment` method accepts two positional arguments - the order and kind
+    # (raw, central, or standard) of the moment - and keyword options:
     # method - a string that indicates which method should be used to compute
     #          the quantity (e.g. a formula or numerical integration).
     # cache_policy - an enum that indicates whether the value should be cached
@@ -2704,11 +2699,12 @@ class ContinuousDistribution:
     # Like the distribution properties, input/output validation is provided by
     # the `_set_invalid_nan_property` decorator.
     #
-    # Like most public methods above, each public method calls a private
-    # "dispatch" method that determines which "method" (strategy for
-    # calculating the desired quantity) to use. Also, each dispatch method can
-    # designate the responsibility computing the moment to one of several
-    # "implementation" methods.
+    # Unlike most public methods above, `moment` dispatches to one of three
+    # private methods - one for each 'kind'. Like most *public* methods above,
+    # each of these private methods calls a private "dispatch" method that
+    # determines which "method" (strategy for calculating the desired quantity)
+    # to use. Also, each dispatch method can designate the responsibility
+    # computing the moment to one of several "implementation" methods.
     # Unlike the dispatch methods above, however, the `@_dispatch` decorator
     # is not used, and both logic and method calls are included in the function
     # itself.
@@ -2755,12 +2751,19 @@ class ContinuousDistribution:
         return constants
 
     @_set_invalid_nan_property
-    def moment_raw(self, order=1, *, method=None, cache_policy=None):
+    def moment(self, order=1, kind='raw', *, method=None, cache_policy=None):
+        kinds = {'raw': self._moment_raw,
+                 'central': self._moment_central,
+                 'standard': self._moment_standard}
+        order = self._validate_order_kind(order, kind, kinds)
+        moment_kind = kinds[kind]
+        return moment_kind(order, method=method, cache_policy=cache_policy)
+
+    def _moment_raw(self, order=1, *, method=None, cache_policy=None):
         """Raw distribution moment about the origin"""
         # Consider exposing the point about which moments are taken as an
         # option. This is easy to support, since `_moment_transform_center`
         # does all the work.
-        order = self._validate_order(order, "moment_raw")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_raw_dispatch(
@@ -2817,10 +2820,8 @@ class ContinuousDistribution:
         # distribution
         return self._one if order == 0 else None
 
-    @_set_invalid_nan_property
-    def moment_central(self, order=1, *, method=None, cache_policy=None):
+    def _moment_central(self, order=1, *, method=None, cache_policy=None):
         """Distribution moment about the mean"""
-        order = self._validate_order(order, "moment_central")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_central_dispatch(
@@ -2888,10 +2889,8 @@ class ContinuousDistribution:
         general_central_moments = {0: self._one, 1: self._zero}
         return general_central_moments.get(order, None)
 
-    @_set_invalid_nan_property
-    def moment_standard(self, order=1, *, method=None, cache_policy=None):
+    def _moment_standard(self, order=1, *, method=None, cache_policy=None):
         """Standardized distribution moment"""
-        order = self._validate_order(order, "moment_standard")
         methods = self._moment_methods if method is None else {method}
         cache_policy = self.cache_policy if cache_policy is None else cache_policy
         return self._moment_standard_dispatch(
