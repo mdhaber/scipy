@@ -1,9 +1,8 @@
-from functools import cached_property
 import numpy as np
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
-    oo, _null, ShiftedScaledDistribution, TransformedDistribution, _combine_docs)
+    oo, ShiftedScaledDistribution, TransformedDistribution, _combine_docs)
 
 __all__ = ['Normal', 'LogUniform', 'LogLaplace', 'CircularDistribution', 'Uniform']
 
@@ -125,8 +124,10 @@ class Normal(ContinuousDistribution):
     _sigma_domain = _RealDomain(endpoints=(0, oo))
     _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
 
-    _mu_param = _RealParameter('mu',  symbol=r'\mu', domain=_mu_domain, typical=(-1, 1))
-    _sigma_param = _RealParameter('sigma', symbol=r'\sigma', domain=_sigma_domain, typical=(0.5, 1.5))
+    _mu_param = _RealParameter('mu',  symbol=r'\mu', domain=_mu_domain,
+                               typical=(-1, 1))
+    _sigma_param = _RealParameter('sigma', symbol=r'\sigma', domain=_sigma_domain,
+                                  typical=(0.5, 1.5))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-1, 1))
 
     _parameterizations = [_Parameterization(_mu_param, _sigma_param)]
@@ -248,15 +249,15 @@ class LogUniform(ContinuousDistribution):
                           _Parameterization(_a_param, _b_param)]
     _variable = _x_param
 
-    # Would like to do this but needs its own commit. Parameter validation currently relies
-    # on unused parameters being unspecified
+    # Would like to do this but needs its own commit. Parameter validation currently
+    # relies on unused parameters being unspecified
     # # define init so IDE can give shape parameter recommendations
     # def __init__(self, *, a=None, b=None, log_a=None, log_b=None,
     #              tol=_null, iv_policy=None, cache_policy=None, rng=None):
     #     # goes in infrastructure: parameters = {name:val for name, val in parameters
     #                                             if val is not None}
-    #     super().__init__(a=a, b=b, log_a=log_a, log_b=log_b,
-    #                      tol=tol, iv_policy=iv_policy, cache_policy=cache_policy, rng=rng)
+    #     super().__init__(a=a, b=b, log_a=log_a, log_b=log_b, tol=tol,
+    #                      iv_policy=iv_policy, cache_policy=cache_policy, rng=rng)
 
     def _process_parameters(self, a=None, b=None, log_a=None, log_b=None, **kwargs):
         a = np.exp(log_a) if a is None else a

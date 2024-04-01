@@ -1,12 +1,11 @@
 import functools
-import warnings
 import pickle
 from copy import deepcopy
 
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_equal
-from hypothesis import strategies, given, reproduce_failure  # noqa
+from hypothesis import strategies, given, reproduce_failure  # noqa: F401
 import hypothesis.extra.numpy as npst
 
 from scipy import stats
@@ -179,7 +178,7 @@ class TestDistributions:
         check_sample_shape_NaNs(dist, 'qmc_sample', sample_shape, result_shape)
 
         methods = {'log/exp'}
-        check_dist_func(dist, 'pdf', x, x_result_shape, methods);
+        check_dist_func(dist, 'pdf', x, x_result_shape, methods)
         check_dist_func(dist, 'logpdf', x, x_result_shape, methods)
 
         methods = {'log/exp', 'complementarity', 'quadrature'}
@@ -309,20 +308,20 @@ def check_cdf2(dist, log, x, y, result_shape, methods):
     methods = methods.copy()
 
     if log:
-        if dist._overrides(f'_logcdf2_formula'):
+        if dist._overrides('_logcdf2_formula'):
             methods.add('formula')
-        if dist._overrides(f'_logcdf_formula') or dist._overrides(f'_logccdf_formula'):
+        if dist._overrides('_logcdf_formula') or dist._overrides('_logccdf_formula'):
             methods.add('subtraction')
-        if (dist._overrides(f'_cdf_formula')
-                or dist._overrides(f'_ccdf_formula')):
+        if (dist._overrides('_cdf_formula')
+                or dist._overrides('_ccdf_formula')):
             methods.add('log/exp')
     else:
-        if dist._overrides(f'_cdf2_formula'):
+        if dist._overrides('_cdf2_formula'):
             methods.add('formula')
-        if dist._overrides(f'_cdf_formula') or dist._overrides(f'_ccdf_formula'):
+        if dist._overrides('_cdf_formula') or dist._overrides('_ccdf_formula'):
             methods.add('subtraction')
-        if (dist._overrides(f'_logcdf_formula')
-                or dist._overrides(f'_logccdf_formula')):
+        if (dist._overrides('_logcdf_formula')
+                or dist._overrides('_logccdf_formula')):
             methods.add('log/exp')
 
     ref = dist.cdf(y) - dist.cdf(x)
@@ -787,8 +786,7 @@ class TestTransforms:
         tmp = draw_distribution_from_family(
             TransformedNormal, data, rng, proportions=(1, 0, 0, 0), min_side=1)
         dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape = tmp
-        sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=1,
-                                                   max_side=20))
+
         loc = dist.loc
         scale = dist.scale
         dist0 = StandardNormal()

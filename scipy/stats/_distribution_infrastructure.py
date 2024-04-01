@@ -854,7 +854,8 @@ def _set_invalid_nan(f):
                 shape = np.broadcast_shapes(x.shape, shape)
                 x = np.broadcast_to(x, shape)
                 # Should we broadcast the distribution parameters to match shape of x?
-                # Should we copy if we broadcast to avoid passing a view to developer functions?
+                # Should we copy if we broadcast to avoid passing a view to developer
+                # functions?
             except ValueError as e:
                 message = (
                     f"The argument provided to `{self.__class__.__name__}"
@@ -1321,7 +1322,8 @@ def _generate_example(dist_family):
     >>> s = X.sample(shape=(n,), rng=rng, qmc_engine=stats.qmc.Halton)
     >>> assert np.count_nonzero(s < X.median()) == n/2
     """
-    # remove the indentation due to use of block quote within function; eliminate blank first line
+    # remove the indentation due to use of block quote within function;
+    # eliminate blank first line
     example = "\n".join([line.lstrip() for line in example.split("\n")][1:])
     return example
 
@@ -1558,8 +1560,7 @@ class ContinuousDistribution:
         # broadcast when it's not necessary.
         parameter_vals = [np.asarray(parameter)
                           for parameter in parameters.values()]
-        parameter_shapes = set((parameter.shape
-                                for parameter in parameter_vals))
+        parameter_shapes = set(parameter.shape for parameter in parameter_vals)
         if len(parameter_shapes) == 1:
             return parameters, parameter_vals[0].shape
 
@@ -2000,7 +2001,68 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def logentropy(self, *, method=None):
-        """Log of the distribution differential entropy"""
+        r"""Logarithm of the differential entropy
+
+        For more information about the differential entropy, see
+        `ContinuousDistribution.entropy`.
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'logexp'}
+            The strategy used to evaluate the differential entropy. By default
+            (``None``), the infrastructure chooses between the following options.
+
+            - ``'formula'``: use a formula for the logarithm of the differential
+              entropy itself
+            - ``'logexp'``: evaluate the differential entropy directly and take
+              the logarithm
+            - ``'quadrature'``: numerically log-integrate the logarithm of the
+              integrand
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The logarithm of the differential entropy of the random variable.
+
+        See Also
+        --------
+        ContinuousDistribution.entropy
+        ContinuousDistribution.logpdf
+
+        Notes
+        -----
+        If the entropy of a distribution is negative, then the logarithm of
+        entropy is complex with imaginary part divisible by :math:`\pi`. For
+        consistency, the result of this function always has complex dtype,
+        regardless of the value of the imaginary part.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Uniform(a=-1, b=1)
+
+        Evaluate the logarithm of the differential entropy:
+
+        >>> X.logentropy()
+        (-0.3665129205816642+0j)
+        >>> np.allclose(np.exp(X.logentropy()), X.entropy())
+        True
+
+        For a random variable with negative entropy, the logarithm of the
+        entropy has an imaginary part equal to `np.pi`.
+
+        >>> X = stats.Uniform(a=-.1, b=.1)
+        >>> X.entropy(), X.logentropy()
+        (-1.6094379124341007, (0.4758849953271105+3.141592653589793j))
+
+        """
         return self._logentropy_dispatch(method=method, **self._parameters) + 0j
 
     @_dispatch
@@ -2029,7 +2091,62 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def entropy(self, *, method=None):
-        """Distribution differential entropy"""
+        r"""Differential entropy
+
+        In terms of probability density function :math:`f(x)` and its support
+        :math:`\chi`, the differential entropy of a random variable :math:`X` is:
+
+        .. math::
+
+            h(X) = - \int_{\chi} f(x) \log f(x) dx
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'logexp'}
+            The strategy used to evaluate the differential entropy. By default
+            (``None``), the infrastructure chooses between the following options.
+
+            - ``'formula'``: use a formula for the differential entropy itself
+            - ``'logexp'``: evaluate the logarithm of the differential entropy
+              directly and exponentiate
+            - ``'quadrature'``: numerically integrate the PDF
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The differential entropy of the random variable.
+
+        See Also
+        --------
+        ContinuousDistribution.logentropy
+        ContinuousDistribution.pdf
+
+        Notes
+        -----
+        This function calculates the differential entropy using the natural
+        logarithm; i.e. the logarithm with base :math:`e`. Consequently, the
+        value is expressed in (dimensionless) "units" of nats. To convert the
+        entropy to different units (i.e. corresponding with a different base),
+        divide the result by the natural logarithm of the desired base.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Uniform(a=-1, b=1)
+
+        Evaluate the differential entropy:
+
+        >>> X.entropy()
+        0.6931471805599454
+
+        """
         return self._entropy_dispatch(method=method, **self._parameters)
 
     @_dispatch
@@ -2184,13 +2301,13 @@ class ContinuousDistribution:
         Parameters
         ----------
         x : Array
-            The value of the random variable for which the log PDF is to be
+            The value of the random variable for which the log-PDF is to be
             evaluated.
         method : {None, 'formula', 'logexp'}
-            The strategy used to evaluate the log PDF. By default (``None``), the
+            The strategy used to evaluate the log-PDF. By default (``None``), the
             infrastructure chooses between the following options.
 
-            - ``'formula'``: use a formula for the log PDF itself
+            - ``'formula'``: use a formula for the log-PDF itself
             - ``'logexp'``: evaluate the PDF and takes its logarithm
 
             Not all `method` options are available for all distributions.
@@ -2200,7 +2317,7 @@ class ContinuousDistribution:
         Returns
         -------
         out : Array
-            The log PDF evaluated at the argument `x`.
+            The log-PDF evaluated at the argument `x`.
 
         See Also
         --------
@@ -2210,9 +2327,9 @@ class ContinuousDistribution:
         Notes
         -----
         Suppose a probability distribution has support :math:`[l, r]`.
-        By definition of the support, the log PDF evaluates to its minimum value
+        By definition of the support, the log-PDF evaluates to its minimum value
         of :math:`-\infty` (i.e. :math:`\log(0)`) outside the support; i.e. for
-        :math:`x < l` or :math:`x > r`. The maximum of the log PDF may be less
+        :math:`x < l` or :math:`x > r`. The maximum of the log-PDF may be less
         than or greater than :math:`\log(1) = 0` because the maximum of the PDF
         can be any positive real.
 
@@ -2232,7 +2349,7 @@ class ContinuousDistribution:
         >>> from scipy import stats
         >>> X = stats.Uniform(a=-0.5, b=0.5)
 
-        Evaluate the log PDF at the desired argument:
+        Evaluate the log-PDF at the desired argument:
 
         >>> X.logpdf(1.)
         0.0
@@ -2359,7 +2476,7 @@ class ContinuousDistribution:
             - ``'logexp'``: evaluate the CDF directly and take the logarithm
             - ``'complementarity'``: evaluate the logarithm of the complementary CDF
               directly and take the logarithmic complement
-            - ``'quadrature'``: numerically log-integrate the log PDF
+            - ``'quadrature'``: numerically log-integrate the log-PDF
 
             In place of ``'complementarity'``, the two-argument form accepts:
 
@@ -2548,12 +2665,12 @@ class ContinuousDistribution:
         -------
         out : Array
             The CDF evaluated at the provided argument(s).
-            
+
         See Also
         --------
         ContinuousDistribution.logcdf
         ContinuousDistribution.ccdf
-        
+
         Notes
         -----
         Suppose a probability distribution has support :math:`[l, r]`.
@@ -2682,7 +2799,7 @@ class ContinuousDistribution:
             - ``'logexp'``: evaluate the CCDF directly and take the logarithm
             - ``'complementarity'``: evaluate the log-CDF directly
               and take the logarithmic complement
-            - ``'quadrature'``: numerically log-integrate the log PDF
+            - ``'quadrature'``: numerically log-integrate the log-PDF
 
             The two-argument form chooses between:
 
@@ -2846,7 +2963,7 @@ class ContinuousDistribution:
         --------
         ContinuousDistribution.cdf
         ContinuousDistribution.logccdf
-        
+
         Notes
         -----
         Suppose a probability distribution has support :math:`[l, r]`.
@@ -3702,7 +3819,7 @@ class ContinuousDistribution:
     def plot(self, func='pdf', *, ax=None, cdf=0.001, ccdf=0.001):
         """Plot a function of the distribution"""
         try:
-            import matplotlib  # noqa
+            import matplotlib  # noqa: F401, E402
         except ModuleNotFoundError as exc:
             message = ("`matplotlib` must be installed to use "
                        f"`{self.__class__.__name__}.plot`.")
@@ -3809,7 +3926,8 @@ class ContinuousDistribution:
         else:
             def objective(x):
                 self.update_parameters(**dict(zip(parameters, x)))
-                return [(function() - output) for function, output in zip(function, output)]
+                return [(function() - output)
+                        for function, output in zip(function, output)]
 
             res = optimize.fsolve(objective, x0)
 
