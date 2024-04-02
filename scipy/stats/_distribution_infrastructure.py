@@ -1961,7 +1961,7 @@ class ContinuousDistribution:
     # and we use quadrature otherwise.
 
     def support(self):
-        """Support of the random variable
+        r"""Support of the random variable
 
         The support of a random variable is set of all possible outcomes;
         i.e., the subset of the domain of argument :math:`x` for which
@@ -1988,10 +1988,15 @@ class ContinuousDistribution:
         | Method         | Value for ``x < l`` | Value for ``x > r`` |
         +================+=====================+=====================+
         | ``pdf(x)``     | 0                   | 0                   |
+        +----------------+---------------------+---------------------+
         | ``logpdf(x)``  | -inf                | -inf                |
+        +----------------+---------------------+---------------------+
         | ``cdf(x)``     | 0                   | 1                   |
+        +----------------+---------------------+---------------------+
         | ``logcdf(x)``  | -inf                | 0                   |
+        +----------------+---------------------+---------------------+
         | ``ccdf(x)``    | 1                   | 0                   |
+        +----------------+---------------------+---------------------+
         | ``logccdf(x)`` | 0                   | -inf                |
         +----------------+---------------------+---------------------+
 
@@ -2007,6 +2012,7 @@ class ContinuousDistribution:
         | Method      | ``x = 0`` | ``x = 1`` |
         +=============+===========+===========+
         | ``icdf(x)`` | ``l``     | ``r``     |
+        +-------------+-----------+-----------+
         | ``icdf(x)`` | ``r``     | ``l``     |
         +-------------+-----------+-----------+
 
@@ -2321,7 +2327,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def mode(self, *, method=None):
-        """Mode
+        r"""Mode
 
         Informally, the mode is a value that a random variable has the highest
         probability (density) of assuming. That is, the mode is the element of
@@ -3603,6 +3609,7 @@ class ContinuousDistribution:
         >>> X.icdf(0.25)
         -0.25
         >>> np.allclose(X.cdf(X.icdf(0.25)), 0.25)
+        True
 
         This function returns NaN when the argument is outside the domain.
 
@@ -3915,20 +3922,20 @@ class ContinuousDistribution:
         Generate a pseudorandom sample:
 
         >>> x = X.sample((1000, 1))
-        >>> percentiles = (np.arange(8) + 1) / 8
-        >>> np.count_nonzero(x <= percentiles, axis=0)
-        array([ 148,  263,  387,  516,  636,  751,  865, 1000])
+        >>> octiles = (np.arange(8) + 1) / 8
+        >>> np.count_nonzero(x <= octiles, axis=0)
+        array([ 148,  263,  387,  516,  636,  751,  865, 1000])  # may vary
 
         Generate a Quasi-Monte Carlo sample:
 
         >>> x = X.sample((1000, 1), qmc_engine=stats.qmc.Halton)
-        >>> np.count_nonzero(x <= percentiles, axis=0)
+        >>> np.count_nonzero(x <= octiles, axis=0)
         array([ 125,  250,  375,  500,  625,  750,  875, 1000])
 
         The QMC sample has low discrepancy along axis 0:
 
         >>> x = X.sample((1000, 3, 1), qmc_engine=stats.qmc.Halton)
-        >>> np.count_nonzero(x <= percentiles, axis=0)
+        >>> np.count_nonzero(x <= octiles, axis=0)
         array([[ 125,  250,  375,  500,  625,  750,  875, 1000],
                [ 124,  249,  374,  498,  624,  750,  875, 1000],
                [ 124,  249,  374,  498,  624,  750,  874, 1000]])
@@ -4059,7 +4066,7 @@ class ContinuousDistribution:
 
         In terms of probability density function :math:`f(x)` and its support
         :math:`\chi`, the "raw" moment (about the origin) of order :math:`n` of
-         a random variable :math:`X` is:
+        a random variable :math:`X` is:
 
         .. math::
 
