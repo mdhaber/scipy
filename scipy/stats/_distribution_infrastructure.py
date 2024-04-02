@@ -1357,16 +1357,17 @@ class ContinuousDistribution:
         Random number generator to be used by any methods that require
         pseudo-random numbers (e.g. `sample`).
 
-    Attributes
-    ----------
-    tol
-    iv_policy
-    cache_policy
-    rng
-
     Methods
     -------
     support
+
+    plot
+
+    sample
+
+    fit
+
+    moment
 
     mean
     median
@@ -1382,25 +1383,21 @@ class ContinuousDistribution:
     logpdf
 
     cdf
-    logcdf
     icdf
-    ilogcdf
-
     ccdf
-    logccdf
     iccdf
+
+    logcdf
+    ilogcdf
+    logccdf
     ilogccdf
-
-    sample
-
-    moment
 
     entropy
     logentropy
 
-    plot
-
-    fit
+    Notes
+    -----
+    All parameters of the class' initializer are available as attributes.
 
     Examples
     --------
@@ -2257,7 +2254,57 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def median(self, *, method=None):
-        """Distribution median"""
+        r"""Median
+
+        If a continuous random variable :math:`X` has probability :math:`0.5` of
+        taking on a value less than :math:`m`, then :math:`m` is the median.
+        That is, the median is the value :math:`m` for which:
+
+        .. math::
+
+            P(X ≤ m) = 0.5 = P(X ≥ m)
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'icdf'}
+            The strategy used to evaluate the median.
+            By default (``None``), the infrastructure chooses between the
+            following options.
+
+            - ``'formula'``: use a formula for the median
+            - ``'icdf'``: evaluate the inverse CDF of 0.5
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The median
+
+        See Also
+        --------
+        ContinuousDistribution.mean
+        ContinuousDistribution.mode
+        ContinuousDistribution.icdf
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Uniform(a=0., b=10.)
+
+        Evaluate the inverse CDF at the desired argument:
+
+        >>> X.median()
+        5
+        >>> X.median() == X.icdf(0.5) == X.iccdf(0.5)
+        True
+
+        """
         return self._median_dispatch(method=method, **self._parameters)
 
     @_dispatch
@@ -2276,7 +2323,88 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def mode(self, *, method=None):
-        """Distribution mode"""
+        """Mode
+
+        Informally, the mode is a value that a random variable has the highest
+        probability (density) of assuming. That is, the mode is the element of
+        the support :math:`\chi` that maximizes the probability density
+        function :math:`f(x)`:
+
+        .. math::
+
+            \text{mode} = \argmax_{\chi} f(x)
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'optimization'}
+            The strategy used to evaluate the mode.
+            By default (``None``), the infrastructure chooses between the
+            following options.
+
+            - ``'formula'``: use a formula for the median
+            - ``'optimization'``: numerically maximize the PDF
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : Array
+            The mode
+
+        See Also
+        --------
+        ContinuousDistribution.mean
+        ContinuousDistribution.median
+        ContinuousDistribution.pdf
+
+        Notes
+        -----
+        For some distributions
+
+        #. the mode is not unique (e.g. the uniform distribution);
+        #. the PDF has one or more singularities, and it is debateable whether
+           a singularity is considered to be in the domain and called the mode
+           (e.g. the beta distribution); and/or
+        #. the probability density function may have one or more local maxima
+           that are not a global maximum.
+
+        In such cases, `ContinuousDistribution.mode` will
+
+        #. return a single value,
+        #. consider the mode to occur at a singularity, and/or
+        #. return a local maximum which may or may not be a global maximum.
+
+        If a formula for the mode is not specifically implemented for the
+        chosen distribution, SciPy will attempt to compute the mode
+        numerically, which may not meet the user's preferred definition of a
+        mode. In such cases, the user is encouraged to subclass the
+        distribution and override ``mode``.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1., sigma=2.)
+
+        Evaluate the mode:
+
+        >>> X.mode()
+        5
+
+        Subclass `Normal` and override ``mode``:
+
+        >>> class BetterNormal(Normal):
+        ...     def mode(self):
+        ...         return self.mu
+        >>> X = BetterNormal(mu=1., sigma=2.)
+        >>> X.mode()
+        5
+
+        """
         return self._mode_dispatch(method=method, **self._parameters)
 
     @_dispatch
@@ -3970,7 +4098,7 @@ class ContinuousDistribution:
         Evaluate the second central moment:
 
         >>> X.moment(order=2, kind='central')
-        1.0
+        4.0
         >>> X.moment(order=2, kind='central') == X.variance() == X.sigma**2
         True
 
