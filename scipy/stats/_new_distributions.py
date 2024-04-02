@@ -341,6 +341,11 @@ class Uniform(ContinuousDistribution):
     def _pdf_formula(self, x, *, ab, **kwargs):
         return np.full(x.shape, 1/ab)
 
+    def _icdf_formula(self, x, a, b, ab, **kwargs):
+        return a + ab*x
+
+    def _mode_formula(self, *, a, b, ab, **kwargs):
+        return a + 0.5*ab
 
 class CircularDistribution(ShiftedScaledDistribution):
     """Class that represents a circular statistical distribution."""

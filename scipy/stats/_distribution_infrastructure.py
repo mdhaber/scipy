@@ -25,6 +25,7 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
+#  fix QMC bug with size=() but distribution shape, say, 2
 #  kurtosis input validation test
 #  clip - ShiftedScaledNormal(loc=0, scale=0.01).ccdf(-7.32, method='quadrature') > 1
 #  test/fix dtypes? It is *so* hard without NEP50
@@ -2017,7 +2018,6 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
         >>> X = stats.Uniform(a=-0.5, b=0.5)
 
@@ -2127,7 +2127,7 @@ class ContinuousDistribution:
 
         >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Uniform(a=-1, b=1)
+        >>> X = stats.Uniform(a=-1., b=1.)
 
         Evaluate the logarithm of the differential entropy:
 
@@ -2218,9 +2218,8 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Uniform(a=-1, b=1)
+        >>> X = stats.Uniform(a=-1., b=1.)
 
         Evaluate the differential entropy:
 
@@ -2293,7 +2292,6 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
         >>> X = stats.Uniform(a=0., b=10.)
 
@@ -2386,23 +2384,30 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
         >>> X = stats.Normal(mu=1., sigma=2.)
 
         Evaluate the mode:
 
         >>> X.mode()
-        5
+        1.0
 
-        Subclass `Normal` and override ``mode``:
+        If the mode is not uniquely defined, ``mode`` nonetheless returns a
+        single value.
 
-        >>> class BetterNormal(Normal):
-        ...     def mode(self):
-        ...         return self.mu
-        >>> X = BetterNormal(mu=1., sigma=2.)
+        >>> X = stats.Uniform(a=0., b=1.)
         >>> X.mode()
-        5
+        0.5
+
+        If this choice does not satisfy your requirements, subclass the
+        distribution and override ``mode``:
+
+        >>> class BetterUniform(stats.Uniform):
+        ...     def mode(self):
+        ...         return self.b
+        >>> X = BetterUniform(a=0., b=1.)
+        >>> X.mode()
+        1.0
 
         """
         return self._mode_dispatch(method=method, **self._parameters)
@@ -2463,9 +2468,8 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Normal(mu=1, sigma=2)
+        >>> X = stats.Normal(mu=1., sigma=2.)
 
         Evaluate the variance:
 
@@ -2497,9 +2501,8 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Normal(mu=1, sigma=2)
+        >>> X = stats.Normal(mu=1., sigma=2.)
 
         Evaluate the variance:
 
@@ -2531,9 +2534,8 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Normal(mu=1, sigma=2)
+        >>> X = stats.Normal(mu=1., sigma=2.)
 
         Evaluate the standard deviation:
 
@@ -2565,9 +2567,8 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Normal(mu=1, sigma=2)
+        >>> X = stats.Normal(mu=1., sigma=2.)
 
         Evaluate the skewness:
 
@@ -2611,16 +2612,15 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Normal(mu=1, sigma=2)
+        >>> X = stats.Normal(mu=1., sigma=2.)
 
         Evaluate the kurtosis:
 
         >>> X.kurtosis()
         3.0
         >>> (X.kurtosis()
-        ...  == X.kurtosis(convention='excess') + 3
+        ...  == X.kurtosis(convention='excess') + 3.
         ...  == X.moment(order=4, kind='standardized'))
         True
 
@@ -2726,13 +2726,13 @@ class ContinuousDistribution:
 
         >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Uniform(a=-0.5, b=0.5)
+        >>> X = stats.Uniform(a=-1.0, b=1.0)
 
         Evaluate the log-PDF at the desired argument:
 
-        >>> X.logpdf(1.)
-        -inf
-        >>> np.allclose(X.logpdf(1.), np.log(X.pdf(1.)))
+        >>> X.logpdf(0.5)
+        -0.6931471805599453
+        >>> np.allclose(X.logpdf(0.5), np.log(X.pdf(0.5)))
         True
 
         """
@@ -2807,14 +2807,13 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Uniform(a=-0.5, b=0.5)
+        >>> X = stats.Uniform(a=-1., b=1.)
 
         Evaluate the probability density function at the desired argument:
 
         >>> X.pdf(0.25)
-        1.0
+        0.5
 
         """
         return self._pdf_dispatch(x, method=method, **self._parameters)
@@ -3073,7 +3072,6 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
         >>> X = stats.Uniform(a=-0.5, b=0.5)
 
@@ -3374,6 +3372,8 @@ class ContinuousDistribution:
 
         >>> X.ccdf(0.25)
         0.25
+        >>> np.allclose(X.ccdf(0.25), 1-X.cdf(0.25))
+        True
 
         """  # noqa: E501
         if y is None:
@@ -3602,6 +3602,7 @@ class ContinuousDistribution:
 
         >>> X.icdf(0.25)
         -0.25
+        >>> np.allclose(X.cdf(X.icdf(0.25)), 0.25)
 
         This function returns NaN when the argument is outside the domain.
 
@@ -3799,6 +3800,8 @@ class ContinuousDistribution:
 
         >>> X.iccdf(0.25)
         0.25
+        >>> np.allclose(X.iccdf(0.25), X.icdf(1-0.25))
+        True
 
         This function returns NaN when the argument is outside the domain.
 
@@ -3856,7 +3859,91 @@ class ContinuousDistribution:
     # information.
 
     def sample(self, shape=(), *, method=None, rng=None, qmc_engine=None):
-        """Random or quasi-random sampling from the distribution"""
+        """Random or quasi-Monte Carlo sample from the distribution
+
+        Parameters
+        ----------
+        shape : tuple of ints, default: ()
+            The shape of the sample to draw. If the parameters of the distribution
+            underlying the random variable are arrays of shape ``param_shape``,
+            the output array will be of shape ``shape + param_shape``.
+        method : {None, 'formula', 'inverse_transform'}
+            The strategy used to produce the sample. By default (``None``),
+            the infrastructure chooses between the following options.
+
+            - ``'formula'``: an implementation specific to the distribution
+            - ``'inverse_transform'``: generate a uniformly distributed sample and
+                                       return the inverse CDF at these arguments.
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a `NotImplementedError``
+            will be raised.
+        rng : `numpy.random.Generator`, optional
+            The pseudorandom number generator instance with which to generate
+            the sample. If `None` (default), a new generator is instantiated
+            with fresh, unpredictable entropy from the operating system.
+        qmc_engine : `scipy.stats.qmc.QMCEngine` subclass, optional
+            A QMC engine class with which to generate a quasi-Monte Carlo sample.
+            An instance of the `qmc_engine` class will be created and provided
+            with `rng` (e.g. for use with shuffling). Typically, the use of
+            `qmc_engine` with ``method='formula'`` will be incompatible.
+
+        Notes
+        -----
+        The values of a quasi-Monte Carlo sequence are not statistically
+        independent; the sequence is designed to have low-discrepancy.
+        The output of `sample` is always formed with this low-discrepancy
+        sequence aligned along axis ``0``. Separate slices along axis ``0``
+        (e.g. separate columns of a 2D output) are separate low-discrepancy
+        sequences; the low-discrepancy properties hold *only* along axis
+        ``0``, not along other axes. By default, many `QMCEngine` classes
+        use a pseudorandom number generator (provided by `rng`, in this case)
+        to *scramble* these separate sequences so they are statistically
+        independent. Consequently, the following simple rule holds for
+        quasi-Monte Carlo samples drawn using `QMCEngine` classes that
+        employ scrambling: each slice along axis ``0`` of the result is a
+        statistically independent low-discrepancy sequence.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Uniform(a=0., b=1.)
+
+        Generate a pseudorandom sample:
+
+        >>> x = X.sample((1000, 1))
+        >>> percentiles = (np.arange(8) + 1) / 8
+        >>> np.count_nonzero(x <= percentiles, axis=0)
+        array([ 148,  263,  387,  516,  636,  751,  865, 1000])
+
+        Generate a Quasi-Monte Carlo sample:
+
+        >>> x = X.sample((1000, 1), qmc_engine=stats.qmc.Halton)
+        >>> np.count_nonzero(x <= percentiles, axis=0)
+        array([ 125,  250,  375,  500,  625,  750,  875, 1000])
+
+        The QMC sample has low discrepancy along axis 0:
+
+        >>> x = X.sample((1000, 3, 1), qmc_engine=stats.qmc.Halton)
+        >>> np.count_nonzero(x <= percentiles, axis=0)
+        array([[ 125,  250,  375,  500,  625,  750,  875, 1000],
+               [ 124,  249,  374,  498,  624,  750,  875, 1000],
+               [ 124,  249,  374,  498,  624,  750,  874, 1000]])
+
+        The shape of the result is the sum of the `shape` parameter
+        and the shape of the broadcasted distribution parameter arrays.
+
+        >>> X = stats.Uniform(a=np.zeros((3, 1)), b=np.ones(2))
+        >>> X.a.shape,
+        (3, 2)
+        >>> x = X.sample(shape=(5, 4))
+        >>> x.shape
+        (5, 4, 3, 2)
+
+        """
         # needs output validation to ensure that developer returns correct
         # dtype and shape
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
@@ -4084,9 +4171,8 @@ class ContinuousDistribution:
         --------
         Instantiate a distribution with the desired parameters:
 
-        >>> import numpy as np
         >>> from scipy import stats
-        >>> X = stats.Normal(mu=1, sigma=2)
+        >>> X = stats.Normal(mu=1., sigma=2.)
 
         Evaluate the first raw moment:
 
