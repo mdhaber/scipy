@@ -2089,16 +2089,16 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        method : {None, 'formula', 'logexp'}
+        method : {None, 'formula', 'logexp', 'quadrature}
             The strategy used to evaluate the differential entropy. By default
             (``None``), the infrastructure chooses between the following options.
 
             - ``'formula'``: use a formula for the logarithm of the differential
-              entropy itself
+                             entropy itself
             - ``'logexp'``: evaluate the differential entropy directly and take
-              the logarithm
+                            the logarithm
             - ``'quadrature'``: numerically log-integrate the logarithm of the
-              integrand
+                                integrand
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -2183,13 +2183,13 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        method : {None, 'formula', 'logexp'}
+        method : {None, 'formula', 'logexp', 'quadrature'}
             The strategy used to evaluate the differential entropy. By default
             (``None``), the infrastructure chooses between the following options.
 
             - ``'formula'``: use a formula for the differential entropy itself
             - ``'logexp'``: evaluate the logarithm of the differential entropy
-              directly and exponentiate
+                            directly and exponentiate
             - ``'quadrature'``: numerically integrate the PDF
 
             Not all `method` options are available for all distributions.
@@ -2448,7 +2448,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+        method : {None, 'formula', 'transform', 'quadrature', 'cache'}
             Method used to calculate the raw first moment. Not
             all methods are available for all distributions. See
             `ContinuousDistribution.moment` for details.
@@ -2474,7 +2474,7 @@ class ContinuousDistribution:
         >>> X.mean() == X.moment(order=1, kind='raw') == X.mu
         True
 
-        """  # noqa:E501
+        """
         return self.moment(1, kind='raw', method=method)
 
     def variance(self, *, method=None):
@@ -2482,7 +2482,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+        method : {None, 'formula', 'transform', 'normalize', 'quadrature', 'cache'}
             Method used to calculate the central second moment. Not
             all methods are available for all distributions. See
             `ContinuousDistribution.moment` for details.
@@ -2508,7 +2508,7 @@ class ContinuousDistribution:
         >>> X.variance() == X.moment(order=2, kind='central') == X.sigma**2
         True
 
-        """  # noqa:E501
+        """
         return self.moment(2, kind='central', method=method)
 
     def standard_deviation(self, *, method=None):
@@ -2516,7 +2516,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+        method : {None, 'formula', 'transform', 'normalize', 'quadrature', 'cache'}
             Method used to calculate the central second moment. Not
             all methods are available for all distributions. See
             `ContinuousDistribution.moment` for details.
@@ -2542,7 +2542,7 @@ class ContinuousDistribution:
         >>> X.standard_deviation() == X.moment(order=2, kind='central')**0.5 == X.sigma
         True
 
-        """  # noqa:E501
+        """
         return np.sqrt(self.variance(method=method))
 
     def skewness(self, *, method=None):
@@ -2550,7 +2550,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+        method : {None, 'formula', 'general', 'transform', 'normalize', 'cache'}
             Method used to calculate the standardized third moment. Not
             all methods are available for all distributions. See
             `ContinuousDistribution.moment` for details.
@@ -2576,7 +2576,7 @@ class ContinuousDistribution:
         >>> X.skewness() == X.moment(order=3, kind='standardized')
         True
 
-        """  # noqa:E501
+        """
         return self.moment(3, kind='standardized', method=method)
 
     def kurtosis(self, *, method=None, convention='non-excess'):
@@ -2589,7 +2589,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+        method : {None, 'formula', 'general', 'transform', 'normalize', 'cache'}
             Method used to calculate the standardized fourth moment. Not
             all methods are available for all distributions. See
             `ContinuousDistribution.moment` for details.
@@ -2624,7 +2624,7 @@ class ContinuousDistribution:
         ...  == X.moment(order=4, kind='standardized'))
         True
 
-        """  # noqa:E501
+        """
         non_excess = {'non-excess', 'pearson'}
         excess = {'excess', 'fisher'}
         message = (f'Parameter `convention` of `{self.__class__.__name__}.kurtosis` '
@@ -2778,7 +2778,7 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the PDF itself
             - ``'logexp'``: evaluate the logarithm of the PDF directly and
-              exponentiate
+                            exponentiate
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -2854,7 +2854,7 @@ class ContinuousDistribution:
             - ``'formula'``: use a formula for the log-CDF itself
             - ``'logexp'``: evaluate the CDF directly and take the logarithm
             - ``'complementarity'``: evaluate the logarithm of the complementary CDF
-              directly and take the logarithmic complement
+                                     directly and take the logarithmic complement
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
             In place of ``'complementarity'``, the two-argument form accepts:
@@ -3026,9 +3026,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the CDF itself
             - ``'logexp'``: evaluate the logarithm of the CDF directly and
-              exponentiate
+                            exponentiate
             - ``'complementarity'``: evaluate the complementary CDF direcly
-              and take the complement
+                                     and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
             In place of ``'complementarity'``, the two-argument form accepts:
@@ -3169,7 +3169,7 @@ class ContinuousDistribution:
         x, y : Array
             The arguments of the logarithm of the complementary cumulative
             distribution function (log CCDF). `x` is required; `y` is optional.
-        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
+        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'addition'}
             The strategy used to evaluate the log CCDF.
             By default (``None``), the one-argument form of the function
             chooses between the following options.
@@ -3177,7 +3177,7 @@ class ContinuousDistribution:
             - ``'formula'``: use a formula for the log CCDF itself
             - ``'logexp'``: evaluate the CCDF directly and take the logarithm
             - ``'complementarity'``: evaluate the log-CDF directly
-              and take the logarithmic complement
+                                     and take the logarithmic complement
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
             The two-argument form chooses between:
@@ -3313,14 +3313,14 @@ class ContinuousDistribution:
         x, y : Array
             The arguments of the complementary cumulative distribution
             function (CCDF). `x` is required; `y` is optional.
-        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
+        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'addition'}
             The strategy used to evaluate the CCDF.
             By default (``None``), the infrastructure chooses between the
             following options.
 
             - ``'formula'``: use a formula for the CCDF itself
             - ``'logexp'``: evaluate the logarithm of the CCDF directly and
-              exponentiate
+                            exponentiate
             - ``'complementarity'``: evaluate the CDF and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
@@ -3453,9 +3453,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse log-CDF itself
             - ``'complementarity'``: evaluate the inverse log-CCDF at the
-              logarithmic complement of `x`.
+                                    logarithmic complement of `x`.
             - ``'inversion'``: solve numerically for the argument at which the
-              log-CDF is equal to `x`.
+                               log-CDF is equal to `x`.
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3563,9 +3563,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse CDF itself
             - ``'complementarity'``: evaluate the inverse CCDF at the
-              complement of `x`; i.e. ``1 - x``.
+                                     complement of `x`; i.e. ``1 - x``.
             - ``'inversion'``: solve numerically for the argument at which the
-              CDF is equal to `x`.
+                               CDF is equal to `x`.
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3649,9 +3649,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse log-CCDF itself
             - ``'complementarity'``: evaluate the inverse log-CDF at the
-              logarithmic complement of `x`.
+                                     logarithmic complement of `x`.
             - ``'inversion'``: solve numerically for the argument at which the
-              log-CCDF is equal to `x`.
+                               log-CCDF is equal to `x`.
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3760,9 +3760,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse CCDF itself
             - ``'complementarity'``: evaluate the inverse CDF at the
-              complement of `x`; i.e. ``1 - x``.
+                                     complement of `x`; i.e. ``1 - x``.
             - ``'inversion'``: solve numerically for the argument at which the
-              CCDF is equal to `x`.
+                               CCDF is equal to `x`.
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
