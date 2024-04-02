@@ -99,7 +99,7 @@ class StandardNormal(ContinuousDistribution):
     def _moment_central_formula(self, order, **kwargs):
         return self._moment_raw_formula(order, **kwargs)
 
-    def _moment_standard_formula(self, order, **kwargs):
+    def _moment_standardized_formula(self, order, **kwargs):
         return self._moment_raw_formula(order, **kwargs)
 
     def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):

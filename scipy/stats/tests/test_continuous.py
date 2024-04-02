@@ -487,7 +487,7 @@ def check_moment_funcs(dist, result_shape):
     for i in range(2, 6):
         ref = dist.moment(i, 'raw', method='quadrature')
         check(i, 'raw', 'transform', ref,
-              success=has_formula(i, 'central') or has_formula(i, 'standard'))
+              success=has_formula(i, 'central') or has_formula(i, 'standardized'))
         dist.moment(i, 'central')  # build up the cache
         check(i, 'raw', 'transform', ref)
 
@@ -512,14 +512,14 @@ def check_moment_funcs(dist, result_shape):
 
     # If we have standard moment formulas, or if there are
     # values in their cache, we can use method='normalize'
-    dist.moment(0, 'standard')  # build up the cache
-    dist.moment(1, 'standard')
-    dist.moment(2, 'standard')
+    dist.moment(0, 'standardized')  # build up the cache
+    dist.moment(1, 'standardized')
+    dist.moment(2, 'standardized')
     for i in range(3, 6):
         ref = dist.moment(i, 'central', method='quadrature')
         check(i, 'central', 'normalize', ref,
-              success=has_formula(i, 'standard'))
-        dist.moment(i, 'standard')  # build up the cache
+              success=has_formula(i, 'standardized'))
+        dist.moment(i, 'standardized')  # build up the cache
         check(i, 'central', 'normalize', ref)
 
     ### Check Standard Moments ###
@@ -528,13 +528,13 @@ def check_moment_funcs(dist, result_shape):
     dist.reset_cache()
 
     for i in range(6):
-        check(i, 'standard', 'cache', success=False)
+        check(i, 'standardized', 'cache', success=False)
         ref = dist.moment(i, 'central', method='quadrature') / var ** (i / 2)
         assert ref.shape == result_shape
-        check(i, 'standard', 'formula', ref,
-              success=has_formula(i, 'standard'))
-        check(i, 'standard', 'general', ref, success=i <= 2)
-        check(i, 'standard', 'normalize', ref)
+        check(i, 'standardized', 'formula', ref,
+              success=has_formula(i, 'standardized'))
+        check(i, 'standardized', 'general', ref, success=i <= 2)
+        check(i, 'standardized', 'normalize', ref)
 
     if isinstance(dist, ShiftedScaledDistribution):
         # logmoment is not fully fleshed out; no need to test
@@ -551,7 +551,7 @@ def check_moment_funcs(dist, result_shape):
         assert_allclose(dist.moment(i, 'central'), ref, atol=atol*10**i)
 
         ref = np.exp(dist._logmoment(i, logcenter=logmean, standardized=True))
-        assert_allclose(dist.moment(i, 'standard'), ref, atol=atol*10**i)
+        assert_allclose(dist.moment(i, 'standardized'), ref, atol=atol*10**i)
 
 
 @pytest.mark.parametrize('family', (LogUniform, StandardNormal))
@@ -812,8 +812,8 @@ class TestTransforms:
             assert_allclose(dist.moment(i, 'raw'), dist_ref.moment(i))
             assert_allclose(dist.moment(i, 'central'),
                             dist0.moment(i, 'central')*scale**i)
-            assert_allclose(dist.moment(i, 'standard'),
-                            dist0.moment(i, 'standard') * np.sign(scale) ** i)
+            assert_allclose(dist.moment(i, 'standardized'),
+                            dist0.moment(i, 'standardized') * np.sign(scale) ** i)
 
 
         dist = (dist - 2*loc) + loc
@@ -837,7 +837,8 @@ class TestTransforms:
         for i in range(1, 5):
             assert_allclose(dist.moment(i, 'raw'), dist0.moment(i, 'raw'))
             assert_allclose(dist.moment(i, 'central'), dist0.moment(i, 'central'))
-            assert_allclose(dist.moment(i, 'standard'), dist0.moment(i, 'standard'))
+            assert_allclose(dist.moment(i, 'standardized'),
+                            dist0.moment(i, 'standardized'))
 
         # These are tough to compare because of the way the shape works
         # rng = np.random.default_rng(seed)

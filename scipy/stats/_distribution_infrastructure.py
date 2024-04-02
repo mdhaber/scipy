@@ -25,6 +25,7 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
+#  kurtosis input validation test
 #  clip - ShiftedScaledNormal(loc=0, scale=0.01).ccdf(-7.32, method='quadrature') > 1
 #  test/fix dtypes? It is *so* hard without NEP50
 #  check behavior of moment methods when moments are undefined/infinite -
@@ -1306,7 +1307,7 @@ def _generate_example(dist_family):
     {X.variance(), X.standard_deviation()}
     >>> X.skewness(), X.kurtosis()
     {X.skewness(), X.kurtosis()}
-    >>> np.allclose(X.moment(order=6, kind='standard'),
+    >>> np.allclose(X.moment(order=6, kind='standardized'),
     ...             X.moment(order=6, kind='central') / X.variance()**3)
     True
     >>> np.allclose(np.exp(X.logentropy()), X.entropy())
@@ -1418,8 +1419,8 @@ class ContinuousDistribution:
         self.rng = rng
         self._not_implemented = (
             f"`{self.__class__.__name__}` does not provide an accurate "
-            "implementation of the required method. Leave `tol` unspecified "
-            "to use the default implementation."
+            "implementation of the required method. Consider leaving "
+            "`method` and `tol` unspecified to use another implementation."
         )
         self._original_parameters = {}
 
@@ -1507,7 +1508,7 @@ class ContinuousDistribution:
         # turned on and off easily.
         self._moment_raw_cache = {}
         self._moment_central_cache = {}
-        self._moment_standard_cache = {}
+        self._moment_standardized_cache = {}
         self._support_cache = None
         self._method_cache = {}
         self._constant_cache = None
@@ -2315,29 +2316,196 @@ class ContinuousDistribution:
         return mode[()]
 
     def mean(self, *, method=None):
-        """Distribution mean"""
+        r"""Mean (raw first moment about the origin)
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+            Method used to calculate the raw first moment. Not
+            all methods are available for all distributions. See
+            `ContinuousDistribution.moment` for details.
+
+        See Also
+        --------
+        ContinuousDistribution.moment
+        ContinuousDistribution.median
+        ContinuousDistribution.mode
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1, sigma=2)
+
+        Evaluate the variance:
+
+        >>> X.mean()
+        1.0
+        >>> X.mean() == X.moment(order=1, kind='raw') == X.mu
+        True
+
+        """  # noqa:E501
         return self.moment(1, kind='raw', method=method)
 
     def variance(self, *, method=None):
-        """Distribution variance"""
+        r"""Variance (central second moment)
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+            Method used to calculate the central second moment. Not
+            all methods are available for all distributions. See
+            `ContinuousDistribution.moment` for details.
+
+        See Also
+        --------
+        ContinuousDistribution.moment
+        ContinuousDistribution.standard_deviation
+        ContinuousDistribution.mean
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1, sigma=2)
+
+        Evaluate the variance:
+
+        >>> X.variance()
+        4.0
+        >>> X.variance() == X.moment(order=2, kind='central') == X.sigma**2
+        True
+
+        """  # noqa:E501
         return self.moment(2, kind='central', method=method)
 
     def standard_deviation(self, *, method=None):
-        """Distribution standard deviation"""
+        r"""Standard deviation (square root of the second central moment)
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+            Method used to calculate the central second moment. Not
+            all methods are available for all distributions. See
+            `ContinuousDistribution.moment` for details.
+
+        See Also
+        --------
+        ContinuousDistribution.variance
+        ContinuousDistribution.mean
+        ContinuousDistribution.moment
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1, sigma=2)
+
+        Evaluate the standard deviation:
+
+        >>> X.standard_deviation()
+        2.0
+        >>> X.standard_deviation() == X.moment(order=2, kind='central')**0.5 == X.sigma
+        True
+
+        """  # noqa:E501
         return np.sqrt(self.variance(method=method))
 
     def skewness(self, *, method=None):
-        """Distribution skewness (standardized third moment)"""
-        return self.moment(3, kind='standard', method=method)
+        r"""Skewness (standardized third moment)
 
-    def kurtosis(self, *, method=None):
-        """Distribution Pearson kurtosis (standardized fourth moment)
+        Parameters
+        ----------
+        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+            Method used to calculate the standardized third moment. Not
+            all methods are available for all distributions. See
+            `ContinuousDistribution.moment` for details.
 
-        This is the Pearson kurtosis, the standardized fourth moment, not the
-        "Fisher" or "Excess" kurtosis. The Pearson kurtosis of the normal
-        distribution is 3.
-        """
-        return self.moment(4, kind='standard', method=method)
+        See Also
+        --------
+        ContinuousDistribution.moment
+        ContinuousDistribution.mean
+        ContinuousDistribution.variance
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1, sigma=2)
+
+        Evaluate the skewness:
+
+        >>> X.skewness()
+        0.0
+        >>> X.skewness() == X.moment(order=3, kind='standardized')
+        True
+
+        """  # noqa:E501
+        return self.moment(3, kind='standardized', method=method)
+
+    def kurtosis(self, *, method=None, convention='non-excess'):
+        r"""Kurtosis (standardized fourth moment)
+
+        By default, this is the standardized fourth moment, also known as the
+        "non-excess" or "Pearson" kurtosis (e.g. the kurtosis of the normal
+        distribution is 3). The "Fisher" or "excess" kurtosis (the standardized
+        fourth moment minus 3) is available via the `convention` parameter.
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+            Method used to calculate the standardized fourth moment. Not
+            all methods are available for all distributions. See
+            `ContinuousDistribution.moment` for details.
+        convention : {'non-excess', 'Pearson', 'excess', 'Fisher'}
+            Two distinction conventions are available:
+
+            - ``'non-excess'`` or ``'Pearson'``: the standardized fourth moment.
+            - ``'excess'`` or ``'Fisher'``: the standardized fourth moment minus 3.
+
+            The default is ``'non-excess'``.
+
+        See Also
+        --------
+        ContinuousDistribution.moment
+        ContinuousDistribution.mean
+        ContinuousDistribution.variance
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1, sigma=2)
+
+        Evaluate the kurtosis:
+
+        >>> X.kurtosis()
+        3.0
+        >>> (X.kurtosis()
+        ...  == X.kurtosis(convention='excess') + 3
+        ...  == X.moment(order=4, kind='standardized'))
+        True
+
+        """  # noqa:E501
+        non_excess = {'non-excess', 'pearson'}
+        excess = {'excess', 'fisher'}
+        message = (f'Parameter `convention` of `{self.__class__.__name__}.kurtosis` '
+                   "must be one of {'non-excess', 'Pearson', 'excess', 'Fisher'}.")
+        convention = convention.lower()
+        if convention not in non_excess.union(excess):
+            raise ValueError(message)
+        k = self.moment(4, kind='standardized', method=method)
+        return k - 3 if convention in excess else k
 
     ### Distribution functions
     # The following functions related to the distribution PDF and CDF are
@@ -3140,7 +3308,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ilogcdf(self, x, *, method=None):
-        """Inverse of the logarithm of the cumulative distribution function
+        r"""Inverse of the logarithm of the cumulative distribution function
 
         For more information about the inverse cumulative distribution function,
         see `ContinuousDistribution.icdf`.
@@ -3336,7 +3504,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ilogccdf(self, x, *, method=None):
-        """Inverse of the log of the complementary cumulative distribution function
+        r"""Inverse of the log of the complementary cumulative distribution function
 
         For more information about the inverse of the complementary cumulative
         distribution function, see `ContinuousDistribution.icdf`.
@@ -3672,10 +3840,151 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment(self, order=1, kind='raw', *, method=None):
-        """Raw, central, or standard distribution moment"""
+        r"""Raw, central, or standard moment of positive integer order
+
+        In terms of probability density function :math:`f(x)` and its support
+        :math:`\chi`, the "raw" moment (about the origin) of order :math:`n` of
+         a random variable :math:`X` is:
+
+        .. math::
+
+            \mu'_n(X) = \int_{\chi} x^n f(x) dx
+
+        The "central" moment is the raw moment taken about the mean,
+        :math:`\mu = \mu'_1`:
+
+        .. math::
+
+            \mu_n(X) = \int_{\chi} (x - \mu) ^n f(x) dx
+
+        The "standardized" moment is the central moment normalized by a power of
+        the standard deviation, :math:`\sigma = \sqrt{\mu'_2}`:
+
+        .. math::
+
+            \tilde{\mu}_n(X) = \frac{\mu_n(X)}
+                                    {\sigma^n}
+
+        Parameters
+        ----------
+        method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
+            The strategy used to evaluate the moment. By default (``None``),
+            the infrastructure chooses between the following options.
+
+            - ``'formula'``: use a formula for the differential entropy itself
+            - ``'general'``: use a general result that is true for all distributions
+                             with finite moments; for instance, the zeroth raw moment
+                             is identically 1.
+            - ``'transform'``: transform a raw moment to a central moment or
+                               vice versa; see notes.
+            - ``'normalize'``: normalize a central moment to get a standardized
+                               or vice versa.
+            - ``'quadrature'``: numerically integrate according to the definition
+            - ``'cache'``: use the value of the moment most recently calculated
+                           via another method.
+
+            Not all `method` options are available for orders, kinds, and
+            distributions. If the selected `method` is not available, a
+            `NotImplementedError`` will be raised.
+
+        Returns
+        -------
+        out : Array
+            The moment of the random variable of the specified order and kind.
+
+        See Also
+        --------
+        ContinuousDistribution.pdf
+        ContinuousDistribution.mean
+        ContinuousDistribution.variance
+        ContinuousDistribution.standard_deviation
+        ContinuousDistribution.skewness
+        ContinuousDistribution.kurtosis
+
+        Notes
+        -----
+        Not all distributions have finite moments of all orders; moments of some
+        orders may be undefined or infinite. If a formula for the moment is not
+        specifically implemented for the chosen distribution, SciPy will attempt
+        to compute the moment via a generic method, which may yield a finite
+        result where none exists. This is not a critical bug, but an opportunity
+        for an enhancement.
+
+        The definition of a raw moment in the summary is specific to the raw moment
+        about the origin. The raw moment about any point :math:`a` is:
+
+        .. math::
+
+            E[(x-b)^n] = \int_{\chi} (x-b)^n f(x) dx
+
+        In this notation, a raw moment about the origin is :math:`\mu'_n = E[x^n]`,
+        and a central moment is :math:`\mu_n = E[(x-\mu)^n]`, where :math:`\mu`
+        is the first raw moment; i.e. the mean.
+
+        The ``'transform'`` method takes advantage of the following relationships
+        between moments taken about different points :math:`a` and :math:`b`.
+
+        .. math::
+
+            E[(x-b)^n] =  \sum_{i=0}^n E[(x-a)^i] {n \choose i} (a - b)^{n-i}
+
+        For instance, to transform the raw moment to the central moment, we let
+        :math:`b = \mu` and :math:`a=0`.
+
+        The distribution infrastructure provides flexibility for distribution
+        authors to implement separate formulas for raw moments, central moments,
+        and standardized moments of any order. By default, the moment of the
+        desired order and kind is evaluated from the formula if such a formula
+        is available; if not, the infrastructure uses any formulas that are
+        available rather than resorting directly to numerical integration.
+        For instance, if formulas for the first three raw moments are
+        available and the third standardized moments is desired, the
+        infrastructure will evaluate the raw moments and perform the transforms
+        and standardization required. The decision tree is somewhat complex,
+        but the strategy for obtaining a moment of a given order and kind
+        (possibly as an intermediate step due to the recursive nature of the
+        transform formula above) roughly follows this order of priority:
+
+        #. Use cache (if order of same moment and kind has been calculated)
+        #. Use formula (if available)
+        #. Transform between raw and central moment and/or normalize to convert
+           between central and standardized moments (if efficient)
+        #. Use a generic result true for most distributions (if available)
+        #. Use quadrature
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=1, sigma=2)
+
+        Evaluate the first raw moment:
+
+        >>> X.moment(order=1, kind='raw')
+        1.0
+        >>> X.moment(order=1, kind='raw') == X.mean() == X.mu
+        True
+
+        Evaluate the second central moment:
+
+        >>> X.moment(order=2, kind='central')
+        1.0
+        >>> X.moment(order=2, kind='central') == X.variance() == X.sigma**2
+        True
+
+        Evaluate the fourth standardized moment:
+
+        >>> X.moment(order=4, kind='standardized')
+        3.0
+        >>> X.moment(order=4, kind='standardized') == X.kurtosis(convention='non-excess')
+        True
+
+        """  # noqa:E501
         kinds = {'raw': self._moment_raw,
                  'central': self._moment_central,
-                 'standard': self._moment_standard}
+                 'standardized': self._moment_standardized}
         order = self._validate_order_kind(order, kind, kinds)
         moment_kind = kinds[kind]
         return moment_kind(order, method=method, cache_policy=self.cache_policy)
@@ -3796,8 +4105,8 @@ class ContinuousDistribution:
 
     def _moment_central_normalize(self, order, **kwargs):
         methods = {'cache', 'formula', 'general'}
-        standard_moment = self._moment_standard_dispatch(order, **kwargs,
-                                                         methods=methods)
+        standard_moment = self._moment_standardized_dispatch(order, **kwargs,
+                                                             methods=methods)
         if standard_moment is None:
             return None
         var = self._moment_central_dispatch(2, methods=self._moment_methods,
@@ -3808,39 +4117,40 @@ class ContinuousDistribution:
         general_central_moments = {0: self._one, 1: self._zero}
         return general_central_moments.get(order, None)
 
-    def _moment_standard(self, order=1, *, method=None, cache_policy=None):
+    def _moment_standardized(self, order=1, *, method=None, cache_policy=None):
         """Standardized distribution moment"""
         methods = self._moment_methods if method is None else {method}
-        return self._moment_standard_dispatch(
+        return self._moment_standardized_dispatch(
             order, methods=methods, cache_policy=cache_policy, **self._parameters)
 
-    def _moment_standard_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
+    def _moment_standardized_dispatch(self, order, *, methods,
+                                      cache_policy=None, **kwargs):
         moment = None
 
         if 'cache' in methods:
-            moment = self._moment_standard_cache.get(order, None)
+            moment = self._moment_standardized_cache.get(order, None)
 
         if moment is None and 'formula' in methods:
-            moment = self._moment_standard_formula(order, **kwargs)
+            moment = self._moment_standardized_formula(order, **kwargs)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_normalize(order, False, **kwargs)
+            moment = self._moment_standardized_normalize(order, False, **kwargs)
 
         if moment is None and 'general' in methods:
-            moment = self._moment_standard_general(order, **kwargs)
+            moment = self._moment_standardized_general(order, **kwargs)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standard_normalize(order, True, **kwargs)
+            moment = self._moment_standardized_normalize(order, True, **kwargs)
 
         if moment is not None and cache_policy != _NO_CACHE:
-            self._moment_standard_cache[order] = moment
+            self._moment_standardized_cache[order] = moment
 
         return moment
 
-    def _moment_standard_formula(self, order, **kwargs):
+    def _moment_standardized_formula(self, order, **kwargs):
         return None
 
-    def _moment_standard_normalize(self, order, use_quadrature, **kwargs):
+    def _moment_standardized_normalize(self, order, use_quadrature, **kwargs):
         methods = ({'quadrature'} if use_quadrature
                    else {'cache', 'formula', 'transform'})
         central_moment = self._moment_central_dispatch(order, **kwargs,
@@ -3851,7 +4161,7 @@ class ContinuousDistribution:
                                             **kwargs)
         return central_moment/var**(order/2)
 
-    def _moment_standard_general(self, order, **kwargs):
+    def _moment_standardized_general(self, order, **kwargs):
         general_standard_moments = {0: self._one, 1: self._zero, 2: self._one}
         return general_standard_moments.get(order, None)
 
@@ -4241,9 +4551,9 @@ class ShiftedScaledDistribution(TransformedDistribution):
     def _iccdf_dispatch(self, x, *, method=None, **kwargs):
         pass
 
-    def _moment_standard_dispatch(self, order, *, loc, scale, sign, methods,
+    def _moment_standardized_dispatch(self, order, *, loc, scale, sign, methods,
                                   cache_policy=None, **kwargs):
-        res = (self._dist._moment_standard_dispatch(
+        res = (self._dist._moment_standardized_dispatch(
             order, methods=methods, cache_policy=cache_policy, **kwargs))
         return None if res is None else res * np.sign(scale)**order
 
