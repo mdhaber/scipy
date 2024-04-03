@@ -1358,6 +1358,10 @@ class ContinuousDistribution:
         Random number generator to be used by any methods that require
         pseudo-random numbers (e.g. `sample`).
 
+    Attributes
+    ----------
+    All parameters are available as attributes.
+
     Methods
     -------
     support
@@ -1395,10 +1399,6 @@ class ContinuousDistribution:
 
     entropy
     logentropy
-
-    Notes
-    -----
-    All parameters of the class' initializer are available as attributes.
 
     Examples
     --------
@@ -4424,14 +4424,50 @@ class ContinuousDistribution:
 
     ### Convenience
 
-    # I've included a rough draft of one convenience function, `plot`, that is
-    # useful for visualizing a distribution. At the very least, it will save
-    # some lines in documentation examples. We would not reproduce the
-    # `matplotlib` interface here; users can modify the returned `ax` directly
-    # if they want to customize the plot.
-
-    def plot(self, func='pdf', *, ax=None, cdf=0.001, ccdf=0.001):
+    def plot(self, x='x', y='pdf', *, t=('cdf', 0.001, 0.999), ax=None):
         """Plot a function of the distribution"""
+
+        # Strategy: given t limits, get quantile limits. Form grid of
+        # quantiles, compute requested x and y at quantiles, and plot.
+        # Currently, the grid of quantiles is always linearly spaced.
+        # Instead of always computing linearly-spaced quantiles, it
+        # would be better to choose:
+        # a) quantiles or probabilities
+        # b) linearly or logarithmically spaced
+        # based on the specified `t`.
+
+        t_is_quantile = {'x', 'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
+        t_is_probability = {'cdf', 'ccdf', 'logcdf', 'logccdf'}
+        valid_t = t_is_quantile.union(t_is_probability)
+        valid_xy =  valid_t.union({'pdf', 'logpdf'})
+
+        ndim = len(self._shape)
+        x_name, y_name = x, y
+        t_name, tlim = t[0], np.asarray(t[1:])
+        tlim = tlim[:, np.newaxis] if ndim else tlim
+
+        # pdf/logpdf are not valid for `t` because we can't easily invert them
+        message = (f'Argument `t` of {self.__class__.__name__}.plot "'
+                   f'must be one of {valid_t}')
+        if y_name not in valid_xy:
+            raise ValueError(message)
+
+        message = (f'Argument `x` of {self.__class__.__name__}.plot "'
+                   f'must be one of {valid_xy}')
+        if x_name not in valid_xy:
+            raise ValueError(message)
+
+        message = (f'Argument `y` of {self.__class__.__name__}.plot "'
+                   f'must be one of {valid_xy}')
+        if y_name not in valid_xy:
+            raise ValueError(message)
+
+        # We could automatically ravel, but do we want to? For now, raise.
+        message = ("To use `plot`, distribution parameters must be "
+                   "scalars or arrays with one or fewer dimensions.")
+        if ndim > 1:
+            raise ValueError(message)
+
         try:
             import matplotlib  # noqa: F401, E402
         except ModuleNotFoundError as exc:
@@ -4443,32 +4479,36 @@ class ContinuousDistribution:
             import matplotlib.pyplot as plt
             ax = plt.gca()
 
-        a, b = self.support()
-        a = np.where(np.isinf(a), self.icdf(cdf), a)
-        b = np.where(np.isinf(b), self.iccdf(ccdf), b)
-        x = np.linspace(a, b, 300)
+        # get quantile limits given t limits
+        qlim = tlim if t_name in t_is_quantile else getattr(self, 'i'+t_name)(tlim)
 
-        f = getattr(self, func)
+        # form quantile grid
+        grid = np.linspace(0, 1, 300)
+        grid = grid[:, np.newaxis] if ndim else grid
+        q = qlim[0] + (qlim[1] - qlim[0]) * grid
 
-        def hist_plot(x, *args, **kwargs):
-            sample = f(1000)
-            # should cut off at user-specified limits
-            ax.hist(sample, bins=30, density=True,
-                    histtype='step', *args, **kwargs)
+        # compute requested x and y at quantile grid
+        x = q if x_name in t_is_quantile else getattr(self, x_name)(q)
+        y = q if y_name in t_is_quantile else getattr(self, y_name)(q)
 
-        def fun_plot(x, *args, **kwargs):
-            y = f(x)
-            ax.plot(x, y, *args, **kwargs)
-
-        plot = (hist_plot if func in {'sample', 'qmc_sample'}
-                else fun_plot)
-        plot(x, label=func)
-
-        # should use LaTeX; use symbols
-        ax.set_xlabel('x')
-        ax.legend()
+        # make plot
+        ax.plot(x, y)
+        ax.set_xlabel(x_name)
+        ax.set_ylabel(y_name)
         ax.set_title(str(self))
-        # ax.set_xlim((np.min(a, b))
+
+        # only need a legend if distribution has parameters
+        if len(self._parameters):
+            label = []
+            param_names = list(self._parameters)
+            param_arrays = [np.atleast_1d(val)
+                            for val in self._parameters.values()]
+            for param_vals in zip(*param_arrays):
+                assignments = [f"{name} = {val}"
+                               for name, val in zip(param_names, param_vals)]
+                label.append(", ".join(assignments))
+            ax.legend(label)
+
         return ax
 
     ### Fitting
