@@ -4616,10 +4616,8 @@ class ContinuousDistribution:
     # quantities should make us question that choice. It can still accomodate
     # these methods reasonably efficiently.
 
-    def llf(self, parameters=None, *, sample, axis=-1):
+    def llf(self, sample, *, axis=-1):
         """Log likelihood function"""
-        parameters = parameters or {}
-        self.update_parameters(**parameters)
         return np.sum(self.logpdf(sample), axis=axis)
 
     def dllf(self, parameters=None, *, sample, var):
@@ -4636,32 +4634,153 @@ class ContinuousDistribution:
 
         return _differentiate(f, self._parameters[var]).df
 
-    def fit(self, function, parameters, output='maximize'):
-        """Fit the distribution parameters to meet objectives
+    def fit(self, parameters, objective):
+        """Fit the distribution parameters to meet an objective
 
-        The value added, compared to requiring the user to optimize/solve on their own:
-        - (potentially) more efficient calls to private rather than public functions
-        - (potentially) more efficient changes in parameter values
-        - (potentially) automatically include constraints
-        - convenience (least important)
+        Parameters
+        ----------
+        parameters : iterable of str or dict
+            An iterable containing the names of distribution parameters to be
+            adjusted to meet the `objective`. If a dictionary, the value
+            corresponding with each parameter name is a 2-tuple containing
+            lower and upper bounds of the parameter.
+        objective : callable or dict
+            If a callable, this is a scalar-valued function to be maximized by
+            adjusting the specified `parameters` of the random variable.
+
+            Otherwise, this is a dictionary with the following keys:
+
+            * ``'f'``: a callable as above, but may be vector-valued.
+            * ``'input'`` (optional): a tuple of arguments to be passed to the callable.
+            * ``'output'`` (optional): the desired output of the callable. If an array,
+              the objective is to minimize the Euclidean norm of the residual. Strings
+              ``'maximize'`` (default) and ``'minimize'`` are also recognized.
+
+            If the callable is recognized as a method of the distribution,
+            additional constraints may be imposed on the distribution parameters. For
+            instance, if the callable is `ContinuousDistribution.llf`, then the first
+            element of `input` represents observations of the random variable, so a
+            constraint ensures that the observations remain within the support.
+
+        Notes
+        -----
+        To use this method, the shape parameters of the distribution must be scalars.
+        If the distribution parameters are arrays, a ``NotImplementedError`` is raised.
+
+        Currently, this method does not return a result; rather, it modifies the
+        parameters of the provided distribution instance. In the future, a result
+        object with information about the optimization status may be returned.
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=0., sigma=1.)
+
+        Adjust the shape parameters to fit the distribution to data using maximum
+        likelihood estimation.
+
+        >>> data = X.sample(100)
+        >>> X.fit(['mu', 'sigma'], dict(f=X.llf, input=(data,)))
+        >>> X.plot()
+        >>> plt.hist(data, density=True, alpha=0.5)
+
+        Adjust the shape parameters to achieve a desired mean and standard deviation.
+
+        >>> X.fit(['mu', 'sigma'],
+        ...       dict(f=lambda: [X.mean(), X.standard_deviation()],
+                       output=[1, 2]))
+        >>> X.mean(), X.standard_deviation()
+        1.0, 2.0
+
         """
+        # add `_fit` implementation methods
 
+        # The value added, compared to requiring the user to optimize/solve on their own:
+        # - (potentially) more efficient calls to private rather than public functions
+        # - (potentially) more efficient changes in parameter values
+        # - (potentially) automatically include constraints
+        # - convenience (least important)
+
+        # this should probably be in a context manager to make sure it gets set back
+        iv_policy = self.iv_policy
+        self.iv_policy = 'skip_all'
         x0 = [getattr(self, parameter) for parameter in parameters]
+
+        if callable(objective):
+            f = objective
+            args = ()
+            output = 'maximize'
+        else:
+            f = objective['f']
+            args = objective.get('input', ())  # should do input validation on these
+            output = objective.get('output', 'maximize')
 
         if output == 'maximize':
             def objective(x):
                 self.update_parameters(**dict(zip(parameters, x)))
-                return -function()
-
-            res = optimize.minimize(objective, x0)
-        else:
+                return -f(*args)
+        elif output == 'minimize':
             def objective(x):
                 self.update_parameters(**dict(zip(parameters, x)))
-                return [(function() - output)
-                        for function, output in zip(function, output)]
+                return f(*args)
+        else:
+            output = np.asarray(output)
+            def objective(x):
+                self.update_parameters(**dict(zip(parameters, x)))
+                return np.linalg.norm(f(*args) - output)
 
-            res = optimize.fsolve(objective, x0)
+        param_info = self._parameterization.parameters
+        bounds = np.asarray([param_info[param_name].domain.endpoints
+                             for param_name in parameters], dtype=object)
+        # should use bounds when possible
+        # bounds = optimize.Bounds(*bounds.T)
+        constraints = []
 
+        for i, bound in enumerate(bounds):
+            a, b = bound
+            str_a, str_b = isinstance(a, str) or not np.isinf(a), isinstance(b, str) or not np.isinf(b)
+
+            if str_a or str_b:
+                def g(x):
+                    p = dict(zip(parameters, x))
+                    name = parameters[i]
+                    a, b = param_info[name].domain.get_numerical_endpoints(p)
+                    var = x[i]
+                    res = []
+                    if str_a:
+                        res = var - a
+                    if str_b:
+                        res = b - var
+                    return res
+                constraints.append(optimize.NonlinearConstraint(g, 0, np.inf))
+
+        if f in {self.llf, self.pdf, self.logpdf, self.cdf, self.logcdf, self.ccdf, self.logccdf}:
+            data = np.asarray(args[0])  # rather than turning input validation off, call private function?
+            data_min, data_max = np.min(data), np.max(data)
+
+            # for now, assume that support bounds cannot become infinite by changing parameters
+            a, b = self.support()
+            inf_a, inf_b = np.isinf(a), np.isinf(b)
+
+            if not inf_a or not inf_b:
+                def g(x):
+                    self.update_parameters(**dict(zip(parameters, x)))
+                    a, b = self.support()
+                    res = []
+                    if not inf_a:
+                        res.append(data_min - a)
+                    if not inf_b:
+                        res.append(b - data_max)
+                    return res
+                constraints.append(optimize.NonlinearConstraint(g, 0, np.inf))
+
+        res = optimize.minimize(objective, x0, constraints=constraints)
+        self.iv_policy = iv_policy
+        self.update_parameters(**dict(zip(parameters, res.x)))
         return res
 
 
