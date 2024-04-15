@@ -790,7 +790,7 @@ class _Parameterization:
 
         Returns
         -------
-        parameter_values : dict (string: array)
+        parameter_values : dict (string: Array)
             A dictionary of parameter name/value pairs.
         """
         # ENH: be smart about the order. The domains of some parameters
@@ -1981,7 +1981,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support ``(l, r)``.
+        Suppose a continuous probability distribution has support ``(l, r)``.
         The following table summarizes the value returned by methods
         of ``ContinuousDistribution`` for arguments outside the support.
 
@@ -2098,7 +2098,8 @@ class ContinuousDistribution:
         ----------
         method : {None, 'formula', 'logexp', 'quadrature}
             The strategy used to evaluate the differential entropy. By default
-            (``None``), the infrastructure chooses between the following options.
+            (``None``), the infrastructure chooses between the following options,
+            listed in order of precedence.
 
             - ``'formula'``: use a formula for the logarithm of the differential
                              entropy itself
@@ -2192,12 +2193,13 @@ class ContinuousDistribution:
         ----------
         method : {None, 'formula', 'logexp', 'quadrature'}
             The strategy used to evaluate the differential entropy. By default
-            (``None``), the infrastructure chooses between the following options.
+            (``None``), the infrastructure chooses between the following options,
+            listed in order of precedence.
 
             - ``'formula'``: use a formula for the differential entropy itself
             - ``'logexp'``: evaluate the logarithm of the differential entropy
                             directly and exponentiate
-            - ``'quadrature'``: numerically integrate the PDF
+            - ``'quadrature'``: use numerical integration
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -2275,7 +2277,7 @@ class ContinuousDistribution:
         method : {None, 'formula', 'icdf'}
             The strategy used to evaluate the median.
             By default (``None``), the infrastructure chooses between the
-            following options.
+            following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the median
             - ``'icdf'``: evaluate the inverse CDF of 0.5
@@ -2302,7 +2304,7 @@ class ContinuousDistribution:
         >>> from scipy import stats
         >>> X = stats.Uniform(a=0., b=10.)
 
-        Evaluate the inverse CDF at the desired argument:
+        Compute the median:
 
         >>> X.median()
         5
@@ -2337,14 +2339,14 @@ class ContinuousDistribution:
 
         .. math::
 
-            \text{mode} = \argmax_{\chi} f(x)
+            \text{mode} = \argmax_{x \in \chi} f(x)
 
         Parameters
         ----------
         method : {None, 'formula', 'optimization'}
             The strategy used to evaluate the mode.
             By default (``None``), the infrastructure chooses between the
-            following options.
+            following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the median
             - ``'optimization'``: numerically maximize the PDF
@@ -2592,7 +2594,7 @@ class ContinuousDistribution:
 
         By default, this is the standardized fourth moment, also known as the
         "non-excess" or "Pearson" kurtosis (e.g. the kurtosis of the normal
-        distribution is 3). The "Fisher" or "excess" kurtosis (the standardized
+        distribution is 3). The "excess" or "Fisher" kurtosis (the standardized
         fourth moment minus 3) is available via the `convention` parameter.
 
         Parameters
@@ -2601,11 +2603,12 @@ class ContinuousDistribution:
             Method used to calculate the standardized fourth moment. Not
             all methods are available for all distributions. See
             `ContinuousDistribution.moment` for details.
-        convention : {'non-excess', 'Pearson', 'excess', 'Fisher'}
+        convention : {'non-excess', 'excess'}
             Two distinction conventions are available:
 
-            - ``'non-excess'`` or ``'Pearson'``: the standardized fourth moment.
-            - ``'excess'`` or ``'Fisher'``: the standardized fourth moment minus 3.
+            - ``'non-excess'``: the standardized fourth moment; the "Pearson" kurtosis.
+            - ``'excess'``: the standardized fourth moment minus 3; the "Fisher"
+                            kurtosis.
 
             The default is ``'non-excess'``.
 
@@ -2632,15 +2635,14 @@ class ContinuousDistribution:
         True
 
         """
-        non_excess = {'non-excess', 'pearson'}
-        excess = {'excess', 'fisher'}
+        conventions = {'non-excess', 'excess'}
         message = (f'Parameter `convention` of `{self.__class__.__name__}.kurtosis` '
-                   "must be one of {'non-excess', 'Pearson', 'excess', 'Fisher'}.")
+                   f"must be one of {conventions}.")
         convention = convention.lower()
-        if convention not in non_excess.union(excess):
+        if convention not in conventions:
             raise ValueError(message)
         k = self.moment(4, kind='standardized', method=method)
-        return k - 3 if convention in excess else k
+        return k - 3 if convention == 'excess' else k
 
     ### Distribution functions
     # The following functions related to the distribution PDF and CDF are
@@ -2691,7 +2693,8 @@ class ContinuousDistribution:
             evaluated.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the log-PDF. By default (``None``), the
-            infrastructure chooses between the following options.
+            infrastructure chooses between the following options, listed in order
+            of precedence.
 
             - ``'formula'``: use a formula for the log-PDF itself
             - ``'logexp'``: evaluate the PDF and takes its logarithm
@@ -2712,7 +2715,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`.
+        Suppose a continuous probability distribution has support :math:`[l, r]`.
         By definition of the support, the log-PDF evaluates to its minimum value
         of :math:`-\infty` (i.e. :math:`\log(0)`) outside the support; i.e. for
         :math:`x < l` or :math:`x > r`. The maximum of the log-PDF may be less
@@ -2720,10 +2723,10 @@ class ContinuousDistribution:
         can be any positive real.
 
         For distributions with infinite support, it is common for
-        `ContinuousDistribution.pdf` to return a value of `0` when the argument
+        `ContinuousDistribution.pdf` to return a value of ``0`` when the argument
         is theoretically within the support; this can occur because the true value
         of the PDF is too small to be represented by the chosen dtype. The log
-        of the PDF, however, will often be numerically nonzero over a much larger
+        of the PDF, however, will often be finite (not ``-inf``) over a much larger
         domain. Consequently, it may be preferred to work with the logarithms of
         probabilities and probability densities to avoid underflow.
 
@@ -2765,7 +2768,7 @@ class ContinuousDistribution:
 
         The probability density function :math:`f(x)` is the probability *per
         unit interval* of :math:`x` that the random variable takes on the value
-        :math:`x`. Mathematically, it is defined as the derivative of the
+        :math:`x`. Mathematically, it can be defined as the derivative of the
         cumulative distribution function `F(x)`:
 
         .. math::
@@ -2781,7 +2784,8 @@ class ContinuousDistribution:
             evaluated.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the PDF. By default (``None``), the
-            infrastructure chooses between the following options.
+            infrastructure chooses between the following options, listed in
+            order of precedence.
 
             - ``'formula'``: use a formula for the PDF itself
             - ``'logexp'``: evaluate the logarithm of the PDF directly and
@@ -2803,7 +2807,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`.
+        Suppose continuous probability distribution has support :math:`[l, r]`.
         By definition of the support, the PDF evaluates to its minimum value
         of :math:`0` outside the support; i.e. for :math:`x < l` or
         :math:`x > r`. The maximum of the PDF may be less than or greater than
@@ -2855,7 +2859,7 @@ class ContinuousDistribution:
         method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
             The strategy used to evaluate the log-CDF.
             By default (``None``), the one-argument form of the function
-            chooses between the following options.
+            chooses between the following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the log-CDF itself
             - ``'logexp'``: evaluate the CDF directly and take the logarithm
@@ -2884,16 +2888,16 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`.
+        Suppose continuous probability distribution has support :math:`[l, r]`.
         The log-CDF evaluates to its minimum value of :math:`\log(0) = -\infty`
         for :math:`x ≤ l` and its maximum value of :math:`\log(1) = 0` for
         :math:`x ≥ r`.
 
         For distributions with infinite support, it is common for
-        `ContinuousDistribution.cdf` to return a value of `0` when the argument
+        `ContinuousDistribution.cdf` to return a value of ``0`` when the argument
         is theoretically within the support; this can occur because the true value
         of the CDF is too small to be represented by the chosen dtype. The log
-        of the CDF, however, will often be numerically nonzero over a much larger
+        of the CDF, however, will often be finite (not ``-inf``) over a much larger
         domain. Consequently, it may be preferred to work with the logarithms of
         probabilities and probability densities to avoid underflow.
 
@@ -3028,7 +3032,7 @@ class ContinuousDistribution:
         method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
             The strategy used to evaluate the CDF.
             By default (``None``), the one-argument form of the function
-            chooses between the following options.
+            chooses between the following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the CDF itself
             - ``'logexp'``: evaluate the logarithm of the CDF directly and
@@ -3058,19 +3062,19 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`.
+        Suppose continuous probability distribution has support :math:`[l, r]`.
         The CDF :math:`F(x)` is related to the probability density function
         :math:`f(x)` by:
 
         .. math::
 
-            F(b) = \int_l^b f(x) dx
+            F(x) = \int_l^x f(u) du
 
         The two argument version is:
 
         .. math::
 
-            F(a, b) = \int_a^b f(x) dx = F(b) - F(a)
+            F(x, y) = \int_x^y f(u) du = F(y) - F(x)
 
         The CDF evaluates to its minimum value of :math:`0` for :math:`x ≤ l`
         and its maximum value of :math:`1` for :math:`x ≥ r`.
@@ -3086,6 +3090,11 @@ class ContinuousDistribution:
 
         >>> X.cdf(0.25)
         0.75
+
+        Evaluate the cumulative probability between two arguments:
+
+        >>> X.cdf(-0.25, 0.25) == X.cdf(0.25) - X.cdf(-0.25)
+        True
 
         """  # noqa: E501
         if y is None:
@@ -3177,7 +3186,7 @@ class ContinuousDistribution:
         method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'addition'}
             The strategy used to evaluate the log CCDF.
             By default (``None``), the one-argument form of the function
-            chooses between the following options.
+            chooses between the following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the log CCDF itself
             - ``'logexp'``: evaluate the CCDF directly and take the logarithm
@@ -3207,16 +3216,16 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`.
-        The log-CCDF takes on its minimum value of :math:`\log(0)=-\infty` for
+        Suppose continuous probability distribution has support :math:`[l, r]`.
+        The log-CCDF returns its minimum value of :math:`\log(0)=-\infty` for
         :math:`x ≥ r` and its maximum value of :math:`\log(1) = 0` for
         :math:`x ≤ l`.
 
         For distributions with infinite support, it is common for
-        `ContinuousDistribution.ccdf` to return a value of `0` when the argument
+        `ContinuousDistribution.ccdf` to return a value of ``0`` when the argument
         is theoretically within the support; this can occur because the true value
         of the CCDF is too small to be represented by the chosen dtype. The log
-        of the CCDF, however, will often be numerically nonzero over a much larger
+        of the CCDF, however, will often be finite (not ``-inf``) over a much larger
         domain. Consequently, it may be preferred to work with the logarithms of
         probabilities and probability densities to avoid underflow.
 
@@ -3280,7 +3289,7 @@ class ContinuousDistribution:
         return method
 
     def _logccdf_formula(self):
-        return NotImplementedError(self._not_implemented)
+        raise NotImplementedError(self._not_implemented)
 
     def _logccdf_logexp(self, x, **kwargs):
         return np.log(self._ccdf_dispatch(x, **kwargs))
@@ -3321,7 +3330,7 @@ class ContinuousDistribution:
         method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'addition'}
             The strategy used to evaluate the CCDF.
             By default (``None``), the infrastructure chooses between the
-            following options.
+            following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the CCDF itself
             - ``'logexp'``: evaluate the logarithm of the CCDF directly and
@@ -3350,21 +3359,21 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`.
+        Suppose continuous probability distribution has support :math:`[l, r]`.
         The CCDF :math:`G(x)` is related to the probability density function
         :math:`f(x)` by:
 
         .. math::
 
-            G(a) = \int_a^r f(x) dx
+            G(x) = \int_x^r f(u) du
 
         The two argument version is:
 
         .. math::
 
-            G(a, b) = \int_l^a f(x) dx + \int_b^r f(x) dx
+            G(x, y) = \int_l^x f(u) du + \int_y^r f(u) du
 
-        The CCDF takes on its minimum value of :math:`0` for :math:`x ≥ r`
+        The CCDF returns its minimum value of :math:`0` for :math:`x ≥ r`
         and its maximum value of :math:`1` for :math:`x ≤ l`.
 
         Examples
@@ -3380,6 +3389,11 @@ class ContinuousDistribution:
         >>> X.ccdf(0.25)
         0.25
         >>> np.allclose(X.ccdf(0.25), 1-X.cdf(0.25))
+        True
+
+        Evaluate the complement of the cumulative probability between two arguments:
+
+        >>> X.ccdf(-0.25, 0.25) == X.cdf(-0.25) + X.ccdf(0.25)
         True
 
         """  # noqa: E501
@@ -3426,7 +3440,7 @@ class ContinuousDistribution:
         return method
 
     def _ccdf_formula(self, x, **kwargs):
-        return NotImplementedError(self._not_implemented)
+        raise NotImplementedError(self._not_implemented)
 
     def _ccdf_logexp(self, x, **kwargs):
         return np.exp(self._logccdf_dispatch(x, **kwargs))
@@ -3456,7 +3470,7 @@ class ContinuousDistribution:
         method : {None, 'formula', 'complementarity', 'inversion'}
             The strategy used to evaluate the inverse log-CDF.
             By default (``None``), the infrastructure chooses between the
-            following options.
+            following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the inverse log-CDF itself
             - ``'complementarity'``: evaluate the inverse log-CCDF at the
@@ -3480,24 +3494,20 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`. The
-        inverse log-CDF takes on its minimum value of :math:`l` at
+        Suppose continuous probability distribution has support :math:`[l, r]`. The
+        inverse log-CDF returns its minimum value of :math:`l` at
         :math:`x = \log(0) = -\infty` and its maximum value of :math:`r` at
         :math:`x = \log(1) = 0`. Because the log-CDF has range
         :math:`[-\infty, 0]`, the inverse log-CDF is only defined on the
         negative reals; for :math:`x > 0`, ``ilogcdf`` returns ``nan``.
 
-        Occasionally it is needed to find the argument of the CDF for which
-        the resulting probability is very close to `0` or `1` - too close to
+        Occasionally, it is needed to find the argument of the CDF for which
+        the resulting probability is very close to ``0`` or ``1`` - too close to
         represent accurately with floating point arithmetic. In many cases,
         however, the *logarithm* of this resulting probability may be
         represented in floating point arithmetic, in which case this function
         may be used to find the argument of the CDF for which the *logarithm*
         of the resulting probability is `x`.
-
-        Due to the inherent spacing between floating point numbers, it is common
-        for there to be no value of the argument for which the log-CDF is close
-        to the provided `x`. In such cases, this function returns NaN.
 
         Examples
         --------
@@ -3513,14 +3523,6 @@ class ContinuousDistribution:
         0.2788007830714034
         >>> np.allclose(X.ilogcdf(-0.25), X.icdf(np.exp(-0.25)))
         True
-
-        This function may return NaN when the spacing between floating point
-        values is too coarse to represent an argument for which the log-CDF is
-        close to the provided `x`, even when the function is theoretically
-        continuous within the domain of the argument.
-
-        >>> X.ilogcdf(-np.inf), X.ilogcdf(-1e10), X.ilogcdf(-30.)
-        (-0.5, nan, -0.4999999999998863)
 
         """
         return self._ilogcdf_dispatch(x, method=method, **self._parameters)
@@ -3546,17 +3548,17 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def icdf(self, x, *, method=None):
-        r"""Inverse cumulative distribution function
+        r"""Inverse of the cumulative distribution function
 
-        The inverse cumulative distribution function :math:`F^{-1}(x)` is the
-        argument :math:`y` for which the cumulative distribution function
-        :math:`F(y)` evaluates to :math:`x`.
+        The inverse of the cumulative distribution function :math:`F^{-1}(x)`
+        is the argument :math:`y` for which the cumulative distribution
+        function :math:`F(y)` evaluates to :math:`x`.
 
         .. math::
 
-            F^{-1}(x) = y \text{ such that } F(y) = x`
+            F^{-1}(x) = y \text{\quad s.t. \quad} F(y) = x`
 
-        ``icdf`` accepts `x` for :math:`x \in [0, 1]`.
+        `icdf` accepts `x` for :math:`x \in [0, 1]`.
 
         Parameters
         ----------
@@ -3566,11 +3568,11 @@ class ContinuousDistribution:
         method : {None, 'formula', 'complementarity', 'inversion'}
             The strategy used to evaluate the inverse CDF.
             By default (``None``), the infrastructure chooses between the
-            following options.
+            following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the inverse CDF itself
             - ``'complementarity'``: evaluate the inverse CCDF at the
-                                     complement of `x`; i.e. ``1 - x``.
+                                     complement of `x`.
             - ``'inversion'``: solve numerically for the argument at which the
                                CDF is equal to `x`.
 
@@ -3585,13 +3587,13 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.cdf
-        ContinuousDistribution.ilogcdf
+        cdf
+        ilogcdf
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`. The
-        inverse CDF takes on its minimum value of :math:`l` at :math:`x = 0`
+        Suppose continuous probability distribution has support :math:`[l, r]`. The
+        inverse CDF returns its minimum value of :math:`l` at :math:`x = 0`
         and its maximum value of :math:`r` at :math:`x = 1`. Because the CDF
         has range :math:`[0, 1]`, the inverse CDF is only defined on the
         domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, ``icdf``
@@ -3631,7 +3633,7 @@ class ContinuousDistribution:
         return method
 
     def _icdf_formula(self, x, **kwargs):
-        return NotImplementedError(self._not_implemented)
+        raise NotImplementedError(self._not_implemented)
 
     def _icdf_complementarity(self, x, **kwargs):
         return self._iccdf_dispatch(1 - x, **kwargs)
@@ -3654,7 +3656,7 @@ class ContinuousDistribution:
         method : {None, 'formula', 'complementarity', 'inversion'}
             The strategy used to evaluate the inverse log-CCDF.
             By default (``None``), the infrastructure chooses between the
-            following options.
+            following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the inverse log-CCDF itself
             - ``'complementarity'``: evaluate the inverse log-CDF at the
@@ -3673,24 +3675,20 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`. The
-        inverse log-CCDF takes on its minimum value of :math:`l` at
+        Suppose continuous probability distribution has support :math:`[l, r]`. The
+        inverse log-CCDF returns its minimum value of :math:`l` at
         :math:`x = \log(1) = 0` and its maximum value of :math:`r` at
         :math:`x = \log(0) = -\infty`. Because the log-CCDF has range
         :math:`[-\infty, 0]`, the inverse log-CDF is only defined on the
         negative reals; for :math:`x > 0`, ``ilogcdf`` returns ``nan``.
 
-        Occasionally it is needed to find the argument of the CCDF for which
-        the resulting probability is very close to `0` or `1` - too close to
+        Occasionally, it is needed to find the argument of the CCDF for which
+        the resulting probability is very close to ``0`` or ``1`` - too close to
         represent accurately with floating point arithmetic. In many cases,
         however, the *logarithm* of this resulting probability may be
         represented in floating point arithmetic, in which case this function
         may be used to find the argument of the CCDF for which the *logarithm*
         of the resulting probability is `x`.
-
-        Due to the inherent spacing between floating point numbers, it is common
-        for there to be no value of the argument for which the log-CCDF is close
-        to the provided `x`. In such cases, this function returns NaN.
 
         See Also
         --------
@@ -3712,14 +3710,6 @@ class ContinuousDistribution:
         >>> np.allclose(X.ilogccdf(-0.25), X.iccdf(np.exp(-0.25)))
         True
 
-        This function may return NaN when the spacing between floating point
-        values is too coarse to represent an argument for which the log-CCDF is
-        close to the provided `x`, even when the function is theoretically
-        continuous within the domain of the argument.
-
-        >>> X.ilogccdf(-np.inf), X.ilogccdf(-1e10), X.ilogccdf(-30.)
-        (0.5, nan, 0.4999999999998863)
-
         """
         return self._ilogccdf_dispatch(x, method=method, **self._parameters)
 
@@ -3734,7 +3724,7 @@ class ContinuousDistribution:
         return method
 
     def _ilogccdf_formula(self, x, **kwargs):
-        return NotImplementedError(self._not_implemented)
+        raise NotImplementedError(self._not_implemented)
 
     def _ilogccdf_complementarity(self, x, **kwargs):
         return self._ilogcdf_dispatch(_log1mexp(x), **kwargs)
@@ -3753,7 +3743,7 @@ class ContinuousDistribution:
 
         .. math::
 
-            G^{-1}(x) = y \text{ such that } G(y) = x`
+            G^{-1}(x) = y \text{\quad s.t. \quad} G(y) = x`
 
         ``iccdf`` accepts `x` for :math:`x \in [0, 1]`.
 
@@ -3765,11 +3755,11 @@ class ContinuousDistribution:
         method : {None, 'formula', 'complementarity', 'inversion'}
             The strategy used to evaluate the inverse CCDF.
             By default (``None``), the infrastructure chooses between the
-            following options.
+            following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the inverse CCDF itself
             - ``'complementarity'``: evaluate the inverse CDF at the
-                                     complement of `x`; i.e. ``1 - x``.
+                                     complement of `x`.
             - ``'inversion'``: solve numerically for the argument at which the
                                CCDF is equal to `x`.
 
@@ -3784,8 +3774,8 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose a probability distribution has support :math:`[l, r]`. The
-        inverse CCDF takes on its minimum value of :math:`l` at :math:`x = 1`
+        Suppose continuous probability distribution has support :math:`[l, r]`. The
+        inverse CCDF returns its minimum value of :math:`l` at :math:`x = 1`
         and its maximum value of :math:`r` at :math:`x = 0`. Because the CCDF
         has range :math:`[0, 1]`, the inverse CCDF is only defined on the
         domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, ``iccdf``
@@ -3830,7 +3820,7 @@ class ContinuousDistribution:
         return method
 
     def _iccdf_formula(self, x, **kwargs):
-        return NotImplementedError(self._not_implemented)
+        raise NotImplementedError(self._not_implemented)
 
     def _iccdf_complementarity(self, x, **kwargs):
         return self._icdf_dispatch(1 - x, **kwargs)
@@ -3877,7 +3867,8 @@ class ContinuousDistribution:
             the output array will be of shape ``shape + param_shape``.
         method : {None, 'formula', 'inverse_transform'}
             The strategy used to produce the sample. By default (``None``),
-            the infrastructure chooses between the following options.
+            the infrastructure chooses between the following options,
+            listed in order of precedence.
 
             - ``'formula'``: an implementation specific to the distribution
             - ``'inverse_transform'``: generate a uniformly distributed sample and
@@ -4081,7 +4072,7 @@ class ContinuousDistribution:
             \mu_n(X) = \int_{\chi} (x - \mu) ^n f(x) dx
 
         The "standardized" moment is the central moment normalized by a power of
-        the standard deviation, :math:`\sigma = \sqrt{\mu'_2}`:
+        the standard deviation, :math:`\sigma = \sqrt{\mu_2}`:
 
         .. math::
 
@@ -4090,11 +4081,19 @@ class ContinuousDistribution:
 
         Parameters
         ----------
+        order : int
+            The integer order of the moment; i.e. :math:`n` in the formulae above.
+        kind : {'raw', 'central', 'standardized'}
+            Whether to return the raw (default), central, or standardized moment
+            defined above.
         method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
             The strategy used to evaluate the moment. By default (``None``),
-            the infrastructure chooses between the following options.
+            the infrastructure chooses between the following options,
+            listed in order of precedence.
 
-            - ``'formula'``: use a formula for the differential entropy itself
+            - ``'cache'``: use the value of the moment most recently calculated
+                           via another method.
+            - ``'formula'``: use a formula for the moment itself
             - ``'general'``: use a general result that is true for all distributions
                              with finite moments; for instance, the zeroth raw moment
                              is identically 1.
@@ -4103,8 +4102,6 @@ class ContinuousDistribution:
             - ``'normalize'``: normalize a central moment to get a standardized
                                or vice versa.
             - ``'quadrature'``: numerically integrate according to the definition
-            - ``'cache'``: use the value of the moment most recently calculated
-                           via another method.
 
             Not all `method` options are available for orders, kinds, and
             distributions. If the selected `method` is not available, a
@@ -4138,7 +4135,7 @@ class ContinuousDistribution:
 
         .. math::
 
-            E[(x-b)^n] = \int_{\chi} (x-b)^n f(x) dx
+            E[(X-a)^n] = \int_{\chi} (x-a)^n f(x) dx
 
         In this notation, a raw moment about the origin is :math:`\mu'_n = E[x^n]`,
         and a central moment is :math:`\mu_n = E[(x-\mu)^n]`, where :math:`\mu`
@@ -4149,10 +4146,10 @@ class ContinuousDistribution:
 
         .. math::
 
-            E[(x-b)^n] =  \sum_{i=0}^n E[(x-a)^i] {n \choose i} (a - b)^{n-i}
+            E[(X-b)^n] =  \sum_{i=0}^n E[(X-a)^i] {n \choose i} (a - b)^{n-i}
 
         For instance, to transform the raw moment to the central moment, we let
-        :math:`b = \mu` and :math:`a=0`.
+        :math:`b = \mu` and :math:`a = 0`.
 
         The distribution infrastructure provides flexibility for distribution
         authors to implement separate formulas for raw moments, central moments,
@@ -4443,16 +4440,16 @@ class ContinuousDistribution:
         t : 3-tuple of (str, float, float), optional
             Tuple indicating the limits within which the quantities are plotted.
             Default is ``('cdf', 0.001, 0.999)`` indicating that the central
-            99.9% of the distribution is to be shown. Valid values of the
-            string are the same as for ``x`` and ``y`` except for ``pdf``
-            and ``logpdf``.
+            99.9% of the distribution is to be shown. Valid values are:
+            'x', 'cdf', 'ccdf', 'icdf', 'iccdf', 'logcdf', 'logccdf',
+            'ilogcdf', 'ilogccdf'.
         ax : `matplotlib.axes`, optional
             Axes on which to generate the plot. If not provided, use the
             current axes.
 
         Returns
         -------
-        ax : `matplotlib.axes`, optional
+        ax : `matplotlib.axes`
             Axes on which the plot was generated.
             The plot can be customized by manipulating this object.
 
@@ -4514,7 +4511,7 @@ class ContinuousDistribution:
         # pdf/logpdf are not valid for `t` because we can't easily invert them
         message = (f'Argument `t` of `{self.__class__.__name__}.plot` "'
                    f'must be one of {valid_t}')
-        if y_name not in valid_xy:
+        if t_name not in valid_t:
             raise ValueError(message)
 
         message = (f'Argument `x` of `{self.__class__.__name__}.plot` "'
@@ -4524,7 +4521,7 @@ class ContinuousDistribution:
 
         message = (f'Argument `y` of `{self.__class__.__name__}.plot` "'
                    f'must be one of {valid_xy}')
-        if y_name not in valid_xy:
+        if t_name not in valid_xy:
             raise ValueError(message)
 
         # This could just be a warning
@@ -4546,7 +4543,6 @@ class ContinuousDistribution:
             message = ("`matplotlib` must be installed to use "
                        f"`{self.__class__.__name__}.plot`.")
             raise ModuleNotFoundError(message) from exc
-
         ax = plt.gca() if ax is None else ax
 
         # get quantile limits given t limits
@@ -4699,13 +4695,15 @@ class ContinuousDistribution:
         """
         # add `_fit` implementation methods
 
-        # The value added, compared to requiring the user to optimize/solve on their own:
+        # The value added, compared to requiring the user to optimize/solve
+        # on their own:
         # - (potentially) more efficient calls to private rather than public functions
         # - (potentially) more efficient changes in parameter values
         # - (potentially) automatically include constraints
         # - convenience (least important)
 
         # this should probably be in a context manager to make sure it gets set back
+        # rather than turning input validation off, call private function?
         iv_policy = self.iv_policy
         self.iv_policy = 'skip_all'
         x0 = [getattr(self, parameter) for parameter in parameters]
@@ -4742,7 +4740,8 @@ class ContinuousDistribution:
 
         for i, bound in enumerate(bounds):
             a, b = bound
-            str_a, str_b = isinstance(a, str) or not np.isinf(a), isinstance(b, str) or not np.isinf(b)
+            str_a, str_b = (isinstance(a, str) or not np.isinf(a),
+                            isinstance(b, str) or not np.isinf(b))
 
             if str_a or str_b:
                 def g(x):
@@ -4758,11 +4757,14 @@ class ContinuousDistribution:
                     return res
                 constraints.append(optimize.NonlinearConstraint(g, 0, np.inf))
 
-        if f in {self.llf, self.pdf, self.logpdf, self.cdf, self.logcdf, self.ccdf, self.logccdf}:
-            data = np.asarray(args[0])  # rather than turning input validation off, call private function?
+        if f in {self.llf, self.pdf, self.logpdf, self.cdf,
+                 self.logcdf, self.ccdf, self.logccdf}:
+
+            data = np.asarray(args[0])
             data_min, data_max = np.min(data), np.max(data)
 
-            # for now, assume that support bounds cannot become infinite by changing parameters
+            # for now, assume that support bounds cannot become
+            # infinite by changing parameters
             a, b = self.support()
             inf_a, inf_b = np.isinf(a), np.isinf(b)
 
