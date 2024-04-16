@@ -2091,8 +2091,16 @@ class ContinuousDistribution:
     def logentropy(self, *, method=None):
         r"""Logarithm of the differential entropy
 
-        For more information about the differential entropy, see
-        `entropy`.
+        In terms of probability density function :math:`f(x)` and its support
+        :math:`\chi`, the differential entropy of a random variable :math:`X` is:
+
+        .. math::
+
+            h(X) = - \int_{\chi} f(x) \log f(x) dx
+
+        `logentropy` computes the logarithm of the differential entropy,
+        :math:`log(h(X))`, but it may be numerically favorable compared to the
+        naive implementation (computing :math:`h(X)` and taking the logarithm).
 
         Parameters
         ----------
@@ -2683,8 +2691,20 @@ class ContinuousDistribution:
     def logpdf(self, x, *, method=None):
         r"""Log of the probability density function
 
-        For more information about the probability density function,
-        see `pdf`.
+        The probability density function :math:`f(x)` is the probability *per
+        unit interval* of :math:`x` that the random variable takes on the value
+        :math:`x`. Mathematically, it can be defined as the derivative of the
+        cumulative distribution function `F(x)`:
+
+        .. math::
+
+            f(x) = \frac{d}{dx} F(x)
+
+        `logpdf` computes the logarithm of the probability density function,
+        :math:`\log(f(x))`, but it may be numerically favorable compared to the
+        naive implementation (computing :math:`f(x)` and taking the logarithm).
+
+        `logpdf` accepts `x` for :math:`x`.
 
         Parameters
         ----------
@@ -2848,8 +2868,28 @@ class ContinuousDistribution:
     def logcdf(self, x, y=None, *, method=None):
         r"""Log of the cumulative distribution function
 
-        For more information about the cumulative distribution function,
-        see `cdf`.
+        The cumulative distribution function :math:`F(x)` is the probability
+        the random variable :math:`X` will take on a value less than or equal
+        to :math:`x`:
+
+        .. math::
+
+            F(x) = P(X ≤ x)
+
+        A two-argument variant of this function is also defined as the
+        probability the random variable :math:`X` will take on a value between
+        :math:`x` and :math:`y`.
+
+        .. math::
+
+            F(x, y) = P(x ≤ X ≤ y)
+
+        `logcdf` computes the logarithm of the cumulative distribution function,
+        :math:`\log(F(x))`/:math:`\log(F(x, y))`, but it may be numerically
+        favorable compared to the naive implementation (computing the CDF
+        and taking the logarithm).
+
+        `logcdf` accepts `x` for :math:`x` and `y` for :math:`y`.
 
         Parameters
         ----------
@@ -2896,10 +2936,12 @@ class ContinuousDistribution:
         For distributions with infinite support, it is common for
         `cdf` to return a value of ``0`` when the argument
         is theoretically within the support; this can occur because the true value
-        of the CDF is too small to be represented by the chosen dtype. The log
-        of the CDF, however, will often be finite (not ``-inf``) over a much larger
-        domain. Consequently, it may be preferred to work with the logarithms of
-        probabilities and probability densities to avoid underflow.
+        of the CDF is too small to be represented by the chosen dtype. `logcdf`,
+        however, will often return a finite (not ``-inf``) result over a much larger
+        domain. Similarly, `logcdf` may provided a strictly negative result with
+        arguments for which `cdf` would return ``1.0``. Consequently, it may be
+        preferred to work with the logarithms of probabilities to avoid underflow
+        and related limitations of floating point numbers.
 
         Examples
         --------
@@ -3175,8 +3217,27 @@ class ContinuousDistribution:
     def logccdf(self, x, y=None, *, method=None):
         r"""Log of the complementary cumulative distribution function
 
-        For more information about the complementary cumulative distribution
-        function, see `cdf`.
+        The complementary cumulative distribution function :math:`G(x)` is the
+        complement of the cumulative distribution function :math:`F(x)`; i.e.,
+        probability the random variable :math:`X` will take on a value greater
+        than :math:`x`:
+
+        .. math::
+
+            G(x) = 1 - F(x) = P(X > x)
+
+        A two-argument variant of this function is:
+
+        .. math::
+
+            G(x, y) = 1 - F(x, y) = P(X < x \text{ or } X > y)
+
+        `logccdf` computes the logarithm of the complementary cumulative
+        distribution function, :math:`\log(G(x))`/:math:`\log(G(x, y))`,
+        but it may be numerically favorable compared to the naive implementation
+        (computing the CDF and taking the logarithm).
+
+        `logccdf` accepts `x` for :math:`x` and `y` for :math:`y`.
 
         Parameters
         ----------
@@ -3226,8 +3287,10 @@ class ContinuousDistribution:
         is theoretically within the support; this can occur because the true value
         of the CCDF is too small to be represented by the chosen dtype. The log
         of the CCDF, however, will often be finite (not ``-inf``) over a much larger
-        domain. Consequently, it may be preferred to work with the logarithms of
-        probabilities and probability densities to avoid underflow.
+        domain. Similarly, `logccdf` may provided a strictly negative result with
+        arguments for which `ccdf` would return ``1.0``. Consequently, it may be
+        preferred to work with the logarithms of probabilities to avoid underflow
+        and related limitations of floating point numbers.
 
         Examples
         --------
@@ -3459,8 +3522,14 @@ class ContinuousDistribution:
     def ilogcdf(self, x, *, method=None):
         r"""Inverse of the logarithm of the cumulative distribution function.
 
-        For more information about the inverse cumulative distribution function,
-        see `icdf`.
+        The inverse of the logarithm of the cumulative distribution function
+        is the argument :math:`y` for which the logarithm of the cumulative
+        distribution function :math:`\log(F(y))` evaluates to :math:`x`
+        Mathematically, it is equivalent to :math:`F^{-1}(\exp(x))`,
+        but it may be numerically favorable compared to the naive implementation
+        (computing :math:`y = \exp(x)`, then :math:`F^{-1}(y)`).
+
+        `ilogcdf` accepts `x` for :math:`x ≤ 0`.
 
         Parameters
         ----------
@@ -3645,8 +3714,14 @@ class ContinuousDistribution:
     def ilogccdf(self, x, *, method=None):
         r"""Inverse of the log of the complementary cumulative distribution function.
 
-        For more information about the inverse of the complementary cumulative
-        distribution function, see `icdf`.
+        The inverse of the logarithm of the complementary cumulative distribution
+        function is the argument :math:`y` for which the logarithm of the
+        complementary cumulative distribution function :math:`\log(G(y))` evaluates
+        to :math:`x`. Mathematically, it is equivalent to :math:`G^{-1}(\exp(x))`,
+        but it may be numerically favorable compared to the naive implementation
+        (computing :math:`y = \exp(x)`, then :math:`G^{-1}(y)`).
+
+        `ilogccdf` accepts `x` for :math:`x ≤ 0`.
 
         Parameters
         ----------
