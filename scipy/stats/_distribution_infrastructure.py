@@ -2856,18 +2856,18 @@ class ContinuousDistribution:
         x, y : Array
             The arguments of the log of the cumulative distribution function
             (log-CDF). `x` is required; `y` is optional.
-        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
+        method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
             The strategy used to evaluate the log-CDF.
             By default (``None``), the one-argument form of the function
             chooses between the following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the log-CDF itself
             - ``'logexp'``: evaluate the CDF directly and take the logarithm
-            - ``'complementarity'``: evaluate the logarithm of the complementary CDF
-                                     directly and take the logarithmic complement
+            - ``'complement'``: evaluate the logarithm of the complementary CDF
+                                directly and take the logarithmic complement
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
-            In place of ``'complementarity'``, the two-argument form accepts:
+            In place of ``'complement'``, the two-argument form accepts:
 
             - ``'subtraction'``: compute the log-CDF at each argument and take
               the logarithmic difference.
@@ -2984,7 +2984,7 @@ class ContinuousDistribution:
         elif self.tol is _null and self._overrides('_cdf_formula'):
             method = self._logcdf_logexp
         elif self._overrides('_logccdf_formula'):
-            method = self._logcdf_complementarity
+            method = self._logcdf_complement
         else:
             method = self._logcdf_quadrature
         return method
@@ -2995,7 +2995,7 @@ class ContinuousDistribution:
     def _logcdf_logexp(self, x, **kwargs):
         return np.log(self._cdf_dispatch(x, **kwargs))
 
-    def _logcdf_complementarity(self, x, **kwargs):
+    def _logcdf_complement(self, x, **kwargs):
         return _log1mexp(self._logccdf_dispatch(x, **kwargs))
 
     def _logcdf_quadrature(self, x, **kwargs):
@@ -3029,7 +3029,7 @@ class ContinuousDistribution:
         x, y : Array
             The arguments of the cumulative distribution function (CDF). `x` is
             required; `y` is optional.
-        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'subtraction'}
+        method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
             The strategy used to evaluate the CDF.
             By default (``None``), the one-argument form of the function
             chooses between the following options, listed in order of precedence.
@@ -3037,11 +3037,11 @@ class ContinuousDistribution:
             - ``'formula'``: use a formula for the CDF itself
             - ``'logexp'``: evaluate the logarithm of the CDF directly and
                             exponentiate
-            - ``'complementarity'``: evaluate the complementary CDF direcly
-                                     and take the complement
+            - ``'complement'``: evaluate the complementary CDF direcly
+                                and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
-            In place of ``'complementarity'``, the two-argument form accepts:
+            In place of ``'complement'``, the two-argument form accepts:
 
             - ``'subtraction'``: compute the CDF at each argument and take
               the difference.
@@ -3153,7 +3153,7 @@ class ContinuousDistribution:
         elif self._overrides('_logcdf_formula'):
             method = self._cdf_logexp
         elif self._tol is _null and self._overrides('_ccdf_formula'):
-            method = self._cdf_complementarity
+            method = self._cdf_complement
         else:
             method = self._cdf_quadrature
         return method
@@ -3164,7 +3164,7 @@ class ContinuousDistribution:
     def _cdf_logexp(self, x, **kwargs):
         return np.exp(self._logcdf_dispatch(x, **kwargs))
 
-    def _cdf_complementarity(self, x, **kwargs):
+    def _cdf_complement(self, x, **kwargs):
         return 1 - self._ccdf_dispatch(x, **kwargs)
 
     def _cdf_quadrature(self, x, **kwargs):
@@ -3183,15 +3183,15 @@ class ContinuousDistribution:
         x, y : Array
             The arguments of the logarithm of the complementary cumulative
             distribution function (log CCDF). `x` is required; `y` is optional.
-        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'addition'}
+        method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
             The strategy used to evaluate the log CCDF.
             By default (``None``), the one-argument form of the function
             chooses between the following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the log CCDF itself
             - ``'logexp'``: evaluate the CCDF directly and take the logarithm
-            - ``'complementarity'``: evaluate the log-CDF directly
-                                     and take the logarithmic complement
+            - ``'complement'``: evaluate the log-CDF directly
+                                and take the logarithmic complement
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
             The two-argument form chooses between:
@@ -3256,7 +3256,7 @@ class ContinuousDistribution:
 
     @_dispatch
     def _logccdf2_dispatch(self, x, y, *, method=None, **kwargs):
-        # if _logccdf2_formula exists, we could use complementarity
+        # if _logccdf2_formula exists, we could use the complement
         # if _ccdf2_formula exists, we could use log/exp
         if self._overrides('_logccdf2_formula'):
             method = self._logccdf2_formula
@@ -3283,7 +3283,7 @@ class ContinuousDistribution:
         elif self.tol is _null and self._overrides('_ccdf_formula'):
             method = self._logccdf_logexp
         elif self._overrides('_logcdf_formula'):
-            method = self._logccdf_complementarity
+            method = self._logccdf_complement
         else:
             method = self._logccdf_quadrature
         return method
@@ -3294,7 +3294,7 @@ class ContinuousDistribution:
     def _logccdf_logexp(self, x, **kwargs):
         return np.log(self._ccdf_dispatch(x, **kwargs))
 
-    def _logccdf_complementarity(self, x, **kwargs):
+    def _logccdf_complement(self, x, **kwargs):
         return _log1mexp(self._logcdf_dispatch(x, **kwargs))
 
     def _logccdf_quadrature(self, x, **kwargs):
@@ -3327,7 +3327,7 @@ class ContinuousDistribution:
         x, y : Array
             The arguments of the complementary cumulative distribution
             function (CCDF). `x` is required; `y` is optional.
-        method : {None, 'formula', 'logexp', 'complementarity', 'quadrature', 'addition'}
+        method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
             The strategy used to evaluate the CCDF.
             By default (``None``), the infrastructure chooses between the
             following options, listed in order of precedence.
@@ -3335,7 +3335,7 @@ class ContinuousDistribution:
             - ``'formula'``: use a formula for the CCDF itself
             - ``'logexp'``: evaluate the logarithm of the CCDF directly and
                             exponentiate
-            - ``'complementarity'``: evaluate the CDF and take the complement
+            - ``'complement'``: evaluate the CDF and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
             The two-argument form chooses between:
@@ -3434,7 +3434,7 @@ class ContinuousDistribution:
         elif self._overrides('_logccdf_formula'):
             method = self._ccdf_logexp
         elif self._tol is _null and self._overrides('_cdf_formula'):
-            method = self._ccdf_complementarity
+            method = self._ccdf_complement
         else:
             method = self._ccdf_quadrature
         return method
@@ -3445,7 +3445,7 @@ class ContinuousDistribution:
     def _ccdf_logexp(self, x, **kwargs):
         return np.exp(self._logccdf_dispatch(x, **kwargs))
 
-    def _ccdf_complementarity(self, x, **kwargs):
+    def _ccdf_complement(self, x, **kwargs):
         return 1 - self._cdf_dispatch(x, **kwargs)
 
     def _ccdf_quadrature(self, x, **kwargs):
@@ -3467,14 +3467,14 @@ class ContinuousDistribution:
         x : Array
             The argument of the inverse of the logarithm of the cumulative
             distribution function (inverse log-CDF).
-        method : {None, 'formula', 'complementarity', 'inversion'}
+        method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse log-CDF.
             By default (``None``), the infrastructure chooses between the
             following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the inverse log-CDF itself
-            - ``'complementarity'``: evaluate the inverse log-CCDF at the
-                                    logarithmic complement of `x`.
+            - ``'complement'``: evaluate the inverse log-CCDF at the
+                                logarithmic complement of `x`.
             - ``'inversion'``: solve numerically for the argument at which the
                                log-CDF is equal to `x`.
 
@@ -3532,7 +3532,7 @@ class ContinuousDistribution:
         if self._overrides('_ilogcdf_formula'):
             method = self._ilogcdf_formula
         elif self._overrides('_ilogccdf_formula'):
-            method = self._ilogcdf_complementarity
+            method = self._ilogcdf_complement
         else:
             method = self._ilogcdf_inversion
         return method
@@ -3540,7 +3540,7 @@ class ContinuousDistribution:
     def _ilogcdf_formula(self, x, **kwargs):
         raise NotImplementedError(self._not_implemented)
 
-    def _ilogcdf_complementarity(self, x, **kwargs):
+    def _ilogcdf_complement(self, x, **kwargs):
         return self._ilogccdf_dispatch(_log1mexp(x), **kwargs)
 
     def _ilogcdf_inversion(self, x, **kwargs):
@@ -3565,14 +3565,14 @@ class ContinuousDistribution:
         x : Array
             The argument of the inverse cumulative distribution function
             (inverse CDF).
-        method : {None, 'formula', 'complementarity', 'inversion'}
+        method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse CDF.
             By default (``None``), the infrastructure chooses between the
             following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the inverse CDF itself
-            - ``'complementarity'``: evaluate the inverse CCDF at the
-                                     complement of `x`.
+            - ``'complement'``: evaluate the inverse CCDF at the
+                                complement of `x`.
             - ``'inversion'``: solve numerically for the argument at which the
                                CDF is equal to `x`.
 
@@ -3627,7 +3627,7 @@ class ContinuousDistribution:
         if self._overrides('_icdf_formula'):
             method = self._icdf_formula
         elif self.tol is _null and self._overrides('_iccdf_formula'):
-            method = self._icdf_complementarity
+            method = self._icdf_complement
         else:
             method = self._icdf_inversion
         return method
@@ -3635,7 +3635,7 @@ class ContinuousDistribution:
     def _icdf_formula(self, x, **kwargs):
         raise NotImplementedError(self._not_implemented)
 
-    def _icdf_complementarity(self, x, **kwargs):
+    def _icdf_complement(self, x, **kwargs):
         return self._iccdf_dispatch(1 - x, **kwargs)
 
     def _icdf_inversion(self, x, **kwargs):
@@ -3653,14 +3653,14 @@ class ContinuousDistribution:
         x : Array
             The argument of the inverse of the logarithm of the complementary
             cumulative distribution function (inverse log-CCDF).
-        method : {None, 'formula', 'complementarity', 'inversion'}
+        method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse log-CCDF.
             By default (``None``), the infrastructure chooses between the
             following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the inverse log-CCDF itself
-            - ``'complementarity'``: evaluate the inverse log-CDF at the
-                                     logarithmic complement of `x`.
+            - ``'complement'``: evaluate the inverse log-CDF at the
+                                logarithmic complement of `x`.
             - ``'inversion'``: solve numerically for the argument at which the
                                log-CCDF is equal to `x`.
 
@@ -3718,7 +3718,7 @@ class ContinuousDistribution:
         if self._overrides('_ilogccdf_formula'):
             method = self._ilogccdf_formula
         elif self._overrides('_ilogcdf_formula'):
-            method = self._ilogccdf_complementarity
+            method = self._ilogccdf_complement
         else:
             method = self._ilogccdf_inversion
         return method
@@ -3726,7 +3726,7 @@ class ContinuousDistribution:
     def _ilogccdf_formula(self, x, **kwargs):
         raise NotImplementedError(self._not_implemented)
 
-    def _ilogccdf_complementarity(self, x, **kwargs):
+    def _ilogccdf_complement(self, x, **kwargs):
         return self._ilogcdf_dispatch(_log1mexp(x), **kwargs)
 
     def _ilogccdf_inversion(self, x, **kwargs):
@@ -3752,14 +3752,14 @@ class ContinuousDistribution:
         x : Array
             The argument of the inverse complementary cumulative distribution
             function (inverse CCDF).
-        method : {None, 'formula', 'complementarity', 'inversion'}
+        method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse CCDF.
             By default (``None``), the infrastructure chooses between the
             following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the inverse CCDF itself
-            - ``'complementarity'``: evaluate the inverse CDF at the
-                                     complement of `x`.
+            - ``'complement'``: evaluate the inverse CDF at the
+                                complement of `x`.
             - ``'inversion'``: solve numerically for the argument at which the
                                CCDF is equal to `x`.
 
@@ -3814,7 +3814,7 @@ class ContinuousDistribution:
         if self._overrides('_iccdf_formula'):
             method = self._iccdf_formula
         elif self.tol is _null and self._overrides('_icdf_formula'):
-            method = self._iccdf_complementarity
+            method = self._iccdf_complement
         else:
             method = self._iccdf_inversion
         return method
@@ -3822,7 +3822,7 @@ class ContinuousDistribution:
     def _iccdf_formula(self, x, **kwargs):
         raise NotImplementedError(self._not_implemented)
 
-    def _iccdf_complementarity(self, x, **kwargs):
+    def _iccdf_complement(self, x, **kwargs):
         return self._icdf_dispatch(1 - x, **kwargs)
 
     def _iccdf_inversion(self, x, **kwargs):

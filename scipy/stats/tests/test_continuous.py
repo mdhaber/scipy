@@ -181,7 +181,7 @@ class TestDistributions:
         check_dist_func(dist, 'pdf', x, x_result_shape, methods)
         check_dist_func(dist, 'logpdf', x, x_result_shape, methods)
 
-        methods = {'log/exp', 'complementarity', 'quadrature'}
+        methods = {'log/exp', 'complement', 'quadrature'}
         check_dist_func(dist, 'logcdf', x, x_result_shape, methods)
         check_dist_func(dist, 'cdf', x, x_result_shape, methods)
         check_dist_func(dist, 'logccdf', x, x_result_shape, methods)
@@ -195,7 +195,7 @@ class TestDistributions:
             check_ccdf2(dist, False, x, y, xy_result_shape, methods)
             check_ccdf2(dist, True, x, y, xy_result_shape, methods)
 
-        methods = {'complementarity', 'inversion'}
+        methods = {'complement', 'inversion'}
         check_dist_func(dist, 'ilogcdf', logp, x_result_shape, methods)
         check_dist_func(dist, 'icdf', p, x_result_shape, methods)
         check_dist_func(dist, 'ilogccdf', logp, x_result_shape, methods)
