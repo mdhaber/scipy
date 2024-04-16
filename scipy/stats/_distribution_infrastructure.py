@@ -1977,7 +1977,7 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.pdf
+        pdf
 
         Notes
         -----
@@ -2092,7 +2092,7 @@ class ContinuousDistribution:
         r"""Logarithm of the differential entropy
 
         For more information about the differential entropy, see
-        `ContinuousDistribution.entropy`.
+        `entropy`.
 
         Parameters
         ----------
@@ -2119,8 +2119,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.entropy
-        ContinuousDistribution.logpdf
+        entropy
+        logpdf
 
         Notes
         -----
@@ -2212,8 +2212,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.logentropy
-        ContinuousDistribution.pdf
+        logentropy
+        pdf
 
         Notes
         -----
@@ -2293,9 +2293,9 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.mean
-        ContinuousDistribution.mode
-        ContinuousDistribution.icdf
+        mean
+        mode
+        icdf
 
         Examples
         --------
@@ -2362,9 +2362,9 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.mean
-        ContinuousDistribution.median
-        ContinuousDistribution.pdf
+        mean
+        median
+        pdf
 
         Notes
         -----
@@ -2377,7 +2377,7 @@ class ContinuousDistribution:
         #. the probability density function may have one or more local maxima
            that are not a global maximum.
 
-        In such cases, `ContinuousDistribution.mode` will
+        In such cases, `mode` will
 
         #. return a single value,
         #. consider the mode to occur at a singularity, and/or
@@ -2465,13 +2465,13 @@ class ContinuousDistribution:
         method : {None, 'formula', 'transform', 'quadrature', 'cache'}
             Method used to calculate the raw first moment. Not
             all methods are available for all distributions. See
-            `ContinuousDistribution.moment` for details.
+            `moment` for details.
 
         See Also
         --------
-        ContinuousDistribution.moment
-        ContinuousDistribution.median
-        ContinuousDistribution.mode
+        moment
+        median
+        mode
 
         Examples
         --------
@@ -2498,13 +2498,13 @@ class ContinuousDistribution:
         method : {None, 'formula', 'transform', 'normalize', 'quadrature', 'cache'}
             Method used to calculate the central second moment. Not
             all methods are available for all distributions. See
-            `ContinuousDistribution.moment` for details.
+            `moment` for details.
 
         See Also
         --------
-        ContinuousDistribution.moment
-        ContinuousDistribution.standard_deviation
-        ContinuousDistribution.mean
+        moment
+        standard_deviation
+        mean
 
         Examples
         --------
@@ -2531,13 +2531,13 @@ class ContinuousDistribution:
         method : {None, 'formula', 'transform', 'normalize', 'quadrature', 'cache'}
             Method used to calculate the central second moment. Not
             all methods are available for all distributions. See
-            `ContinuousDistribution.moment` for details.
+            `moment` for details.
 
         See Also
         --------
-        ContinuousDistribution.variance
-        ContinuousDistribution.mean
-        ContinuousDistribution.moment
+        variance
+        mean
+        moment
 
         Examples
         --------
@@ -2564,13 +2564,13 @@ class ContinuousDistribution:
         method : {None, 'formula', 'general', 'transform', 'normalize', 'cache'}
             Method used to calculate the standardized third moment. Not
             all methods are available for all distributions. See
-            `ContinuousDistribution.moment` for details.
+            `moment` for details.
 
         See Also
         --------
-        ContinuousDistribution.moment
-        ContinuousDistribution.mean
-        ContinuousDistribution.variance
+        moment
+        mean
+        variance
 
         Examples
         --------
@@ -2602,7 +2602,7 @@ class ContinuousDistribution:
         method : {None, 'formula', 'general', 'transform', 'normalize', 'cache'}
             Method used to calculate the standardized fourth moment. Not
             all methods are available for all distributions. See
-            `ContinuousDistribution.moment` for details.
+            `moment` for details.
         convention : {'non-excess', 'excess'}
             Two distinction conventions are available:
 
@@ -2614,9 +2614,9 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.moment
-        ContinuousDistribution.mean
-        ContinuousDistribution.variance
+        moment
+        mean
+        variance
 
         Examples
         --------
@@ -2684,7 +2684,7 @@ class ContinuousDistribution:
         r"""Log of the probability density function
 
         For more information about the probability density function,
-        see `ContinuousDistribution.pdf`.
+        see `pdf`.
 
         Parameters
         ----------
@@ -2710,8 +2710,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.pdf
-        ContinuousDistribution.logcdf
+        pdf
+        logcdf
 
         Notes
         -----
@@ -2723,7 +2723,7 @@ class ContinuousDistribution:
         can be any positive real.
 
         For distributions with infinite support, it is common for
-        `ContinuousDistribution.pdf` to return a value of ``0`` when the argument
+        `pdf` to return a value of ``0`` when the argument
         is theoretically within the support; this can occur because the true value
         of the PDF is too small to be represented by the chosen dtype. The log
         of the PDF, however, will often be finite (not ``-inf``) over a much larger
@@ -2775,7 +2775,7 @@ class ContinuousDistribution:
 
             f(x) = \frac{d}{dx} F(x)
 
-        ``pdf`` accepts `x` for :math:`x`.
+        `pdf` accepts `x` for :math:`x`.
 
         Parameters
         ----------
@@ -2802,8 +2802,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.cdf
-        ContinuousDistribution.logpdf
+        cdf
+        logpdf
 
         Notes
         -----
@@ -2849,7 +2849,7 @@ class ContinuousDistribution:
         r"""Log of the cumulative distribution function
 
         For more information about the cumulative distribution function,
-        see `ContinuousDistribution.cdf`.
+        see `cdf`.
 
         Parameters
         ----------
@@ -2883,8 +2883,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.cdf
-        ContinuousDistribution.logccdf
+        cdf
+        logccdf
 
         Notes
         -----
@@ -2894,7 +2894,7 @@ class ContinuousDistribution:
         :math:`x ≥ r`.
 
         For distributions with infinite support, it is common for
-        `ContinuousDistribution.cdf` to return a value of ``0`` when the argument
+        `cdf` to return a value of ``0`` when the argument
         is theoretically within the support; this can occur because the true value
         of the CDF is too small to be represented by the chosen dtype. The log
         of the CDF, however, will often be finite (not ``-inf``) over a much larger
@@ -3022,7 +3022,7 @@ class ContinuousDistribution:
 
             F(x, y) = P(x ≤ X ≤ y)
 
-        ``cdf`` accepts `x` for :math:`x` and `y` for :math:`y`.
+        `cdf` accepts `x` for :math:`x` and `y` for :math:`y`.
 
         Parameters
         ----------
@@ -3057,8 +3057,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.logcdf
-        ContinuousDistribution.ccdf
+        logcdf
+        ccdf
 
         Notes
         -----
@@ -3176,7 +3176,7 @@ class ContinuousDistribution:
         r"""Log of the complementary cumulative distribution function
 
         For more information about the complementary cumulative distribution
-        function, see `ContinuousDistribution.cdf`.
+        function, see `cdf`.
 
         Parameters
         ----------
@@ -3211,8 +3211,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.ccdf
-        ContinuousDistribution.logcdf
+        ccdf
+        logcdf
 
         Notes
         -----
@@ -3222,7 +3222,7 @@ class ContinuousDistribution:
         :math:`x ≤ l`.
 
         For distributions with infinite support, it is common for
-        `ContinuousDistribution.ccdf` to return a value of ``0`` when the argument
+        `ccdf` to return a value of ``0`` when the argument
         is theoretically within the support; this can occur because the true value
         of the CCDF is too small to be represented by the chosen dtype. The log
         of the CCDF, however, will often be finite (not ``-inf``) over a much larger
@@ -3320,7 +3320,7 @@ class ContinuousDistribution:
 
             G(x, y) = 1 - F(x, y) = P(X < x \text{ or } X > y)
 
-        ``ccdf`` accepts `x` for :math:`x` and `y` for :math:`y`.
+        `ccdf` accepts `x` for :math:`x` and `y` for :math:`y`.
 
         Parameters
         ----------
@@ -3354,8 +3354,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.cdf
-        ContinuousDistribution.logccdf
+        cdf
+        logccdf
 
         Notes
         -----
@@ -3460,7 +3460,7 @@ class ContinuousDistribution:
         r"""Inverse of the logarithm of the cumulative distribution function
 
         For more information about the inverse cumulative distribution function,
-        see `ContinuousDistribution.icdf`.
+        see `icdf`.
 
         Parameters
         ----------
@@ -3489,8 +3489,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.icdf
-        ContinuousDistribution.logcdf
+        icdf
+        logcdf
 
         Notes
         -----
@@ -3499,7 +3499,7 @@ class ContinuousDistribution:
         :math:`x = \log(0) = -\infty` and its maximum value of :math:`r` at
         :math:`x = \log(1) = 0`. Because the log-CDF has range
         :math:`[-\infty, 0]`, the inverse log-CDF is only defined on the
-        negative reals; for :math:`x > 0`, ``ilogcdf`` returns ``nan``.
+        negative reals; for :math:`x > 0`, `ilogcdf` returns ``nan``.
 
         Occasionally, it is needed to find the argument of the CDF for which
         the resulting probability is very close to ``0`` or ``1`` - too close to
@@ -3596,7 +3596,7 @@ class ContinuousDistribution:
         inverse CDF returns its minimum value of :math:`l` at :math:`x = 0`
         and its maximum value of :math:`r` at :math:`x = 1`. Because the CDF
         has range :math:`[0, 1]`, the inverse CDF is only defined on the
-        domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, ``icdf``
+        domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, `icdf`
         returns ``nan``.
 
         Examples
@@ -3646,7 +3646,7 @@ class ContinuousDistribution:
         r"""Inverse of the log of the complementary cumulative distribution function
 
         For more information about the inverse of the complementary cumulative
-        distribution function, see `ContinuousDistribution.icdf`.
+        distribution function, see `icdf`.
 
         Parameters
         ----------
@@ -3680,7 +3680,7 @@ class ContinuousDistribution:
         :math:`x = \log(1) = 0` and its maximum value of :math:`r` at
         :math:`x = \log(0) = -\infty`. Because the log-CCDF has range
         :math:`[-\infty, 0]`, the inverse log-CDF is only defined on the
-        negative reals; for :math:`x > 0`, ``ilogcdf`` returns ``nan``.
+        negative reals; for :math:`x > 0`, `ilogccdf` returns ``nan``.
 
         Occasionally, it is needed to find the argument of the CCDF for which
         the resulting probability is very close to ``0`` or ``1`` - too close to
@@ -3692,8 +3692,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.iccdf
-        ContinuousDistribution.ilogccdf
+        iccdf
+        ilogccdf
 
         Examples
         --------
@@ -3745,7 +3745,7 @@ class ContinuousDistribution:
 
             G^{-1}(x) = y \text{\quad s.t. \quad} G(y) = x`
 
-        ``iccdf`` accepts `x` for :math:`x \in [0, 1]`.
+        `iccdf` accepts `x` for :math:`x \in [0, 1]`.
 
         Parameters
         ----------
@@ -3783,8 +3783,8 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.icdf
-        ContinuousDistribution.ilogccdf
+        icdf
+        ilogccdf
 
         Examples
         --------
@@ -4114,12 +4114,12 @@ class ContinuousDistribution:
 
         See Also
         --------
-        ContinuousDistribution.pdf
-        ContinuousDistribution.mean
-        ContinuousDistribution.variance
-        ContinuousDistribution.standard_deviation
-        ContinuousDistribution.skewness
-        ContinuousDistribution.kurtosis
+        pdf
+        mean
+        variance
+        standard_deviation
+        skewness
+        kurtosis
 
         Notes
         -----
@@ -4654,7 +4654,7 @@ class ContinuousDistribution:
 
             If the callable is recognized as a method of the distribution,
             additional constraints may be imposed on the distribution parameters. For
-            instance, if the callable is `ContinuousDistribution.llf`, then the first
+            instance, if the callable is `llf`, then the first
             element of `input` represents observations of the random variable, so a
             constraint ensures that the observations remain within the support.
 
