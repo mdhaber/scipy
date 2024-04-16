@@ -4688,9 +4688,9 @@ class ContinuousDistribution:
 
         >>> X.fit(['mu', 'sigma'],
         ...       dict(f=lambda: [X.mean(), X.standard_deviation()],
-                       output=[1, 2]))
+        ...            output=[1, 2]))
         >>> X.mean(), X.standard_deviation()
-        1.0, 2.0
+        (0.999996100617804, 1.9999959909785976)
 
         """
         # add `_fit` implementation methods
