@@ -1423,9 +1423,9 @@ class ContinuousDistribution:
         )
         self._original_parameters = {}
 
-        self.update_parameters(**parameters)
+        self._update_parameters(**parameters)
 
-    def update_parameters(self, *, iv_policy=None, **kwargs):
+    def _update_parameters(self, *, iv_policy=None, **kwargs):
         """ Update the numerical values of distribution parameters.
 
         Parameters
@@ -1446,6 +1446,8 @@ class ContinuousDistribution:
         self._invalid = np.asarray(False)
         self._any_invalid = False
         self._shape = tuple()
+        self._ndim = 0
+        self._size = 1
         self._dtype = np.float64
 
         if (iv_policy or self.iv_policy) == _SKIP_ALL:
@@ -1476,7 +1478,7 @@ class ContinuousDistribution:
             # optimize this.
 
             parameterization = self._identify_parameterization(parameters)
-            parameters, shape = self._broadcast(parameters)
+            parameters, shape, size, ndim = self._broadcast(parameters)
             parameters, invalid, any_invalid, dtype = (
                 self._validate(parameterization, parameters))
             parameters = self._process_parameters(**parameters)
@@ -1484,6 +1486,8 @@ class ContinuousDistribution:
             self._invalid = invalid
             self._any_invalid = any_invalid
             self._shape = shape
+            self._size = size
+            self._ndim = ndim
             self._dtype = dtype
 
         self.reset_cache()
@@ -1562,7 +1566,8 @@ class ContinuousDistribution:
                           for parameter in parameters.values()]
         parameter_shapes = set(parameter.shape for parameter in parameter_vals)
         if len(parameter_shapes) == 1:
-            return parameters, parameter_vals[0].shape
+            return (parameters, parameter_vals[0].shape,
+                    parameter_vals[0].size, parameter_vals[0].ndim)
 
         try:
             parameter_vals = np.broadcast_arrays(*parameter_vals)
@@ -1573,7 +1578,9 @@ class ContinuousDistribution:
                        "cannot be broadcast to the same shape.")
             raise ValueError(message) from e
         return (dict(zip(parameters.keys(), parameter_vals)),
-                parameter_vals[0].shape)
+                parameter_vals[0].shape,
+                parameter_vals[0].size,
+                parameter_vals[0].ndim)
 
     def _validate(self, parameterization, parameters):
         # Broadcasts distribution parameter arrays and converts them to a
@@ -1728,11 +1735,16 @@ class ContinuousDistribution:
 
         """
         class_name = self.__class__.__name__
-        parameters = list(self._original_parameters)
+        parameters = list(self._original_parameters.items())
         info = []
         if parameters:
             parameters.sort()
-            info.append(f"{', '.join(parameters)}")
+            if self._size <= 3:
+                str_parameters = [f"{symbol}={value}" for symbol, value in parameters]
+                str_parameters = f"{', '.join(str_parameters)}"
+            else:
+                str_parameters = f"{', '.join([symbol for symbol, _ in parameters])}"
+            info.append(str_parameters)
         if self._shape:
             info.append(f"shape={self._shape}")
         if self._dtype != np.float64:
@@ -2473,9 +2485,9 @@ class ContinuousDistribution:
         # less than the PDF at the median, it's either a (rare in SciPy)
         # bimodal distribution (in which case the generic implementation will
         # never be great) or the mode is at one of the endpoints.
-        if not np.prod(self._shape):
+        if not self._size:
             return np.empty(self._shape, dtype=self._dtype)
-        p_shape = (3,) + (1,)*len(self._shape)
+        p_shape = (3,) + (1,)*self._ndim
         p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
         bracket = self._icdf_dispatch(p, **kwargs)
         f, args = _kwargs2args(lambda x, **kwargs: -self._pdf_dispatch(x, **kwargs),
@@ -4696,7 +4708,7 @@ class ContinuousDistribution:
         valid_t = t_is_quantile.union(t_is_probability)
         valid_xy =  valid_t.union({'pdf', 'logpdf'})
 
-        ndim = len(self._shape)
+        ndim = self._ndim
         x_name, y_name = x, y
         t_name, tlim = t[0], np.asarray(t[1:])
         tlim = tlim[:, np.newaxis] if ndim else tlim
@@ -4872,12 +4884,12 @@ class ContinuousDistribution:
     # def dllf(self, parameters=None, *, sample, var):
     #     """Partial derivative of the log likelihood function."""
     #     parameters = parameters or {}
-    #     self.update_parameters(**parameters)
+    #     self._update_parameters(**parameters)
     #
     #     def f(x):
     #         update = {}
     #         update[var] = x
-    #         self.update_parameters(**update)
+    #         self._update_parameters(**update)
     #         res = self.llf(sample=sample[:, np.newaxis], axis=0)
     #         return np.reshape(res, x.shape)
     #
@@ -4972,16 +4984,16 @@ class ContinuousDistribution:
 
         if output == 'maximize':
             def objective(x):
-                self.update_parameters(**dict(zip(parameters, x)))
+                self._update_parameters(**dict(zip(parameters, x)))
                 return -f(*args)
         elif output == 'minimize':
             def objective(x):
-                self.update_parameters(**dict(zip(parameters, x)))
+                self._update_parameters(**dict(zip(parameters, x)))
                 return f(*args)
         else:
             output = np.asarray(output)
             def objective(x):
-                self.update_parameters(**dict(zip(parameters, x)))
+                self._update_parameters(**dict(zip(parameters, x)))
                 return np.linalg.norm(f(*args) - output)
 
         param_info = self._parameterization.parameters
@@ -5023,7 +5035,7 @@ class ContinuousDistribution:
 
             if not inf_a or not inf_b:
                 def g(x):
-                    self.update_parameters(**dict(zip(parameters, x)))
+                    self._update_parameters(**dict(zip(parameters, x)))
                     a, b = self.support()
                     res = []
                     if not inf_a:
@@ -5035,7 +5047,7 @@ class ContinuousDistribution:
 
         res = optimize.minimize(objective, x0, constraints=constraints)
         self.iv_policy = iv_policy
-        self.update_parameters(**dict(zip(parameters, res.x)))
+        self._update_parameters(**dict(zip(parameters, res.x)))
         return
 
 
@@ -5108,7 +5120,7 @@ class TransformedDistribution(ContinuousDistribution):
     #       single `_Parameterization` that has no parameters. The reason is
     #       that `dist`'s parameters need to get added to it. If they're not
     #       added, then those parameter kwargs are not recognized in
-    #       `update_parameters`.
+    #       `_update_parameters`.
     def __init__(self, dist, *args, **kwargs):
         self._copy_parameterization()
         self._variable = dist._variable
@@ -5135,7 +5147,7 @@ class TransformedDistribution(ContinuousDistribution):
         self._dist.reset_cache()
         super().reset_cache()
 
-    def update_parameters(self, *, iv_policy=None, **kwargs):
+    def _update_parameters(self, *, iv_policy=None, **kwargs):
         # maybe broadcast everything before processing?
         parameters = {}
         # There may be some issues with _original_parameters
@@ -5144,7 +5156,7 @@ class TransformedDistribution(ContinuousDistribution):
         # self._original_parameters.
         parameters.update(self._dist._original_parameters)
         parameters.update(kwargs)
-        super().update_parameters(iv_policy=iv_policy, **parameters)
+        super()._update_parameters(iv_policy=iv_policy, **parameters)
 
     def _process_parameters(self, **kwargs):
         return self._dist._process_parameters(**kwargs)
@@ -5307,21 +5319,21 @@ class ShiftedScaledDistribution(TransformedDistribution):
     # TODO: Add these methods to ContinuousDistribution so they can return a
     #       ShiftedScaledDistribution
     def __add__(self, loc):
-        self.update_parameters(loc=self.loc + loc)
+        self._update_parameters(loc=self.loc + loc)
         return self
 
     def __sub__(self, loc):
-        self.update_parameters(loc=self.loc - loc)
+        self._update_parameters(loc=self.loc - loc)
         return self
 
     def __mul__(self, scale):
-        self.update_parameters(loc=self.loc * scale,
-                               scale=self.scale * scale)
+        self._update_parameters(loc=self.loc * scale,
+                                scale=self.scale * scale)
         return self
 
     def __truediv__(self, scale):
-        self.update_parameters(loc=self.loc / scale,
-                               scale=self.scale / scale)
+        self._update_parameters(loc=self.loc / scale,
+                                scale=self.scale / scale)
         return self
 
     def __radd__(self, other):
