@@ -26,6 +26,7 @@ _NO_CACHE = "no_cache"
 
 # TODO:
 #  When a parameter is invalid, set only the offending parameter to NaN (if possible)?
+#  Test ilogcdf with extreme probabilities
 #  fix QMC bug with size=() but distribution shape, say, 2
 #  kurtosis input validation test
 #  clip - ShiftedScaledNormal(loc=0, scale=0.01).ccdf(-7.32, method='quadrature') > 1
@@ -2381,9 +2382,9 @@ class ContinuousDistribution:
         #. the mode is not unique (e.g. the uniform distribution);
         #. the PDF has one or more singularities, and it is debateable whether
            a singularity is considered to be in the domain and called the mode
-           (e.g. the beta distribution); and/or
+           (e.g. the gamma distribution with shape parameter less than 1); and/or
         #. the probability density function may have one or more local maxima
-           that are not a global maximum.
+           that are not a global maximum (e.g. mixture distributions).
 
         In such cases, `mode` will
 
@@ -2616,7 +2617,7 @@ class ContinuousDistribution:
 
             - ``'non-excess'``: the standardized fourth moment; the "Pearson" kurtosis.
             - ``'excess'``: the standardized fourth moment minus 3; the "Fisher"
-                            kurtosis.
+                            kurtosis
 
             The default is ``'non-excess'``.
 
@@ -2904,6 +2905,7 @@ class ContinuousDistribution:
             - ``'logexp'``: evaluate the CDF directly and take the logarithm
             - ``'complement'``: evaluate the logarithm of the complementary CDF
                                 directly and take the logarithmic complement
+                                (see Notes)
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
             In place of ``'complement'``, the two-argument form accepts:
@@ -2941,6 +2943,10 @@ class ContinuousDistribution:
         arguments for which `cdf` would return ``1.0``. Consequently, it may be
         preferred to work with the logarithms of probabilities to avoid underflow
         and related limitations of floating point numbers.
+
+        The "logarithmic complement" of :math:`z` is mathematically equivalent to
+        :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
+        when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
 
         Examples
         --------
@@ -3250,8 +3256,8 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the log CCDF itself
             - ``'logexp'``: evaluate the CCDF directly and take the logarithm
-            - ``'complement'``: evaluate the log-CDF directly
-                                and take the logarithmic complement
+            - ``'complement'``: evaluate the log-CDF directly and take the
+                                logarithmic complement (see Notes)
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
             The two-argument form chooses between:
@@ -3291,6 +3297,10 @@ class ContinuousDistribution:
         preferred to work with the logarithms of probabilities to avoid underflow
         and related limitations of floating point numbers.
 
+        The "logarithmic complement" of :math:`z` is mathematically equivalent to
+        :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
+        when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
+        
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -3542,9 +3552,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse log-CDF itself
             - ``'complement'``: evaluate the inverse log-CCDF at the
-                                logarithmic complement of `x`.
+                                logarithmic complement of `x` (see Notes)
             - ``'inversion'``: solve numerically for the argument at which the
-                               log-CDF is equal to `x`.
+                               log-CDF is equal to `x`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3576,6 +3586,10 @@ class ContinuousDistribution:
         represented in floating point arithmetic, in which case this function
         may be used to find the argument of the CDF for which the *logarithm*
         of the resulting probability is `x`.
+
+        The "logarithmic complement" of :math:`z` is mathematically equivalent to
+         :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
+         when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
 
         Examples
         --------
@@ -3640,9 +3654,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse CDF itself
             - ``'complement'``: evaluate the inverse CCDF at the
-                                complement of `x`.
+                                complement of `x`
             - ``'inversion'``: solve numerically for the argument at which the
-                               CDF is equal to `x`.
+                               CDF is equal to `x`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3734,9 +3748,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse log-CCDF itself
             - ``'complement'``: evaluate the inverse log-CDF at the
-                                logarithmic complement of `x`.
+                                logarithmic complement of `x` (see Notes)
             - ``'inversion'``: solve numerically for the argument at which the
-                               log-CCDF is equal to `x`.
+                               log-CCDF is equal to `x`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3763,6 +3777,10 @@ class ContinuousDistribution:
         represented in floating point arithmetic, in which case this function
         may be used to find the argument of the CCDF for which the *logarithm*
         of the resulting probability is `x`.
+
+        The "logarithmic complement" of :math:`z` is mathematically equivalent to
+        :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
+        when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
 
         See Also
         --------
@@ -3833,9 +3851,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse CCDF itself
             - ``'complement'``: evaluate the inverse CDF at the
-                                complement of `x`.
+                                complement of `x`
             - ``'inversion'``: solve numerically for the argument at which the
-                               CCDF is equal to `x`.
+                               CCDF is equal to `x`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -4166,20 +4184,20 @@ class ContinuousDistribution:
             listed in order of precedence.
 
             - ``'cache'``: use the value of the moment most recently calculated
-                           via another method.
+                           via another method
             - ``'formula'``: use a formula for the moment itself
             - ``'general'``: use a general result that is true for all distributions
                              with finite moments; for instance, the zeroth raw moment
-                             is identically 1.
+                             is identically 1
             - ``'transform'``: transform a raw moment to a central moment or
-                               vice versa; see notes.
+                               vice versa (see Notes)
             - ``'normalize'``: normalize a central moment to get a standardized
-                               or vice versa.
+                               or vice versa
             - ``'quadrature'``: numerically integrate according to the definition
 
             Not all `method` options are available for orders, kinds, and
             distributions. If the selected `method` is not available, a
-            `NotImplementedError`` will be raised.
+            ``NotImplementedError`` will be raised.
 
         Returns
         -------
@@ -4857,7 +4875,7 @@ class ContinuousDistribution:
         res = optimize.minimize(objective, x0, constraints=constraints)
         self.iv_policy = iv_policy
         self.update_parameters(**dict(zip(parameters, res.x)))
-        return res
+        return
 
 
 # Rough sketch of how we might shift/scale distributions. The purpose of
