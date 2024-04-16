@@ -6,7 +6,6 @@ from scipy._lib._util import _lazywhere
 from scipy._lib._docscrape import ClassDoc, NumpyDocString
 from scipy import special, optimize
 from scipy.integrate._tanhsinh import _tanhsinh
-from scipy.optimize._differentiate import _differentiate
 from scipy.optimize._bracket import _bracket_root
 from scipy.optimize._chandrupatla import _chandrupatla, _chandrupatla_minimize
 
@@ -30,7 +29,7 @@ _NO_CACHE = "no_cache"
 #  fix QMC bug with size=() but distribution shape, say, 2
 #  kurtosis input validation test
 #  clip - ShiftedScaledNormal(loc=0, scale=0.01).ccdf(-7.32, method='quadrature') > 1
-#  test/fix dtypes? It is *so* hard without NEP50
+#  ~~test/fix dtypes? It is *so* hard without NEP50~~
 #  check behavior of moment methods when moments are undefined/infinite -
 #    basically OK but needs tests
 #  investigate use of median
@@ -1980,6 +1979,11 @@ class ContinuousDistribution:
         --------
         pdf
 
+        References
+        ----------
+        .. [1] Support (mathematics), *Wikipedia*,
+               https://en.wikipedia.org/wiki/Support_(mathematics)
+
         Notes
         -----
         Suppose a continuous probability distribution has support ``(l, r)``.
@@ -2092,7 +2096,7 @@ class ContinuousDistribution:
     def logentropy(self, *, method=None):
         r"""Logarithm of the differential entropy
 
-        In terms of probability density function :math:`f(x)` and its support
+        In terms of probability density function :math:`f(x)` and support
         :math:`\chi`, the differential entropy of a random variable :math:`X` is:
 
         .. math::
@@ -2137,6 +2141,11 @@ class ContinuousDistribution:
         entropy is complex with imaginary part divisible by :math:`\pi`. For
         consistency, the result of this function always has complex dtype,
         regardless of the value of the imaginary part.
+
+        References
+        ----------
+        .. [1] Differential entropy, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Differential_entropy
 
         Examples
         --------
@@ -2191,7 +2200,7 @@ class ContinuousDistribution:
     def entropy(self, *, method=None):
         r"""Differential entropy
 
-        In terms of probability density function :math:`f(x)` and its support
+        In terms of probability density function :math:`f(x)` and support
         :math:`\chi`, the differential entropy of a random variable :math:`X` is:
 
         .. math::
@@ -2231,6 +2240,11 @@ class ContinuousDistribution:
         value is expressed in (dimensionless) "units" of nats. To convert the
         entropy to different units (i.e. corresponding with a different base),
         divide the result by the natural logarithm of the desired base.
+
+        References
+        ----------
+        .. [1] Differential entropy, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Differential_entropy
 
         Examples
         --------
@@ -2305,6 +2319,11 @@ class ContinuousDistribution:
         mean
         mode
         icdf
+
+        References
+        ----------
+        .. [1] Median, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Median#Probability_distributions
 
         Examples
         --------
@@ -2398,6 +2417,11 @@ class ContinuousDistribution:
         mode. In such cases, the user is encouraged to subclass the
         distribution and override ``mode``.
 
+        References
+        ----------
+        .. [1] Mode (statistics), *Wikipedia*,
+               https://en.wikipedia.org/wiki/Mode_(statistics)
+
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -2482,6 +2506,11 @@ class ContinuousDistribution:
         median
         mode
 
+        References
+        ----------
+        .. [1] Mean, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Mean#Mean_of_a_probability_distribution
+
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -2514,6 +2543,11 @@ class ContinuousDistribution:
         moment
         standard_deviation
         mean
+
+        References
+        ----------
+        .. [1] Variance, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Variance#Absolutely_continuous_random_variable
 
         Examples
         --------
@@ -2548,6 +2582,11 @@ class ContinuousDistribution:
         mean
         moment
 
+        References
+        ----------
+        .. [1] Standard deviation, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Standard_deviation#Definition_of_population_values
+
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -2581,6 +2620,11 @@ class ContinuousDistribution:
         mean
         variance
 
+        References
+        ----------
+        .. [1] Skewness, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Skewness
+
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -2613,11 +2657,10 @@ class ContinuousDistribution:
             all methods are available for all distributions. See
             `moment` for details.
         convention : {'non-excess', 'excess'}
-            Two distinction conventions are available:
+            Two distinct conventions are available:
 
-            - ``'non-excess'``: the standardized fourth moment; the "Pearson" kurtosis.
-            - ``'excess'``: the standardized fourth moment minus 3; the "Fisher"
-                            kurtosis
+            - ``'non-excess'``: the standardized fourth moment (Pearson's kurtosis)
+            - ``'excess'``: the standardized fourth moment minus 3 (Fisher's kurtosis)
 
             The default is ``'non-excess'``.
 
@@ -2626,6 +2669,11 @@ class ContinuousDistribution:
         moment
         mean
         variance
+
+        References
+        ----------
+        .. [1] Kurtosis, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Kurtosis
 
         Examples
         --------
@@ -2751,6 +2799,11 @@ class ContinuousDistribution:
         domain. Consequently, it may be preferred to work with the logarithms of
         probabilities and probability densities to avoid underflow.
 
+        References
+        ----------
+        .. [1] Probability density function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Probability_density_function
+
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -2833,6 +2886,11 @@ class ContinuousDistribution:
         :math:`x > r`. The maximum of the PDF may be less than or greater than
         :math:`1`; since the valus is a probability *density*, only its integral
         over the support must equal :math:`1`.
+
+        References
+        ----------
+        .. [1] Probability density function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Probability_density_function
 
         Examples
         --------
@@ -2947,6 +3005,11 @@ class ContinuousDistribution:
         The "logarithmic complement" of :math:`z` is mathematically equivalent to
         :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
         when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
+
+        References
+        ----------
+        .. [1] Cumulative distribution function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Cumulative_distribution_function
 
         Examples
         --------
@@ -3126,6 +3189,13 @@ class ContinuousDistribution:
         The CDF evaluates to its minimum value of :math:`0` for :math:`x ≤ l`
         and its maximum value of :math:`1` for :math:`x ≥ r`.
 
+        The CDF is also known simply as the "distribution function".
+
+        References
+        ----------
+        .. [1] Cumulative distribution function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Cumulative_distribution_function
+
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -3300,7 +3370,12 @@ class ContinuousDistribution:
         The "logarithmic complement" of :math:`z` is mathematically equivalent to
         :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
         when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
-        
+
+        References
+        ----------
+        .. [1] Cumulative distribution function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Cumulative_distribution_function#Derived_functions
+
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -3447,6 +3522,13 @@ class ContinuousDistribution:
 
         The CCDF returns its minimum value of :math:`0` for :math:`x ≥ r`
         and its maximum value of :math:`1` for :math:`x ≤ l`.
+
+        The CCDF is also known as the "survival function".
+
+        References
+        ----------
+        .. [1] Cumulative distribution function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Cumulative_distribution_function#Derived_functions
 
         Examples
         --------
@@ -3680,6 +3762,14 @@ class ContinuousDistribution:
         has range :math:`[0, 1]`, the inverse CDF is only defined on the
         domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, `icdf`
         returns ``nan``.
+
+        The inverse CDF is also known as the quantile function, percentile function,
+        and percent-point function.
+
+        References
+        ----------
+        .. [1] Quantile function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Quantile_function
 
         Examples
         --------
@@ -3995,6 +4085,11 @@ class ContinuousDistribution:
         employ scrambling: each slice along axis ``0`` of the result is a
         statistically independent low-discrepancy sequence.
 
+        References
+        ----------
+        .. [1] Sampling (statistics), *Wikipedia*,
+               https://en.wikipedia.org/wiki/Sampling_(statistics)
+
         Examples
         --------
         Instantiate a distribution with the desired parameters:
@@ -4148,7 +4243,7 @@ class ContinuousDistribution:
     def moment(self, order=1, kind='raw', *, method=None):
         r"""Raw, central, or standard moment of positive integer order.
 
-        In terms of probability density function :math:`f(x)` and its support
+        In terms of probability density function :math:`f(x)` and support
         :math:`\chi`, the "raw" moment (about the origin) of order :math:`n` of
         a random variable :math:`X` is:
 
@@ -4163,8 +4258,9 @@ class ContinuousDistribution:
 
             \mu_n(X) = \int_{\chi} (x - \mu) ^n f(x) dx
 
-        The "standardized" moment is the central moment normalized by a power of
-        the standard deviation, :math:`\sigma = \sqrt{\mu_2}`:
+        The "standardized" moment is the central moment normalized by the
+        :math:`n^\text{th}` power of the standard deviation
+        :math:`\sigma = \sqrt{\mu_2}` to produce a scale invariant quantity:
 
         .. math::
 
@@ -4195,7 +4291,7 @@ class ContinuousDistribution:
                                or vice versa
             - ``'quadrature'``: numerically integrate according to the definition
 
-            Not all `method` options are available for orders, kinds, and
+            Not all `method` options are available for all orders, kinds, and
             distributions. If the selected `method` is not available, a
             ``NotImplementedError`` will be raised.
 
@@ -4263,6 +4359,11 @@ class ContinuousDistribution:
            between central and standardized moments (if efficient)
         #. Use a generic result true for most distributions (if available)
         #. Use quadrature
+
+        References
+        ----------
+        .. [1] Moment, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Moment_(mathematics)
 
         Examples
         --------
@@ -4705,22 +4806,82 @@ class ContinuousDistribution:
     # these methods reasonably efficiently.
 
     def llf(self, sample, *, axis=-1):
-        """Log likelihood function."""
+        r"""Log-likelihood function
+
+        Given a sample :math:`x`, the log-likelihood function is the logarithm
+        of the joint probability density of the observed data. It is typically
+        viewed as a function of the parameters :math:`\theta` of a statistical
+        distribution:
+
+        .. math::
+
+            \mathcal{L}(\theta | x) = \log \left( \prod_i f_\theta(x_i) \right) = \sum_{i} \log(f_\theta(x_i))
+
+        where :math:`f_\theta` is the probability density function with
+        parameters :math:`\theta`.
+
+        As a method of `ContinuousDistribution`, the parameter values are specified
+        during instantiation; `llf` accepts only the sample :math:`x` as `sample`.
+
+        Parameters
+        ----------
+        sample : array
+            The given sample for to calculate the log-likelihood function (LLF).
+        axis : int or tuple of ints
+            The axis over which the reducing operation (sum of logarithms) is performed.
+
+        Notes
+        -----
+        The log-likelihood function is often viewed as a function of the parameters
+        with the sample fixed; see the Notes for an example of a function with
+        this signature.
+
+        References
+        ----------
+        .. [1] Likelihood function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Likelihood_function
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from scipy import stats
+        >>> X = stats.Normal(mu=0., sigma=1.)
+
+        Evaluate the LLF with the given sample:
+
+        >>> sample = [1., 2., 3.]
+        >>> X.llf(sample)
+        -9.756815599614018
+        >>> np.allclose(X.llf(sample), np.sum(X.logpdf(sample)))
+        True
+
+        To generate a function that accepts only the parameters and
+        holds the data fixed:
+
+        >>> def llf(mu, sigma):
+        ...     return stats.Normal(mu=mu, sigma=sigma).llf(sample)
+        >>> llf(0., 1.)
+        -9.756815599614018
+
+        """ # noqa: E501
         return np.sum(self.logpdf(sample), axis=axis)
 
-    def dllf(self, parameters=None, *, sample, var):
-        """Partial derivative of the log likelihood function."""
-        parameters = parameters or {}
-        self.update_parameters(**parameters)
-
-        def f(x):
-            update = {}
-            update[var] = x
-            self.update_parameters(**update)
-            res = self.llf(sample=sample[:, np.newaxis], axis=0)
-            return np.reshape(res, x.shape)
-
-        return _differentiate(f, self._parameters[var]).df
+    # def dllf(self, parameters=None, *, sample, var):
+    #     """Partial derivative of the log likelihood function."""
+    #     parameters = parameters or {}
+    #     self.update_parameters(**parameters)
+    #
+    #     def f(x):
+    #         update = {}
+    #         update[var] = x
+    #         self.update_parameters(**update)
+    #         res = self.llf(sample=sample[:, np.newaxis], axis=0)
+    #         return np.reshape(res, x.shape)
+    #
+    #     return _differentiate(f, self._parameters[var]).df
 
     def fit(self, parameters, objective):
         """Fit the distribution parameters to meet an objective.
