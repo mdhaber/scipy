@@ -35,7 +35,7 @@ class OrderStatisticDistribution(TransformedDistribution):
 
 
 class StandardNormal(ContinuousDistribution):
-    r"""Standard normal distribution
+    r"""Standard normal distribution.
 
     The probability density function of the standard normal distribution is:
 
@@ -107,7 +107,7 @@ class StandardNormal(ContinuousDistribution):
 
 
 class Normal(ContinuousDistribution):
-    r"""Normal distribution with prescribed mean and standard deviation
+    r"""Normal distribution with prescribed mean and standard deviation.
 
     The probability density function of the normal distribution is:
 
@@ -212,7 +212,7 @@ def _log_diff(log_p, log_q):
 
 
 class LogUniform(ContinuousDistribution):
-    r"""Log-uniform distribution
+    r"""Log-uniform distribution.
 
     The probability density function of the log-uniform distribution is:
 
@@ -285,7 +285,7 @@ class LogUniform(ContinuousDistribution):
 
 
 class LogLaplace(ContinuousDistribution):
-    """Log-Laplace distribution"""
+    """Log-Laplace distribution."""
 
     _mu_domain = _RealDomain(endpoints=(-oo, oo))
     _b_domain = _RealDomain(endpoints=(0, oo))
@@ -308,7 +308,7 @@ class LogLaplace(ContinuousDistribution):
 
 
 class Uniform(ContinuousDistribution):
-    r"""Uniform distribution
+    r"""Uniform distribution.
 
     The probability density function of the uniform distribution is:
 

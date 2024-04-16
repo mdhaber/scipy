@@ -184,7 +184,7 @@ _NO_CACHE = "no_cache"
 
 
 class _Domain(ABC):
-    """ Representation of the applicable domain of a parameter or variable
+    """ Representation of the applicable domain of a parameter or variable.
 
     A `_Domain` object is responsible for storing information about the
     domain of a parameter or variable, determining whether a value is within
@@ -228,7 +228,7 @@ class _Domain(ABC):
 
 
 class _SimpleDomain(_Domain):
-    """ Representation of a simply-connected domain defined by two endpoints
+    """ Representation of a simply-connected domain defined by two endpoints.
 
     Each endpoint may be a finite scalar, positive or negative infinity, or
     be given by a single parameter. The domain may include the endpoints or
@@ -269,7 +269,7 @@ class _SimpleDomain(_Domain):
         #                       and inclusive == (True, True))
 
     def define_parameters(self, *parameters):
-        r""" Records any parameters used to define the endpoints of the domain
+        r""" Records any parameters used to define the endpoints of the domain.
 
         Adds the keyword name of each parameter and its text representation
         to the  `symbols` attribute as key:value pairs.
@@ -292,7 +292,7 @@ class _SimpleDomain(_Domain):
         self.symbols.update(new_symbols)
 
     def get_numerical_endpoints(self, parameter_values):
-        """ Get the numerical values of the domain endpoints
+        """ Get the numerical values of the domain endpoints.
 
         Domain endpoints may be defined symbolically. This returns numerical
         values of the endpoints given numerical values for any variables.
@@ -329,7 +329,7 @@ class _SimpleDomain(_Domain):
         return a, b
 
     def contains(self, item, parameter_values=None):
-        """Determine whether the argument is contained within the domain
+        """Determine whether the argument is contained within the domain.
 
         Parameters
         ----------
@@ -364,7 +364,7 @@ class _SimpleDomain(_Domain):
 
 
 class _RealDomain(_SimpleDomain):
-    """ Represents a simply-connected subset of the real line
+    """ Represents a simply-connected subset of the real line.
 
     Completes the implementation of the `_SimpleDomain` class for simple
     domains on the real line.
@@ -401,7 +401,7 @@ class _RealDomain(_SimpleDomain):
         return f"{left}{a}, {b}{right}"
 
     def draw(self, size=None, rng=None, proportions=None, parameter_values=None):
-        """ Draw random values from the domain
+        """ Draw random values from the domain.
 
         Parameters
         ----------
@@ -505,7 +505,7 @@ class _RealDomain(_SimpleDomain):
 
 
 class _IntegerDomain(_SimpleDomain):
-    """ Represents a domain of consecutive integers.
+    """ Representation of a domain of consecutive integers.
 
     Completes the implementation of the `_SimpleDomain` class for domains
     composed of consecutive integer values.
@@ -516,7 +516,7 @@ class _IntegerDomain(_SimpleDomain):
 
 
 class _Parameter(ABC):
-    """ Representation of a distribution parameter or variable
+    """ Representation of a distribution parameter or variable.
 
     A `_Parameter` object is responsible for storing information about a
     parameter or variable, providing input validation/standardization of
@@ -564,12 +564,12 @@ class _Parameter(ABC):
         self.typical = typical or domain
 
     def __str__(self):
-        """ String representation of the parameter for use in documentation """
+        """ String representation of the parameter for use in documentation."""
         return f"`{self.name}` for :math:`{self.symbol} ∈ {str(self.domain)}`"
 
     def draw(self, size=None, *, rng=None, domain='typical', proportions=None,
              parameter_values=None):
-        """ Draw random values of the parameter for use in testing
+        """ Draw random values of the parameter for use in testing.
 
         Parameters
         ----------
@@ -615,14 +615,14 @@ class _Parameter(ABC):
 
 
 class _RealParameter(_Parameter):
-    """ Represents a real-valued parameter
+    """ Represents a real-valued parameter.
 
     Implements the remaining methods of _Parameter for real parameters.
     All attributes are inherited.
 
     """
     def validate(self, arr, parameter_values):
-        """ Input validation/standardization of numerical values of a parameter
+        """ Input validation/standardization of numerical values of a parameter.
 
         Checks whether elements of the argument `arr` are reals, ensuring that
         the dtype reflects this. Also produces a logical array that indicates
@@ -677,7 +677,7 @@ class _RealParameter(_Parameter):
 
 
 class _Parameterization:
-    """ Represents a parameterization of a distribution
+    """ Represents a parameterization of a distribution.
 
     Distributions can have multiple parameterizations. A `_Parameterization`
     object is responsible for recording the parameters used by the
@@ -718,7 +718,7 @@ class _Parameterization:
         return _Parameterization(*self.parameters.values())
 
     def matches(self, parameters):
-        """ Checks whether the keyword arguments match the parameterization
+        """ Checks whether the keyword arguments match the parameterization.
 
         Parameters
         ----------
@@ -735,7 +735,7 @@ class _Parameterization:
         return parameters == set(self.parameters.keys())
 
     def validation(self, parameter_values):
-        """ Input validation / standardization of parameterization
+        """ Input validation / standardization of parameterization.
 
         Parameters
         ----------
@@ -770,7 +770,7 @@ class _Parameterization:
         return ", ".join(messages)
 
     def draw(self, sizes=None, rng=None, proportions=None):
-        """Draw random values of all parameters for use in testing
+        """Draw random values of all parameters for use in testing.
 
         Parameters
         ----------
@@ -1083,7 +1083,7 @@ def _kwargs2args(f, args=None, kwargs=None):
 
 
 def _log1mexp(x):
-    r"""Compute the log of the complement of the exponential
+    r"""Compute the log of the complement of the exponential.
 
     This function is equivalent to::
 
@@ -1123,7 +1123,7 @@ def _log1mexp(x):
 
 
 def _logexpxmexpy(x, y):
-    """ Compute the log of the difference of the exponentials of two arguments
+    """ Compute the log of the difference of the exponentials of two arguments.
 
     Avoids over/underflow, but does not prevent loss of precision otherwise.
     """
@@ -3457,7 +3457,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ilogcdf(self, x, *, method=None):
-        r"""Inverse of the logarithm of the cumulative distribution function
+        r"""Inverse of the logarithm of the cumulative distribution function.
 
         For more information about the inverse cumulative distribution function,
         see `icdf`.
@@ -3548,7 +3548,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def icdf(self, x, *, method=None):
-        r"""Inverse of the cumulative distribution function
+        r"""Inverse of the cumulative distribution function.
 
         The inverse of the cumulative distribution function :math:`F^{-1}(x)`
         is the argument :math:`y` for which the cumulative distribution
@@ -3643,7 +3643,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def ilogccdf(self, x, *, method=None):
-        r"""Inverse of the log of the complementary cumulative distribution function
+        r"""Inverse of the log of the complementary cumulative distribution function.
 
         For more information about the inverse of the complementary cumulative
         distribution function, see `icdf`.
@@ -3734,7 +3734,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan
     def iccdf(self, x, *, method=None):
-        r"""Inverse complementary cumulative distribution function
+        r"""Inverse complementary cumulative distribution function.
 
         The inverse complementary cumulative distribution function
         :math:`G^{-1}(x)` is the argument :math:`y` for which the
@@ -3857,7 +3857,7 @@ class ContinuousDistribution:
     # information.
 
     def sample(self, shape=(), *, method=None, rng=None, qmc_engine=None):
-        """Random or quasi-Monte Carlo sample from the distribution
+        """Random or quasi-Monte Carlo sample from the distribution.
 
         Parameters
         ----------
@@ -4054,7 +4054,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def moment(self, order=1, kind='raw', *, method=None):
-        r"""Raw, central, or standard moment of positive integer order
+        r"""Raw, central, or standard moment of positive integer order.
 
         In terms of probability density function :math:`f(x)` and its support
         :math:`\chi`, the "raw" moment (about the origin) of order :math:`n` of
@@ -4209,7 +4209,7 @@ class ContinuousDistribution:
         return moment_kind(order, method=method, cache_policy=self.cache_policy)
 
     def _moment_raw(self, order=1, *, method=None, cache_policy=None):
-        """Raw distribution moment about the origin"""
+        """Raw distribution moment about the origin."""
         # Consider exposing the point about which moments are taken as an
         # option. This is easy to support, since `_moment_transform_center`
         # does all the work.
@@ -4269,7 +4269,7 @@ class ContinuousDistribution:
         return self._one if order == 0 else None
 
     def _moment_central(self, order=1, *, method=None, cache_policy=None):
-        """Distribution moment about the mean"""
+        """Distribution moment about the mean."""
         methods = self._moment_methods if method is None else {method}
         return self._moment_central_dispatch(
             order, methods=methods, cache_policy=cache_policy, **self._parameters)
@@ -4337,7 +4337,7 @@ class ContinuousDistribution:
         return general_central_moments.get(order, None)
 
     def _moment_standardized(self, order=1, *, method=None, cache_policy=None):
-        """Standardized distribution moment"""
+        """Standardized distribution moment."""
         methods = self._moment_methods if method is None else {method}
         return self._moment_standardized_dispatch(
             order, methods=methods, cache_policy=cache_policy, **self._parameters)
@@ -4423,7 +4423,7 @@ class ContinuousDistribution:
     ### Convenience
 
     def plot(self, x='x', y='pdf', *, t=('cdf', 0.0005, 0.9995), ax=None):
-        r"""Plot a function of the distribution
+        r"""Plot a function of the distribution.
 
         Convenience function for quick visualization of the distribution
         underlying the random variable.
@@ -4613,11 +4613,11 @@ class ContinuousDistribution:
     # these methods reasonably efficiently.
 
     def llf(self, sample, *, axis=-1):
-        """Log likelihood function"""
+        """Log likelihood function."""
         return np.sum(self.logpdf(sample), axis=axis)
 
     def dllf(self, parameters=None, *, sample, var):
-        """Partial derivative of the log likelihood function"""
+        """Partial derivative of the log likelihood function."""
         parameters = parameters or {}
         self.update_parameters(**parameters)
 
@@ -4631,7 +4631,7 @@ class ContinuousDistribution:
         return _differentiate(f, self._parameters[var]).df
 
     def fit(self, parameters, objective):
-        """Fit the distribution parameters to meet an objective
+        """Fit the distribution parameters to meet an objective.
 
         Parameters
         ----------
@@ -4903,7 +4903,7 @@ class TransformedDistribution(ContinuousDistribution):
 
 
 class ShiftedScaledDistribution(TransformedDistribution):
-    """Distribution with a standard shift/scale transformation"""
+    """Distribution with a standard shift/scale transformation."""
     # Unclear whether infinite loc/scale will work reasonably in all cases
     _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
     _loc_param = _RealParameter('loc', symbol='µ',
