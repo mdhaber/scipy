@@ -2709,7 +2709,8 @@ class ContinuousDistribution:
         Parameters
         ----------
         x : array
-            The value for which the log-PDF is to be evaluated.
+            The argument of the logarithm of the probability density function
+            (log-PDF).
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the log-PDF. By default (``None``), the
             infrastructure chooses between the following options, listed in order
@@ -2799,7 +2800,7 @@ class ContinuousDistribution:
         Parameters
         ----------
         x : array
-            The value for which the PDF is to be evaluated.
+            The argument of the probability density function (PDF).
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the PDF. By default (``None``), the
             infrastructure chooses between the following options, listed in
