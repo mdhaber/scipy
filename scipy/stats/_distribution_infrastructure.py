@@ -790,7 +790,7 @@ class _Parameterization:
 
         Returns
         -------
-        parameter_values : dict (string: Array)
+        parameter_values : dict (string: array)
             A dictionary of parameter name/value pairs.
         """
         # ENH: be smart about the order. The domains of some parameters
@@ -2122,7 +2122,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The logarithm of the differential entropy of the random variable.
 
         See Also
@@ -2215,7 +2215,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The differential entropy of the random variable.
 
         See Also
@@ -2296,7 +2296,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The median
 
         See Also
@@ -2365,7 +2365,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The mode
 
         See Also
@@ -2708,9 +2708,8 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : Array
-            The value of the random variable for which the log-PDF is to be
-            evaluated.
+        x : array
+            The value for which the log-PDF is to be evaluated.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the log-PDF. By default (``None``), the
             infrastructure chooses between the following options, listed in order
@@ -2725,7 +2724,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The log-PDF evaluated at the argument `x`.
 
         See Also
@@ -2799,9 +2798,8 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : Array
-            The value of the random variable for which the PDF is to be
-            evaluated.
+        x : array
+            The value for which the PDF is to be evaluated.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the PDF. By default (``None``), the
             infrastructure chooses between the following options, listed in
@@ -2817,7 +2815,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The PDF evaluated at the argument `x`.
 
         See Also
@@ -2893,7 +2891,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : Array
+        x, y : array
             The arguments of the log of the cumulative distribution function
             (log-CDF). `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
@@ -2918,7 +2916,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The log-CDF evaluated at the provided argument(s).
 
         See Also
@@ -3068,7 +3066,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : Array
+        x, y : array
             The arguments of the cumulative distribution function (CDF). `x` is
             required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
@@ -3094,7 +3092,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The CDF evaluated at the provided argument(s).
 
         See Also
@@ -3241,7 +3239,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : Array
+        x, y : array
             The arguments of the logarithm of the complementary cumulative
             distribution function (log CCDF). `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
@@ -3267,7 +3265,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The log-CCDF evaluated at the provided argument(s).
 
         See Also
@@ -3387,7 +3385,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : Array
+        x, y : array
             The arguments of the complementary cumulative distribution
             function (CCDF). `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
@@ -3412,7 +3410,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The CCDF evaluated at the provided argument(s).
 
         See Also
@@ -3533,7 +3531,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : Array
+        x : array
             The argument of the inverse of the logarithm of the cumulative
             distribution function (inverse log-CDF).
         method : {None, 'formula', 'complement', 'inversion'}
@@ -3553,7 +3551,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The inverse log-CDF evaluated at the provided argument.
 
         See Also
@@ -3631,7 +3629,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : Array
+        x : array
             The argument of the inverse cumulative distribution function
             (inverse CDF).
         method : {None, 'formula', 'complement', 'inversion'}
@@ -3651,7 +3649,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The inverse CDF evaluated at the provided argument.
 
         See Also
@@ -3725,7 +3723,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : Array
+        x : array
             The argument of the inverse of the logarithm of the complementary
             cumulative distribution function (inverse log-CCDF).
         method : {None, 'formula', 'complement', 'inversion'}
@@ -3745,7 +3743,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The inverse log-CCDF evaluated at the provided argument.
 
         Notes
@@ -3824,7 +3822,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : Array
+        x : array
             The argument of the inverse complementary cumulative distribution
             function (inverse CCDF).
         method : {None, 'formula', 'complement', 'inversion'}
@@ -3844,7 +3842,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The inverse CCDF evaluated at the provided argument.
 
         Notes
@@ -4184,7 +4182,7 @@ class ContinuousDistribution:
 
         Returns
         -------
-        out : Array
+        out : array
             The moment of the random variable of the specified order and kind.
 
         See Also
