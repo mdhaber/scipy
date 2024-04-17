@@ -1963,7 +1963,7 @@ class ContinuousDistribution:
     # strings are:
     # formula - distribution-specific analytical expressions to be implemented
     #           by subclasses.
-    # log/exp - Compute the log of a value and then exponentiate it or vice
+    # log/exp - Compute the log of a number and then exponentiate it or vice
     #           versa.
     # quadrature - Compute the value via numerical integration.
     #
@@ -2753,9 +2753,9 @@ class ContinuousDistribution:
         r"""Log of the probability density function
 
         The probability density function :math:`f(x)` is the probability *per
-        unit interval* of :math:`x` that the random variable takes on the value
-        :math:`x`. Mathematically, it can be defined as the derivative of the
-        cumulative distribution function `F(x)`:
+        unit length* that the random variable takes on the value :math:`x`.
+        Mathematically, it can be defined as the derivative of the cumulative
+        distribution function `F(x)`:
 
         .. math::
 
@@ -2853,9 +2853,9 @@ class ContinuousDistribution:
         r"""Probability density function
 
         The probability density function :math:`f(x)` is the probability *per
-        unit interval* of :math:`x` that the random variable takes on the value
-        :math:`x`. Mathematically, it can be defined as the derivative of the
-        cumulative distribution function `F(x)`:
+        unit length* that the random variable takes on the value :math:`x`.
+        Mathematically, it can be defined as the derivative of the cumulative
+        distribution function `F(x)`:
 
         .. math::
 
@@ -3014,9 +3014,9 @@ class ContinuousDistribution:
         preferred to work with the logarithms of probabilities to avoid underflow
         and related limitations of floating point numbers.
 
-        The "logarithmic complement" of :math:`z` is mathematically equivalent to
-        :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
-        when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
+        The "logarithmic complement" of a number :math:`z` is mathematically
+        equivalent to :math:`\log(1-\exp(z))`, but it is computed to avoid loss
+        of precision when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
 
         References
         ----------
@@ -3379,9 +3379,9 @@ class ContinuousDistribution:
         preferred to work with the logarithms of probabilities to avoid underflow
         and related limitations of floating point numbers.
 
-        The "logarithmic complement" of :math:`z` is mathematically equivalent to
-        :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
-        when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
+        The "logarithmic complement" of a number :math:`z` is mathematically
+        equivalent to :math:`\log(1-\exp(z))`, but it is computed to avoid loss
+        of precision when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
 
         References
         ----------
@@ -3622,21 +3622,22 @@ class ContinuousDistribution:
     ## Inverse cumulative distribution functions
 
     @_set_invalid_nan
-    def ilogcdf(self, x, *, method=None):
+    def ilogcdf(self, logp, *, method=None):
         r"""Inverse of the logarithm of the cumulative distribution function.
 
         The inverse of the logarithm of the cumulative distribution function
-        is the argument :math:`y` for which the logarithm of the cumulative
-        distribution function :math:`\log(F(y))` evaluates to :math:`x`
-        Mathematically, it is equivalent to :math:`F^{-1}(\exp(x))`,
-        but it may be numerically favorable compared to the naive implementation
-        (computing :math:`y = \exp(x)`, then :math:`F^{-1}(y)`).
+        is the argument :math:`x` for which the logarithm of the cumulative
+        distribution function :math:`\log(F(x))` evaluates to :math:`\log(p)`.
+        Mathematically, it is equivalent to :math:`F^{-1}(\exp(y))`, where
+        :math:`y = \log(p)`, but it may be numerically favorable compared to
+        the naive implementation (computing :math:`p = \exp(y)`, then
+        :math:`F^{-1}(p)`).
 
-        `ilogcdf` accepts `x` for :math:`x ≤ 0`.
+        `ilogcdf` accepts `logp` for :math:`\log(p) ≤ 0`.
 
         Parameters
         ----------
-        x : array
+        logp : array
             The argument of the inverse of the logarithm of the cumulative
             distribution function (inverse log-CDF).
         method : {None, 'formula', 'complement', 'inversion'}
@@ -3646,9 +3647,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse log-CDF itself
             - ``'complement'``: evaluate the inverse log-CCDF at the
-                                logarithmic complement of `x` (see Notes)
+                                logarithmic complement of `logp` (see Notes)
             - ``'inversion'``: solve numerically for the argument at which the
-                               log-CDF is equal to `x`
+                               log-CDF is equal to `logp`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3668,10 +3669,10 @@ class ContinuousDistribution:
         -----
         Suppose continuous probability distribution has support :math:`[l, r]`. The
         inverse log-CDF returns its minimum value of :math:`l` at
-        :math:`x = \log(0) = -\infty` and its maximum value of :math:`r` at
-        :math:`x = \log(1) = 0`. Because the log-CDF has range
+        :math:`\log(p) = \log(0) = -\infty` and its maximum value of :math:`r` at
+        :math:`\log(p) = \log(1) = 0`. Because the log-CDF has range
         :math:`[-\infty, 0]`, the inverse log-CDF is only defined on the
-        negative reals; for :math:`x > 0`, `ilogcdf` returns ``nan``.
+        negative reals; for :math:`\log(p) > 0`, `ilogcdf` returns ``nan``.
 
         Occasionally, it is needed to find the argument of the CDF for which
         the resulting probability is very close to ``0`` or ``1`` - too close to
@@ -3679,11 +3680,11 @@ class ContinuousDistribution:
         however, the *logarithm* of this resulting probability may be
         represented in floating point arithmetic, in which case this function
         may be used to find the argument of the CDF for which the *logarithm*
-        of the resulting probability is `x`.
+        of the resulting probability is :math:`y = \log(p)`.
 
-        The "logarithmic complement" of :math:`z` is mathematically equivalent to
-         :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
-         when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
+        The "logarithmic complement" of a number :math:`z` is mathematically
+        equivalent to :math:`\log(1-\exp(z))`, but it is computed to avoid loss
+        of precision when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
 
         Examples
         --------
@@ -3701,7 +3702,7 @@ class ContinuousDistribution:
         True
 
         """
-        return self._ilogcdf_dispatch(x, method=method, **self._parameters)
+        return self._ilogcdf_dispatch(logp, method=method, **self._parameters)
 
     @_dispatch
     def _ilogcdf_dispatch(self, x, method=None, **kwargs):
@@ -3723,22 +3724,22 @@ class ContinuousDistribution:
         return self._solve_bounded(self._logcdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def icdf(self, x, *, method=None):
+    def icdf(self, p, *, method=None):
         r"""Inverse of the cumulative distribution function.
 
-        The inverse of the cumulative distribution function :math:`F^{-1}(x)`
-        is the argument :math:`y` for which the cumulative distribution
-        function :math:`F(y)` evaluates to :math:`x`.
+        The inverse of the cumulative distribution function :math:`F^{-1}(p)`
+        is the argument :math:`x` for which the cumulative distribution
+        function :math:`F(x)` evaluates to :math:`p`.
 
         .. math::
 
-            F^{-1}(x) = y \text{\quad s.t. \quad} F(y) = x`
+            F^{-1}(p) = x \text{\quad s.t. \quad} F(x) = p`
 
-        `icdf` accepts `x` for :math:`x \in [0, 1]`.
+        `icdf` accepts `p` for :math:`p \in [0, 1]`.
 
         Parameters
         ----------
-        x : array
+        p : array
             The argument of the inverse cumulative distribution function
             (inverse CDF).
         method : {None, 'formula', 'complement', 'inversion'}
@@ -3748,9 +3749,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse CDF itself
             - ``'complement'``: evaluate the inverse CCDF at the
-                                complement of `x`
+                                complement of `p`
             - ``'inversion'``: solve numerically for the argument at which the
-                               CDF is equal to `x`
+                               CDF is equal to `p`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3769,10 +3770,10 @@ class ContinuousDistribution:
         Notes
         -----
         Suppose continuous probability distribution has support :math:`[l, r]`. The
-        inverse CDF returns its minimum value of :math:`l` at :math:`x = 0`
-        and its maximum value of :math:`r` at :math:`x = 1`. Because the CDF
+        inverse CDF returns its minimum value of :math:`l` at :math:`p = 0`
+        and its maximum value of :math:`r` at :math:`p = 1`. Because the CDF
         has range :math:`[0, 1]`, the inverse CDF is only defined on the
-        domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, `icdf`
+        domain :math:`[0, 1]`; for :math:`p < 0` and :math:`p > 1`, `icdf`
         returns ``nan``.
 
         The inverse CDF is also known as the quantile function, percentile function,
@@ -3804,7 +3805,7 @@ class ContinuousDistribution:
         array([ nan, -0.5,  0.5,  nan])
 
         """
-        return self._icdf_dispatch(x, method=method, **self._parameters)
+        return self._icdf_dispatch(p, method=method, **self._parameters)
 
     @_dispatch
     def _icdf_dispatch(self, x, method=None, **kwargs):
@@ -3826,17 +3827,17 @@ class ContinuousDistribution:
         return self._solve_bounded(self._cdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def ilogccdf(self, x, *, method=None):
+    def ilogccdf(self, logp, *, method=None):
         r"""Inverse of the log of the complementary cumulative distribution function.
 
         The inverse of the logarithm of the complementary cumulative distribution
-        function is the argument :math:`y` for which the logarithm of the
-        complementary cumulative distribution function :math:`\log(G(y))` evaluates
-        to :math:`x`. Mathematically, it is equivalent to :math:`G^{-1}(\exp(x))`,
-        but it may be numerically favorable compared to the naive implementation
-        (computing :math:`y = \exp(x)`, then :math:`G^{-1}(y)`).
+        function is the argument :math:`x` for which the logarithm of the
+        complementary cumulative distribution function :math:`\log(G(x))` evaluates
+        to :math:`\log(p)`. Mathematically, it is equivalent to :math:`G^{-1}(\exp(y))`,
+        where :math:`y = \log(p)`, but it may be numerically favorable compared to the
+        naive implementation (computing :math:`p = \exp(y)`, then :math:`G^{-1}(p)`).
 
-        `ilogccdf` accepts `x` for :math:`x ≤ 0`.
+        `ilogccdf` accepts `logp` for :math:`\log(p) ≤ 0`.
 
         Parameters
         ----------
@@ -3867,10 +3868,10 @@ class ContinuousDistribution:
         -----
         Suppose continuous probability distribution has support :math:`[l, r]`. The
         inverse log-CCDF returns its minimum value of :math:`l` at
-        :math:`x = \log(1) = 0` and its maximum value of :math:`r` at
-        :math:`x = \log(0) = -\infty`. Because the log-CCDF has range
+        :math:`\log(p) = \log(1) = 0` and its maximum value of :math:`r` at
+        :math:`\log(p) = \log(0) = -\infty`. Because the log-CCDF has range
         :math:`[-\infty, 0]`, the inverse log-CDF is only defined on the
-        negative reals; for :math:`x > 0`, `ilogccdf` returns ``nan``.
+        negative reals; for :math:`\log(p) > 0`, `ilogccdf` returns ``nan``.
 
         Occasionally, it is needed to find the argument of the CCDF for which
         the resulting probability is very close to ``0`` or ``1`` - too close to
@@ -3878,11 +3879,11 @@ class ContinuousDistribution:
         however, the *logarithm* of this resulting probability may be
         represented in floating point arithmetic, in which case this function
         may be used to find the argument of the CCDF for which the *logarithm*
-        of the resulting probability is `x`.
+        of the resulting probability is `y = \log(p)`.
 
-        The "logarithmic complement" of :math:`z` is mathematically equivalent to
-        :math:`\log(1-\exp(z))`, but it is computed to avoid loss of precision
-        when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
+        The "logarithmic complement" of a number :math:`z` is mathematically
+        equivalent to :math:`\log(1-\exp(z))`, but it is computed to avoid loss
+        of precision when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
 
         See Also
         --------
@@ -3905,7 +3906,7 @@ class ContinuousDistribution:
         True
 
         """
-        return self._ilogccdf_dispatch(x, method=method, **self._parameters)
+        return self._ilogccdf_dispatch(logp, method=method, **self._parameters)
 
     @_dispatch
     def _ilogccdf_dispatch(self, x, method=None, **kwargs):
@@ -3927,23 +3928,23 @@ class ContinuousDistribution:
         return self._solve_bounded(self._logccdf_dispatch, x, kwargs=kwargs)
 
     @_set_invalid_nan
-    def iccdf(self, x, *, method=None):
+    def iccdf(self, p, *, method=None):
         r"""Inverse complementary cumulative distribution function.
 
         The inverse complementary cumulative distribution function
-        :math:`G^{-1}(x)` is the argument :math:`y` for which the
-        complementary cumulative distribution function :math:`G(y)`
-        evaluates to :math:`x`.
+        :math:`G^{-1}(p)` is the argument :math:`x` for which the
+        complementary cumulative distribution function :math:`G(x)`
+        evaluates to :math:`p`.
 
         .. math::
 
-            G^{-1}(x) = y \text{\quad s.t. \quad} G(y) = x`
+            G^{-1}(p) = x \text{\quad s.t. \quad} G(x) = p`
 
-        `iccdf` accepts `x` for :math:`x \in [0, 1]`.
+        `iccdf` accepts `p` for :math:`p \in [0, 1]`.
 
         Parameters
         ----------
-        x : array
+        p : array
             The argument of the inverse complementary cumulative distribution
             function (inverse CCDF).
         method : {None, 'formula', 'complement', 'inversion'}
@@ -3953,9 +3954,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse CCDF itself
             - ``'complement'``: evaluate the inverse CDF at the
-                                complement of `x`
+                                complement of `p`
             - ``'inversion'``: solve numerically for the argument at which the
-                               CCDF is equal to `x`
+                               CCDF is equal to `p`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3969,10 +3970,10 @@ class ContinuousDistribution:
         Notes
         -----
         Suppose continuous probability distribution has support :math:`[l, r]`. The
-        inverse CCDF returns its minimum value of :math:`l` at :math:`x = 1`
-        and its maximum value of :math:`r` at :math:`x = 0`. Because the CCDF
+        inverse CCDF returns its minimum value of :math:`l` at :math:`p = 1`
+        and its maximum value of :math:`r` at :math:`p = 0`. Because the CCDF
         has range :math:`[0, 1]`, the inverse CCDF is only defined on the
-        domain :math:`[0, 1]`; for :math:`x < 0` and :math:`x > 1`, ``iccdf``
+        domain :math:`[0, 1]`; for :math:`p < 0` and :math:`p > 1`, ``iccdf``
         returns ``nan``.
 
         See Also
@@ -4001,7 +4002,7 @@ class ContinuousDistribution:
         array([ nan,  0.5, -0.5,  nan])
 
         """
-        return self._iccdf_dispatch(x, method=method, **self._parameters)
+        return self._iccdf_dispatch(p, method=method, **self._parameters)
 
     @_dispatch
     def _iccdf_dispatch(self, x, method=None, **kwargs):
