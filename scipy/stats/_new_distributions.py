@@ -34,78 +34,6 @@ class OrderStatisticDistribution(TransformedDistribution):
         return factor * fX * FX**(r-1) * cFX**(n-r)
 
 
-class StandardNormal(ContinuousDistribution):
-    r"""Standard normal distribution.
-
-    The probability density function of the standard normal distribution is:
-
-    .. math::
-
-        f(x) = \frac{1}{\sqrt{2 \pi}} \exp \left( -\frac{1}{2} x^2 \right)
-
-    """
-    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
-    _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
-    _variable = _x_param
-    _normalization = 1/np.sqrt(2*np.pi)
-    _log_normalization = np.log(2*np.pi)/2
-
-    def _logpdf_formula(self, x, **kwargs):
-        return -(self._log_normalization + x**2/2)
-
-    def _pdf_formula(self, x, **kwargs):
-        return self._normalization * np.exp(-x**2/2)
-
-    def _logcdf_formula(self, x, **kwargs):
-        return special.log_ndtr(x)
-
-    def _cdf_formula(self, x, **kwargs):
-        return special.ndtr(x)
-
-    def _logccdf_formula(self, x, **kwargs):
-        return special.log_ndtr(-x)
-
-    def _ccdf_formula(self, x, **kwargs):
-        return special.ndtr(-x)
-
-    def _icdf_formula(self, x, **kwargs):
-        return special.ndtri(x)
-
-    def _ilogcdf_formula(self, x, **kwargs):
-        return special.ndtri_exp(x)
-
-    def _iccdf_formula(self, x, **kwargs):
-        return -special.ndtri(x)
-
-    def _ilogccdf_formula(self, x, **kwargs):
-        return -special.ndtri_exp(x)
-
-    def _entropy_formula(self, **kwargs):
-        return (1 + np.log(2*np.pi))/2
-
-    def _logentropy_formula(self, **kwargs):
-        return np.log1p(np.log(2*np.pi)) - np.log(2)
-
-    def _median_formula(self, **kwargs):
-        return 0
-
-    def _mode_formula(self, **kwargs):
-        return 0
-
-    def _moment_raw_formula(self, order, **kwargs):
-        raw_moments = {0: 1, 1: 0, 2: 1, 3: 0, 4: 3, 5: 0}
-        return raw_moments.get(order, None)
-
-    def _moment_central_formula(self, order, **kwargs):
-        return self._moment_raw_formula(order, **kwargs)
-
-    def _moment_standardized_formula(self, order, **kwargs):
-        return self._moment_raw_formula(order, **kwargs)
-
-    def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):
-        return rng.normal(size=full_shape)[()]
-
-
 class Normal(ContinuousDistribution):
     r"""Normal distribution with prescribed mean and standard deviation.
 
@@ -209,6 +137,84 @@ class Normal(ContinuousDistribution):
 
 def _log_diff(log_p, log_q):
     return special.logsumexp([log_p, log_q+np.pi*1j], axis=0)
+
+
+class StandardNormal(Normal):
+    r"""Standard normal distribution.
+
+    The probability density function of the standard normal distribution is:
+
+    .. math::
+
+        f(x) = \frac{1}{\sqrt{2 \pi}} \exp \left( -\frac{1}{2} x^2 \right)
+
+    """
+    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
+    _variable = _x_param
+    _parameterizations = []
+    _normalization = 1/np.sqrt(2*np.pi)
+    _log_normalization = np.log(2*np.pi)/2
+    mu = np.float64(0.)
+    sigma = np.float64(1.)
+
+    def __new__(cls, *args, **kwargs):
+        return ContinuousDistribution.__new__(cls)
+
+    def _logpdf_formula(self, x, **kwargs):
+        return -(self._log_normalization + x**2/2)
+
+    def _pdf_formula(self, x, **kwargs):
+        return self._normalization * np.exp(-x**2/2)
+
+    def _logcdf_formula(self, x, **kwargs):
+        return special.log_ndtr(x)
+
+    def _cdf_formula(self, x, **kwargs):
+        return special.ndtr(x)
+
+    def _logccdf_formula(self, x, **kwargs):
+        return special.log_ndtr(-x)
+
+    def _ccdf_formula(self, x, **kwargs):
+        return special.ndtr(-x)
+
+    def _icdf_formula(self, x, **kwargs):
+        return special.ndtri(x)
+
+    def _ilogcdf_formula(self, x, **kwargs):
+        return special.ndtri_exp(x)
+
+    def _iccdf_formula(self, x, **kwargs):
+        return -special.ndtri(x)
+
+    def _ilogccdf_formula(self, x, **kwargs):
+        return -special.ndtri_exp(x)
+
+    def _entropy_formula(self, **kwargs):
+        return (1 + np.log(2*np.pi))/2
+
+    def _logentropy_formula(self, **kwargs):
+        return np.log1p(np.log(2*np.pi)) - np.log(2)
+
+    def _median_formula(self, **kwargs):
+        return 0
+
+    def _mode_formula(self, **kwargs):
+        return 0
+
+    def _moment_raw_formula(self, order, **kwargs):
+        raw_moments = {0: 1, 1: 0, 2: 1, 3: 0, 4: 3, 5: 0}
+        return raw_moments.get(order, None)
+
+    def _moment_central_formula(self, order, **kwargs):
+        return self._moment_raw_formula(order, **kwargs)
+
+    def _moment_standardized_formula(self, order, **kwargs):
+        return self._moment_raw_formula(order, **kwargs)
+
+    def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):
+        return rng.normal(size=full_shape)[()]
 
 
 class LogUniform(ContinuousDistribution):

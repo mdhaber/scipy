@@ -186,7 +186,7 @@ _NO_CACHE = "no_cache"
 
 
 class _Domain(ABC):
-    """ Representation of the applicable domain of a parameter or variable.
+    r""" Representation of the applicable domain of a parameter or variable.
 
     A `_Domain` object is responsible for storing information about the
     domain of a parameter or variable, determining whether a value is within
@@ -230,7 +230,7 @@ class _Domain(ABC):
 
 
 class _SimpleDomain(_Domain):
-    """ Representation of a simply-connected domain defined by two endpoints.
+    r""" Representation of a simply-connected domain defined by two endpoints.
 
     Each endpoint may be a finite scalar, positive or negative infinity, or
     be given by a single parameter. The domain may include the endpoints or
@@ -294,7 +294,7 @@ class _SimpleDomain(_Domain):
         self.symbols.update(new_symbols)
 
     def get_numerical_endpoints(self, parameter_values):
-        """ Get the numerical values of the domain endpoints.
+        r""" Get the numerical values of the domain endpoints.
 
         Domain endpoints may be defined symbolically. This returns numerical
         values of the endpoints given numerical values for any variables.
@@ -331,7 +331,7 @@ class _SimpleDomain(_Domain):
         return a, b
 
     def contains(self, item, parameter_values=None):
-        """Determine whether the argument is contained within the domain.
+        r"""Determine whether the argument is contained within the domain.
 
         Parameters
         ----------
@@ -366,7 +366,7 @@ class _SimpleDomain(_Domain):
 
 
 class _RealDomain(_SimpleDomain):
-    """ Represents a simply-connected subset of the real line.
+    r""" Represents a simply-connected subset of the real line.
 
     Completes the implementation of the `_SimpleDomain` class for simple
     domains on the real line.
@@ -403,7 +403,7 @@ class _RealDomain(_SimpleDomain):
         return f"{left}{a}, {b}{right}"
 
     def draw(self, size=None, rng=None, proportions=None, parameter_values=None):
-        """ Draw random values from the domain.
+        r""" Draw random values from the domain.
 
         Parameters
         ----------
@@ -507,7 +507,7 @@ class _RealDomain(_SimpleDomain):
 
 
 class _IntegerDomain(_SimpleDomain):
-    """ Representation of a domain of consecutive integers.
+    r""" Representation of a domain of consecutive integers.
 
     Completes the implementation of the `_SimpleDomain` class for domains
     composed of consecutive integer values.
@@ -518,7 +518,7 @@ class _IntegerDomain(_SimpleDomain):
 
 
 class _Parameter(ABC):
-    """ Representation of a distribution parameter or variable.
+    r""" Representation of a distribution parameter or variable.
 
     A `_Parameter` object is responsible for storing information about a
     parameter or variable, providing input validation/standardization of
@@ -566,12 +566,12 @@ class _Parameter(ABC):
         self.typical = typical or domain
 
     def __str__(self):
-        """ String representation of the parameter for use in documentation."""
+        r""" String representation of the parameter for use in documentation."""
         return f"`{self.name}` for :math:`{self.symbol} ∈ {str(self.domain)}`"
 
     def draw(self, size=None, *, rng=None, domain='typical', proportions=None,
              parameter_values=None):
-        """ Draw random values of the parameter for use in testing.
+        r""" Draw random values of the parameter for use in testing.
 
         Parameters
         ----------
@@ -617,14 +617,14 @@ class _Parameter(ABC):
 
 
 class _RealParameter(_Parameter):
-    """ Represents a real-valued parameter.
+    r""" Represents a real-valued parameter.
 
     Implements the remaining methods of _Parameter for real parameters.
     All attributes are inherited.
 
     """
     def validate(self, arr, parameter_values):
-        """ Input validation/standardization of numerical values of a parameter.
+        r""" Input validation/standardization of numerical values of a parameter.
 
         Checks whether elements of the argument `arr` are reals, ensuring that
         the dtype reflects this. Also produces a logical array that indicates
@@ -679,7 +679,7 @@ class _RealParameter(_Parameter):
 
 
 class _Parameterization:
-    """ Represents a parameterization of a distribution.
+    r""" Represents a parameterization of a distribution.
 
     Distributions can have multiple parameterizations. A `_Parameterization`
     object is responsible for recording the parameters used by the
@@ -720,7 +720,7 @@ class _Parameterization:
         return _Parameterization(*self.parameters.values())
 
     def matches(self, parameters):
-        """ Checks whether the keyword arguments match the parameterization.
+        r""" Checks whether the keyword arguments match the parameterization.
 
         Parameters
         ----------
@@ -737,7 +737,7 @@ class _Parameterization:
         return parameters == set(self.parameters.keys())
 
     def validation(self, parameter_values):
-        """ Input validation / standardization of parameterization.
+        r""" Input validation / standardization of parameterization.
 
         Parameters
         ----------
@@ -767,12 +767,12 @@ class _Parameterization:
         return all_valid, dtype
 
     def __str__(self):
-        """Returns a string representation of the parameterization."""
+        r"""Returns a string representation of the parameterization."""
         messages = [str(param) for name, param in self.parameters.items()]
         return ", ".join(messages)
 
     def draw(self, sizes=None, rng=None, proportions=None):
-        """Draw random values of all parameters for use in testing.
+        r"""Draw random values of all parameters for use in testing.
 
         Parameters
         ----------
@@ -1334,7 +1334,7 @@ def _generate_example(dist_family):
 
 
 class ContinuousDistribution:
-    """ Class that represents a continuous statistical distribution.
+    r""" Class that represents a continuous statistical distribution.
 
     Instances of the class represent a random variable.
 
@@ -1372,8 +1372,6 @@ class ContinuousDistribution:
     plot
 
     sample
-
-    fit
 
     moment
 
@@ -1428,7 +1426,7 @@ class ContinuousDistribution:
         self._update_parameters(**parameters)
 
     def _update_parameters(self, *, iv_policy=None, **kwargs):
-        """ Update the numerical values of distribution parameters.
+        r""" Update the numerical values of distribution parameters.
 
         Parameters
         ----------
@@ -1498,7 +1496,7 @@ class ContinuousDistribution:
         self._original_parameters = original_parameters
 
     def reset_cache(self):
-        """ Clear all cached values.
+        r""" Clear all cached values.
 
         To improve the speed of some calculations, the distribution's support
         and moments are cached.
@@ -1604,7 +1602,7 @@ class ContinuousDistribution:
         return parameters, invalid, any_invalid, dtype
 
     def _process_parameters(self, **kwargs):
-        """ Process and cache distribution parameters for reuse.
+        r""" Process and cache distribution parameters for reuse.
 
         This is intended to be overridden by subclasses. It allows distribution
         authors to pre-process parameters for re-use. For instance, when a user
@@ -1632,7 +1630,7 @@ class ContinuousDistribution:
     # `tol` attribute is just notional right now. See Question 4 above.
     @property
     def tol(self):
-        """positive float:
+        r"""positive float:
         The desired relative tolerance of calculations. Left unspecified,
         calculations may be faster; when provided, calculations may be
         more likely to meet the desired accuracy.
@@ -1655,7 +1653,7 @@ class ContinuousDistribution:
 
     @property
     def cache_policy(self):
-        """{None, "no_cache"}:
+        r"""{None, "no_cache"}:
         Specifies the extent to which intermediate results are cached. Left
         unspecified, intermediate results of some calculations (e.g. distribution
         support, moments, etc.) are cached to improve performance of future
@@ -1676,7 +1674,7 @@ class ContinuousDistribution:
 
     @property
     def iv_policy(self):
-        """{None, "skip_all"}:
+        r"""{None, "skip_all"}:
         Specifies the level of input validation to perform. Left unspecified,
         input validation is performed to ensure appropriate behavior in edge
         case (e.g. parameters out of domain, argument outside of distribution
@@ -1698,7 +1696,7 @@ class ContinuousDistribution:
 
     @property
     def rng(self):
-        """numpy.random.Generator
+        r"""numpy.random.Generator
         Random number generator to be used by any methods that require
         pseudo-random numbers (e.g. `sample`).
         """
@@ -1729,7 +1727,7 @@ class ContinuousDistribution:
     ### Other magic methods
 
     def __repr__(self):
-        """ Returns a string representation of the distribution.
+        r""" Returns a string representation of the distribution.
 
         Includes the name of the distribution family, the names of the
         parameters, and the broadcasted shape and result dtype of the
@@ -1814,7 +1812,7 @@ class ContinuousDistribution:
     @classmethod
     def _draw(cls, sizes=None, rng=None, i_parameterization=None,
               proportions=None):
-        """ Draw a specific (fully-defined) distribution from the family.
+        r""" Draw a specific (fully-defined) distribution from the family.
 
         See _Parameterization.draw for documentation details.
         """
@@ -2111,29 +2109,29 @@ class ContinuousDistribution:
         r"""Logarithm of the differential entropy
 
         In terms of probability density function :math:`f(x)` and support
-        :math:`\chi`, the differential entropy of a random variable :math:`X` is:
+        :math:`\chi`, the differential entropy (or simply "entropy") of a random
+        variable :math:`X` is:
 
         .. math::
 
             h(X) = - \int_{\chi} f(x) \log f(x) dx
 
-        `logentropy` computes the logarithm of the differential entropy,
-        :math:`log(h(X))`, but it may be numerically favorable compared to the
-        naive implementation (computing :math:`h(X)` and taking the logarithm).
+        `logentropy` computes the logarithm of the differential entropy
+        ("log-entropy"), :math:`log(h(X))`, but it may be numerically favorable
+        compared to the naive implementation (computing :math:`h(X)` then
+        taking the logarithm).
 
         Parameters
         ----------
         method : {None, 'formula', 'logexp', 'quadrature}
-            The strategy used to evaluate the differential entropy. By default
+            The strategy used to evaluate the log-entropy. By default
             (``None``), the infrastructure chooses between the following options,
             listed in order of precedence.
 
-            - ``'formula'``: use a formula for the logarithm of the differential
-                             entropy itself
-            - ``'logexp'``: evaluate the differential entropy directly and take
-                            the logarithm
+            - ``'formula'``: use a formula for the log-entropy itself
+            - ``'logexp'``: evaluate the entropy directly and take the logarithm
             - ``'quadrature'``: numerically log-integrate the logarithm of the
-                                integrand
+              entropy integrand
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -2142,7 +2140,7 @@ class ContinuousDistribution:
         Returns
         -------
         out : array
-            The logarithm of the differential entropy of the random variable.
+            The log-entropy.
 
         See Also
         --------
@@ -2151,8 +2149,8 @@ class ContinuousDistribution:
 
         Notes
         -----
-        If the entropy of a distribution is negative, then the logarithm of
-        entropy is complex with imaginary part divisible by :math:`\pi`. For
+        If the entropy of a distribution is negative, then the log-entropy
+        is complex with imaginary part divisible by :math:`\pi`. For
         consistency, the result of this function always has complex dtype,
         regardless of the value of the imaginary part.
 
@@ -2169,15 +2167,15 @@ class ContinuousDistribution:
         >>> from scipy import stats
         >>> X = stats.Uniform(a=-1., b=1.)
 
-        Evaluate the logarithm of the differential entropy:
+        Evaluate the log-entropy:
 
         >>> X.logentropy()
         (-0.3665129205816642+0j)
         >>> np.allclose(np.exp(X.logentropy()), X.entropy())
         True
 
-        For a random variable with negative entropy, the logarithm of the
-        entropy has an imaginary part equal to `np.pi`.
+        For a random variable with negative entropy, the log-entropy has an
+        imaginary part equal to `np.pi`.
 
         >>> X = stats.Uniform(a=-.1, b=.1)
         >>> X.entropy(), X.logentropy()
@@ -2215,7 +2213,8 @@ class ContinuousDistribution:
         r"""Differential entropy
 
         In terms of probability density function :math:`f(x)` and support
-        :math:`\chi`, the differential entropy of a random variable :math:`X` is:
+        :math:`\chi`, the differential entropy (or simply "entropy") of a
+        continuous random variable :math:`X` is:
 
         .. math::
 
@@ -2224,13 +2223,13 @@ class ContinuousDistribution:
         Parameters
         ----------
         method : {None, 'formula', 'logexp', 'quadrature'}
-            The strategy used to evaluate the differential entropy. By default
-            (``None``), the infrastructure chooses between the following options,
-            listed in order of precedence.
+            The strategy used to evaluate the entropy. By default (``None``),
+            the infrastructure chooses between the following options, listed
+            in order of precedence.
 
-            - ``'formula'``: use a formula for the differential entropy itself
-            - ``'logexp'``: evaluate the logarithm of the differential entropy
-                            directly and exponentiate
+            - ``'formula'``: use a formula for the entropy itself
+            - ``'logexp'``: evaluate the logarithm of the entropy directly and
+              exponentiate
             - ``'quadrature'``: use numerical integration
 
             Not all `method` options are available for all distributions.
@@ -2240,7 +2239,7 @@ class ContinuousDistribution:
         Returns
         -------
         out : array
-            The differential entropy of the random variable.
+            The entropy of the random variable.
 
         See Also
         --------
@@ -2249,11 +2248,11 @@ class ContinuousDistribution:
 
         Notes
         -----
-        This function calculates the differential entropy using the natural
-        logarithm; i.e. the logarithm with base :math:`e`. Consequently, the
-        value is expressed in (dimensionless) "units" of nats. To convert the
-        entropy to different units (i.e. corresponding with a different base),
-        divide the result by the natural logarithm of the desired base.
+        This function calculates the entropy using the natural logarithm; i.e.
+        the logarithm with base :math:`e`. Consequently, the value is expressed
+        in (dimensionless) "units" of nats. To convert the entropy to different
+        units (i.e. corresponding with a different base), divide the result by
+        the natural logarithm of the desired base.
 
         References
         ----------
@@ -2267,7 +2266,7 @@ class ContinuousDistribution:
         >>> from scipy import stats
         >>> X = stats.Uniform(a=-1., b=1.)
 
-        Evaluate the differential entropy:
+        Evaluate the entropy:
 
         >>> X.entropy()
         0.6931471805599454
@@ -2294,12 +2293,13 @@ class ContinuousDistribution:
     def _entropy_quadrature(self, **kwargs):
         def integrand(x, **kwargs):
             pdf = self._pdf_dispatch(x, **kwargs)
-            return np.log(pdf)*pdf
+            logpdf = self._logpdf_dispatch(x, **kwargs)
+            return logpdf * pdf
         return -self._quadrature(integrand, kwargs=kwargs)
 
     @_set_invalid_nan_property
     def median(self, *, method=None):
-        r"""Median
+        r"""Median (50th percentil)
 
         If a continuous random variable :math:`X` has probability :math:`0.5` of
         taking on a value less than :math:`m`, then :math:`m` is the median.
@@ -2372,7 +2372,7 @@ class ContinuousDistribution:
 
     @_set_invalid_nan_property
     def mode(self, *, method=None):
-        r"""Mode
+        r"""Mode (most likely value)
 
         Informally, the mode is a value that a random variable has the highest
         probability (density) of assuming. That is, the mode is the element of
@@ -2381,7 +2381,7 @@ class ContinuousDistribution:
 
         .. math::
 
-            \text{mode} = \argmax_{x \in \chi} f(x)
+            \text{mode} = \arg\max_{x \in \chi} f(x)
 
         Parameters
         ----------
@@ -2754,26 +2754,26 @@ class ContinuousDistribution:
     def logpdf(self, x, *, method=None):
         r"""Log of the probability density function
 
-        The probability density function :math:`f(x)` is the probability *per
-        unit length* that the random variable takes on the value :math:`x`.
-        Mathematically, it can be defined as the derivative of the cumulative
-        distribution function `F(x)`:
+        The probability density function ("PDF"), denoted :math:`f(x)`, is the
+        probability *per unit length* that the random variable takes on the
+        value :math:`x`. Mathematically, it can be defined as the derivative
+        of the cumulative distribution function :math:`F(x)`:
 
         .. math::
 
             f(x) = \frac{d}{dx} F(x)
 
-        `logpdf` computes the logarithm of the probability density function,
-        :math:`\log(f(x))`, but it may be numerically favorable compared to the
-        naive implementation (computing :math:`f(x)` and taking the logarithm).
+        `logpdf` computes the logarithm of the probability density function
+        ("log-PDF"), :math:`\log(f(x))`, but it may be numerically favorable
+        compared to the naive implementation (computing :math:`f(x)` and
+        taking the logarithm).
 
         `logpdf` accepts `x` for :math:`x`.
 
         Parameters
         ----------
         x : array
-            The argument of the logarithm of the probability density function
-            (log-PDF).
+            The argument of the log-PDF.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the log-PDF. By default (``None``), the
             infrastructure chooses between the following options, listed in order
@@ -2805,13 +2805,13 @@ class ContinuousDistribution:
         than or greater than :math:`\log(1) = 0` because the maximum of the PDF
         can be any positive real.
 
-        For distributions with infinite support, it is common for
-        `pdf` to return a value of ``0`` when the argument
-        is theoretically within the support; this can occur because the true value
-        of the PDF is too small to be represented by the chosen dtype. The log
-        of the PDF, however, will often be finite (not ``-inf``) over a much larger
-        domain. Consequently, it may be preferred to work with the logarithms of
-        probabilities and probability densities to avoid underflow.
+        For distributions with infinite support, it is common for `pdf` to return
+        a value of ``0`` when the argument is theoretically within the support;
+        this can occur because the true value of the PDF is too small to be
+        represented by the chosen dtype. The log-PDF, however, will often be finite
+        (not ``-inf``) over a much larger domain. Consequently, it may be preferred
+        to work with the logarithms of probabilities and probability densities to
+        avoid underflow.
 
         References
         ----------
@@ -2854,10 +2854,10 @@ class ContinuousDistribution:
     def pdf(self, x, *, method=None):
         r"""Probability density function
 
-        The probability density function :math:`f(x)` is the probability *per
-        unit length* that the random variable takes on the value :math:`x`.
-        Mathematically, it can be defined as the derivative of the cumulative
-        distribution function `F(x)`:
+        The probability density function ("PDF"), denoted :math:`f(x)`, is the
+        probability *per unit length* that the random variable takes on the
+        value :math:`x`. Mathematically, it can be defined as the derivative
+        of the cumulative distribution function :math:`F(x)`:
 
         .. math::
 
@@ -2868,7 +2868,7 @@ class ContinuousDistribution:
         Parameters
         ----------
         x : array
-            The argument of the probability density function (PDF).
+            The argument of the PDF.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the PDF. By default (``None``), the
             infrastructure chooses between the following options, listed in
@@ -2876,7 +2876,7 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the PDF itself
             - ``'logexp'``: evaluate the logarithm of the PDF directly and
-                            exponentiate
+              exponentiate
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -2940,9 +2940,9 @@ class ContinuousDistribution:
     def logcdf(self, x, y=None, *, method=None):
         r"""Log of the cumulative distribution function
 
-        The cumulative distribution function :math:`F(x)` is the probability
-        the random variable :math:`X` will take on a value less than or equal
-        to :math:`x`:
+        The cumulative distribution function ("CDF"), denoted :math:`F(x)`, is
+        the probability the random variable :math:`X` will take on a value
+        less than or equal to :math:`x`:
 
         .. math::
 
@@ -2956,18 +2956,17 @@ class ContinuousDistribution:
 
             F(x, y) = P(x ≤ X ≤ y)
 
-        `logcdf` computes the logarithm of the cumulative distribution function,
-        :math:`\log(F(x))`/:math:`\log(F(x, y))`, but it may be numerically
-        favorable compared to the naive implementation (computing the CDF
-        and taking the logarithm).
+        `logcdf` computes the logarithm of the cumulative distribution function
+        ("log-CDF"), :math:`\log(F(x))`/:math:`\log(F(x, y))`, but it may be
+        numerically favorable compared to the naive implementation (computing
+        the CDF and taking the logarithm).
 
         `logcdf` accepts `x` for :math:`x` and `y` for :math:`y`.
 
         Parameters
         ----------
         x, y : array
-            The arguments of the log of the cumulative distribution function
-            (log-CDF). `x` is required; `y` is optional.
+            The arguments of the log-CDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
             The strategy used to evaluate the log-CDF.
             By default (``None``), the one-argument form of the function
@@ -2976,8 +2975,7 @@ class ContinuousDistribution:
             - ``'formula'``: use a formula for the log-CDF itself
             - ``'logexp'``: evaluate the CDF directly and take the logarithm
             - ``'complement'``: evaluate the logarithm of the complementary CDF
-                                directly and take the logarithmic complement
-                                (see Notes)
+              directly and take the logarithmic complement (see Notes)
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
             In place of ``'complement'``, the two-argument form accepts:
@@ -3130,9 +3128,9 @@ class ContinuousDistribution:
     def cdf(self, x, y=None, *, method=None):
         r"""Cumulative distribution function
 
-        The cumulative distribution function :math:`F(x)` is the probability
-        the random variable :math:`X` will take on a value less than or equal
-        to :math:`x`:
+        The cumulative distribution function ("CDF"), denoted :math:`F(x)`, is
+        the probability the random variable :math:`X` will take on a value
+        less than or equal to :math:`x`:
 
         .. math::
 
@@ -3151,8 +3149,7 @@ class ContinuousDistribution:
         Parameters
         ----------
         x, y : array
-            The arguments of the cumulative distribution function (CDF). `x` is
-            required; `y` is optional.
+            The arguments of the CDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
             The strategy used to evaluate the CDF.
             By default (``None``), the one-argument form of the function
@@ -3160,9 +3157,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the CDF itself
             - ``'logexp'``: evaluate the logarithm of the CDF directly and
-                            exponentiate
+              exponentiate
             - ``'complement'``: evaluate the complementary CDF direcly
-                                and take the complement
+              and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
             In place of ``'complement'``, the two-argument form accepts:
@@ -3306,10 +3303,10 @@ class ContinuousDistribution:
     def logccdf(self, x, y=None, *, method=None):
         r"""Log of the complementary cumulative distribution function
 
-        The complementary cumulative distribution function :math:`G(x)` is the
-        complement of the cumulative distribution function :math:`F(x)`; i.e.,
-        probability the random variable :math:`X` will take on a value greater
-        than :math:`x`:
+        The complementary cumulative distribution function ("CCDF"), denoted
+        :math:`G(x)` is the complement of the cumulative distribution function
+        :math:`F(x)`; i.e., probability the random variable :math:`X` will
+        take on a value greater than :math:`x`:
 
         .. math::
 
@@ -3319,10 +3316,10 @@ class ContinuousDistribution:
 
         .. math::
 
-            G(x, y) = 1 - F(x, y) = P(X < x \text{ or } X > y)
+            G(x, y) = 1 - F(x, y) = P(X < x \quad \text{or} \quad X > y)
 
         `logccdf` computes the logarithm of the complementary cumulative
-        distribution function, :math:`\log(G(x))`/:math:`\log(G(x, y))`,
+        distribution function ("log-CCDF"), :math:`\log(G(x))`/:math:`\log(G(x, y))`,
         but it may be numerically favorable compared to the naive implementation
         (computing the CDF and taking the logarithm).
 
@@ -3331,8 +3328,7 @@ class ContinuousDistribution:
         Parameters
         ----------
         x, y : array
-            The arguments of the logarithm of the complementary cumulative
-            distribution function (log CCDF). `x` is required; `y` is optional.
+            The arguments of the log-CCDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
             The strategy used to evaluate the log CCDF.
             By default (``None``), the one-argument form of the function
@@ -3341,7 +3337,7 @@ class ContinuousDistribution:
             - ``'formula'``: use a formula for the log CCDF itself
             - ``'logexp'``: evaluate the CCDF directly and take the logarithm
             - ``'complement'``: evaluate the log-CDF directly and take the
-                                logarithmic complement (see Notes)
+              logarithmic complement (see Notes)
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
             The two-argument form chooses between:
@@ -3466,10 +3462,10 @@ class ContinuousDistribution:
     def ccdf(self, x, y=None, *, method=None):
         r"""Complementary cumulative distribution function
 
-        The complementary cumulative distribution function :math:`G(x)` is the
-        complement of the cumulative distribution function :math:`F(x)`; i.e.,
-        probability the random variable :math:`X` will take on a value greater
-        than :math:`x`:
+        The complementary cumulative distribution function ("CCDF"), denoted
+        :math:`G(x)`, is the complement of the cumulative distribution function
+        :math:`F(x)`; i.e., probability the random variable :math:`X` will
+        take on a value greater than :math:`x`:
 
         .. math::
 
@@ -3486,8 +3482,7 @@ class ContinuousDistribution:
         Parameters
         ----------
         x, y : array
-            The arguments of the complementary cumulative distribution
-            function (CCDF). `x` is required; `y` is optional.
+            The arguments of the CCDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
             The strategy used to evaluate the CCDF.
             By default (``None``), the infrastructure chooses between the
@@ -3495,7 +3490,7 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the CCDF itself
             - ``'logexp'``: evaluate the logarithm of the CCDF directly and
-                            exponentiate
+              exponentiate
             - ``'complement'``: evaluate the CDF and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
@@ -3628,8 +3623,10 @@ class ContinuousDistribution:
         r"""Inverse of the logarithm of the cumulative distribution function.
 
         The inverse of the logarithm of the cumulative distribution function
-        is the argument :math:`x` for which the logarithm of the cumulative
-        distribution function :math:`\log(F(x))` evaluates to :math:`\log(p)`.
+        ("inverse log-CDF") is the argument :math:`x` for which the logarithm
+        of the cumulative distribution function :math:`\log(F(x))` evaluates
+        to :math:`\log(p)`.
+
         Mathematically, it is equivalent to :math:`F^{-1}(\exp(y))`, where
         :math:`y = \log(p)`, but it may be numerically favorable compared to
         the naive implementation (computing :math:`p = \exp(y)`, then
@@ -3640,8 +3637,7 @@ class ContinuousDistribution:
         Parameters
         ----------
         logp : array
-            The argument of the inverse of the logarithm of the cumulative
-            distribution function (inverse log-CDF).
+            The argument of the inverse log-CDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse log-CDF.
             By default (``None``), the infrastructure chooses between the
@@ -3649,9 +3645,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse log-CDF itself
             - ``'complement'``: evaluate the inverse log-CCDF at the
-                                logarithmic complement of `logp` (see Notes)
+              logarithmic complement of `logp` (see Notes)
             - ``'inversion'``: solve numerically for the argument at which the
-                               log-CDF is equal to `logp`
+              log-CDF is equal to `logp`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3669,8 +3665,8 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`. The
-        inverse log-CDF returns its minimum value of :math:`l` at
+        Suppose continuous probability distribution has support :math:`[l, r]`.
+        The inverse log-CDF returns its minimum value of :math:`l` at
         :math:`\log(p) = \log(0) = -\infty` and its maximum value of :math:`r` at
         :math:`\log(p) = \log(1) = 0`. Because the log-CDF has range
         :math:`[-\infty, 0]`, the inverse log-CDF is only defined on the
@@ -3729,21 +3725,20 @@ class ContinuousDistribution:
     def icdf(self, p, *, method=None):
         r"""Inverse of the cumulative distribution function.
 
-        The inverse of the cumulative distribution function :math:`F^{-1}(p)`
-        is the argument :math:`x` for which the cumulative distribution
-        function :math:`F(x)` evaluates to :math:`p`.
+        The inverse of the cumulative distribution function ("inverse CDF"),
+        denoted :math:`F^{-1}(p)`, is the argument :math:`x` for which the
+        cumulative distribution function :math:`F(x)` evaluates to :math:`p`.
 
         .. math::
 
-            F^{-1}(p) = x \text{\quad s.t. \quad} F(x) = p`
+            F^{-1}(p) = x \quad \text{s.t.} \quad F(x) = p`
 
         `icdf` accepts `p` for :math:`p \in [0, 1]`.
 
         Parameters
         ----------
         p : array
-            The argument of the inverse cumulative distribution function
-            (inverse CDF).
+            The argument of the inverse CDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse CDF.
             By default (``None``), the infrastructure chooses between the
@@ -3751,9 +3746,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse CDF itself
             - ``'complement'``: evaluate the inverse CCDF at the
-                                complement of `p`
+              complement of `p`
             - ``'inversion'``: solve numerically for the argument at which the
-                               CDF is equal to `p`
+              CDF is equal to `p`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3833,19 +3828,20 @@ class ContinuousDistribution:
         r"""Inverse of the log of the complementary cumulative distribution function.
 
         The inverse of the logarithm of the complementary cumulative distribution
-        function is the argument :math:`x` for which the logarithm of the
-        complementary cumulative distribution function :math:`\log(G(x))` evaluates
-        to :math:`\log(p)`. Mathematically, it is equivalent to :math:`G^{-1}(\exp(y))`,
-        where :math:`y = \log(p)`, but it may be numerically favorable compared to the
-        naive implementation (computing :math:`p = \exp(y)`, then :math:`G^{-1}(p)`).
+        function ("inverse log-CCDF") is the argument :math:`x` for which the logarithm
+        of the complementary cumulative distribution function :math:`\log(G(x))`
+        evaluates to :math:`\log(p)`.
+
+        Mathematically, it is equivalent to :math:`G^{-1}(\exp(y))`, where
+        :math:`y = \log(p)`, but it may be numerically favorable compared to the naive
+        implementation (computing :math:`p = \exp(y)`, then :math:`G^{-1}(p)`).
 
         `ilogccdf` accepts `logp` for :math:`\log(p) ≤ 0`.
 
         Parameters
         ----------
         x : array
-            The argument of the inverse of the logarithm of the complementary
-            cumulative distribution function (inverse log-CCDF).
+            The argument of the inverse log-CCDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse log-CCDF.
             By default (``None``), the infrastructure chooses between the
@@ -3853,9 +3849,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse log-CCDF itself
             - ``'complement'``: evaluate the inverse log-CDF at the
-                                logarithmic complement of `x` (see Notes)
+              logarithmic complement of `x` (see Notes)
             - ``'inversion'``: solve numerically for the argument at which the
-                               log-CCDF is equal to `x`
+              log-CCDF is equal to `x`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3933,22 +3929,21 @@ class ContinuousDistribution:
     def iccdf(self, p, *, method=None):
         r"""Inverse complementary cumulative distribution function.
 
-        The inverse complementary cumulative distribution function
-        :math:`G^{-1}(p)` is the argument :math:`x` for which the
-        complementary cumulative distribution function :math:`G(x)`
-        evaluates to :math:`p`.
+        The inverse complementary cumulative distribution function ("inverse CCDF"),
+        denoted :math:`G^{-1}(p)`, is the argument :math:`x` for which the
+        complementary cumulative distribution function :math:`G(x)` evaluates to
+        :math:`p`.
 
         .. math::
 
-            G^{-1}(p) = x \text{\quad s.t. \quad} G(x) = p`
+            G^{-1}(p) = x \quad \text{s.t.} \quad G(x) = p`
 
         `iccdf` accepts `p` for :math:`p \in [0, 1]`.
 
         Parameters
         ----------
         p : array
-            The argument of the inverse complementary cumulative distribution
-            function (inverse CCDF).
+            The argument of the inverse CCDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse CCDF.
             By default (``None``), the infrastructure chooses between the
@@ -3956,9 +3951,9 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the inverse CCDF itself
             - ``'complement'``: evaluate the inverse CDF at the
-                                complement of `p`
+              complement of `p`
             - ``'inversion'``: solve numerically for the argument at which the
-                               CCDF is equal to `p`
+              CCDF is equal to `p`
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -4069,7 +4064,7 @@ class ContinuousDistribution:
 
             - ``'formula'``: an implementation specific to the distribution
             - ``'inverse_transform'``: generate a uniformly distributed sample and
-                                       return the inverse CDF at these arguments.
+              return the inverse CDF at these arguments.
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a `NotImplementedError``
@@ -4295,15 +4290,15 @@ class ContinuousDistribution:
             listed in order of precedence.
 
             - ``'cache'``: use the value of the moment most recently calculated
-                           via another method
+              via another method
             - ``'formula'``: use a formula for the moment itself
             - ``'general'``: use a general result that is true for all distributions
-                             with finite moments; for instance, the zeroth raw moment
-                             is identically 1
+              with finite moments; for instance, the zeroth raw moment is
+              identically 1
             - ``'transform'``: transform a raw moment to a central moment or
-                               vice versa (see Notes)
+              vice versa (see Notes)
             - ``'normalize'``: normalize a central moment to get a standardized
-                               or vice versa
+              or vice versa
             - ``'quadrature'``: numerically integrate according to the definition
 
             Not all `method` options are available for all orders, kinds, and
@@ -4823,7 +4818,7 @@ class ContinuousDistribution:
     def llf(self, sample, *, axis=-1):
         r"""Log-likelihood function
 
-        Given a sample :math:`x`, the log-likelihood function is the logarithm
+        Given a sample :math:`x`, the log-likelihood function (LLF) is the logarithm
         of the joint probability density of the observed data. It is typically
         viewed as a function of the parameters :math:`\theta` of a statistical
         distribution:
@@ -4841,15 +4836,14 @@ class ContinuousDistribution:
         Parameters
         ----------
         sample : array
-            The given sample for to calculate the log-likelihood function (LLF).
+            The given sample for to calculate the LLF.
         axis : int or tuple of ints
             The axis over which the reducing operation (sum of logarithms) is performed.
 
         Notes
         -----
-        The log-likelihood function is often viewed as a function of the parameters
-        with the sample fixed; see the Notes for an example of a function with
-        this signature.
+        The LLF is often viewed as a function of the parameters with the sample fixed;
+        see the Notes for an example of a function with this signature.
 
         References
         ----------
