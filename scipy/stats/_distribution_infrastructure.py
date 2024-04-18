@@ -13,7 +13,7 @@ import numpy as np
 _null = object()
 oo = np.inf
 
-__all__ = ['ContinuousDistribution', 'ShiftedScaledDistribution']
+__all__ = ['ContinuousDistribution']
 
 # Could add other policies for broadcasting and edge/out-of-bounds case handling
 # For instance, when edge case handling is known not to be needed, it's much
@@ -1197,7 +1197,7 @@ def _generate_domain_support(dist_family):
     elif n_parameterizations == 1:
         support = f"""
         This class accepts one parameterization:
-        {str(dist_family._parameterizations[0])}
+        {str(dist_family._parameterizations[0])}.
         """
     else:
         number = {2: 'two', 3: 'three', 4: 'four', 5: 'five'}[
@@ -1373,6 +1373,8 @@ class ContinuousDistribution:
 
     sample
 
+    fit
+
     moment
 
     mean
@@ -1401,9 +1403,16 @@ class ContinuousDistribution:
     entropy
     logentropy
 
-    Examples
-    --------
-    This is where examples will go.
+    Notes
+    -----
+    The following abbreviations are used throughout the documentation.
+
+    - PDF: probability density function
+    - CDF: cumulative distribution function
+    - CCDF: complementary CDF
+    - entropy: differential entropy
+    - log-*F*: logarithm of *F* (e.g. log-CDF)
+    - inverse *F*: inverse function of *F* (e.g. inverse CDF)
 
     """
     _parameterizations = []
@@ -2129,7 +2138,7 @@ class ContinuousDistribution:
             listed in order of precedence.
 
             - ``'formula'``: use a formula for the log-entropy itself
-            - ``'logexp'``: evaluate the entropy directly and take the logarithm
+            - ``'logexp'``: evaluate the entropy and take the logarithm
             - ``'quadrature'``: numerically log-integrate the logarithm of the
               entropy integrand
 
@@ -2228,8 +2237,7 @@ class ContinuousDistribution:
             in order of precedence.
 
             - ``'formula'``: use a formula for the entropy itself
-            - ``'logexp'``: evaluate the logarithm of the entropy directly and
-              exponentiate
+            - ``'logexp'``: evaluate the log-entropy and exponentiate
             - ``'quadrature'``: use numerical integration
 
             Not all `method` options are available for all distributions.
@@ -2875,8 +2883,7 @@ class ContinuousDistribution:
             order of precedence.
 
             - ``'formula'``: use a formula for the PDF itself
-            - ``'logexp'``: evaluate the logarithm of the PDF directly and
-              exponentiate
+            - ``'logexp'``: evaluate the log-PDF and exponentiate
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -2913,7 +2920,7 @@ class ContinuousDistribution:
         >>> from scipy import stats
         >>> X = stats.Uniform(a=-1., b=1.)
 
-        Evaluate the probability density function at the desired argument:
+        Evaluate the PDF at the desired argument:
 
         >>> X.pdf(0.25)
         0.5
@@ -2973,15 +2980,15 @@ class ContinuousDistribution:
             chooses between the following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the log-CDF itself
-            - ``'logexp'``: evaluate the CDF directly and take the logarithm
-            - ``'complement'``: evaluate the logarithm of the complementary CDF
-              directly and take the logarithmic complement (see Notes)
+            - ``'logexp'``: evaluate the CDF and take the logarithm
+            - ``'complement'``: evaluate the log-CCDF and take the
+              logarithmic complement (see Notes)
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
             In place of ``'complement'``, the two-argument form accepts:
 
             - ``'subtraction'``: compute the log-CDF at each argument and take
-              the logarithmic difference.
+              the logarithmic difference (see Notes)
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3017,6 +3024,8 @@ class ContinuousDistribution:
         The "logarithmic complement" of a number :math:`z` is mathematically
         equivalent to :math:`\log(1-\exp(z))`, but it is computed to avoid loss
         of precision when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
+        Similarly, the term "logarithmic difference" of :math:`w` and :math:`z`
+        is used here to mean :math:`\log(\exp(w)-\exp(z))`.
 
         References
         ----------
@@ -3156,10 +3165,8 @@ class ContinuousDistribution:
             chooses between the following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the CDF itself
-            - ``'logexp'``: evaluate the logarithm of the CDF directly and
-              exponentiate
-            - ``'complement'``: evaluate the complementary CDF direcly
-              and take the complement
+            - ``'logexp'``: evaluate the log-CDF and exponentiate
+            - ``'complement'``: evaluate the CCDF and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
             In place of ``'complement'``, the two-argument form accepts:
@@ -3330,13 +3337,13 @@ class ContinuousDistribution:
         x, y : array
             The arguments of the log-CCDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
-            The strategy used to evaluate the log CCDF.
+            The strategy used to evaluate the log-CCDF.
             By default (``None``), the one-argument form of the function
             chooses between the following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the log CCDF itself
-            - ``'logexp'``: evaluate the CCDF directly and take the logarithm
-            - ``'complement'``: evaluate the log-CDF directly and take the
+            - ``'logexp'``: evaluate the CCDF and take the logarithm
+            - ``'complement'``: evaluate the log-CDF and take the
               logarithmic complement (see Notes)
             - ``'quadrature'``: numerically log-integrate the log-PDF
 
@@ -3344,7 +3351,7 @@ class ContinuousDistribution:
 
             - ``'formula'``: use a formula for the log CCDF itself
             - ``'addition'``: compute the log-CDF at `x` and the log-CCDF at `y`,
-              then take the logarithmic sum
+              then take the logarithmic sum (see Notes)
 
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a ``NotImplementedError``
@@ -3380,6 +3387,10 @@ class ContinuousDistribution:
         The "logarithmic complement" of a number :math:`z` is mathematically
         equivalent to :math:`\log(1-\exp(z))`, but it is computed to avoid loss
         of precision when :math:`\exp(z)` is nearly :math:`0` or :math:`1`.
+        Similarly, the term "logarithmic sum" of :math:`w` and :math:`z`
+        is used here to mean the :math:`\log(\exp(w)+\exp(z))`, AKA
+        :math:`\text{LogSumExp}(w, z)`.
+
 
         References
         ----------
@@ -3489,8 +3500,7 @@ class ContinuousDistribution:
             following options, listed in order of precedence.
 
             - ``'formula'``: use a formula for the CCDF itself
-            - ``'logexp'``: evaluate the logarithm of the CCDF directly and
-              exponentiate
+            - ``'logexp'``: evaluate the log-CCDF and exponentiate
             - ``'complement'``: evaluate the CDF and take the complement
             - ``'quadrature'``: numerically integrate the PDF
 
@@ -4937,14 +4947,16 @@ class ContinuousDistribution:
         >>> import matplotlib.pyplot as plt
         >>> from scipy import stats
         >>> X = stats.Normal(mu=0., sigma=1.)
+        >>> rng = np.random.default_rng()
 
         Adjust the shape parameters to fit the distribution to data using maximum
         likelihood estimation.
 
-        >>> data = X.sample(100)
+        >>> data = X.sample(1000, rng=rng)
         >>> X.fit(['mu', 'sigma'], dict(f=X.llf, input=(data,)))
         >>> X.plot()
         >>> plt.hist(data, density=True, alpha=0.5)
+        >>> plt.show()
 
         Adjust the shape parameters to achieve a desired mean and standard deviation.
 
@@ -4952,7 +4964,7 @@ class ContinuousDistribution:
         ...       dict(f=lambda: [X.mean(), X.standard_deviation()],
         ...            output=[1, 2]))
         >>> X.mean(), X.standard_deviation()
-        (0.999996100617804, 1.9999959909785976)
+        (1.0000000860089517, 1.9999999399112434)
 
         """
         # add `_fit` implementation methods
@@ -4997,13 +5009,14 @@ class ContinuousDistribution:
         bounds = np.asarray([param_info[param_name].domain.endpoints
                              for param_name in parameters], dtype=object)
         # should use bounds when possible
-        # bounds = optimize.Bounds(*bounds.T)
+        numerical_bounds = []
         constraints = []
 
         for i, bound in enumerate(bounds):
             a, b = bound
-            str_a, str_b = (isinstance(a, str) or not np.isinf(a),
-                            isinstance(b, str) or not np.isinf(b))
+            str_a, str_b = isinstance(a, str), isinstance(b, str)
+            numerical_bound = [a if not str_a else -np.inf, b if not str_b else np.inf]
+            numerical_bounds.append(numerical_bound)
 
             if str_a or str_b:
                 def g(x):
@@ -5042,7 +5055,7 @@ class ContinuousDistribution:
                     return res
                 constraints.append(optimize.NonlinearConstraint(g, 0, np.inf))
 
-        res = optimize.minimize(objective, x0, constraints=constraints)
+        res = optimize.minimize(objective, x0, constraints=constraints, bounds=numerical_bounds)
         self.iv_policy = iv_policy
         self._update_parameters(**dict(zip(parameters, res.x)))
         return

@@ -4,7 +4,7 @@ from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
     oo, ShiftedScaledDistribution, TransformedDistribution, _combine_docs)
 
-__all__ = ['Normal', 'LogUniform', 'LogLaplace', 'CircularDistribution', 'Uniform']
+__all__ = ['Normal', 'Uniform']
 
 def factorial(n):
     return special.gamma(n + 1)
@@ -50,7 +50,7 @@ class Normal(ContinuousDistribution):
     # used that it's worth a bit of code duplication to get better performance.
     _mu_domain = _RealDomain(endpoints=(-oo, oo))
     _sigma_domain = _RealDomain(endpoints=(0, oo))
-    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
 
     _mu_param = _RealParameter('mu',  symbol=r'µ', domain=_mu_domain,
                                typical=(-1, 1))
@@ -149,7 +149,7 @@ class StandardNormal(Normal):
         f(x) = \frac{1}{\sqrt{2 \pi}} \exp \left( -\frac{1}{2} x^2 \right)
 
     """
-    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
     _parameterizations = []
@@ -327,7 +327,7 @@ class Uniform(ContinuousDistribution):
 
     _a_domain = _RealDomain(endpoints=(-oo, oo))
     _b_domain = _RealDomain(endpoints=('a', oo))
-    _x_support = _RealDomain(endpoints=('a', 'b'), inclusive=(True, True))
+    _x_support = _RealDomain(endpoints=('a', 'b'), inclusive=(False, False))
 
     _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 0.9))
     _b_param = _RealParameter('b', domain=_b_domain, typical=(1.1, 1e3))
