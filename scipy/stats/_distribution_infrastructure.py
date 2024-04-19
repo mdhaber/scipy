@@ -64,7 +64,6 @@ _NO_CACHE = "no_cache"
 #   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
 #   Make tolerance override method-specific again.
 #  Test repr?
-#  Fix _scalar_optimization_algorithms with 0-size arrays
 #  use `median` information to improve integration? In some cases this will
 #   speed things up. If it's not needed, it may be about twice as slow. I think
 #   it should depend on the accuracy setting.
@@ -3752,7 +3751,7 @@ class ContinuousDistribution:
 
         .. math::
 
-            F^{-1}(p) = x \quad \text{s.t.} \quad F(x) = p`
+            F^{-1}(p) = x \quad \text{s.t.} \quad F(x) = p
 
         `icdf` accepts `p` for :math:`p \in [0, 1]`.
 
@@ -3957,7 +3956,7 @@ class ContinuousDistribution:
 
         .. math::
 
-            G^{-1}(p) = x \quad \text{s.t.} \quad G(x) = p`
+            G^{-1}(p) = x \quad \text{s.t.} \quad G(x) = p
 
         `iccdf` accepts `p` for :math:`p \in [0, 1]`.
 
