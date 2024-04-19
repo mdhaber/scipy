@@ -2773,7 +2773,7 @@ class ContinuousDistribution:
         r"""Log of the probability density function
 
         The probability density function ("PDF"), denoted :math:`f(x)`, is the
-        probability *per unit length* that the random variable takes on the
+        probability *per unit length* that the random variable will assume the
         value :math:`x`. Mathematically, it can be defined as the derivative
         of the cumulative distribution function :math:`F(x)`:
 
@@ -2873,7 +2873,7 @@ class ContinuousDistribution:
         r"""Probability density function
 
         The probability density function ("PDF"), denoted :math:`f(x)`, is the
-        probability *per unit length* that the random variable takes on the
+        probability *per unit length* that the random variable will assume the
         value :math:`x`. Mathematically, it can be defined as the derivative
         of the cumulative distribution function :math:`F(x)`:
 
@@ -2911,7 +2911,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`.
+        Suppose a continuous probability distribution has support :math:`[l, r]`.
         By definition of the support, the PDF evaluates to its minimum value
         of :math:`0` outside the support; i.e. for :math:`x < l` or
         :math:`x > r`. The maximum of the PDF may be less than or greater than
@@ -2958,7 +2958,7 @@ class ContinuousDistribution:
         r"""Log of the cumulative distribution function
 
         The cumulative distribution function ("CDF"), denoted :math:`F(x)`, is
-        the probability the random variable :math:`X` will take on a value
+        the probability the random variable :math:`X` will assume a value
         less than or equal to :math:`x`:
 
         .. math::
@@ -2966,7 +2966,7 @@ class ContinuousDistribution:
             F(x) = P(X ≤ x)
 
         A two-argument variant of this function is also defined as the
-        probability the random variable :math:`X` will take on a value between
+        probability the random variable :math:`X` will assume a value between
         :math:`x` and :math:`y`.
 
         .. math::
@@ -3016,7 +3016,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`.
+        Suppose a continuous probability distribution has support :math:`[l, r]`.
         The log-CDF evaluates to its minimum value of :math:`\log(0) = -\infty`
         for :math:`x ≤ l` and its maximum value of :math:`\log(1) = 0` for
         :math:`x ≥ r`.
@@ -3148,7 +3148,7 @@ class ContinuousDistribution:
         r"""Cumulative distribution function
 
         The cumulative distribution function ("CDF"), denoted :math:`F(x)`, is
-        the probability the random variable :math:`X` will take on a value
+        the probability the random variable :math:`X` will assume a value
         less than or equal to :math:`x`:
 
         .. math::
@@ -3156,7 +3156,7 @@ class ContinuousDistribution:
             F(x) = P(X ≤ x)
 
         A two-argument variant of this function is also defined as the
-        probability the random variable :math:`X` will take on a value between
+        probability the random variable :math:`X` will assume a value between
         :math:`x` and :math:`y`.
 
         .. math::
@@ -3200,7 +3200,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`.
+        Suppose a continuous probability distribution has support :math:`[l, r]`.
         The CDF :math:`F(x)` is related to the probability density function
         :math:`f(x)` by:
 
@@ -3323,7 +3323,7 @@ class ContinuousDistribution:
         The complementary cumulative distribution function ("CCDF"), denoted
         :math:`G(x)` is the complement of the cumulative distribution function
         :math:`F(x)`; i.e., probability the random variable :math:`X` will
-        take on a value greater than :math:`x`:
+        assume a value greater than :math:`x`:
 
         .. math::
 
@@ -3379,7 +3379,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`.
+        Suppose a continuous probability distribution has support :math:`[l, r]`.
         The log-CCDF returns its minimum value of :math:`\log(0)=-\infty` for
         :math:`x ≥ r` and its maximum value of :math:`\log(1) = 0` for
         :math:`x ≤ l`.
@@ -3486,7 +3486,7 @@ class ContinuousDistribution:
         The complementary cumulative distribution function ("CCDF"), denoted
         :math:`G(x)`, is the complement of the cumulative distribution function
         :math:`F(x)`; i.e., probability the random variable :math:`X` will
-        take on a value greater than :math:`x`:
+        assume a value greater than :math:`x`:
 
         .. math::
 
@@ -3535,7 +3535,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`.
+        Suppose a continuous probability distribution has support :math:`[l, r]`.
         The CCDF :math:`G(x)` is related to the probability density function
         :math:`f(x)` by:
 
@@ -3685,7 +3685,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`.
+        Suppose a continuous probability distribution has support :math:`[l, r]`.
         The inverse log-CDF returns its minimum value of :math:`l` at
         :math:`\log(p) = \log(0) = -\infty` and its maximum value of :math:`r` at
         :math:`\log(p) = \log(1) = 0`. Because the log-CDF has range
@@ -3786,7 +3786,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`. The
+        Suppose a continuous probability distribution has support :math:`[l, r]`. The
         inverse CDF returns its minimum value of :math:`l` at :math:`p = 0`
         and its maximum value of :math:`r` at :math:`p = 1`. Because the CDF
         has range :math:`[0, 1]`, the inverse CDF is only defined on the
@@ -3884,7 +3884,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`. The
+        Suppose a continuous probability distribution has support :math:`[l, r]`. The
         inverse log-CCDF returns its minimum value of :math:`l` at
         :math:`\log(p) = \log(1) = 0` and its maximum value of :math:`r` at
         :math:`\log(p) = \log(0) = -\infty`. Because the log-CCDF has range
@@ -3986,7 +3986,7 @@ class ContinuousDistribution:
 
         Notes
         -----
-        Suppose continuous probability distribution has support :math:`[l, r]`. The
+        Suppose a continuous probability distribution has support :math:`[l, r]`. The
         inverse CCDF returns its minimum value of :math:`l` at :math:`p = 1`
         and its maximum value of :math:`r` at :math:`p = 0`. Because the CCDF
         has range :math:`[0, 1]`, the inverse CCDF is only defined on the
