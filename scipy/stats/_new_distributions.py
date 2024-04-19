@@ -50,7 +50,7 @@ class Normal(ContinuousDistribution):
     # used that it's worth a bit of code duplication to get better performance.
     _mu_domain = _RealDomain(endpoints=(-oo, oo))
     _sigma_domain = _RealDomain(endpoints=(0, oo))
-    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
+    _x_support = _RealDomain(endpoints=(-oo, oo))
 
     _mu_param = _RealParameter('mu',  symbol=r'µ', domain=_mu_domain,
                                typical=(-1, 1))
@@ -68,6 +68,9 @@ class Normal(ContinuousDistribution):
         if mu is None and sigma is None:
             return StandardNormal(**kwargs)
         return super().__new__(cls)
+
+    def __init__(self, *, mu=0., sigma=1., **kwargs):
+        super().__init__(mu=mu, sigma=sigma, **kwargs)
 
     def _logpdf_formula(self, x, *, mu, sigma, **kwargs):
         return StandardNormal._logpdf_formula(self, (x - mu)/sigma) - np.log(sigma)
@@ -149,7 +152,7 @@ class StandardNormal(Normal):
         f(x) = \frac{1}{\sqrt{2 \pi}} \exp \left( -\frac{1}{2} x^2 \right)
 
     """
-    _x_support = _RealDomain(endpoints=(-oo, oo), inclusive=(False, False))
+    _x_support = _RealDomain(endpoints=(-oo, oo))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
     _parameterizations = []
@@ -160,6 +163,9 @@ class StandardNormal(Normal):
 
     def __new__(cls, *args, **kwargs):
         return ContinuousDistribution.__new__(cls)
+
+    def __init__(self, **kwargs):
+        ContinuousDistribution.__init__(self, **kwargs)
 
     def _logpdf_formula(self, x, **kwargs):
         return -(self._log_normalization + x**2/2)
@@ -255,15 +261,8 @@ class LogUniform(ContinuousDistribution):
                           _Parameterization(_a_param, _b_param)]
     _variable = _x_param
 
-    # Would like to do this but needs its own commit. Parameter validation currently
-    # relies on unused parameters being unspecified
-    # # define init so IDE can give shape parameter recommendations
-    # def __init__(self, *, a=None, b=None, log_a=None, log_b=None,
-    #              tol=_null, iv_policy=None, cache_policy=None, rng=None):
-    #     # goes in infrastructure: parameters = {name:val for name, val in parameters
-    #                                             if val is not None}
-    #     super().__init__(a=a, b=b, log_a=log_a, log_b=log_b, tol=tol,
-    #                      iv_policy=iv_policy, cache_policy=cache_policy, rng=rng)
+    def __init__(self, *, a=None, b=None, log_a=None, log_b=None, **kwargs):
+        super().__init__(a=a, b=b, log_a=log_a, log_b=log_b, **kwargs)
 
     def _process_parameters(self, a=None, b=None, log_a=None, log_b=None, **kwargs):
         a = np.exp(log_a) if a is None else a
@@ -338,6 +337,9 @@ class Uniform(ContinuousDistribution):
 
     _parameterizations = [_Parameterization(_a_param, _b_param)]
     _variable = _x_param
+
+    def __init__(self, *, a=None, b=None, **kwargs):
+        super().__init__(a=a, b=b, **kwargs)
 
     def _process_parameters(self, a=None, b=None, ab=None, **kwargs):
         ab = b - a

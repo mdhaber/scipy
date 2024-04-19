@@ -1414,6 +1414,13 @@ class ContinuousDistribution:
     - log-*F*: logarithm of *F* (e.g. log-CDF)
     - inverse *F*: inverse function of *F* (e.g. inverse CDF)
 
+    The API documentation is written to describe the API, not to serve as
+    a statistical reference. Effort is made to be correct at the level
+    required to use the functionality, not to be mathematically rigorous.
+    For example, continuity and differentiability may be implicitly assumed.
+    For precise mathematical definitions, consult your preferred mathematical
+    text.
+
     """
     _parameterizations = []
 
@@ -1431,7 +1438,11 @@ class ContinuousDistribution:
             "`method` and `tol` unspecified to use another implementation."
         )
         self._original_parameters = {}
-
+        # We may want to override the `__init__` method with parameters so
+        # IDEs can suggest parameter names. If there are multiple parameterizations,
+        # we'll need the default values of parameters to be None; this will
+        # filter out the parameters that were not actually specified by the user.
+        parameters = {key: val for key, val in parameters.items() if val is not None}
         self._update_parameters(**parameters)
 
     def _update_parameters(self, *, iv_policy=None, **kwargs):
