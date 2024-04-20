@@ -24,6 +24,8 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
+#  When drawing endpoint/out-of-bounds values of a parameter, draw them from
+#   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
 #  tighten test tolerances again
 #  When a parameter is invalid, set only the offending parameter to NaN (if possible)?
 #  Test ilogcdf with extreme probabilities
@@ -42,7 +44,6 @@ _NO_CACHE = "no_cache"
 #  implement double distribution
 #  profile/optimize
 #  general cleanup (choose keyword-only parameters)
-#  documentation
 #  compare old/new distribution timing
 #  make video
 #  PR
@@ -52,8 +53,6 @@ _NO_CACHE = "no_cache"
 #  integrate `logmoment` into `moment`? (Not hard, but enough time and code
 #   complexity to wait for reviewer feedback before adding.)
 #  Eliminate bracket_root error "`min <= a < b <= max` must be True"
-#  When drawing endpoint/out-of-bounds values of a parameter, draw them from
-#   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
 #  Test repr?
 #  use `median` information to improve integration? In some cases this will
 #   speed things up. If it's not needed, it may be about twice as slow. I think
@@ -481,7 +480,6 @@ class _RealDomain(_SimpleDomain):
         z_on_shape = (n_on,) + squeezed_base_shape
         z_on = np.ones(z_on_shape)
         i = rng.random(size=n_on) < 0.5
-        # if i.size:
         z_on[i] = min
         z_on[~i] = max
 
@@ -568,10 +566,7 @@ class _Parameter(ABC):
         Parameters
         ----------
         size : tuple of ints
-            The shape of the array of valid values to be drawn. For now,
-            all values are uniformly sampled from within the `typical` range,
-            but we should add options for picking more challenging values (e.g.
-            including endpoints; out-of-bounds values; extreme values).
+            The shape of the array of valid values to be drawn.
         rng : np.Generator
             The Generator used for drawing random values.
         domain : str
@@ -600,6 +595,7 @@ class _Parameter(ABC):
         parameter_values = parameter_values or {}
         domain = getattr(self, domain)
         proportions = (1, 0, 0, 0) if proportions is None else proportions
+
         return domain.draw(size=size, rng=rng, proportions=proportions,
                            parameter_values=parameter_values)
 
