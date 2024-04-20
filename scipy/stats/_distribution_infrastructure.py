@@ -24,6 +24,7 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
+#  tighten test tolerances again
 #  When a parameter is invalid, set only the offending parameter to NaN (if possible)?
 #  Test ilogcdf with extreme probabilities
 #  tanhsinh special case when there are no abscissae between the limits
@@ -53,7 +54,6 @@ _NO_CACHE = "no_cache"
 #  Eliminate bracket_root error "`min <= a < b <= max` must be True"
 #  When drawing endpoint/out-of-bounds values of a parameter, draw them from
 #   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
-#   Make tolerance override method-specific again.
 #  Test repr?
 #  use `median` information to improve integration? In some cases this will
 #   speed things up. If it's not needed, it may be about twice as slow. I think
@@ -480,8 +480,10 @@ class _RealDomain(_SimpleDomain):
 
         z_on_shape = (n_on,) + squeezed_base_shape
         z_on = np.ones(z_on_shape)
-        z_on[:n_on // 2] = min
-        z_on[n_on // 2:] = max
+        i = rng.random(size=n_on) < 0.5
+        # if i.size:
+        z_on[i] = min
+        z_on[~i] = max
 
         z_out = rng.uniform(min_nn-10, max_nn+10,
                             size=(n_out,) + squeezed_base_shape)
@@ -1826,6 +1828,7 @@ class ContinuousDistribution:
 
         See _Parameterization.draw for documentation details.
         """
+        rng = rng or np.random.default_rng()
         if len(cls._parameterizations) == 0:
             return cls()
         if i_parameterization is None:
@@ -2491,20 +2494,38 @@ class ContinuousDistribution:
         raise NotImplementedError(self._not_implemented)
 
     def _mode_optimization(self, **kwargs):
+        # if not self._size:
+        #     return np.empty(self._shape, dtype=self._dtype)
+        #
+        # a, b = self._support(**kwargs)
+        # m = self._median_dispatch(**kwargs)
+        #
+        # f, args = _kwargs2args(lambda x, **kwargs: -self._pdf_dispatch(x, **kwargs),
+        #                        args=(), kwargs=kwargs)
+        # res_b = _bracket_minimum(f, m, xmin=a, xmax=b, args=args)
+        # res = _chandrupatla_minimize(f, res_b.xl, res_b.xm, res_b.xr, args=args)
+        # mode = np.asarray(res.x)
+        # mode_at_boundary = res_b.status == -1
+        # mode_at_left = mode_at_boundary & (res_b.fl <= res_b.fm)
+        # mode_at_right = mode_at_boundary & (res_b.fr < res_b.fm)
+        # mode[mode_at_left] = a[mode_at_left]
+        # mode[mode_at_right] = b[mode_at_right]
+        # return mode[()]
+
         if not self._size:
             return np.empty(self._shape, dtype=self._dtype)
-
-        a, b = self._support(**kwargs)
-        m = self._median_dispatch(**kwargs)
-
-        f, args = _kwargs2args(lambda x, **kwargs: -self._pdf_dispatch(x, **kwargs),
-                               args=(), kwargs=kwargs)
-        res_b = _bracket_minimum(f, m, xmin=a, xmax=b, args=args)
-        res = _chandrupatla_minimize(f, res_b.xl, res_b.xm, res_b.xr, args=args)
+        p_shape = (3,) + (1,) * self._ndim
+        p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
+        bracket = self._icdf_dispatch(p, **kwargs)
+        f, args = _kwargs2args(
+            lambda x, **kwargs: -self._pdf_dispatch(x, **kwargs),
+            args=(), kwargs=kwargs)
+        res = _chandrupatla_minimize(f, *bracket, args=args)
         mode = np.asarray(res.x)
-        mode_at_boundary = res_b.status == -1
-        mode_at_left = mode_at_boundary & (res_b.fl <= res_b.fm)
-        mode_at_right = mode_at_boundary & (res_b.fr < res_b.fm)
+        mode_at_boundary = ~res.success
+        mode_at_left = mode_at_boundary & (res.fl <= res.fr)
+        mode_at_right = mode_at_boundary & (res.fr < res.fl)
+        a, b = self._support(**kwargs)
         mode[mode_at_left] = a[mode_at_left]
         mode[mode_at_right] = b[mode_at_right]
         return mode[()]
