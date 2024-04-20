@@ -29,7 +29,6 @@ _NO_CACHE = "no_cache"
 #  tanhsinh special case when there are no abscissae between the limits
 #    example: cdf of uniform betweeen 1.0 and np.nextafter(1.0, np.inf)
 #  fix QMC bug with size=() but distribution shape, say, 2
-#  kurtosis input validation test
 #  clip - ShiftedScaledNormal(loc=0, scale=0.01).ccdf(-7.32, method='quadrature') > 1
 #  check behavior of moment methods when moments are undefined/infinite -
 #    basically OK but needs tests

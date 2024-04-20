@@ -664,8 +664,7 @@ def test_input_validation():
     with pytest.raises(ValueError, match=message):
         Test(a=1, )
 
-    message = ("Attribute `tol` of `Test` must be a positive float, if "
-               "specified.")
+    message = "Attribute `tol` of `Test` must be a positive float, if specified."
     with pytest.raises(ValueError, match=message):
         Test(tol=np.asarray([]))
     with pytest.raises(ValueError, match=message):
@@ -680,7 +679,7 @@ def test_input_validation():
     with pytest.raises(ValueError, match=message):
         Test().moment(-1)
 
-    message = ("Argument `kind` of `Test.moment` must be one of...")
+    message = "Argument `kind` of `Test.moment` must be one of..."
     with pytest.raises(ValueError, match=message):
         Test().moment(2, kind='coconut')
 
@@ -716,9 +715,15 @@ def test_input_validation():
         dist = Test2(c=[1, 2, 3], d=[1, 2, 3])
         dist.pdf([1, 2])
 
-    message = ("Parameter `c` must be of real dtype.")
+    message = "Parameter `c` must be of real dtype."
     with pytest.raises(ValueError, match=message):
         Test2(c=[1, object()], d=[1, 2])
+
+    message = "Parameter `convention` of `Test2.kurtosis` must be one of..."
+    with pytest.raises(ValueError, match=message):
+        dist = Test2(c=[1, 2, 3], d=[1, 2, 3])
+        dist.kurtosis(convention='coconut')
+
 
 # I removed `None` from this list. The current behavior is to generate a new
 # `default_rng()` every time it is needed. We should not generate it during
