@@ -6,7 +6,7 @@ from scipy._lib._util import _lazywhere
 from scipy._lib._docscrape import ClassDoc, NumpyDocString
 from scipy import special, optimize
 from scipy.integrate._tanhsinh import _tanhsinh
-from scipy.optimize._bracket import _bracket_root
+from scipy.optimize._bracket import _bracket_root, _bracket_minimum
 from scipy.optimize._chandrupatla import _chandrupatla, _chandrupatla_minimize
 
 import numpy as np
@@ -31,19 +31,15 @@ _NO_CACHE = "no_cache"
 #  fix QMC bug with size=() but distribution shape, say, 2
 #  kurtosis input validation test
 #  clip - ShiftedScaledNormal(loc=0, scale=0.01).ccdf(-7.32, method='quadrature') > 1
-#  ~~test/fix dtypes? It is *so* hard without NEP50~~
 #  check behavior of moment methods when moments are undefined/infinite -
 #    basically OK but needs tests
 #  investigate use of median
 #  add cdf2 to shifted/scaled distribution
-#  Add bounds to `fit` method
 #  implement symmetric distribution
 #  implement composite distribution
 #  implement wrapped distribution
 #  implement folded distribution
 #  implement double distribution
-#  Be consistent about options passed to distributions/methods: tols, iv_policy,
-#    cache, rng. Also check for issues with transformed distributions.
 #  profile/optimize
 #  general cleanup (choose keyword-only parameters)
 #  documentation
@@ -53,13 +49,9 @@ _NO_CACHE = "no_cache"
 #  add array API support
 #  why does dist.ilogcdf(-100) not converge to bound? Check solver response to inf
 #  _chandrupatla_minimize should not report xm = fm = NaN when it fails
-#  improve mode after writing _bracket_minimize
 #  integrate `logmoment` into `moment`? (Not hard, but enough time and code
 #   complexity to wait for reviewer feedback before adding.)
 #  Eliminate bracket_root error "`min <= a < b <= max` must be True"
-#  Fully-bake addition of lower limit to CDF. It's really sloppy right now.
-#   Needs input validation, better method names, better style, and better
-#   efficiency. Similar idea needed in `logcdf`.
 #  When drawing endpoint/out-of-bounds values of a parameter, draw them from
 #   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
 #   Make tolerance override method-specific again.
@@ -2500,24 +2492,20 @@ class ContinuousDistribution:
         raise NotImplementedError(self._not_implemented)
 
     def _mode_optimization(self, **kwargs):
-        # Heuristic until we write a proper minimization bracket finder (like
-        # bracket_root): if the PDF at the 0.01 and 99.99 percentiles is not
-        # less than the PDF at the median, it's either a (rare in SciPy)
-        # bimodal distribution (in which case the generic implementation will
-        # never be great) or the mode is at one of the endpoints.
         if not self._size:
             return np.empty(self._shape, dtype=self._dtype)
-        p_shape = (3,) + (1,)*self._ndim
-        p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
-        bracket = self._icdf_dispatch(p, **kwargs)
+
+        a, b = self._support(**kwargs)
+        m = self._median_dispatch(**kwargs)
+
         f, args = _kwargs2args(lambda x, **kwargs: -self._pdf_dispatch(x, **kwargs),
                                args=(), kwargs=kwargs)
-        res = _chandrupatla_minimize(f, *bracket, args=args)
+        res_b = _bracket_minimum(f, m, xmin=a, xmax=b, args=args)
+        res = _chandrupatla_minimize(f, res_b.xl, res_b.xm, res_b.xr, args=args)
         mode = np.asarray(res.x)
-        mode_at_boundary = ~res.success
-        mode_at_left = mode_at_boundary & (res.fl <= res.fr)
-        mode_at_right = mode_at_boundary & (res.fr < res.fl)
-        a, b = self._support(**kwargs)
+        mode_at_boundary = res_b.status == -1
+        mode_at_left = mode_at_boundary & (res_b.fl <= res_b.fm)
+        mode_at_right = mode_at_boundary & (res_b.fr < res_b.fm)
         mode[mode_at_left] = a[mode_at_left]
         mode[mode_at_right] = b[mode_at_right]
         return mode[()]

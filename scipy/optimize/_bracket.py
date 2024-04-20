@@ -454,10 +454,10 @@ def _bracket_minimum_iv(func, xm0, xl0, xr0, xmin, xmax, factor, args, maxiter):
     if not maxiter == maxiter_int or maxiter < 0:
         raise ValueError(message)
 
-    if not np.all((xmin <= xl0) & (xl0 < xm0) & (xm0 < xr0) & (xr0 <= xmax)):
-        raise ValueError(
-            '`xmin <= xl0 < xm0 < xr0 <= xmax` must be True (elementwise).'
-        )
+    # if not np.all((xmin <= xl0) & (xl0 < xm0) & (xm0 < xr0) & (xr0 <= xmax)):
+    #     raise ValueError(
+    #         '`xmin <= xl0 < xm0 < xr0 <= xmax` must be True (elementwise).'
+    #     )
 
     return func, xm0, xl0, xr0, xmin, xmax, factor, args, maxiter
 
