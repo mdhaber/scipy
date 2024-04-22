@@ -24,7 +24,7 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
-#  Consider ensuring everything is at least 1D for calculations? Would avoid needing to sprinkly
+#  Consider ensuring everything is at least 1D for calculations? Would avoid needing to sprinkle
 #   `np.asarray` throughout due to indescriminate conversion of 0D arrays to scalars
 #  When drawing endpoint/out-of-bounds values of a parameter, draw them from
 #   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
@@ -88,8 +88,8 @@ _NO_CACHE = "no_cache"
 # 2.  `cache_policy` is supported in several methods where I imagine it being
 #     useful, but it needs to be tested. Before doing that:
 #     - What should the default value be?
-#     - What should the other values be? Currently there is an enum, but
-#       I find this to be cumbersome.
+#     - What should the other values be?
+#     Or should we just eliminate this policy?
 # 3.  `iv_policy` is supported in a few places, but it should be checked for
 #     consistency. I have the same questions as for `cache_policy`.
 # 4.  `tol` is currently notional. I think there needs to be way to set
@@ -99,8 +99,12 @@ _NO_CACHE = "no_cache"
 #       example, if `atol` is set to `1e-12`, it may be acceptable to compute
 #       the complementary CDF as 1 - CDF even when CDF is nearly 1; otherwise,
 #       a (potentially more time-consuming) method would need to be used.
-#     I'm looking for unified suggestions for the interface, not individual
-#     ideas like "you could do this here."
+#     I'm looking for unified suggestions for the interface, not ad hoc ideas
+#     for using tolerances. Suppose the user wants to have more control over
+#     the tolerances used for each method - how do they specify it? It would
+#     probably be easiest for the user if they could pass tolerances into each
+#     method, but it's easiest for us if they can only set it as a property of
+#     the class. Perhaps a dictionary of tolerance settings?
 # 5.  I also envision that accuracy estimates should be reported to the user
 #     somehow. I think my preference would be to return a subclass of an array
 #     with an `error` attribute - yes, really. But this is unlikely to be
@@ -133,47 +137,37 @@ _NO_CACHE = "no_cache"
 #   not the compressed arrays. This means that this same sort of invalid
 #   value detection needs to be repeated every time one of these methods is
 #   called.
-#   The much simpler solution is to keep the data uncompressed but to replace
-#   the invalid parameters and arguments with NaNs (and only if some are
-#   invalid). With this approach, the copying happens only if/when it is
-#   needed. Most functions involved in stats distribution calculations don't
-#   mind NaNs; they just return NaN. The behavior "If x_i is NaN, the result
-#   is NaN" is explicit in the array API. So this should be fine.
-#   I'm also going to leave the data in the original shape. The reason for this
-#   is that the user can process distribution parameters as needed and make
-#   them @cached_properties. If we leave all the original shapes alone, the
-#   input to functions like `pdf` that accept additional arguments will be
-#   broadcastable with these @cached_properties. In most cases, this is
-#   completely transparent to the author.
+# The much simpler solution is to keep the data uncompressed but to replace
+# the invalid parameters and arguments with NaNs (and only if some are
+# invalid). With this approach, the copying happens only if/when it is
+# needed. Most functions involved in stats distribution calculations don't
+# mind NaNs; they just return NaN. The behavior "If x_i is NaN, the result
+# is NaN" is explicit in the array API. So this should be fine.
 #
-#   Another important decision is that the *private* methods must accept
-#   the distribution parameters as inputs rather than relying on these
-#   cached properties directly (although the public methods typically pass
-#   the cached values to the private methods). This is because the elementwise
-#   algorithms for quadrature, differentiation, root-finding, and minimization
-#   require that the input functions are strictly elementwise in the sense
-#   that the value output for a given input element does not depend on the
-#   shape of the input or that element's location within the input array.
-#   When the computation has converged for an element, it is removed from
-#   the computation entirely. The shape of the arrays passed to the
-#   function will almost never be broadcastable with the shape of the
-#   cached parameter arrays.
+# Currently, I am still leaving the parameters and function arguments
+# in their broadcasted shapes rather than, say, raveling. The intent
+# is to avoid back and forth reshaping. If authors of distributions have
+# trouble dealing with N-D arrays, we can reconsider this.
 #
-#   Need to work a bit more on caching. It's not as fast as I'd like it to be.
-#   lru_cache for methods that don't accept additional arguments would be
-#   great, but it can't easily be turned off by the user. With a custom
-#   cache, we can easily add options that disabled or cleared it as needed.
-#   Perhaps there is a way to wrap `lru_cache` or the function wrapped by
-#   `lru_cache` to add that in.
+# Another important decision is that the *private* methods must accept
+# the distribution parameters as inputs rather than relying on these
+# cached properties directly (although the public methods typically pass
+# the cached values to the private methods). This is because the elementwise
+# algorithms for quadrature, differentiation, root-finding, and minimization
+# prefer that the input functions are strictly elementwise in the sense
+# that the value output for a given input element does not depend on the
+# shape of the input or that element's location within the input array.
+# When the computation has converged for an element, it is removed from
+# the computation entirely. As a result, the shape of the arrays passed to
+# the function will almost never be broadcastable with the shape of the
+# cached parameter arrays.
 #
-#   I've sprinkled in some optimizations for scalars and same-shape/type arrays
-#   throughout. The biggest time sinks before were:
-#   - broadcast_arrays
-#   - result_dtype
-#   - is_subdtype
-#   It is much faster to check whether these are necessary than to do them.
-#
-
+# I've sprinkled in some optimizations for scalars and same-shape/type arrays
+# throughout. The biggest time sinks before were:
+# - broadcast_arrays
+# - result_dtype
+# - is_subdtype
+# It is much faster to check whether these are necessary than to do them.
 
 
 class _Domain(ABC):
