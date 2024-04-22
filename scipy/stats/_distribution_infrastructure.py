@@ -2,16 +2,20 @@ import functools
 from abc import ABC, abstractmethod
 from functools import cached_property
 
+import numpy as np
+
 from scipy._lib._util import _lazywhere
 from scipy._lib._docscrape import ClassDoc, NumpyDocString
 from scipy import special, optimize
 from scipy.integrate._tanhsinh import _tanhsinh
-from scipy.optimize._bracket import _bracket_root, _bracket_minimum
+from scipy.optimize._bracket import _bracket_root
 from scipy.optimize._chandrupatla import _chandrupatla, _chandrupatla_minimize
 
-import numpy as np
-_null = object()
 oo = np.inf
+# in case we need to distinguish between None and not specified
+_null = object()
+def _isnull(x):
+    return type(x) == object
 
 __all__ = ['ContinuousDistribution']
 
@@ -24,8 +28,9 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
-#  Consider ensuring everything is at least 1D for calculations? Would avoid needing to sprinkle
-#   `np.asarray` throughout due to indescriminate conversion of 0D arrays to scalars
+#  Consider ensuring everything is at least 1D for calculations? Would avoid needing
+#    to sprinkle `np.asarray` throughout due to indescriminate conversion of 0D arrays
+#    to scalars
 #  When drawing endpoint/out-of-bounds values of a parameter, draw them from
 #   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
 #  Break up `test_basic`: test each method separately
@@ -998,7 +1003,7 @@ def _dispatch(f):
     #     settings (e.g. tolerance).
 
     @functools.wraps(f)
-    def wrapped(self, *args, method=None, cache_policy=None, **kwargs):
+    def wrapped(self, *args, method=None, **kwargs):
         func_name = f.__name__
         method = method or self._method_cache.get(func_name, None)
         if callable(method):
@@ -1009,8 +1014,7 @@ def _dispatch(f):
             method = getattr(self, method_name)
         else:
             method = f(self, *args, method=method, **kwargs)
-            cache_policy = str(cache_policy or self.cache_policy).lower()
-            if cache_policy != _NO_CACHE:
+            if self.cache_policy != _NO_CACHE:
                 self._method_cache[func_name] = method
 
         try:
@@ -1695,7 +1699,7 @@ class ContinuousDistribution:
 
     @tol.setter
     def tol(self, tol):
-        if tol is _null:
+        if _isnull(tol):
             self._tol = tol
             return
 
@@ -1911,7 +1915,8 @@ class ContinuousDistribution:
         f, args = _kwargs2args(integrand, args=args, kwargs=kwargs)
         args = np.broadcast_arrays(*args)
         # If we know the median or mean, consider breaking up the interval
-        res = _tanhsinh(f, a, b, args=args, log=log)
+        rtol = None if _isnull(self.tol) else self.tol
+        res = _tanhsinh(f, a, b, args=args, log=log, rtol=rtol)
         # For now, we ignore the status, but I want to return the error
         # estimate - see question 5 at the top.
         return res.integral
@@ -1961,7 +1966,8 @@ class ContinuousDistribution:
         res = _bracket_root(f3, xl0=a, xr0=b, xmin=xmin, xmax=xmax, args=args)
         # For now, we ignore the status, but I want to use the bracket width
         # as an error estimate - see question 5 at the top.
-        return _chandrupatla(f3, a=res.xl, b=res.xr, args=args).x
+        xrtol = None if _isnull(self.tol) else self.tol
+        return _chandrupatla(f3, a=res.xl, b=res.xr, args=args, xrtol=xrtol).x
 
     ## Other
 
@@ -2245,7 +2251,7 @@ class ContinuousDistribution:
     def _logentropy_dispatch(self, method=None, **kwargs):
         if self._overrides('_logentropy_formula'):
             method = self._logentropy_formula
-        elif self.tol is _null and self._overrides('_entropy_formula'):
+        elif _isnull(self.tol) and self._overrides('_entropy_formula'):
             method = self._logentropy_logexp
         else:
             method = self._logentropy_quadrature
@@ -2912,7 +2918,7 @@ class ContinuousDistribution:
     def _logpdf_dispatch(self, x, *, method=None, **kwargs):
         if self._overrides('_logpdf_formula'):
             method = self._logpdf_formula
-        elif self.tol is _null:  # ensure that developers override _logpdf
+        elif _isnull(self.tol):  # ensure that developers override _logpdf
             method = self._logpdf_logexp
         return method
 
@@ -3130,7 +3136,7 @@ class ContinuousDistribution:
         elif (self._overrides('_logcdf_formula')
               or self._overrides('_logccdf_formula')):
             method = self._logcdf2_subtraction
-        elif self.tol is _null and (self._overrides('_cdf_formula')
+        elif _isnull(self.tol) and (self._overrides('_cdf_formula')
                                     or self._overrides('_ccdf_formula')):
             method = self._logcdf2_logexp
         else:
@@ -3175,7 +3181,7 @@ class ContinuousDistribution:
     def _logcdf_dispatch(self, x, *, method=None, **kwargs):
         if self._overrides('_logcdf_formula'):
             method = self._logcdf_formula
-        elif self.tol is _null and self._overrides('_cdf_formula'):
+        elif _isnull(self.tol) and self._overrides('_cdf_formula'):
             method = self._logcdf_logexp
         elif self._overrides('_logccdf_formula'):
             method = self._logcdf_complement
@@ -3312,8 +3318,8 @@ class ContinuousDistribution:
         elif (self._overrides('_logcdf_formula')
               or self._overrides('_logccdf_formula')):
             method = self._cdf2_logexp
-        elif self._tol is _null and (self._overrides('_cdf_formula')
-                                     or self._overrides('_ccdf_formula')):
+        elif _isnull(self.tol) and (self._overrides('_cdf_formula')
+                                    or self._overrides('_ccdf_formula')):
             method = self._cdf2_subtraction
         else:
             method = self._cdf2_quadrature
@@ -3349,7 +3355,7 @@ class ContinuousDistribution:
             method = self._cdf_formula
         elif self._overrides('_logcdf_formula'):
             method = self._cdf_logexp
-        elif self._tol is _null and self._overrides('_ccdf_formula'):
+        elif _isnull(self.tol) and self._overrides('_ccdf_formula'):
             method = self._cdf_complement
         else:
             method = self._cdf_quadrature
@@ -3510,7 +3516,7 @@ class ContinuousDistribution:
     def _logccdf_dispatch(self, x, method=None, **kwargs):
         if self._overrides('_logccdf_formula'):
             method = self._logccdf_formula
-        elif self.tol is _null and self._overrides('_ccdf_formula'):
+        elif _isnull(self.tol) and self._overrides('_ccdf_formula'):
             method = self._logccdf_logexp
         elif self._overrides('_logcdf_formula'):
             method = self._logccdf_complement
@@ -3668,7 +3674,7 @@ class ContinuousDistribution:
             method = self._ccdf_formula
         elif self._overrides('_logccdf_formula'):
             method = self._ccdf_logexp
-        elif self._tol is _null and self._overrides('_cdf_formula'):
+        elif _isnull(self.tol) and self._overrides('_cdf_formula'):
             method = self._ccdf_complement
         else:
             method = self._ccdf_quadrature
@@ -3880,7 +3886,7 @@ class ContinuousDistribution:
     def _icdf_dispatch(self, x, method=None, **kwargs):
         if self._overrides('_icdf_formula'):
             method = self._icdf_formula
-        elif self.tol is _null and self._overrides('_iccdf_formula'):
+        elif _isnull(self.tol) and self._overrides('_iccdf_formula'):
             method = self._icdf_complement
         else:
             method = self._icdf_inversion
@@ -4077,7 +4083,7 @@ class ContinuousDistribution:
     def _iccdf_dispatch(self, x, method=None, **kwargs):
         if self._overrides('_iccdf_formula'):
             method = self._iccdf_formula
-        elif self.tol is _null and self._overrides('_icdf_formula'):
+        elif _isnull(self.tol) and self._overrides('_icdf_formula'):
             method = self._iccdf_complement
         else:
             method = self._iccdf_inversion
@@ -4481,18 +4487,17 @@ class ContinuousDistribution:
                  'standardized': self._moment_standardized}
         order = self._validate_order_kind(order, kind, kinds)
         moment_kind = kinds[kind]
-        return moment_kind(order, method=method, cache_policy=self.cache_policy)
+        return moment_kind(order, method=method)
 
-    def _moment_raw(self, order=1, *, method=None, cache_policy=None):
+    def _moment_raw(self, order=1, *, method=None):
         """Raw distribution moment about the origin."""
         # Consider exposing the point about which moments are taken as an
         # option. This is easy to support, since `_moment_transform_center`
         # does all the work.
         methods = self._moment_methods if method is None else {method}
-        return self._moment_raw_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **self._parameters)
+        return self._moment_raw_dispatch(order, methods=methods, **self._parameters)
 
-    def _moment_raw_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
+    def _moment_raw_dispatch(self, order, *, methods, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -4510,7 +4515,7 @@ class ContinuousDistribution:
         if moment is None and 'quadrature' in methods:
             moment = self._moment_integrate_pdf(order, center=self._zero, **kwargs)
 
-        if moment is not None and cache_policy != _NO_CACHE:
+        if moment is not None and self.cache_policy != _NO_CACHE:
             self._moment_raw_cache[order] = moment
 
         return moment
@@ -4522,8 +4527,7 @@ class ContinuousDistribution:
         central_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'normalize', 'general'}
-            moment_i = self._moment_central_dispatch(order=i,
-                                                     methods=methods, **kwargs)
+            moment_i = self._moment_central_dispatch(order=i, methods=methods, **kwargs)
             if moment_i is None:
                 return None
             central_moments.append(moment_i)
@@ -4543,13 +4547,12 @@ class ContinuousDistribution:
         # distribution
         return self._one if order == 0 else None
 
-    def _moment_central(self, order=1, *, method=None, cache_policy=None):
+    def _moment_central(self, order=1, *, method=None):
         """Distribution moment about the mean."""
         methods = self._moment_methods if method is None else {method}
-        return self._moment_central_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **self._parameters)
+        return self._moment_central_dispatch(order, methods=methods, **self._parameters)
 
-    def _moment_central_dispatch(self, order, *, methods, cache_policy=None, **kwargs):
+    def _moment_central_dispatch(self, order, *, methods, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -4572,7 +4575,7 @@ class ContinuousDistribution:
                                              methods=self._moment_methods)
             moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
 
-        if moment is not None and cache_policy != _NO_CACHE:
+        if moment is not None and self.cache_policy != _NO_CACHE:
             self._moment_central_cache[order] = moment
 
         return moment
@@ -4585,8 +4588,7 @@ class ContinuousDistribution:
         raw_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'general'}
-            moment_i = self._moment_raw_dispatch(order=i, methods=methods,
-                                                 **kwargs)
+            moment_i = self._moment_raw_dispatch(order=i, methods=methods, **kwargs)
             if moment_i is None:
                 return None
             raw_moments.append(moment_i)
@@ -4603,22 +4605,20 @@ class ContinuousDistribution:
                                                              methods=methods)
         if standard_moment is None:
             return None
-        var = self._moment_central_dispatch(2, methods=self._moment_methods,
-                                            **kwargs)
+        var = self._moment_central_dispatch(2, methods=self._moment_methods, **kwargs)
         return standard_moment*var**(order/2)
 
     def _moment_central_general(self, order, **kwargs):
         general_central_moments = {0: self._one, 1: self._zero}
         return general_central_moments.get(order, None)
 
-    def _moment_standardized(self, order=1, *, method=None, cache_policy=None):
+    def _moment_standardized(self, order=1, *, method=None):
         """Standardized distribution moment."""
         methods = self._moment_methods if method is None else {method}
-        return self._moment_standardized_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **self._parameters)
+        return self._moment_standardized_dispatch(order, methods=methods,
+                                                  **self._parameters)
 
-    def _moment_standardized_dispatch(self, order, *, methods,
-                                      cache_policy=None, **kwargs):
+    def _moment_standardized_dispatch(self, order, *, methods, **kwargs):
         moment = None
 
         if 'cache' in methods:
@@ -4636,7 +4636,7 @@ class ContinuousDistribution:
         if moment is None and 'normalize' in methods:
             moment = self._moment_standardized_normalize(order, True, **kwargs)
 
-        if moment is not None and cache_policy != _NO_CACHE:
+        if moment is not None and self.cache_policy != _NO_CACHE:
             self._moment_standardized_cache[order] = moment
 
         return moment
@@ -5117,7 +5117,8 @@ class ContinuousDistribution:
                     return res
                 constraints.append(optimize.NonlinearConstraint(g, 0, np.inf))
 
-        res = optimize.minimize(objective, x0, constraints=constraints, bounds=numerical_bounds)
+        res = optimize.minimize(objective, x0, constraints=constraints,
+                                bounds=numerical_bounds)
         self.iv_policy = iv_policy
         self._update_parameters(**dict(zip(parameters, res.x)))
         return
@@ -5348,26 +5349,25 @@ class ShiftedScaledDistribution(TransformedDistribution):
         pass
 
     def _moment_standardized_dispatch(self, order, *, loc, scale, sign, methods,
-                                      cache_policy=None, **kwargs):
+                                      **kwargs):
         res = (self._dist._moment_standardized_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **kwargs))
+            order, methods=methods, **kwargs))
         return None if res is None else res * np.sign(scale)**order
 
     def _moment_central_dispatch(self, order, *, loc, scale, sign, methods,
-                                 cache_policy=None, **kwargs):
+                                 **kwargs):
         res = (self._dist._moment_central_dispatch(
-            order, methods=methods, cache_policy=cache_policy, **kwargs))
+            order, methods=methods, **kwargs))
         return None if res is None else res * scale**order
 
     def _moment_raw_dispatch(self, order, *, loc, scale, sign, methods,
-                             cache_policy=None, ** kwargs):
+                             ** kwargs):
         raw_moments = []
         methods_highest_order = methods
         for i in range(int(order) + 1):
             methods = (self._moment_methods if i < order
                        else methods_highest_order)
-            raw = self._dist._moment_raw_dispatch(
-                i, methods=methods, cache_policy=cache_policy, **kwargs)
+            raw = self._dist._moment_raw_dispatch(i, methods=methods, **kwargs)
             if raw is None:
                 return None
             moment_i = raw * scale**i
@@ -5391,10 +5391,12 @@ class ShiftedScaledDistribution(TransformedDistribution):
     # TODO: Add these methods to ContinuousDistribution so they can return a
     #       ShiftedScaledDistribution
     def __add__(self, loc):
-        return ShiftedScaledDistribution(self._dist, loc=self.loc + loc, scale=self.scale)
+        return ShiftedScaledDistribution(self._dist, loc=self.loc + loc,
+                                         scale=self.scale)
 
     def __sub__(self, loc):
-        return ShiftedScaledDistribution(self._dist, loc=self.loc - loc, scale=self.scale)
+        return ShiftedScaledDistribution(self._dist, loc=self.loc - loc,
+                                         scale=self.scale)
 
     def __mul__(self, scale):
         return ShiftedScaledDistribution(self._dist,

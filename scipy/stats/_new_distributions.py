@@ -2,7 +2,7 @@ import numpy as np
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
-    oo, ShiftedScaledDistribution, TransformedDistribution, _combine_docs)
+    oo, TransformedDistribution, _combine_docs)
 
 __all__ = ['Normal', 'Uniform']
 
