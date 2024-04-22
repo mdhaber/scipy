@@ -5343,22 +5343,20 @@ class ShiftedScaledDistribution(TransformedDistribution):
     # TODO: Add these methods to ContinuousDistribution so they can return a
     #       ShiftedScaledDistribution
     def __add__(self, loc):
-        self._update_parameters(loc=self.loc + loc)
-        return self
+        return ShiftedScaledDistribution(self._dist, loc=self.loc + loc, scale=self.scale)
 
     def __sub__(self, loc):
-        self._update_parameters(loc=self.loc - loc)
-        return self
+        return ShiftedScaledDistribution(self._dist, loc=self.loc - loc, scale=self.scale)
 
     def __mul__(self, scale):
-        self._update_parameters(loc=self.loc * scale,
-                                scale=self.scale * scale)
-        return self
+        return ShiftedScaledDistribution(self._dist,
+                                         loc=self.loc * scale,
+                                         scale=self.scale * scale)
 
     def __truediv__(self, scale):
-        self._update_parameters(loc=self.loc / scale,
-                                scale=self.scale / scale)
-        return self
+        return ShiftedScaledDistribution(self._dist,
+                                         loc=self.loc / scale,
+                                         scale=self.scale / scale)
 
     def __radd__(self, other):
         return self.__add__(other)
