@@ -266,7 +266,7 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
     check_nans_and_edges(dist, fname, arg, ref)
 
     # Remove this after fixing `draw`
-    tol_override = {'atol': 1e-15, 'rtol': 1e-3}
+    tol_override = {'atol': 1e-15}
     # Mean can be 0, which makes logmean -oo.
     if fname in {'logmean', 'mean', 'logskewness', 'skewness'}:
         tol_override = {'atol': 1e-15}

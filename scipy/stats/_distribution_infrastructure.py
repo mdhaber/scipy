@@ -24,15 +24,17 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
+#  Consider ensuring everything is at least 1D for calculations? Would avoid needing to sprinkly
+#   `np.asarray` throughout due to indescriminate conversion of 0D arrays to scalars
 #  When drawing endpoint/out-of-bounds values of a parameter, draw them from
 #   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
-#  tighten test tolerances again
+#  Break up `test_basic`: test each method separately
+#  Fix `sample` for QMCEngine (implementation does not match documentation)
 #  When a parameter is invalid, set only the offending parameter to NaN (if possible)?
-#  Test ilogcdf with extreme probabilities
-#  tanhsinh special case when there are no abscissae between the limits
+#  Improve `_solve_bounded` bracket logic - e.g. if support is finite,
+#    bracket is entire support
+#  `_tanhsinh` special case when there are no abscissae between the limits
 #    example: cdf of uniform betweeen 1.0 and np.nextafter(1.0, np.inf)
-#  fix QMC bug with size=() but distribution shape, say, 2
-#  clip - ShiftedScaledNormal(loc=0, scale=0.01).ccdf(-7.32, method='quadrature') > 1
 #  check behavior of moment methods when moments are undefined/infinite -
 #    basically OK but needs tests
 #  investigate use of median
@@ -822,6 +824,8 @@ def _set_invalid_nan(f):
                     '_cdf1': (0, 1), '_ccdf1': (1, 0)}
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
+    clip = {'_cdf1', '_ccdf1'}
+    clip_log = {'_logcdf1', '_logccdf1'}
 
     @functools.wraps(f)
     def filtered(self, x, *args, iv_policy=None, **kwargs):
@@ -835,13 +839,13 @@ def _set_invalid_nan(f):
 
         # Ensure that argument is at least as precise as distribution
         # parameters, which are already at least floats. This will avoid issues
-        # with raising integers to negative integer powers failure to replace
+        # with raising integers to negative integer powers and failure to replace
         # invalid integers with NaNs.
         if x.dtype != dtype:
             dtype = np.result_type(x.dtype, dtype)
             x = np.asarray(x, dtype=dtype)
 
-        # Broadcasting is slow. Skip if possible.
+        # Broadcasting is slow. Do it only if necessary.
         if not x.shape == shape:
             try:
                 shape = np.broadcast_shapes(x.shape, shape)
@@ -858,6 +862,8 @@ def _set_invalid_nan(f):
 
         low, high = endpoints.get(method_name, self.support())
 
+        # Check for arguments outside of domain. They'll be replaced with NaNs,
+        # and the result will be set to the appropriate value.
         left_inc, right_inc = self._variable.domain.inclusive
         mask_low = (x < low if (method_name in replace_strict and left_inc)
                     else x <= low)
@@ -867,6 +873,8 @@ def _set_invalid_nan(f):
         any_invalid = (mask_invalid if mask_invalid.shape == ()
                        else np.any(mask_invalid))
 
+        # Check for arguments at domain endpoints, whether they
+        # are part of the domain or not.
         any_endpoint = False
         if method_name in replace_exact:
             mask_low_endpoint = (x == low)
@@ -875,12 +883,16 @@ def _set_invalid_nan(f):
             any_endpoint = (mask_endpoint if mask_endpoint.shape == ()
                             else np.any(mask_endpoint))
 
+        # Set out-of-domain arguments to NaN. The result will be set to the
+        # appropriate value later.
         if any_invalid:
             x = np.array(x, dtype=dtype, copy=True)
             x[mask_invalid] = np.nan
 
         res = np.asarray(f(self, x, *args, **kwargs))
 
+        # Ensure that the result is the correct dtype and shape,
+        # copying (only once) if necessary.
         res_needs_copy = False
         if res.dtype != dtype:
             dtype = np.result_type(dtype, self._dtype)
@@ -893,12 +905,14 @@ def _set_invalid_nan(f):
         if res_needs_copy:
             res = np.array(res, dtype=dtype, copy=True)
 
+        #  For arguments outside the function domain, replace results
         if any_invalid:
             replace_low, replace_high = (
                 replacements.get(method_name, (np.nan, np.nan)))
             res[mask_low] = replace_low
             res[mask_high] = replace_high
 
+        # For arguments at the endpoints of the domain, replace results
         if any_endpoint:
             a, b = self.support()
             if a.shape != shape:
@@ -914,6 +928,13 @@ def _set_invalid_nan(f):
 
             res[mask_low_endpoint] = replace_low_endpoint
             res[mask_high_endpoint] = replace_high_endpoint
+
+        # Clip probabilities to [0, 1]
+        if method_name in clip:
+            res = np.clip(res, 0., 1.)
+        elif method_name in clip_log:
+            res = res.real  # exp(res) > 0
+            res = np.clip(res, None, 0.)  # exp(res) < 1
 
         return res[()]
 
@@ -1026,10 +1047,19 @@ def _cdf2_input_validation(f):
 
     @functools.wraps(f)
     def wrapped(self, x, y, *args, **kwargs):
+        func_name = f.__name__
+
         low, high = self.support()
         x, y, low, high = np.broadcast_arrays(x, y, low, high)
         dtype = np.result_type(x.dtype, y.dtype, self._dtype)
-        x, y = np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype)
+        # yes, copy to avoid modifying input arrays
+        x, y = x.astype(dtype, copy=True), y.astype(dtype, copy=True)
+
+        # Swap arguments to ensure that x < y, and replace
+        # out-of domain arguments with domain endpoints. We'll
+        # transform the result later.
+        i_swap = y < x
+        x[i_swap], y[i_swap] = y[i_swap], x[i_swap]
         i = x < low
         x[i] = low[i]
         i = y < low
@@ -1038,7 +1068,31 @@ def _cdf2_input_validation(f):
         x[i] = high[i]
         i = y > high
         y[i] = high[i]
-        return f(self, x, y, *args, **kwargs)
+
+        res = f(self, x, y, *args, **kwargs)
+
+        # Clipping probability to [0, 1]
+        if func_name in {'_cdf2', '_ccdf2'}:
+            res = np.clip(res, 0., 1.)
+        else:
+            res = res.real  # exp(res) > 0
+            res = np.clip(res, None, 0.)  # exp(res) < 1
+
+        # Transform the result to account for swapped argument order
+        res = np.asarray(res)
+        if func_name == '_cdf2':
+            res[i_swap] *= -1.
+        elif func_name == '_ccdf2':
+            res[i_swap] *= -1
+            res[i_swap] += 2.
+        elif func_name == '_logcdf2':
+            res = np.asarray(res + 0j) if np.any(i_swap) else res
+            res[i_swap] = res[i_swap] + np.pi*1j
+        else:
+            # res[i_swap] is always positive and less than 1, so it's
+            # safe to ensure that the result is real
+            res[i_swap] = _logexpxmexpy(np.log(2), res[i_swap]).real
+        return res[()]
 
     return wrapped
 
@@ -2490,6 +2544,7 @@ class ContinuousDistribution:
         raise NotImplementedError(self._not_implemented)
 
     def _mode_optimization(self, **kwargs):
+        # There are some bugs in `_bracket_minimum`; when those are resolved:
         # if not self._size:
         #     return np.empty(self._shape, dtype=self._dtype)
         #
@@ -2508,6 +2563,7 @@ class ContinuousDistribution:
         # mode[mode_at_right] = b[mode_at_right]
         # return mode[()]
 
+        # In the meantime, use a heuristic for the bracket:
         if not self._size:
             return np.empty(self._shape, dtype=self._dtype)
         p_shape = (3,) + (1,) * self._ndim
@@ -3069,8 +3125,7 @@ class ContinuousDistribution:
 
     @_cdf2_input_validation
     def _logcdf2(self, x, y, *, method):
-        res = self._logcdf2_dispatch(x, y, method=method, **self._parameters)
-        return res  # clip? it can be complex with imag part pi
+        return self._logcdf2_dispatch(x, y, method=method, **self._parameters)
 
     @_dispatch
     def _logcdf2_dispatch(self, x, y, *, method=None, **kwargs):
@@ -3253,8 +3308,7 @@ class ContinuousDistribution:
 
     @_cdf2_input_validation
     def _cdf2(self, x, y, *, method):
-        res = self._cdf2_dispatch(x, y, method=method, **self._parameters)
-        return np.clip(res, -1, 1)
+        return self._cdf2_dispatch(x, y, method=method, **self._parameters)
 
     @_dispatch
     def _cdf2_dispatch(self, x, y, *, method=None, **kwargs):
