@@ -117,9 +117,6 @@ _NO_CACHE = "no_cache"
 #     popular, so what are other ideas? Again, we need a unified vision here,
 #     not just pointing out difficulties (not all errors are known or easy
 #     to estimate, what to do when errors could compound, etc.).
-# 6.  `kwargs` is used in many places to refer to the dictionary of
-#      distribution parameters (e.g. as passed from the public function to a
-#      private function). Shall I change this to `parameters`?
 # 7.  The term "method" is used to refer to public instance functions,
 #     private instance functions, the "method" string argument, and the means
 #     of calculating the desired quantity (represented by the string argument).
@@ -4498,37 +4495,37 @@ class ContinuousDistribution:
         methods = self._moment_methods if method is None else {method}
         return self._moment_raw_dispatch(order, methods=methods, **self._parameters)
 
-    def _moment_raw_dispatch(self, order, *, methods, **kwargs):
+    def _moment_raw_dispatch(self, order, *, methods, **params):
         moment = None
 
         if 'cache' in methods:
             moment = self._moment_raw_cache.get(order, None)
 
         if moment is None and 'formula' in methods:
-            moment = self._moment_raw_formula(order, **kwargs)
+            moment = self._moment_raw_formula(order, **params)
 
         if moment is None and 'transform' in methods and order > 1:
-            moment = self._moment_raw_transform(order, **kwargs)
+            moment = self._moment_raw_transform(order, **params)
 
         if moment is None and 'general' in methods:
-            moment = self._moment_raw_general(order, **kwargs)
+            moment = self._moment_raw_general(order, **params)
 
         if moment is None and 'quadrature' in methods:
-            moment = self._moment_integrate_pdf(order, center=self._zero, **kwargs)
+            moment = self._moment_integrate_pdf(order, center=self._zero, **params)
 
         if moment is not None and self.cache_policy != _NO_CACHE:
             self._moment_raw_cache[order] = moment
 
         return moment
 
-    def _moment_raw_formula(self, order, **kwargs):
+    def _moment_raw_formula(self, order, **params):
         return None
 
-    def _moment_raw_transform(self, order, **kwargs):
+    def _moment_raw_transform(self, order, **params):
         central_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'normalize', 'general'}
-            moment_i = self._moment_central_dispatch(order=i, methods=methods, **kwargs)
+            moment_i = self._moment_central_dispatch(order=i, methods=methods, **params)
             if moment_i is None:
                 return None
             central_moments.append(moment_i)
@@ -4536,14 +4533,14 @@ class ContinuousDistribution:
         # Doesn't make sense to get the mean by "transform", since that's
         # how we got here. Questionable whether 'quadrature' should be here.
         mean_methods = {'cache', 'formula', 'quadrature'}
-        mean = self._moment_raw_dispatch(self._one, methods=mean_methods, **kwargs)
+        mean = self._moment_raw_dispatch(self._one, methods=mean_methods, **params)
         if mean is None:
             return None
 
         moment = self._moment_transform_center(order, central_moments, mean, self._zero)
         return moment
 
-    def _moment_raw_general(self, order, **kwargs):
+    def _moment_raw_general(self, order, **params):
         # This is the only general formula for a raw moment of a probability
         # distribution
         return self._one if order == 0 else None
@@ -4553,63 +4550,63 @@ class ContinuousDistribution:
         methods = self._moment_methods if method is None else {method}
         return self._moment_central_dispatch(order, methods=methods, **self._parameters)
 
-    def _moment_central_dispatch(self, order, *, methods, **kwargs):
+    def _moment_central_dispatch(self, order, *, methods, **params):
         moment = None
 
         if 'cache' in methods:
             moment = self._moment_central_cache.get(order, None)
 
         if moment is None and 'formula' in methods:
-            moment = self._moment_central_formula(order, **kwargs)
+            moment = self._moment_central_formula(order, **params)
 
         if moment is None and 'transform' in methods:
-            moment = self._moment_central_transform(order, **kwargs)
+            moment = self._moment_central_transform(order, **params)
 
         if moment is None and 'normalize' in methods and order > 2:
-            moment = self._moment_central_normalize(order, **kwargs)
+            moment = self._moment_central_normalize(order, **params)
 
         if moment is None and 'general' in methods:
-            moment = self._moment_central_general(order, **kwargs)
+            moment = self._moment_central_general(order, **params)
 
         if moment is None and 'quadrature' in methods:
-            mean = self._moment_raw_dispatch(self._one, **kwargs,
+            mean = self._moment_raw_dispatch(self._one, **params,
                                              methods=self._moment_methods)
-            moment = self._moment_integrate_pdf(order, center=mean, **kwargs)
+            moment = self._moment_integrate_pdf(order, center=mean, **params)
 
         if moment is not None and self.cache_policy != _NO_CACHE:
             self._moment_central_cache[order] = moment
 
         return moment
 
-    def _moment_central_formula(self, order, **kwargs):
+    def _moment_central_formula(self, order, **params):
         return None
 
-    def _moment_central_transform(self, order, **kwargs):
+    def _moment_central_transform(self, order, **params):
 
         raw_moments = []
         for i in range(int(order) + 1):
             methods = {'cache', 'formula', 'general'}
-            moment_i = self._moment_raw_dispatch(order=i, methods=methods, **kwargs)
+            moment_i = self._moment_raw_dispatch(order=i, methods=methods, **params)
             if moment_i is None:
                 return None
             raw_moments.append(moment_i)
 
         mean_methods = self._moment_methods
-        mean = self._moment_raw_dispatch(self._one, methods=mean_methods, **kwargs)
+        mean = self._moment_raw_dispatch(self._one, methods=mean_methods, **params)
 
         moment = self._moment_transform_center(order, raw_moments, self._zero, mean)
         return moment
 
-    def _moment_central_normalize(self, order, **kwargs):
+    def _moment_central_normalize(self, order, **params):
         methods = {'cache', 'formula', 'general'}
-        standard_moment = self._moment_standardized_dispatch(order, **kwargs,
+        standard_moment = self._moment_standardized_dispatch(order, **params,
                                                              methods=methods)
         if standard_moment is None:
             return None
-        var = self._moment_central_dispatch(2, methods=self._moment_methods, **kwargs)
+        var = self._moment_central_dispatch(2, methods=self._moment_methods, **params)
         return standard_moment*var**(order/2)
 
-    def _moment_central_general(self, order, **kwargs):
+    def _moment_central_general(self, order, **params):
         general_central_moments = {0: self._one, 1: self._zero}
         return general_central_moments.get(order, None)
 
@@ -4619,52 +4616,52 @@ class ContinuousDistribution:
         return self._moment_standardized_dispatch(order, methods=methods,
                                                   **self._parameters)
 
-    def _moment_standardized_dispatch(self, order, *, methods, **kwargs):
+    def _moment_standardized_dispatch(self, order, *, methods, **params):
         moment = None
 
         if 'cache' in methods:
             moment = self._moment_standardized_cache.get(order, None)
 
         if moment is None and 'formula' in methods:
-            moment = self._moment_standardized_formula(order, **kwargs)
+            moment = self._moment_standardized_formula(order, **params)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standardized_normalize(order, False, **kwargs)
+            moment = self._moment_standardized_normalize(order, False, **params)
 
         if moment is None and 'general' in methods:
-            moment = self._moment_standardized_general(order, **kwargs)
+            moment = self._moment_standardized_general(order, **params)
 
         if moment is None and 'normalize' in methods:
-            moment = self._moment_standardized_normalize(order, True, **kwargs)
+            moment = self._moment_standardized_normalize(order, True, **params)
 
         if moment is not None and self.cache_policy != _NO_CACHE:
             self._moment_standardized_cache[order] = moment
 
         return moment
 
-    def _moment_standardized_formula(self, order, **kwargs):
+    def _moment_standardized_formula(self, order, **params):
         return None
 
-    def _moment_standardized_normalize(self, order, use_quadrature, **kwargs):
+    def _moment_standardized_normalize(self, order, use_quadrature, **params):
         methods = ({'quadrature'} if use_quadrature
                    else {'cache', 'formula', 'transform'})
-        central_moment = self._moment_central_dispatch(order, **kwargs,
+        central_moment = self._moment_central_dispatch(order, **params,
                                                        methods=methods)
         if central_moment is None:
             return None
         var = self._moment_central_dispatch(2, methods=self._moment_methods,
-                                            **kwargs)
+                                            **params)
         return central_moment/var**(order/2)
 
-    def _moment_standardized_general(self, order, **kwargs):
+    def _moment_standardized_general(self, order, **params):
         general_standard_moments = {0: self._one, 1: self._zero, 2: self._one}
         return general_standard_moments.get(order, None)
 
-    def _moment_integrate_pdf(self, order, center, **kwargs):
-        def integrand(x, order, center, **kwargs):
-            pdf = self._pdf_dispatch(x, **kwargs)
+    def _moment_integrate_pdf(self, order, center, **params):
+        def integrand(x, order, center, **params):
+            pdf = self._pdf_dispatch(x, **params)
             return pdf*(x-center)**order
-        return self._quadrature(integrand, args=(order, center), kwargs=kwargs)
+        return self._quadrature(integrand, args=(order, center), kwargs=params)
 
     def _moment_transform_center(self, order, moment_as, a, b):
         a, b, *moment_as = np.broadcast_arrays(a, b, *moment_as)
@@ -4689,12 +4686,12 @@ class ContinuousDistribution:
             res = res - logvar * (order/2)
         return res
 
-    def _logmoment_quad(self, order, logcenter, **kwargs):
-        def logintegrand(x, order, logcenter, **kwargs):
-            logpdf = self._logpdf_dispatch(x, **kwargs)
+    def _logmoment_quad(self, order, logcenter, **params):
+        def logintegrand(x, order, logcenter, **params):
+            logpdf = self._logpdf_dispatch(x, **params)
             return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)
         return self._quadrature(logintegrand, args=(order, logcenter),
-                                kwargs=kwargs, log=True)
+                                kwargs=params, log=True)
 
     ### Convenience
 
@@ -5221,7 +5218,7 @@ class TransformedDistribution(ContinuousDistribution):
         self._dist.reset_cache()
         super().reset_cache()
 
-    def _update_parameters(self, *, iv_policy=None, **kwargs):
+    def _update_parameters(self, *, iv_policy=None, **params):
         # maybe broadcast everything before processing?
         parameters = {}
         # There may be some issues with _original_parameters
@@ -5229,11 +5226,11 @@ class TransformedDistribution(ContinuousDistribution):
         # initialization. Afterward that, we want to start with
         # self._original_parameters.
         parameters.update(self._dist._original_parameters)
-        parameters.update(kwargs)
+        parameters.update(params)
         super()._update_parameters(iv_policy=iv_policy, **parameters)
 
-    def _process_parameters(self, **kwargs):
-        return self._dist._process_parameters(**kwargs)
+    def _process_parameters(self, **params):
+        return self._dist._process_parameters(**params)
 
     def __repr__(self):
         s = super().__repr__()
@@ -5256,11 +5253,11 @@ class ShiftedScaledDistribution(TransformedDistribution):
                           _Parameterization(_loc_param),
                           _Parameterization(_scale_param)]
 
-    def _process_parameters(self, loc=None, scale=None, **kwargs):
+    def _process_parameters(self, loc=None, scale=None, **params):
         loc = loc if loc is not None else np.zeros_like(scale)[()]
         scale = scale if scale is not None else np.ones_like(loc)[()]
         sign = scale > 0
-        parameters = self._dist._process_parameters(**kwargs)
+        parameters = self._dist._process_parameters(**params)
         parameters.update(dict(loc=loc, scale=scale, sign=sign))
         return parameters
 
@@ -5270,9 +5267,9 @@ class ShiftedScaledDistribution(TransformedDistribution):
     def _itransform(self, x, loc, scale, **kwargs):
         return x * scale + loc
 
-    def _support(self, loc, scale, sign, **kwargs):
+    def _support(self, loc, scale, sign, **params):
         # Add shortcut for infinite support?
-        a, b = self._dist._support(**kwargs)
+        a, b = self._dist._support(**params)
         a, b = self._itransform(a, loc, scale), self._itransform(b, loc, scale)
         return np.where(sign, a, b)[()], np.where(sign, b, a)[()]
 
@@ -5289,86 +5286,86 @@ class ShiftedScaledDistribution(TransformedDistribution):
     # calculations. I think it is cleaner if `loc` and `scale` do not affect
     # the underlying calculations at all.
 
-    def _entropy_dispatch(self, *args, loc, scale, sign, **kwargs):
-        return (self._dist._entropy_dispatch(*args, **kwargs)
+    def _entropy_dispatch(self, *args, loc, scale, sign, **params):
+        return (self._dist._entropy_dispatch(*args, **params)
                 + np.log(abs(scale)))
 
-    def _logentropy_dispatch(self, *args, loc, scale, sign, **kwargs):
-        lH0 = self._dist._logentropy_dispatch(*args, **kwargs)
+    def _logentropy_dispatch(self, *args, loc, scale, sign, **params):
+        lH0 = self._dist._logentropy_dispatch(*args, **params)
         lls = np.log(np.log(abs(scale))+0j)
         return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
 
-    def _median_dispatch(self, *, method, loc, scale, sign, **kwargs):
-        raw = self._dist._median_dispatch(method=method, **kwargs)
+    def _median_dispatch(self, *, method, loc, scale, sign, **params):
+        raw = self._dist._median_dispatch(method=method, **params)
         return self._itransform(raw, loc, scale)
 
-    def _mode_dispatch(self, *, method, loc, scale, sign, **kwargs):
-        raw = self._dist._mode_dispatch(method=method, **kwargs)
+    def _mode_dispatch(self, *, method, loc, scale, sign, **params):
+        raw = self._dist._mode_dispatch(method=method, **params)
         return self._itransform(raw, loc, scale)
 
-    def _logpdf_dispatch(self, x, *args, loc, scale, sign, **kwargs):
+    def _logpdf_dispatch(self, x, *args, loc, scale, sign, **params):
         x = self._transform(x, loc, scale)
-        logpdf = self._dist._logpdf_dispatch(x, *args, **kwargs)
+        logpdf = self._dist._logpdf_dispatch(x, *args, **params)
         return logpdf - np.log(abs(scale))
 
-    def _pdf_dispatch(self, x, *args, loc, scale, sign, **kwargs):
+    def _pdf_dispatch(self, x, *args, loc, scale, sign, **params):
         x = self._transform(x, loc, scale)
-        pdf = self._dist._pdf_dispatch(x, *args, **kwargs)
+        pdf = self._dist._pdf_dispatch(x, *args, **params)
         return pdf / abs(scale)
 
     # Sorry about the magic. This is just a draft to show the behavior.
     @_shift_scale_distribution_function
-    def _logcdf_dispatch(self, x, *, method=None, **kwargs):
+    def _logcdf_dispatch(self, x, *, method=None, **params):
         pass
 
     @_shift_scale_distribution_function
-    def _cdf_dispatch(self, x, *, method=None, **kwargs):
+    def _cdf_dispatch(self, x, *, method=None, **params):
         pass
 
     @_shift_scale_distribution_function
-    def _logccdf_dispatch(self, x, *, method=None, **kwargs):
+    def _logccdf_dispatch(self, x, *, method=None, **params):
         pass
 
     @_shift_scale_distribution_function
-    def _ccdf_dispatch(self, x, *, method=None, **kwargs):
+    def _ccdf_dispatch(self, x, *, method=None, **params):
         pass
 
     @_shift_scale_inverse_function
-    def _ilogcdf_dispatch(self, x, *, method=None, **kwargs):
+    def _ilogcdf_dispatch(self, x, *, method=None, **params):
         pass
 
     @_shift_scale_inverse_function
-    def _icdf_dispatch(self, x, *, method=None, **kwargs):
+    def _icdf_dispatch(self, x, *, method=None, **params):
         pass
 
     @_shift_scale_inverse_function
-    def _ilogccdf_dispatch(self, x, *, method=None, **kwargs):
+    def _ilogccdf_dispatch(self, x, *, method=None, **params):
         pass
 
     @_shift_scale_inverse_function
-    def _iccdf_dispatch(self, x, *, method=None, **kwargs):
+    def _iccdf_dispatch(self, x, *, method=None, **params):
         pass
 
     def _moment_standardized_dispatch(self, order, *, loc, scale, sign, methods,
-                                      **kwargs):
+                                      **params):
         res = (self._dist._moment_standardized_dispatch(
-            order, methods=methods, **kwargs))
+            order, methods=methods, **params))
         return None if res is None else res * np.sign(scale)**order
 
     def _moment_central_dispatch(self, order, *, loc, scale, sign, methods,
-                                 **kwargs):
+                                 **params):
         res = (self._dist._moment_central_dispatch(
-            order, methods=methods, **kwargs))
+            order, methods=methods, **params))
         return None if res is None else res * scale**order
 
     def _moment_raw_dispatch(self, order, *, loc, scale, sign, methods,
-                             ** kwargs):
+                             **params):
         raw_moments = []
         methods_highest_order = methods
         for i in range(int(order) + 1):
             methods = (self._moment_methods if i < order
                        else methods_highest_order)
-            raw = self._dist._moment_raw_dispatch(i, methods=methods, **kwargs)
+            raw = self._dist._moment_raw_dispatch(i, methods=methods, **params)
             if raw is None:
                 return None
             moment_i = raw * scale**i
@@ -5378,16 +5375,16 @@ class ShiftedScaledDistribution(TransformedDistribution):
             order, raw_moments, loc, self._zero)
 
     def _sample_dispatch(self, sample_shape, full_shape, *,
-                         method, rng, **kwargs):
+                         method, rng, **params):
         rvs = self._dist._sample_dispatch(
-            sample_shape, full_shape, method=method, rng=rng, **kwargs)
-        return self._itransform(rvs, **kwargs)
+            sample_shape, full_shape, method=method, rng=rng, **params)
+        return self._itransform(rvs, **params)
 
     def _qmc_sample_dispatch(self, length, full_shape, *,
-                             method, qrng, **kwargs):
+                             method, qrng, **params):
         rvs = self._dist._qmc_sample_dispatch(
-            length, full_shape, method=method, qrng=qrng, **kwargs)
-        return self._itransform(rvs, **kwargs)
+            length, full_shape, method=method, qrng=qrng, **params)
+        return self._itransform(rvs, **params)
 
     # TODO: Add these methods to ContinuousDistribution so they can return a
     #       ShiftedScaledDistribution
