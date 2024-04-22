@@ -822,8 +822,8 @@ def _set_invalid_nan(f):
     clip_log = {'_logcdf1', '_logccdf1'}
 
     @functools.wraps(f)
-    def filtered(self, x, *args, iv_policy=None, **kwargs):
-        if str(self.iv_policy or iv_policy).lower() == _SKIP_ALL:
+    def filtered(self, x, *args, **kwargs):
+        if self.iv_policy == _SKIP_ALL:
             return f(self, x, *args, **kwargs)
 
         method_name = f.__name__
@@ -945,8 +945,8 @@ def _set_invalid_nan_property(f):
     # there are NaNs wherever the distribution parameters were invalid.
 
     @functools.wraps(f)
-    def filtered(self, *args, method=None, iv_policy=None, **kwargs):
-        if str(self.iv_policy or iv_policy).lower() == _SKIP_ALL:
+    def filtered(self, *args, method=None, **kwargs):
+        if self.iv_policy == _SKIP_ALL:
             return f(self, *args, method=method, **kwargs)
 
         res = f(self, *args, method=method, **kwargs)
@@ -1760,7 +1760,7 @@ class ContinuousDistribution:
 
     @rng.setter
     def rng(self, rng):
-        rng = self._validate_rng(rng, self.iv_policy)
+        rng = self._validate_rng(rng)
         self._rng = rng
 
 
@@ -1811,14 +1811,14 @@ class ContinuousDistribution:
 
     ## Input validation
 
-    def _validate_rng(self, rng, iv_policy=None):
+    def _validate_rng(self, rng):
         # Yet another RNG validating function. Unlike others in SciPy, if `rng
         # is None`, this returns `None`. This reduces overhead (~30 µs on my
         # machine) of distribution initialization by delaying a call to
         # `default_rng()` until the RNG will actually be used. It also
         # raises a distribution-specific error message to facilitate
         #  identification of the source of the error.
-        if str(self.iv_policy or iv_policy).lower() == _SKIP_ALL:
+        if self.iv_policy == _SKIP_ALL:
             return rng
 
         if rng is not None and not isinstance(rng, np.random.Generator):
@@ -1829,12 +1829,12 @@ class ContinuousDistribution:
             raise ValueError(message)
         return rng
 
-    def _validate_order_kind(self, order, kind, kinds, iv_policy=None):
+    def _validate_order_kind(self, order, kind, kinds):
         # Yet another integer validating function. Unlike others in SciPy, it
         # Is quite flexible about what is allowed as an integer, and it
         # raises a distribution-specific error message to facilitate
         # identification of the source of the error.
-        if str(self.iv_policy or iv_policy).lower() == _SKIP_ALL:
+        if self.iv_policy == _SKIP_ALL:
             return order
 
         order = np.asarray(order, dtype=self._dtype)[()]
@@ -5348,7 +5348,7 @@ class ShiftedScaledDistribution(TransformedDistribution):
         pass
 
     def _moment_standardized_dispatch(self, order, *, loc, scale, sign, methods,
-                                  cache_policy=None, **kwargs):
+                                      cache_policy=None, **kwargs):
         res = (self._dist._moment_standardized_dispatch(
             order, methods=methods, cache_policy=cache_policy, **kwargs))
         return None if res is None else res * np.sign(scale)**order
