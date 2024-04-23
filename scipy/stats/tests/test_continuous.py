@@ -13,12 +13,20 @@ from scipy.stats._fit import _kolmogorov_smirnov
 from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
-    oo, _Domain, _RealDomain, _RealParameter, ContinuousDistribution,
-    _Parameterization, ShiftedScaledDistribution)
+    oo, _Domain, _RealDomain, _Parameter, _Parameterization, _RealParameter,
+    ContinuousDistribution, ShiftedScaledDistribution, _fiinfo,
+    _generate_domain_support)
 from scipy.stats._new_distributions import LogUniform, StandardNormal, Normal
 
 class Test_RealDomain:
     rng = np.random.default_rng(349849812549824)
+
+    def test_iv(self):
+        domain = _RealDomain(endpoints=('a', 'b'))
+        message = "The endpoints of the distribution are defined..."
+        with pytest.raises(TypeError, match=message):
+            domain.get_numerical_endpoints(dict)
+
 
     @pytest.mark.parametrize('x', [rng.uniform(10, 10, size=(2, 3, 4)),
                                    -np.inf, np.pi])
@@ -100,7 +108,6 @@ class Test_RealDomain:
                              inclusive=(inclusive_a, inclusive_b))
         ref = f"{left_bracket}{a}, {b}{right_bracket}"
         assert str(domain) == ref
-
 
 def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
     # If the distribution has parameters, choose a parameterization and
@@ -200,6 +207,16 @@ class TestDistributions:
         check_dist_func(dist, 'icdf', p, x_result_shape, methods)
         check_dist_func(dist, 'ilogccdf', logp, x_result_shape, methods)
         check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
+
+    def test_plot(self):
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            return
+
+        X = stats.Uniform(a=0., b=1.)
+        ax = X.plot()
+        assert ax == plt.gca()
 
 
 def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape):
@@ -727,6 +744,8 @@ def test_input_validation():
         dist.kurtosis(convention='coconut')
 
 
+
+
 # I removed `None` from this list. The current behavior is to generate a new
 # `default_rng()` every time it is needed. We should not generate it during
 # initialization because it increases the time by more than 50%!
@@ -780,16 +799,20 @@ class TestAttributes:
         with pytest.raises(NotImplementedError, match=message):
             dist.mean(method='cache')
 
+        message = "Attribute `cache_policy` of `StandardNormal`..."
+        with pytest.raises(ValueError, match=message):
+            dist.cache_policy = "invalid"
+
     def test_tol(self):
         x = 3.
         X = stats.Normal()
 
         message = "Attribute `tol` of `StandardNormal` must..."
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=message):
             X.tol = -1.
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=message):
             X.tol = (0.1,)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=message):
             X.tol = np.nan
 
         X1 = stats.Normal(tol=1e-1)
@@ -809,6 +832,55 @@ class TestAttributes:
         assert_allclose(res1, ref, rtol=X1.tol)
         assert_allclose(res2, ref, rtol=X2.tol)
         assert abs(res2 - ref) > abs(res1 - ref)
+
+        # Test the tolerance logic in one dispatch method
+        # When tol is set, quadrature should be used -> correct entropy.
+        # When tol is not set, logexp should be used -> incorrect entropy.
+        wrong_entropy = 1.23456
+
+        class TestDist(ContinuousDistribution):
+            _variable = _RealParameter('x', domain=_RealDomain(endpoints=(0, 0.5)))
+            def _logpdf_formula(self, x, *args, **kwargs):
+                return np.full_like(x, np.log(2.))
+            def _entropy_formula(self, *args, **kwargs):
+                return wrong_entropy
+
+        X0 = stats.Uniform(a=0., b=0.5)
+        assert_allclose(TestDist(tol=1e-10).logentropy(), X0.logentropy())
+        assert_allclose(TestDist().logentropy(), np.log(wrong_entropy))
+
+
+    def test_iv_policy(self):
+        X = stats.Uniform(a=0, b=1)
+        assert X.pdf(2) == 0
+
+        X.iv_policy = 'skip_all'
+        assert X.pdf(np.asarray(2.)) == 1
+
+        # Tests _set_invalid_nan
+        a, b = np.asarray(1.), np.asarray(0.)  # invalid parameters
+        X = stats.Uniform(a=a, b=b, iv_policy='skip_all')
+        assert X.pdf(np.asarray(2.)) == -1
+
+        # Tests _set_invalid_nan_property
+        class MyUniform(stats.Uniform):
+            def _entropy_formula(self, *args, **kwargs):
+                return 'incorrect'
+
+            def _moment_raw_formula(self, order, **params):
+                return 'incorrect'
+
+        X = MyUniform(a=a, b=b, iv_policy='skip_all')
+        assert X.entropy() == 'incorrect'
+
+        # Tests _validate_order_kind
+        assert X.moment(kind='raw', order=-1) == 'incorrect'
+
+        # Test input validation
+        message = "Attribute `iv_policy` of `MyUniform`..."
+        with pytest.raises(ValueError, match=message):
+            X.iv_policy = "invalid"
+
 
 class TestTransforms:
     @pytest.mark.filterwarnings("ignore")
@@ -884,3 +956,73 @@ class TestTransforms:
         #                 dist0.sample(x_result_shape, rng=rng0) * scale + loc)
         # assert_allclose(dist.qmc_sample(x_result_shape, rng=rng),
         #                 dist0.qmc_sample(x_result_shape, rng=rng0) * scale + loc)
+
+
+class TestFullCoverage:
+    # Adds tests just to get to 100% test coverage; this way it's more obvious
+    # if new lines are untested.
+    def test_Domain(self):
+        with pytest.raises(NotImplementedError):
+            _Domain.contains(None, 1.)
+        with pytest.raises(NotImplementedError):
+            _Domain.get_numerical_endpoints(None, 1.)
+        with pytest.raises(NotImplementedError):
+            _Domain.__str__(None)
+
+    def test_Parameter(self):
+        with pytest.raises(NotImplementedError):
+            _Parameter.validate(None, 1.)
+
+    @pytest.mark.parametrize(("dtype_in", "dtype_out"),
+                              [(np.float16, np.float16),
+                               (np.int16, np.float64),
+                               (np.complex128, np.float64)])
+    def test_RealParameter_uncommon_dtypes(self, dtype_in, dtype_out):
+        domain = _RealDomain((-1, 1))
+        parameter = _RealParameter('x', domain=domain)
+
+        x = np.asarray([0.5, 2.5], dtype=dtype_in)
+        arr, dtype, valid = parameter.validate(x, parameter_values={})
+        assert_equal(arr, x)
+        assert dtype == dtype_out
+        assert_equal(valid, [True, False])
+
+    def test_ContinuousDistribution_set_invalid_nan(self):
+        # Exercise code paths when formula returns wrong shape and dtype
+        # We could consider making this raise an error to force authors
+        # to return the right shape and dytpe, but this would need to be
+        # configurable.
+        class TestDist(ContinuousDistribution):
+            _variable = _RealParameter('x', domain=_RealDomain(endpoints=(0., 1.)))
+            def _logpdf_formula(self, x, *args, **kwargs):
+                return 0
+
+        X = TestDist()
+        dtype = np.float32
+        X._dtype = dtype
+        x = np.asarray([0.5], dtype=dtype)
+        assert X.logpdf(x).dtype == dtype
+
+    def test_fiinfo(self):
+        assert _fiinfo(np.float64(1.)).max == np.finfo(np.float64).max
+        assert _fiinfo(np.int64(1)).max == np.iinfo(np.int64).max
+
+    def test_generate_domain_support(self):
+        msg = _generate_domain_support(StandardNormal)
+        assert "accepts no distribution parameters" in msg
+
+        msg = _generate_domain_support(Normal)
+        assert "accepts one parameterization" in msg
+
+        msg = _generate_domain_support(LogUniform)
+        assert "accepts two parameterizations" in msg
+
+    def test_ContinuousDistribution__str__(self):
+        X = stats.Uniform(a=0, b=1)
+        assert str(X) == "Uniform(a=0.0, b=1.0)"
+
+        X = stats.Uniform(a=np.zeros(4), b=1)
+        assert str(X) == "Uniform(a, b, shape=(4,))"
+
+        X = stats.Uniform(a=np.zeros(4, dtype=np.float32), b=np.ones(4, dtype=np.float32))
+        assert str(X) == "Uniform(a, b, shape=(4,), dtype=float32)"

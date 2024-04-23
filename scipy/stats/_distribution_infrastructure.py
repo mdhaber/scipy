@@ -15,7 +15,7 @@ oo = np.inf
 # in case we need to distinguish between None and not specified
 _null = object()
 def _isnull(x):
-    return type(x) == object
+    return type(x) == object or x is None
 
 __all__ = ['ContinuousDistribution']
 
@@ -28,7 +28,11 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
-#  test tol, iv_policy
+#  Distributions without shape parameters probably need to accept a `dtype` parameter;
+#    right now they default to float64. If we have them default to float16, they will
+#    need to determine result_type when input is not float16 (overhead).
+#  Get test coverage to 100%
+#  Raise when distribution method returns wrong shape/dtype?
 #  Consider ensuring everything is at least 1D for calculations? Would avoid needing
 #    to sprinkle `np.asarray` throughout due to indescriminate conversion of 0D arrays
 #    to scalars

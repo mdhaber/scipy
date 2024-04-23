@@ -431,5 +431,5 @@ class Uniform(ContinuousDistribution):
 #         return rng.vonmises(mu=mu, kappa=kappa, size=full_shape)[()]
 
 
-Normal.__doc__ = _combine_docs(Normal)
+# Normal.__doc__ = _combine_docs(Normal)
 # LogUniform.__doc__ = _combine_docs(LogUniform)
