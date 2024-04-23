@@ -117,15 +117,15 @@ _NO_CACHE = "no_cache"
 #     popular, so what are other ideas? Again, we need a unified vision here,
 #     not just pointing out difficulties (not all errors are known or easy
 #     to estimate, what to do when errors could compound, etc.).
-# 7.  The term "method" is used to refer to public instance functions,
+# 6.  The term "method" is used to refer to public instance functions,
 #     private instance functions, the "method" string argument, and the means
 #     of calculating the desired quantity (represented by the string argument).
 #     For the sake of disambiguation, shall I rename the "method" string to
 #     "strategy" and refer to the means of calculating the quantity as the
 #     "strategy"?
 
-# Originally, I planned to filter out invalid distribution parameters for the
-# author of the distribution; they would always work with "compressed",
+# Originally, I planned to filter out invalid distribution parameters;
+# distribution implementation functions would always work with "compressed",
 # 1D arrays containing only valid distribution parameters. There are two
 # problems with this:
 # - This essentially requires copying all arrays, even if there is only a
@@ -1900,17 +1900,17 @@ class ContinuousDistribution:
     ## Algorithms
 
     def _quadrature(self, integrand, limits=None, args=None,
-                    kwargs=None, log=False):
+                    params=None, log=False):
         # Performs numerical integration of an integrand between limits.
         # Much of this should be added to `_tanhsinh`.
-        a, b = self._support(**kwargs) if limits is None else limits
+        a, b = self._support(**params) if limits is None else limits
         a, b = np.broadcast_arrays(a, b)
         if not a.size:
             # maybe need to figure out result type from a, b
             return np.empty(a.shape, dtype=self._dtype)
         args = [] if args is None else args
-        kwargs = {} if kwargs is None else kwargs
-        f, args = _kwargs2args(integrand, args=args, kwargs=kwargs)
+        params = {} if params is None else params
+        f, args = _kwargs2args(integrand, args=args, kwargs=params)
         args = np.broadcast_arrays(*args)
         # If we know the median or mean, consider breaking up the interval
         rtol = None if _isnull(self.tol) else self.tol
@@ -1919,11 +1919,11 @@ class ContinuousDistribution:
         # estimate - see question 5 at the top.
         return res.integral
 
-    def _solve_bounded(self, f, p, *, bounds=None, kwargs=None):
+    def _solve_bounded(self, f, p, *, bounds=None, params=None):
         # Finds the argument of a function that produces the desired output.
         # Much of this should be added to _bracket_root / _chandrupatla.
-        xmin, xmax = self._support(**kwargs) if bounds is None else bounds
-        kwargs = {} if kwargs is None else kwargs
+        xmin, xmax = self._support(**params) if bounds is None else bounds
+        params = {} if params is None else params
 
         p, xmin, xmax = np.broadcast_arrays(p, xmin, xmax)
         if not p.size:
@@ -1933,7 +1933,7 @@ class ContinuousDistribution:
         def f2(x, p, **kwargs):
             return f(x, **kwargs) - p
 
-        f3, args = _kwargs2args(f2, args=[p], kwargs=kwargs)
+        f3, args = _kwargs2args(f2, args=[p], kwargs=params)
         # If we know the median or mean, should use it
 
         # Any operations between 0d array and a scalar produces a scalar, so...
@@ -2266,7 +2266,7 @@ class ContinuousDistribution:
         def logintegrand(x, **params):
             logpdf = self._logpdf_dispatch(x, **params)
             return logpdf + np.log(0j+logpdf)
-        res = self._quadrature(logintegrand, kwargs=params, log=True)
+        res = self._quadrature(logintegrand, params=params, log=True)
         return _log_real_standardize(res + np.pi*1j)
 
     @_set_invalid_nan_property
@@ -2355,7 +2355,7 @@ class ContinuousDistribution:
             pdf = self._pdf_dispatch(x, **params)
             logpdf = self._logpdf_dispatch(x, **params)
             return logpdf * pdf
-        return -self._quadrature(integrand, kwargs=params)
+        return -self._quadrature(integrand, params=params)
 
     @_set_invalid_nan_property
     def median(self, *, method=None):
@@ -3168,7 +3168,7 @@ class ContinuousDistribution:
 
     def _logcdf2_quadrature(self, x, y, **params):
         logres = self._quadrature(self._logpdf_dispatch, limits=(x, y),
-                                  log=True, kwargs=params)
+                                  log=True, params=params)
         return logres
 
     @_set_invalid_nan
@@ -3199,7 +3199,7 @@ class ContinuousDistribution:
     def _logcdf_quadrature(self, x, **params):
         a, _ = self._support(**params)
         return self._quadrature(self._logpdf_dispatch, limits=(a, x),
-                                kwargs=params, log=True)
+                                params=params, log=True)
 
     def cdf(self, x, y=None, *, method=None):
         r"""Cumulative distribution function
@@ -3341,7 +3341,7 @@ class ContinuousDistribution:
         return np.where(i, cdf_y-cdf_x, ccdf_x-ccdf_y)
 
     def _cdf2_quadrature(self, x, y, **params):
-        return self._quadrature(self._pdf_dispatch, limits=(x, y), kwargs=params)
+        return self._quadrature(self._pdf_dispatch, limits=(x, y), params=params)
 
     @_set_invalid_nan
     def _cdf1(self, x, *, method):
@@ -3371,7 +3371,7 @@ class ContinuousDistribution:
     def _cdf_quadrature(self, x, **params):
         a, _ = self._support(**params)
         return self._quadrature(self._pdf_dispatch, limits=(a, x),
-                                kwargs=params)
+                                params=params)
 
     def logccdf(self, x, y=None, *, method=None):
         r"""Log of the complementary cumulative distribution function
@@ -3534,7 +3534,7 @@ class ContinuousDistribution:
     def _logccdf_quadrature(self, x, **params):
         _, b = self._support(**params)
         return self._quadrature(self._logpdf_dispatch, limits=(x, b),
-                                kwargs=params, log=True)
+                                params=params, log=True)
 
     def ccdf(self, x, y=None, *, method=None):
         r"""Complementary cumulative distribution function
@@ -3690,7 +3690,7 @@ class ContinuousDistribution:
     def _ccdf_quadrature(self, x, **params):
         _, b = self._support(**params)
         return self._quadrature(self._pdf_dispatch, limits=(x, b),
-                                kwargs=params)
+                                params=params)
 
     ## Inverse cumulative distribution functions
 
@@ -3795,7 +3795,7 @@ class ContinuousDistribution:
         return self._ilogccdf_dispatch(_log1mexp(x), **params)
 
     def _ilogcdf_inversion(self, x, **params):
-        return self._solve_bounded(self._logcdf_dispatch, x, kwargs=params)
+        return self._solve_bounded(self._logcdf_dispatch, x, params=params)
 
     @_set_invalid_nan
     def icdf(self, p, *, method=None):
@@ -3897,7 +3897,7 @@ class ContinuousDistribution:
         return self._iccdf_dispatch(1 - x, **params)
 
     def _icdf_inversion(self, x, **params):
-        return self._solve_bounded(self._cdf_dispatch, x, kwargs=params)
+        return self._solve_bounded(self._cdf_dispatch, x, params=params)
 
     @_set_invalid_nan
     def ilogccdf(self, logp, *, method=None):
@@ -3999,7 +3999,7 @@ class ContinuousDistribution:
         return self._ilogcdf_dispatch(_log1mexp(x), **params)
 
     def _ilogccdf_inversion(self, x, **params):
-        return self._solve_bounded(self._logccdf_dispatch, x, kwargs=params)
+        return self._solve_bounded(self._logccdf_dispatch, x, params=params)
 
     @_set_invalid_nan
     def iccdf(self, p, *, method=None):
@@ -4094,7 +4094,7 @@ class ContinuousDistribution:
         return self._icdf_dispatch(1 - x, **params)
 
     def _iccdf_inversion(self, x, **params):
-        return self._solve_bounded(self._ccdf_dispatch, x, kwargs=params)
+        return self._solve_bounded(self._ccdf_dispatch, x, params=params)
 
     ### Sampling Functions
     # The following functions for drawing samples from the distribution are
@@ -4661,7 +4661,7 @@ class ContinuousDistribution:
         def integrand(x, order, center, **params):
             pdf = self._pdf_dispatch(x, **params)
             return pdf*(x-center)**order
-        return self._quadrature(integrand, args=(order, center), kwargs=params)
+        return self._quadrature(integrand, args=(order, center), params=params)
 
     def _moment_transform_center(self, order, moment_as, a, b):
         a, b, *moment_as = np.broadcast_arrays(a, b, *moment_as)
@@ -4691,7 +4691,7 @@ class ContinuousDistribution:
             logpdf = self._logpdf_dispatch(x, **params)
             return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)
         return self._quadrature(logintegrand, args=(order, logcenter),
-                                kwargs=params, log=True)
+                                params=params, log=True)
 
     ### Convenience
 
