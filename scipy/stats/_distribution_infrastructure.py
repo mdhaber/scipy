@@ -1702,7 +1702,7 @@ class ContinuousDistribution:
             return
 
         tol = np.asarray(tol)
-        if (tol.shape != () or not tol <= 0 or  # catches NaNs
+        if (tol.shape != () or not tol > 0 or  # catches NaNs
                 not np.issubdtype(tol.dtype, np.floating)):
             message = (f"Attribute `tol` of `{self.__class__.__name__}` must "
                        "be a positive float, if specified.")

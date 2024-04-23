@@ -743,42 +743,72 @@ def test_deepcopy_pickle(seed):
     assert_equal(res3, res1)
 
 
-def test_cache_policy():
-    dist = StandardNormal(cache_policy="no_cache")
-    # make error message more appropriate
-    message = "`StandardNormal` does not provide an accurate implementation of the "
-    with pytest.raises(NotImplementedError, match=message):
-        dist.mean(method='cache')
-    mean = dist.mean()
-    with pytest.raises(NotImplementedError, match=message):
-        dist.mean(method='cache')
+class TestAttributes:
+    def test_cache_policy(self):
+        dist = StandardNormal(cache_policy="no_cache")
+        # make error message more appropriate
+        message = "`StandardNormal` does not provide an accurate implementation of the "
+        with pytest.raises(NotImplementedError, match=message):
+            dist.mean(method='cache')
+        mean = dist.mean()
+        with pytest.raises(NotImplementedError, match=message):
+            dist.mean(method='cache')
 
-    # add to enum
-    dist.cache_policy = None
-    with pytest.raises(NotImplementedError, match=message):
-        dist.mean(method='cache')
-    mean = dist.mean()  # method is 'formula' by default
-    cached_mean = dist.mean(method='cache')
-    assert_equal(cached_mean, mean)
+        # add to enum
+        dist.cache_policy = None
+        with pytest.raises(NotImplementedError, match=message):
+            dist.mean(method='cache')
+        mean = dist.mean()  # method is 'formula' by default
+        cached_mean = dist.mean(method='cache')
+        assert_equal(cached_mean, mean)
 
-    # cache is overridden by latest evaluation
-    quadrature_mean = dist.mean(method='quadrature')
-    cached_mean = dist.mean(method='cache')
-    assert_equal(cached_mean, quadrature_mean)
-    assert not np.all(mean == quadrature_mean)
+        # cache is overridden by latest evaluation
+        quadrature_mean = dist.mean(method='quadrature')
+        cached_mean = dist.mean(method='cache')
+        assert_equal(cached_mean, quadrature_mean)
+        assert not np.all(mean == quadrature_mean)
 
-    # We can turn the cache off, and it won't change, but the old cache is
-    # still available
-    dist.cache_policy = "no_cache"
-    mean = dist.mean(method='formula')
-    cached_mean = dist.mean(method='cache')
-    assert_equal(cached_mean, quadrature_mean)
-    assert not np.all(mean == quadrature_mean)
+        # We can turn the cache off, and it won't change, but the old cache is
+        # still available
+        dist.cache_policy = "no_cache"
+        mean = dist.mean(method='formula')
+        cached_mean = dist.mean(method='cache')
+        assert_equal(cached_mean, quadrature_mean)
+        assert not np.all(mean == quadrature_mean)
 
-    dist.reset_cache()
-    with pytest.raises(NotImplementedError, match=message):
-        dist.mean(method='cache')
+        dist.reset_cache()
+        with pytest.raises(NotImplementedError, match=message):
+            dist.mean(method='cache')
 
+    def test_tol(self):
+        x = 3.
+        X = stats.Normal()
+
+        message = "Attribute `tol` of `StandardNormal` must..."
+        with pytest.raises(ValueError):
+            X.tol = -1.
+        with pytest.raises(ValueError):
+            X.tol = (0.1,)
+        with pytest.raises(ValueError):
+            X.tol = np.nan
+
+        X1 = stats.Normal(tol=1e-1)
+        X2 = stats.Normal(tol=1e-12)
+        ref = X.cdf(x)
+        res1 = X1.cdf(x, method='quadrature')
+        res2 = X2.cdf(x, method='quadrature')
+        assert_allclose(res1, ref, rtol=X1.tol)
+        assert_allclose(res2, ref, rtol=X2.tol)
+        assert abs(res1 - ref) > abs(res2 - ref)
+
+        p = 0.99
+        X1.tol, X2.tol = X2.tol, X1.tol
+        ref = X.icdf(p)
+        res1 = X1.icdf(p, method='inversion')
+        res2 = X2.icdf(p, method='inversion')
+        assert_allclose(res1, ref, rtol=X1.tol)
+        assert_allclose(res2, ref, rtol=X2.tol)
+        assert abs(res2 - ref) > abs(res1 - ref)
 
 class TestTransforms:
     @pytest.mark.filterwarnings("ignore")
