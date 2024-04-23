@@ -66,7 +66,7 @@ class Normal(ContinuousDistribution):
 
     def __new__(cls, mu=None, sigma=None, **kwargs):
         if mu is None and sigma is None:
-            return StandardNormal(**kwargs)
+            return super().__new__(StandardNormal)
         return super().__new__(cls)
 
     def __init__(self, *, mu=0., sigma=1., **kwargs):
@@ -160,9 +160,6 @@ class StandardNormal(Normal):
     _log_normalization = np.log(2*np.pi)/2
     mu = np.float64(0.)
     sigma = np.float64(1.)
-
-    def __new__(cls, *args, **kwargs):
-        return ContinuousDistribution.__new__(cls)
 
     def __init__(self, **kwargs):
         ContinuousDistribution.__init__(self, **kwargs)
