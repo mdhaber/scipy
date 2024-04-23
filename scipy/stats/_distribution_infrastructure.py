@@ -28,21 +28,20 @@ _SKIP_ALL = "skip_all"
 _NO_CACHE = "no_cache"
 
 # TODO:
+#  When drawing endpoint/out-of-bounds values of a parameter, draw them from
+#   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
 #  Distributions without shape parameters probably need to accept a `dtype` parameter;
 #    right now they default to float64. If we have them default to float16, they will
 #    need to determine result_type when input is not float16 (overhead).
+#  Test _solve_bounded bracket logic, and decide what to do about warnings
 #  Get test coverage to 100%
 #  Raise when distribution method returns wrong shape/dtype?
 #  Consider ensuring everything is at least 1D for calculations? Would avoid needing
 #    to sprinkle `np.asarray` throughout due to indescriminate conversion of 0D arrays
 #    to scalars
-#  When drawing endpoint/out-of-bounds values of a parameter, draw them from
-#   the endpoints/out-of-bounds region of the full `domain`, not `typical`.
 #  Break up `test_basic`: test each method separately
 #  Fix `sample` for QMCEngine (implementation does not match documentation)
 #  When a parameter is invalid, set only the offending parameter to NaN (if possible)?
-#  Improve `_solve_bounded` bracket logic - e.g. if support is finite,
-#    bracket is entire support
 #  `_tanhsinh` special case when there are no abscissae between the limits
 #    example: cdf of uniform betweeen 1.0 and np.nextafter(1.0, np.inf)
 #  check behavior of moment methods when moments are undefined/infinite -
@@ -1949,16 +1948,16 @@ class ContinuousDistribution:
         d = xmax - xmin
 
         i = np.isfinite(xmin) & np.isfinite(xmax)
-        a[i] = xmin[i] + 0.25 * d[i]
-        b[i] = xmax[i] - 0.25 * d[i]
+        a[i] = xmin[i]
+        b[i] = xmax[i]
 
         i = np.isfinite(xmin) & ~np.isfinite(xmax)
-        a[i] = xmin[i] + 1
-        b[i] = xmin[i] + 2
+        a[i] = xmin[i]
+        b[i] = xmin[i] + 1
 
         i = np.isfinite(xmax) & ~np.isfinite(xmin)
-        a[i] = xmax[i] - 2
-        b[i] = xmax[i] - 1
+        a[i] = xmax[i] - 1
+        b[i] = xmax[i]
 
         xmin = xmin.reshape(shape)
         xmax = xmax.reshape(shape)
