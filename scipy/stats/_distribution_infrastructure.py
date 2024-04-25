@@ -8,7 +8,7 @@ from scipy._lib._util import _lazywhere
 from scipy._lib._docscrape import ClassDoc, NumpyDocString
 from scipy import special, optimize
 from scipy.integrate._tanhsinh import _tanhsinh
-from scipy.optimize._bracket import _bracket_root
+from scipy.optimize._bracket import _bracket_root, _bracket_minimum
 from scipy.optimize._chandrupatla import _chandrupatla, _chandrupatla_minimize
 
 oo = np.inf
@@ -2545,40 +2545,20 @@ class ContinuousDistribution:
         raise NotImplementedError(self._not_implemented)
 
     def _mode_optimization(self, **params):
-        # There are some bugs in `_bracket_minimum`; when those are resolved:
-        # if not self._size:
-        #     return np.empty(self._shape, dtype=self._dtype)
-        #
-        # a, b = self._support(**params)
-        # m = self._median_dispatch(**params)
-        #
-        # f, args = _kwargs2args(lambda x, **params: -self._pdf_dispatch(x, **params),
-        #                        args=(), kwargs=params)
-        # res_b = _bracket_minimum(f, m, xmin=a, xmax=b, args=args)
-        # res = _chandrupatla_minimize(f, res_b.xl, res_b.xm, res_b.xr, args=args)
-        # mode = np.asarray(res.x)
-        # mode_at_boundary = res_b.status == -1
-        # mode_at_left = mode_at_boundary & (res_b.fl <= res_b.fm)
-        # mode_at_right = mode_at_boundary & (res_b.fr < res_b.fm)
-        # mode[mode_at_left] = a[mode_at_left]
-        # mode[mode_at_right] = b[mode_at_right]
-        # return mode[()]
-
-        # In the meantime, use a heuristic for the bracket:
         if not self._size:
             return np.empty(self._shape, dtype=self._dtype)
-        p_shape = (3,) + (1,) * self._ndim
-        p = np.asarray([0.0001, 0.5, 0.9999]).reshape(p_shape)
-        bracket = self._icdf_dispatch(p, **params)
-        f, args = _kwargs2args(
-            lambda x, **params: -self._pdf_dispatch(x, **params),
-            args=(), kwargs=params)
-        res = _chandrupatla_minimize(f, *bracket, args=args)
-        mode = np.asarray(res.x)
-        mode_at_boundary = ~res.success
-        mode_at_left = mode_at_boundary & (res.fl <= res.fr)
-        mode_at_right = mode_at_boundary & (res.fr < res.fl)
+
         a, b = self._support(**params)
+        m = self._median_dispatch(**params)
+
+        f, args = _kwargs2args(lambda x, **params: -self._pdf_dispatch(x, **params),
+                               args=(), kwargs=params)
+        res_b = _bracket_minimum(f, m, xmin=a, xmax=b, args=args)
+        res = _chandrupatla_minimize(f, res_b.xl, res_b.xm, res_b.xr, args=args)
+        mode = np.asarray(res.x)
+        mode_at_boundary = res_b.status == -1
+        mode_at_left = mode_at_boundary & (res_b.fl <= res_b.fm)
+        mode_at_right = mode_at_boundary & (res_b.fr < res_b.fm)
         mode[mode_at_left] = a[mode_at_left]
         mode[mode_at_right] = b[mode_at_right]
         return mode[()]
