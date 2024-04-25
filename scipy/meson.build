@@ -81,9 +81,7 @@ inc_f2py = include_directories(incdir_f2py)
 fortranobject_c = incdir_f2py / 'fortranobject.c'
 
 npymath_path = _incdir_numpy_abs / '..' / 'lib'
-npyrandom_path = _incdir_numpy_abs / '..' / '..' / 'random' / 'lib'
 npymath_lib = cc.find_library('npymath', dirs: npymath_path)
-npyrandom_lib = cc.find_library('npyrandom', dirs: npyrandom_path)
 
 pybind11_dep = dependency('pybind11', version: '>=2.12.0')
 
@@ -130,10 +128,20 @@ fortranobject_lib = static_library('_fortranobject',
   c_args: numpy_nodepr_api,
   dependencies: py3_dep,
   include_directories: [inc_np, inc_f2py],
+  gnu_symbol_visibility: 'hidden',
 )
 fortranobject_dep = declare_dependency(
   link_with: fortranobject_lib,
   include_directories: [inc_np, inc_f2py],
+)
+# Workaround for numpy#24761 on numpy<1.26.1 (see also gh-20515)
+_f2py_c_args = []
+if is_mingw
+  _f2py_c_args = '-DNPY_OS_MINGW'
+endif
+fortranobject_dep = declare_dependency(
+  dependencies: fortranobject_dep,
+  compile_args: _f2py_c_args,
 )
 
 # TODO: 64-bit BLAS and LAPACK
