@@ -1,10 +1,14 @@
+import sys
+import json
+import pathlib
+
 import numpy as np
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
     oo, TransformedDistribution, _combine_docs)
 
-__all__ = ['Normal', 'Uniform']
+__all__ = ['Normal', 'Uniform', 'LogUniform']
 
 def factorial(n):
     return special.gamma(n + 1)
@@ -430,6 +434,19 @@ class Uniform(ContinuousDistribution):
 #     def _sample_formula(self, sample_shape, full_shape, rng, mu, kappa, **kwargs):
 #         return rng.vonmises(mu=mu, kappa=kappa, size=full_shape)[()]
 
+_docfile = "_new_distribution_docs.json"
+_docdir = pathlib.Path(__file__).parent.resolve()
+_docpath = _docdir.joinpath(_docfile)
+_module = sys.modules[__name__].__dict__
+if __name__ == "__main__":
+    docs = {}
+    for dist_name in __all__:
+        docs[dist_name] = _combine_docs(_module[dist_name])
+    with open(_docpath, 'w') as f:
+        print('here')
+        json.dump(docs, f)
 
-# Normal.__doc__ = _combine_docs(Normal)
-# LogUniform.__doc__ = _combine_docs(LogUniform)
+with open(_docpath, 'r') as f:
+    docs = json.load(f)
+    for dist_name in __all__:
+        _module[dist_name].__doc__ = docs[dist_name]
