@@ -1,6 +1,6 @@
 import sys
 import json
-import pathlib
+import os
 
 import numpy as np
 from scipy import special
@@ -435,16 +435,16 @@ class Uniform(ContinuousDistribution):
 #         return rng.vonmises(mu=mu, kappa=kappa, size=full_shape)[()]
 
 _docfile = "_new_distribution_docs.json"
-_docdir = pathlib.Path(__file__).parent.resolve()
-_docpath = _docdir.joinpath(_docfile)
+_docdir = os.path.dirname(__file__)
+_docpath = os.path.abspath(os.path.join(_docdir, _docfile))
 _module = sys.modules[__name__].__dict__
+
 if __name__ == "__main__":
     docs = {}
     for dist_name in __all__:
         docs[dist_name] = _combine_docs(_module[dist_name])
     with open(_docpath, 'w') as f:
-        print('here')
-        json.dump(docs, f)
+        json.dump(docs, f, indent="    ")
 
 with open(_docpath, 'r') as f:
     docs = json.load(f)
