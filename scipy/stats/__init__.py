@@ -42,7 +42,6 @@ Random Variables
    Normal
    Uniform
    LogUniform
-   ShiftedScaledDistribution
 
 Each univariate distribution is an instance of a subclass of `rv_continuous`
 (`rv_discrete` for discrete distributions):
