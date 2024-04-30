@@ -49,7 +49,6 @@ _NO_CACHE = "no_cache"
 #  check behavior of moment methods when moments are undefined/infinite -
 #    basically OK but needs tests
 #  investigate use of median
-#  add cdf2 to shifted/scaled distribution
 #  implement symmetric distribution
 #  implement composite distribution
 #  implement wrapped distribution
@@ -1813,6 +1812,33 @@ class ContinuousDistribution:
         if self._dtype != np.float64:
             info.append(f"dtype={self._dtype}")
         return f"{class_name}({', '.join(info)})"
+
+    def __add__(self, loc):
+        return ShiftedScaledDistribution(self, loc=loc)
+
+    def __sub__(self, loc):
+        return ShiftedScaledDistribution(self, loc=-self.loc)
+
+    def __mul__(self, scale):
+        return ShiftedScaledDistribution(self, scale=scale)
+
+    def __truediv__(self, scale):
+        return ShiftedScaledDistribution(self, scale=1/scale)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __rsub__(self, other):
+        return self.__add__(other)
+
+    def __rmul__(self, other):
+        return self.__add__(other)
+
+    def __rtruediv__(self, other):
+        return self.__add__(other)
+
+    def __neg__(self):
+        return self * -1
 
     ### Utilities
 
@@ -5109,7 +5135,7 @@ class ContinuousDistribution:
 
 
 # Rough sketch of how we might shift/scale distributions. The purpose of
-# making it a separate class is just for
+# making it a separate class is for
 # a) simplicity of the ContinuousDistribution class and
 # b) avoiding the requirement that every distribution accept loc/scale.
 # The simplicity of ContinuousDistribution is important, because there are
@@ -5121,23 +5147,23 @@ class ContinuousDistribution:
 # components rather than all built into `ContinuousDistribution`.
 
 def _shift_scale_distribution_function_2arg(func):
-    citem = {'_logcdf_dispatch': '_logccdf_dispatch',
-             '_cdf_dispatch': '_ccdf_dispatch',
-             '_logccdf_dispatch': '_logcdf_dispatch',
-             '_ccdf_dispatch': '_cdf_dispatch'}
-    def wrapped(self, x, *args, loc, scale, sign, **kwargs):
+    def wrapped(self, x, y, *args, loc, scale, sign, **kwargs):
         item = func.__name__
 
         f = getattr(self._dist, item)
-        cf = getattr(self._dist, citem[item])
 
-        fx = f(self._transform(x, loc, scale), *args, **kwargs)
-        cfx = cf(self._transform(x, loc, scale), *args, **kwargs)
-        return np.where(sign, fx, cfx)[()]
+        # Obviously it's possible to get away with half of the work here.
+        # Let's focus on correct results first and optimize later.
+        xt = self._transform(x, loc, scale)
+        yt = self._transform(y, loc, scale)
+        fxy = f(xt, yt, *args, **kwargs)
+        fyx = f(yt, xt, *args, **kwargs)
+        return np.where(sign, fxy, fyx)[()]
 
     return wrapped
 
 def _shift_scale_distribution_function(func):
+    # c is for complementary
     citem = {'_logcdf_dispatch': '_logccdf_dispatch',
              '_cdf_dispatch': '_ccdf_dispatch',
              '_logccdf_dispatch': '_logcdf_dispatch',
@@ -5148,8 +5174,11 @@ def _shift_scale_distribution_function(func):
         f = getattr(self._dist, item)
         cf = getattr(self._dist, citem[item])
 
-        fx = f(self._transform(x, loc, scale), *args, **kwargs)
-        cfx = cf(self._transform(x, loc, scale), *args, **kwargs)
+        # Obviously it's possible to get away with half of the work here.
+        # Let's focus on correct results first and optimize later.
+        xt = self._transform(x, loc, scale)
+        fx = f(xt, *args, **kwargs)
+        cfx = cf(xt, *args, **kwargs)
         return np.where(sign, fx, cfx)[()]
 
     return wrapped
@@ -5159,14 +5188,16 @@ def _shift_scale_inverse_function(func):
              '_icdf_dispatch': '_iccdf_dispatch',
              '_ilogccdf_dispatch': '_ilogcdf_dispatch',
              '_iccdf_dispatch': '_icdf_dispatch'}
-    def wrapped(self, x, *args, loc, scale, sign, **kwargs):
+    def wrapped(self, p, *args, loc, scale, sign, **kwargs):
         item = func.__name__
 
         f = getattr(self._dist, item)
         cf = getattr(self._dist, citem[item])
 
-        fx = self._itransform(f(x, *args, **kwargs), loc, scale)
-        cfx = self._itransform(cf(x, *args, **kwargs), loc, scale)
+        # Obviously it's possible to get away with half of the work here.
+        # Let's focus on correct results first and optimize later.
+        fx =  self._itransform(f(p, *args, **kwargs), loc, scale)
+        cfx = self._itransform(cf(p, *args, **kwargs), loc, scale)
         return np.where(sign, fx, cfx)[()]
 
     return wrapped
@@ -5316,6 +5347,22 @@ class ShiftedScaledDistribution(TransformedDistribution):
     def _ccdf_dispatch(self, x, *, method=None, **params):
         pass
 
+    @_shift_scale_distribution_function_2arg
+    def _logcdf2_dispatch(self, x, y, *, method=None, **params):
+        pass
+
+    @_shift_scale_distribution_function_2arg
+    def _cdf2_dispatch(self, x, y, *, method=None, **params):
+        pass
+
+    @_shift_scale_distribution_function_2arg
+    def _logccdf2_dispatch(self, x, y, *, method=None, **params):
+        pass
+
+    @_shift_scale_distribution_function_2arg
+    def _ccdf2_dispatch(self, x, y, *, method=None, **params):
+        pass
+
     @_shift_scale_inverse_function
     def _ilogcdf_dispatch(self, x, *, method=None, **params):
         pass
@@ -5372,8 +5419,6 @@ class ShiftedScaledDistribution(TransformedDistribution):
             length, full_shape, method=method, qrng=qrng, **params)
         return self._itransform(rvs, **params)
 
-    # TODO: Add these methods to ContinuousDistribution so they can return a
-    #       ShiftedScaledDistribution
     def __add__(self, loc):
         return ShiftedScaledDistribution(self._dist, loc=self.loc + loc,
                                          scale=self.scale)
@@ -5403,3 +5448,6 @@ class ShiftedScaledDistribution(TransformedDistribution):
 
     def __rtruediv__(self, other):
         return self.__add__(other)
+
+    def __neg__(self):
+        return self * -1

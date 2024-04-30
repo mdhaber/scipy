@@ -886,6 +886,7 @@ class TestTransforms:
     @pytest.mark.filterwarnings("ignore")
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_loc_scale(self, data, seed):
+        # Need tests with negative scale
         rng = np.random.default_rng(seed)
 
         class TransformedNormal(ShiftedScaledDistribution):
@@ -902,17 +903,31 @@ class TestTransforms:
         dist_ref = stats.norm(loc=loc, scale=scale)
 
         x0 = (x - loc) / scale
+        y0 = (y - loc) / scale
 
+        a, b = dist.support()
+        a0, b0 = dist0.support()
+        assert_allclose(a, a0 + loc)
+        assert_allclose(b, b0 + loc)
         assert_allclose(dist.logentropy(), np.log(dist.entropy() + 0j))
         assert_allclose(dist.entropy(), dist_ref.entropy())
         assert_allclose(dist.median(), dist0.median() + loc)
         assert_allclose(dist.mode(), dist0.mode() + loc)
+        assert_allclose(dist.mean(), dist0.mean() + loc)
+        assert_allclose(dist.variance(), dist0.variance() * scale**2)
+        assert_allclose(dist.standard_deviation(), dist.variance()**0.5)
+        assert_allclose(dist.skewness(), dist0.skewness() * np.sign(scale))
+        assert_allclose(dist.kurtosis(), dist0.kurtosis())
         assert_allclose(dist.logpdf(x), dist0.logpdf(x0) - np.log(scale))
         assert_allclose(dist.pdf(x), dist0.pdf(x0) / scale)
         assert_allclose(dist.logcdf(x), dist0.logcdf(x0))
         assert_allclose(dist.cdf(x), dist0.cdf(x0))
         assert_allclose(dist.logccdf(x), dist0.logccdf(x0))
         assert_allclose(dist.ccdf(x), dist0.ccdf(x0))
+        assert_allclose(dist.logcdf(x, y), dist0.logcdf(x0, y0))
+        assert_allclose(dist.cdf(x, y), dist0.cdf(x0, y0))
+        assert_allclose(dist.logccdf(x, y), dist0.logccdf(x0, y0))
+        assert_allclose(dist.ccdf(x, y), dist0.ccdf(x0, y0))
         assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp)*scale + loc)
         assert_allclose(dist.icdf(p), dist0.icdf(p)*scale + loc)
         assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp)*scale + loc)
@@ -920,19 +935,29 @@ class TestTransforms:
         for i in range(1, 5):
             assert_allclose(dist.moment(i, 'raw'), dist_ref.moment(i))
             assert_allclose(dist.moment(i, 'central'),
-                            dist0.moment(i, 'central')*scale**i)
+                            dist0.moment(i, 'central') * scale**i)
             assert_allclose(dist.moment(i, 'standardized'),
-                            dist0.moment(i, 'standardized') * np.sign(scale) ** i)
+                            dist0.moment(i, 'standardized') * np.sign(scale)**i)
 
-
+        # Transform back to the original distribution using all arithmetic
+        # operations; check that it behaves as expected.
         dist = (dist - 2*loc) + loc
         dist = dist/scale**2 * scale
         z = np.zeros(dist._shape)  # compact broadcasting
 
+        a, b = dist.support()
+        a0, b0 = dist0.support()
+        assert_allclose(a, a0 + z)
+        assert_allclose(b, b0 + z)
         assert_allclose(dist.logentropy(), dist0.logentropy() + z)
         assert_allclose(dist.entropy(), dist0.entropy() + z)
         assert_allclose(dist.median(), dist0.median() + z)
         assert_allclose(dist.mode(), dist0.mode() + z)
+        assert_allclose(dist.mean(), dist0.mean() + z)
+        assert_allclose(dist.variance(), dist0.variance() + z)
+        assert_allclose(dist.standard_deviation(), dist0.standard_deviation() + z)
+        assert_allclose(dist.skewness(), dist0.skewness() + z)
+        assert_allclose(dist.kurtosis(), dist0.kurtosis() + z)
         assert_allclose(dist.logpdf(x), dist0.logpdf(x)+z)
         assert_allclose(dist.pdf(x), dist0.pdf(x) + z)
         assert_allclose(dist.logcdf(x), dist0.logcdf(x) + z)
@@ -956,6 +981,7 @@ class TestTransforms:
         #                 dist0.sample(x_result_shape, rng=rng0) * scale + loc)
         # assert_allclose(dist.qmc_sample(x_result_shape, rng=rng),
         #                 dist0.qmc_sample(x_result_shape, rng=rng0) * scale + loc)
+        # Should also try to test fit, plot?
 
 
 class TestFullCoverage:

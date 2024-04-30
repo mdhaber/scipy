@@ -229,7 +229,7 @@ class LogUniform(ContinuousDistribution):
 
     The probability density function of the log-uniform distribution is:
 
-    ..math::
+    .. math::
 
         f(x; a, b) = \frac{1}
                           {x (\log(b) - \log(a))}
@@ -318,7 +318,7 @@ class Uniform(ContinuousDistribution):
 
     The probability density function of the uniform distribution is:
 
-    ..math::
+    .. math::
 
         f(x; a, b) = \frac{1}
                           {b - a}
