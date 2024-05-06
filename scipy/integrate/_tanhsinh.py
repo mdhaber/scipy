@@ -315,7 +315,10 @@ def _tanhsinh(f, a, b, *, args=(), log=False, maxfun=None, maxlevel=None,
     # shape and dtype. Did you know that 0d and >0d arrays follow different
     # type promotion rules?
     with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
-        c = ((a.ravel() + b.ravel())/2).reshape(a.shape)
+        # Arbitrary weights close to 1. This avoids evaluating f *at* 0, which
+        # is more likely to be a singularity.
+        m1, m2 = 1 + np.pi/1000, 1 + np.e/1000
+        c = ((m1*a.ravel() + m2*b.ravel())/(m1 + m2)).reshape(a.shape)
         inf_a, inf_b = np.isinf(a), np.isinf(b)
         c[inf_a] = b[inf_a] - 1  # takes care of infinite a
         c[inf_b] = a[inf_b] + 1  # takes care of infinite b
