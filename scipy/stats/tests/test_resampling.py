@@ -1118,13 +1118,40 @@ class TestMonteCarloHypothesisTest:
 
 
 class TestPower:
-    def test_input_validation(self):
+
+    def get_rvs(self, rng, xp=np):
+        def rvs(*args, size=None, **kwargs):
+            size = tuple([int(i) for i in size])
+            res = xp.asarray(rng.normal(*args, size=size, **kwargs))
+            return res[()] if res.ndim == 0 else res
+        return rvs
+
+    def get_test(self, xp):
+        def test(x1, x2, axis):
+            m1 = xp.mean(x1, axis=axis)
+            m2 = xp.mean(x2, axis=axis)
+            v1 = xp.var(x1, axis=axis, correction=1)
+            v2 = xp.var(x2, axis=axis, correction=1)
+            n1 = x1.shape[axis]
+            n2 = x2.shape[axis]
+            df = n1 + n2 - 2
+            svar = ((n1 - 1) * v1 + (n2 - 1) * v2) / df
+            denom = xp.sqrt(svar * (1 / n1 + 1 / n2))
+            statistic = (m1 - m2) / denom
+            # t-distribution CDF doesn't have array-API support, so use normal
+            return 2 * special.ndtr(-xp.abs(statistic))
+            # return stats.ttest_2samp(x, popmean=0., axis=axis).pvalue)
+        return test
+
+    @array_api_compatible
+    def test_input_validation(self, xp):
         # test that the appropriate error messages are raised for invalid input
         rng = np.random.default_rng(8519895914314711673)
 
-        test = stats.ttest_ind
         rvs = (rng.normal, rng.normal)
-        n_observations = (10, 12)
+        n_observations = (xp.asarray(10), xp.asarray(12))
+        xp_test = array_namespace(*n_observations)  # test needs var to have `correction`
+        test = self.get_test(xp_test)
 
         message = "`vectorized` must be `True`, `False`, or `None`."
         with pytest.raises(ValueError, match=message):
@@ -1146,17 +1173,18 @@ class TestPower:
         with pytest.raises(ValueError, match=message):
             power(test, rvs, n_observations, significance=2)
         with pytest.raises(ValueError, match=message):
-            power(test, rvs, n_observations, significance=np.linspace(-1, 1))
+            power(test, rvs, n_observations, significance=xp.linspace(-1, 1, 50))
 
         message = "`kwargs` must be a dictionary"
         with pytest.raises(TypeError, match=message):
             power(test, rvs, n_observations, kwargs=(1, 2, 3))
 
-        message = "shape mismatch: objects cannot be broadcast"
+        message = "...not be broadcast..."
         with pytest.raises(ValueError, match=message):
-            power(test, rvs, ([10, 11], [12, 13, 14]))
+            power(test, rvs, (xp.asarray([10, 11]), xp.asarray([12, 13, 14])))
         with pytest.raises(ValueError, match=message):
-            power(test, rvs, ([10, 11], [12, 13]), kwargs={'x': [1, 2, 3]})
+            power(test, rvs, (xp.asarray([10, 11]), xp.asarray([12, 13])),
+                  kwargs={'x': xp.asarray([1, 2, 3])})
 
         message = "`test` must be callable"
         with pytest.raises(TypeError, match=message):
@@ -1250,22 +1278,30 @@ class TestPower:
         # Show that results are similar
         assert_allclose(res.power, ref, rtol=2e-2, atol=1e-2)
 
-    def test_ttest_ind_null(self):
+    @array_api_compatible
+    def test_ttest_ind_null(self, xp):
         # Check that the p-values of `ttest_ind` are uniformly distributed under
         # the null hypothesis
-        rng = np.random.default_rng(254952548345528)
+        rng = np.random.default_rng(25495248345528)
 
-        test = stats.ttest_ind
-        n_observations = rng.integers(10, 100, size=(2, 10))
-        rvs = rng.normal, rng.normal
-        significance = np.asarray([0.01, 0.05, 0.1])
+        n_observations = [xp.asarray(rng.integers(10, 100, size=(10,))),
+                          xp.asarray(rng.integers(10, 100, size=(10,)))]
+        xp_test = array_namespace(*n_observations)  # test needs var to have `correction`
+        test = self.get_test(xp_test)
+        rvs = self.get_rvs(rng, xp), self.get_rvs(rng, xp)
+
+        significance = xp.asarray([0.01, 0.05, 0.1])
         res = stats.power(test, rvs, n_observations, significance=significance)
-        significance = np.broadcast_to(significance[:, np.newaxis], res.power.shape)
-        assert_allclose(res.power, significance, atol=1e-2)
+        significance = xp.broadcast_to(significance[:, xp.newaxis], res.power.shape)
+        xp_assert_close(res.power, significance, atol=1e-2)
 
-    def test_ttest_1samp_power(self):
+    @array_api_compatible
+    @pytest.mark.usefixtures("skip_xp_backends")
+    @pytest.mark.skip_xp_backends(cpu_only=True)
+    def test_ttest_1samp_power(self, xp):
         # Check simulated ttest_1samp power against reference
         rng = np.random.default_rng(254952548345528)
+        rvs = self.get_rvs(rng, xp)
 
         # Reference values computed with statmodels
         # import numpy as np
@@ -1276,13 +1312,14 @@ class TestPower:
                 [0.01657775, 0.29734608, 0.86228288]],
                [[0.0592903 , 0.29317561, 0.71718121],
                 [0.07094116, 0.56450441, 0.96815163]]]
+        ref = xp.asarray(ref)
 
-        kwargs = {'popmean': [0.1, 0.5, 0.9]}
-        n_observations = [[10], [20]]
-        significance = [0.01, 0.05]
-        res = stats.power(stats.ttest_1samp, rng.normal, n_observations,
+        kwargs = {'popmean': xp.asarray([0.1, 0.5, 0.9])}
+        n_observations = xp.asarray([[10], [20]])
+        significance = xp.asarray([0.01, 0.05])
+        res = stats.power(stats.ttest_1samp, rvs, n_observations,
                           significance=significance, kwargs=kwargs)
-        assert_allclose(res.power, ref, atol=1e-2)
+        xp_assert_close(res.power, ref, atol=1e-2)
 
 
 class TestPermutationTest:

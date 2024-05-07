@@ -16,7 +16,7 @@ from ._common import ConfidenceInterval
 from ._axis_nan_policy import _broadcast_concatenate, _broadcast_arrays
 from ._warnings_errors import DegenerateDataWarning
 
-__all__ = ['bootstrap', 'monte_carlo_test', 'permutation_test']
+__all__ = ['bootstrap', 'monte_carlo_test', 'permutation_test', 'power']
 
 
 def _vectorize_statistic(statistic):
@@ -1030,14 +1030,22 @@ def _power_iv(rvs, test, n_observations, significance, vectorized,
         if not callable(rvs_i):
             raise TypeError("`rvs` must be callable or sequence of callables.")
 
+    # At this point, `n_observations` should be a sequence
+    # If it isn't, the user passed a sequence for `rvs` but not `n_observations`
+    message = "If `rvs` is a sequence, `len(rvs)` must equal `len(n_observations)`."
+    try:
+        len(n_observations)
+    except TypeError as e:
+        raise ValueError(message) from e
     if not len(rvs) == len(n_observations):
-        message = ("If `rvs` is a sequence, `len(rvs)` "
-                   "must equal `len(n_observations)`.")
         raise ValueError(message)
 
-    significance = np.asarray(significance)[()]
-    if (not np.issubdtype(significance.dtype, np.floating)
-            or np.min(significance) < 0 or np.max(significance) > 1):
+    xp = array_namespace(*n_observations)
+
+    significance = xp.asarray(significance)
+    significance = significance[()] if significance.ndim == 0 else significance
+    if (not xp.isdtype(significance.dtype, 'real floating')
+            or xp.min(significance) < 0 or xp.max(significance) > 1):
         raise ValueError("`significance` must contain floats between 0 and 1.")
 
     kwargs = dict() if kwargs is None else kwargs
@@ -1052,25 +1060,40 @@ def _power_iv(rvs, test, n_observations, significance, vectorized,
 
     # Broadcast, then ravel nobs/kwarg combinations. In the end,
     # `nobs` and `vals` have shape (# of combinations, number of variables)
-    tmp = np.asarray(np.broadcast_arrays(*n_observations, *vals))
-    shape = tmp.shape
-    if tmp.ndim == 1:
-        tmp = tmp[np.newaxis, :]
+    arrays = xp.broadcast_arrays(*n_observations, *vals)
+    shape = arrays[0].shape
+    arrays = [xp.reshape(array, (-1,)) for array in arrays]
+    nobs, vals = arrays[:len(rvs)], arrays[len(rvs):]
+    nobs = [xp.asarray(nob, dtype=xp.int32)[:, np.newaxis] for nob in nobs]
+    nobs = xp.concat(nobs, axis=-1)
+    if not vals:
+        vals = nobs[..., 0:0]
     else:
-        tmp = tmp.reshape((shape[0], -1)).T
-    nobs, vals = tmp[:, :len(rvs)], tmp[:, len(rvs):]
-    nobs = nobs.astype(int)
+        vals = [val[:, np.newaxis] for val in vals]
+        vals = xp.concat(vals, axis=-1)
 
     if not callable(test):
         raise TypeError("`test` must be callable.")
 
     if vectorized is None:
-        vectorized = 'axis' in inspect.signature(test).parameters
+        try:
+            signature = inspect.signature(test).parameters
+        except ValueError as e:
+            message = (f"Signature inspection of {test=} failed; "
+                       "pass `vectorize` explicitly.")
+            raise ValueError(message) from e
+        vectorized = 'axis' in signature
 
     if not vectorized:
-        test_vectorized = _vectorize_statistic(test)
+        if is_numpy(xp):
+            test_vectorized = _vectorize_statistic(test)
+        else:
+            message = ("`test` must be vectorized (i.e. support an `axis` "
+                       f"argument) when `data` contains {xp.__name__} arrays.")
+            raise ValueError(message)
     else:
         test_vectorized = test
+
     # Wrap `test` function to ignore unused kwargs
     test_vectorized = _wrap_kwargs(test_vectorized)
 
@@ -1086,7 +1109,7 @@ def _power_iv(rvs, test, n_observations, significance, vectorized,
             raise ValueError("`batch` must be a positive integer or None.")
 
     return (wrapped_rvs, test_vectorized, nobs, significance, vectorized,
-            n_resamples_int, batch_iv, vals, keys, shape[1:])
+            n_resamples_int, batch_iv, vals, keys, shape, xp)
 
 
 def power(test, rvs, n_observations, *, significance=0.01, vectorized=None,
@@ -1286,11 +1309,12 @@ def power(test, rvs, n_observations, *, significance=0.01, vectorized=None,
     tmp = _power_iv(rvs, test, n_observations, significance,
                     vectorized, n_resamples, batch, kwargs)
     (rvs, test, nobs, significance,
-     vectorized, n_resamples, batch, args, kwds, shape)= tmp
+     vectorized, n_resamples, batch, args, kwds, shape, xp)= tmp
 
     batch_nominal = batch or n_resamples
     pvalues = []  # results of various nobs/kwargs combinations
-    for nobs_i, args_i in zip(nobs, args):
+    for i in range(nobs.shape[0]):
+        nobs_i, args_i = nobs[i, ...], args[i, ...]
         kwargs_i = dict(zip(kwds, args_i))
         pvalues_i = []  # results of batches; fixed nobs/kwargs combination
         for k in range(0, n_resamples, batch_nominal):
@@ -1301,18 +1325,20 @@ def power(test, rvs, n_observations, *, significance=0.01, vectorized=None,
             p = getattr(res, 'pvalue', res)
             pvalues_i.append(p)
         # Concatenate results from batches
-        pvalues_i = np.concatenate(pvalues_i, axis=-1)
+        pvalues_i = xp.concat(pvalues_i, axis=-1)
         pvalues.append(pvalues_i)
     # `test` can return result with array of p-values
     shape += pvalues_i.shape[:-1]
     # Concatenate results from various nobs/kwargs combinations
-    pvalues = np.concatenate(pvalues, axis=0)
+    pvalues = xp.concat(pvalues, axis=0)
     # nobs/kwargs arrays were raveled to single axis; unravel
-    pvalues = pvalues.reshape(shape + (-1,))
+    pvalues = xp.reshape(pvalues, shape + (-1,))
     if significance.ndim > 0:
         newdims = tuple(range(significance.ndim, pvalues.ndim + significance.ndim))
-        significance = np.expand_dims(significance, newdims)
-    powers = np.mean(pvalues < significance, axis=-1)
+        for newdim in newdims:
+            significance = xp.expand_dims(significance, axis=newdim)
+    dtype = significance.dtype
+    powers = xp.mean(xp.asarray(pvalues < significance, dtype=dtype), axis=-1)
 
     return PowerResult(power=powers, pvalues=pvalues)
 
