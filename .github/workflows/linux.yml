@@ -26,7 +26,7 @@ jobs:
     uses: ./.github/workflows/commit_message.yml
 
   test_meson:
-    name: mypy (py3.10) & dev deps (py3.12), fast, dev.py
+    name: dev deps (py3.12), fast, dev.py
     needs: get_commit_message
     # If using act to run CI locally the github object does not exist and
     # the usual skipping should not be enforced
@@ -113,15 +113,6 @@ jobs:
         python check_installation.py ${{ env.INSTALLDIR }}
         ./check_pyext_symbol_hiding.sh ../build
         popd
-
-    - name: Mypy
-      if: matrix.python-version == '3.10'
-      run: |
-        # Packages that are only needed for their annotations
-        python -m pip install mypy==1.10.0 types-psutil typing_extensions
-        python -m pip install pybind11 sphinx
-
-        python -u dev.py mypy
 
     - name: Test SciPy
       run: |

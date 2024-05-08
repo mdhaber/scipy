@@ -1494,7 +1494,7 @@ class LatinHypercube(QMCEngine):
         for j in range(n_col):
             perms = self.rng.permutation(p)
             oa_sample_[:, j] = perms[oa_sample[:, j]]
-        
+
         oa_sample = oa_sample_
         # following is making a scrambled OA into an OA-LHS
         oa_lhs_sample = np.zeros(shape=(n_row, n_col))
@@ -2488,9 +2488,9 @@ def _random_cd(
     while n_nochange_ < n_nochange and n_iters_ < n_iters:
         n_iters_ += 1
 
-        col = rng_integers(rng, *bounds[0], endpoint=True)  # type: ignore[misc]
-        row_1 = rng_integers(rng, *bounds[1], endpoint=True)  # type: ignore[misc]
-        row_2 = rng_integers(rng, *bounds[2], endpoint=True)  # type: ignore[misc]
+        col = rng_integers(rng, *bounds[0], endpoint=True)
+        row_1 = rng_integers(rng, *bounds[1], endpoint=True)
+        row_2 = rng_integers(rng, *bounds[2], endpoint=True)
         disc = _perturb_discrepancy(best_sample,
                                     row_1, row_2, col,
                                     best_disc)
