@@ -1008,14 +1008,22 @@ def _hessian(f, x, **kwargs):
     """
     def df(x):
         temp = _jacobian(f, x, **kwargs)
+        df.iter_count = max(df.iter_count, np.max(temp.nit))
         if df.res is None:
             df.res = temp
         else:
             df.res.nfev += temp.nfev.sum(axis=-1)
         return temp.df
+    df.iter_count = 0
+
     df.res = None
     temp = _jacobian(df, x, **kwargs)
     temp.nfev = df.res.nfev
     temp.ddf = temp.df
     del temp.df
+
+    iter_count = max(df.iter_count, np.max(temp.nit))
+    initial_step = kwargs.pop('initial_step', 0.5)
+    temp2 = _jacobian(df, x, initial_step=initial_step/2**iter_count, **kwargs)
+    temp.error = np.abs(temp2.df - temp.ddf)
     return temp
