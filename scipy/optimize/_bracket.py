@@ -456,7 +456,7 @@ def _bracket_minimum_iv(func, xm0, xl0, xr0, xmin, xmax, factor, args, maxiter):
 
 
 def _bracket_minimum(func, xm0, *, xl0=None, xr0=None, xmin=None, xmax=None,
-                     factor=None, args=(), maxiter=1000):
+                     factor=None, args=(), maxiter=1000, callback=None):
     """Bracket the minimum of a unimodal scalar function of one variable
 
     This function works elementwise when `xm0`, `xl0`, `xr0`, `xmin`, `xmax`,
@@ -557,8 +557,6 @@ def _bracket_minimum(func, xm0, *, xl0=None, xr0=None, xmin=None, xmax=None,
     the boundary isn't missed while also detecting whether or not the `xmax` is
     a minimizer when `xmax` is reached after a finite number of steps.
     """  # noqa: E501
-    callback = None  # works; I just don't want to test it
-
     temp = _bracket_minimum_iv(func, xm0, xl0, xr0, xmin, xmax, factor, args, maxiter)
     func, xm0, xl0, xr0, xmin, xmax, factor, args, maxiter = temp
 
@@ -607,6 +605,7 @@ def _bracket_minimum(func, xm0, *, xl0=None, xr0=None, xmin=None, xmax=None,
 
     def pre_func_eval(work):
         work.step *= work.factor
+        print(f"{work.limit[work.limited][0]}, {work.step[0]}, {(work.limit[work.limited] - work.step[work.limited])[0]}")
         x = np.empty_like(work.xr)
         x[~work.limited] = work.xr0[~work.limited] + work.step[~work.limited]
         x[work.limited] = work.limit[work.limited] - work.step[work.limited]
@@ -614,6 +613,7 @@ def _bracket_minimum(func, xm0, *, xl0=None, xr0=None, xmin=None, xmax=None,
         # limit, it may be the case that the new endpoint equals the old endpoint,
         # when the old endpoint is sufficiently close to the limit. We use the
         # limit itself as the new endpoint in these cases.
+        print(x[work.limited] == work.xr[work.limited])
         x[work.limited] = np.where(
             x[work.limited] == work.xr[work.limited],
             work.limit[work.limited],
