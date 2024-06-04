@@ -45,12 +45,12 @@ def _broadcast_arrays(arrays, axis=None, xp=None):
     if not arrays:
         return arrays
     xp = array_namespace(*arrays) if xp is None else xp
-    arrays = [xp.asarray(arr) for arr in arrays]
+    arrays = [xp.asanyarray(arr) for arr in arrays]
     shapes = [arr.shape for arr in arrays]
     new_shapes = _broadcast_shapes(shapes, axis)
     if axis is None:
         new_shapes = [new_shapes]*len(arrays)
-    return [xp.broadcast_to(array, new_shape)
+    return [xp.broadcast_to(array, new_shape, subok=True)
             for array, new_shape in zip(arrays, new_shapes)]
 
 
@@ -517,7 +517,7 @@ def _axis_nan_policy_factory(tuple_to_result, default_axis=0,
                     # all the dimensions are reduced.
                     n_dims = np.max([sample.ndim for sample in samples])
                     reduced_axes = tuple(range(n_dims))
-                samples = [np.asarray(sample.ravel()) for sample in samples]
+                samples = [np.asanyarray(sample.ravel()) for sample in samples]
             else:
                 samples = _broadcast_arrays(samples, axis=axis)
                 axis = np.atleast_1d(axis)

@@ -1288,3 +1288,17 @@ def test_array_like_input(dtype):
     res = stats.mode(ArrLike(x, dtype=dtype))
     assert res.mode == 1
     assert res.count == 2
+
+
+def test_array_subclass_gh20896():
+    # Check that `_axis_nan_policy`-decorated functions don't always
+    # break array subclass support
+
+    class ArrSubclass(np.ndarray):
+        pass
+
+    x = np.arange(10).reshape(2, 5)
+    res = stats.ttest_1samp(x.view(ArrSubclass), popmean=0, axis=-1)
+    ref = stats.ttest_1samp(x, popmean=0, axis=-1)
+    assert_equal(res, ref)
+    assert isinstance(res.statistic, ArrSubclass)
