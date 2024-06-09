@@ -17,6 +17,7 @@ py3.install_sources([
     'test_fit.py',
     'test_hypotests.py',
     'test_kdeoth.py',
+    'test_mgc.py',
     'test_morestats.py',
     'test_mstats_basic.py',
     'test_mstats_extras.py',
@@ -34,7 +35,8 @@ py3.install_sources([
     'test_tukeylambda_stats.py',
     'test_variation.py'
   ],
-  subdir: 'scipy/stats/tests'
+  subdir: 'scipy/stats/tests',
+  install_tag: 'tests'
 )
 
 subdir('data')
