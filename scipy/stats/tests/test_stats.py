@@ -4265,6 +4265,7 @@ class TestChisquare:
             f_exp = xp.asarray([30., 60.])
             stats.chisquare(f_obs=f_obs, f_exp=f_exp)
 
+    @pytest.mark.xfail(reason="`int32` isn't 'integral' dtype sometimes - see gh-20943")
     @pytest.mark.parametrize("n, dtype", [(200, 'uint8'), (1000000, 'int32')])
     def test_chiquare_data_types_attributes(self, n, dtype, xp):
         # Regression test for gh-10159 and gh-18368
