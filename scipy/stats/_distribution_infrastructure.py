@@ -1281,6 +1281,7 @@ def _generate_example(dist_family):
     p = 0.32
     x = round(X.icdf(p), 2)
     y = round(X.icdf(2 * p), 2)
+    X.rng = rng
 
     example = f"""
     To use the distribution class, it must be instantiated using keyword
@@ -1362,9 +1363,9 @@ def _generate_example(dist_family):
     Pseudo-random samples can be drawn from
     the underlying distribution using ``sample``.
 
-    >>> rng = np.random.default_rng(2354873452)
-    >>> X.sample(shape=(4,), rng=rng)
-    {repr(X.sample(shape=(4,), rng=rng))}
+    >>> X.rng = np.random.default_rng(2354873452)
+    >>> X.sample(shape=(4,))
+    {repr(X.sample(shape=(4,)))}
     """
     # remove the indentation due to use of block quote within function;
     # eliminate blank first line
@@ -4129,7 +4130,7 @@ class ContinuousDistribution:
     # See the note corresponding with the "Distribution Parameters" for more
     # information.
 
-    def sample(self, shape=(), *, method=None, rng=None):
+    def sample(self, shape=(), *, method=None):
         """Random sample from the distribution.
 
         Parameters
@@ -4150,10 +4151,6 @@ class ContinuousDistribution:
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a `NotImplementedError``
             will be raised.
-        rng : `numpy.random.Generator`, optional
-            The pseudorandom number generator instance with which to generate
-            the sample. If `None` (default), a new generator is instantiated
-            with fresh, unpredictable entropy from the operating system.
 
         References
         ----------
@@ -4187,8 +4184,7 @@ class ContinuousDistribution:
         # dtype and shape
         sample_shape = (shape,) if not np.iterable(shape) else tuple(shape)
         full_shape = sample_shape + self._shape
-        rng = self._validate_rng(rng) or self.rng or np.random.default_rng()
-
+        rng = self.rng or np.random.default_rng()
         res = self._sample_dispatch(sample_shape, full_shape, method=method,
                                     rng=rng, **self._parameters)
 

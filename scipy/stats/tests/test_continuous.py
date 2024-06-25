@@ -245,10 +245,10 @@ def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape):
         assert np.all(np.isfinite(res[valid_parameters]))
         assert_equal(res[~valid_parameters], np.nan)
 
-        sample1 = sample_method(sample_shape, method=method,
-                                rng=np.random.default_rng(42))
-        sample2 = sample_method(sample_shape, method=method,
-                                rng=np.random.default_rng(42))
+        dist.rng = np.random.default_rng(42)
+        sample1 = sample_method(sample_shape, method=method)
+        dist.rng = np.random.default_rng(42)
+        sample2 = sample_method(sample_shape, method=method)
         assert not np.any(np.equal(res, sample1))
         assert_equal(sample1, sample2)
 
@@ -591,7 +591,8 @@ def test_sample_against_cdf(family, dist_shape, x_shape, fname):
     if fname == 'sample':
         sample_method = dist.sample
 
-    x = sample_method(sample_size, rng=rng)
+    dist.rng = rng
+    x = sample_method(sample_size)
     assert x.shape == sample_array_shape
 
     # probably should give `axis` argument to ks_1samp, review that separately
