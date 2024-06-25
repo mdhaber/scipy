@@ -100,7 +100,7 @@ class Normal(ContinuousDistribution):
             return mu
         else:
             return None
-    _moment_raw_formula.orders = [0, 1]
+    _moment_raw_formula.orders = [0, 1]  # type: ignore[attr-defined]
 
     def _moment_central_formula(self, order, *, mu, sigma, **kwargs):
         if order == 0:

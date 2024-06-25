@@ -35,6 +35,7 @@ class Test_RealDomain:
         domain = _RealDomain(endpoints=(a, b), inclusive=(False, True))
         assert_equal(domain.contains(x), (a < x) & (x <= b))
 
+    @pytest.mark.slow
     @given(shapes=npst.mutually_broadcastable_shapes(num_shapes=3, min_side=0),
            inclusive_a=strategies.booleans(),
            inclusive_b=strategies.booleans(),
@@ -87,12 +88,14 @@ class Test_RealDomain:
         domain = _RealDomain(endpoints=case[:2], inclusive=case[2:4])
         assert str(domain) == case[4]
 
-    @given(a=strategies.one_of(strategies.decimals(allow_nan=False),
-                               strategies.characters(whitelist_categories="L"),
-                               strategies.sampled_from(list(_Domain.symbols))),
-           b=strategies.one_of(strategies.decimals(allow_nan=False),
-                               strategies.characters(whitelist_categories="L"),
-                               strategies.sampled_from(list(_Domain.symbols))),
+    @given(a=strategies.one_of(
+        strategies.decimals(allow_nan=False),
+        strategies.characters(whitelist_categories="L"),  # type: ignore[arg-type]
+        strategies.sampled_from(list(_Domain.symbols))),
+           b=strategies.one_of(
+        strategies.decimals(allow_nan=False),
+        strategies.characters(whitelist_categories="L"),  # type: ignore[arg-type]
+        strategies.sampled_from(list(_Domain.symbols))),
            inclusive_a=strategies.booleans(),
            inclusive_b=strategies.booleans(),
            )
@@ -138,13 +141,14 @@ def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
     xy_result_shape = np.broadcast_shapes(y_shape, x_result_shape)
     p_domain = _RealDomain((0, 1), (True, True))
     p = p_domain.draw(x_shape, proportions=proportions, rng=rng)
-    logp = np.log(p)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        logp = np.log(p)
 
     return dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape
 
 
 class TestDistributions:
-    @pytest.mark.filterwarnings("ignore")
+    @pytest.mark.fail_slow(60)  # need to break up check_moment_funcs
     @pytest.mark.parametrize('family', (StandardNormal, Normal, _LogUniform))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_support_moments_sample(self, family, data, seed):
@@ -157,11 +161,12 @@ class TestDistributions:
         sample_shape = data.draw(npst.array_shapes(min_dims=0, min_side=0,
                                                    max_side=20))
 
-        check_support(dist)
-        check_moment_funcs(dist, result_shape)  # this needs to get split up
-        check_sample_shape_NaNs(dist, 'sample', sample_shape, result_shape)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            check_support(dist)
+            check_moment_funcs(dist, result_shape)  # this needs to get split up
+            check_sample_shape_NaNs(dist, 'sample', sample_shape, result_shape)
 
-    @pytest.mark.filterwarnings("ignore")
+    @pytest.mark.fail_slow(10)
     @pytest.mark.parametrize('family', (StandardNormal, Normal, _LogUniform))
     @pytest.mark.parametrize('func, methods, arg',
                              [('entropy', {'log/exp', 'quadrature'}, None),
@@ -191,23 +196,26 @@ class TestDistributions:
         dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape = tmp
 
         args = {'x': x, 'p': p, 'logp': p}
-        if arg is None:
-            check_dist_func(dist, func, None, result_shape, methods)
-        elif arg in args:
-            check_dist_func(dist, func, args[arg], x_result_shape, methods)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            if arg is None:
+                check_dist_func(dist, func, None, result_shape, methods)
+            elif arg in args:
+                check_dist_func(dist, func, args[arg], x_result_shape, methods)
 
         if func == 'variance':
             assert_allclose(dist.standard_deviation()**2, dist.variance())
 
-        if not isinstance(dist, ShiftedScaledDistribution):
-            if func == 'cdf':
-                methods = {'quadrature'}
-                check_cdf2(dist, False, x, y, xy_result_shape, methods)
-                check_cdf2(dist, True, x, y, xy_result_shape, methods)
-            elif func == 'ccdf':
-                methods = {'addition'}
-                check_ccdf2(dist, False, x, y, xy_result_shape, methods)
-                check_ccdf2(dist, True, x, y, xy_result_shape, methods)
+        # invalid and divide are to be expected; maybe look into over
+        with np.errstate(invalid='ignore', divide='ignore', over='ignore'):
+            if not isinstance(dist, ShiftedScaledDistribution):
+                if func == 'cdf':
+                    methods = {'quadrature'}
+                    check_cdf2(dist, False, x, y, xy_result_shape, methods)
+                    check_cdf2(dist, True, x, y, xy_result_shape, methods)
+                elif func == 'ccdf':
+                    methods = {'addition'}
+                    check_ccdf2(dist, False, x, y, xy_result_shape, methods)
+                    check_ccdf2(dist, True, x, y, xy_result_shape, methods)
 
     def test_plot(self):
         try:
@@ -880,7 +888,7 @@ class TestAttributes:
 
 
 class TestTransforms:
-    @pytest.mark.filterwarnings("ignore")
+    @pytest.mark.fail_slow(10)
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_loc_scale(self, data, seed):
         # Need tests with negative scale
@@ -906,35 +914,37 @@ class TestTransforms:
         a0, b0 = dist0.support()
         assert_allclose(a, a0 + loc)
         assert_allclose(b, b0 + loc)
-        assert_allclose(dist.logentropy(), np.log(dist.entropy() + 0j))
-        assert_allclose(dist.entropy(), dist_ref.entropy())
-        assert_allclose(dist.median(), dist0.median() + loc)
-        assert_allclose(dist.mode(), dist0.mode() + loc)
-        assert_allclose(dist.mean(), dist0.mean() + loc)
-        assert_allclose(dist.variance(), dist0.variance() * scale**2)
-        assert_allclose(dist.standard_deviation(), dist.variance()**0.5)
-        assert_allclose(dist.skewness(), dist0.skewness() * np.sign(scale))
-        assert_allclose(dist.kurtosis(), dist0.kurtosis())
-        assert_allclose(dist.logpdf(x), dist0.logpdf(x0) - np.log(scale))
-        assert_allclose(dist.pdf(x), dist0.pdf(x0) / scale)
-        assert_allclose(dist.logcdf(x), dist0.logcdf(x0))
-        assert_allclose(dist.cdf(x), dist0.cdf(x0))
-        assert_allclose(dist.logccdf(x), dist0.logccdf(x0))
-        assert_allclose(dist.ccdf(x), dist0.ccdf(x0))
-        assert_allclose(dist.logcdf(x, y), dist0.logcdf(x0, y0))
-        assert_allclose(dist.cdf(x, y), dist0.cdf(x0, y0))
-        assert_allclose(dist.logccdf(x, y), dist0.logccdf(x0, y0))
-        assert_allclose(dist.ccdf(x, y), dist0.ccdf(x0, y0))
-        assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp)*scale + loc)
-        assert_allclose(dist.icdf(p), dist0.icdf(p)*scale + loc)
-        assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp)*scale + loc)
-        assert_allclose(dist.iccdf(p), dist0.iccdf(p)*scale + loc)
-        for i in range(1, 5):
-            assert_allclose(dist.moment(i, 'raw'), dist_ref.moment(i))
-            assert_allclose(dist.moment(i, 'central'),
-                            dist0.moment(i, 'central') * scale**i)
-            assert_allclose(dist.moment(i, 'standardized'),
-                            dist0.moment(i, 'standardized') * np.sign(scale)**i)
+
+        with np.errstate(invalid='ignore', divide='ignore'):
+            assert_allclose(dist.logentropy(), np.log(dist.entropy() + 0j))
+            assert_allclose(dist.entropy(), dist_ref.entropy())
+            assert_allclose(dist.median(), dist0.median() + loc)
+            assert_allclose(dist.mode(), dist0.mode() + loc)
+            assert_allclose(dist.mean(), dist0.mean() + loc)
+            assert_allclose(dist.variance(), dist0.variance() * scale**2)
+            assert_allclose(dist.standard_deviation(), dist.variance()**0.5)
+            assert_allclose(dist.skewness(), dist0.skewness() * np.sign(scale))
+            assert_allclose(dist.kurtosis(), dist0.kurtosis())
+            assert_allclose(dist.logpdf(x), dist0.logpdf(x0) - np.log(scale))
+            assert_allclose(dist.pdf(x), dist0.pdf(x0) / scale)
+            assert_allclose(dist.logcdf(x), dist0.logcdf(x0))
+            assert_allclose(dist.cdf(x), dist0.cdf(x0))
+            assert_allclose(dist.logccdf(x), dist0.logccdf(x0))
+            assert_allclose(dist.ccdf(x), dist0.ccdf(x0))
+            assert_allclose(dist.logcdf(x, y), dist0.logcdf(x0, y0))
+            assert_allclose(dist.cdf(x, y), dist0.cdf(x0, y0))
+            assert_allclose(dist.logccdf(x, y), dist0.logccdf(x0, y0))
+            assert_allclose(dist.ccdf(x, y), dist0.ccdf(x0, y0))
+            assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp)*scale + loc)
+            assert_allclose(dist.icdf(p), dist0.icdf(p)*scale + loc)
+            assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp)*scale + loc)
+            assert_allclose(dist.iccdf(p), dist0.iccdf(p)*scale + loc)
+            for i in range(1, 5):
+                assert_allclose(dist.moment(i, 'raw'), dist_ref.moment(i))
+                assert_allclose(dist.moment(i, 'central'),
+                                dist0.moment(i, 'central') * scale**i)
+                assert_allclose(dist.moment(i, 'standardized'),
+                                dist0.moment(i, 'standardized') * np.sign(scale)**i)
 
         # Transform back to the original distribution using all arithmetic
         # operations; check that it behaves as expected.
@@ -946,37 +956,39 @@ class TestTransforms:
         a0, b0 = dist0.support()
         assert_allclose(a, a0 + z)
         assert_allclose(b, b0 + z)
-        assert_allclose(dist.logentropy(), dist0.logentropy() + z)
-        assert_allclose(dist.entropy(), dist0.entropy() + z)
-        assert_allclose(dist.median(), dist0.median() + z)
-        assert_allclose(dist.mode(), dist0.mode() + z)
-        assert_allclose(dist.mean(), dist0.mean() + z)
-        assert_allclose(dist.variance(), dist0.variance() + z)
-        assert_allclose(dist.standard_deviation(), dist0.standard_deviation() + z)
-        assert_allclose(dist.skewness(), dist0.skewness() + z)
-        assert_allclose(dist.kurtosis(), dist0.kurtosis() + z)
-        assert_allclose(dist.logpdf(x), dist0.logpdf(x)+z)
-        assert_allclose(dist.pdf(x), dist0.pdf(x) + z)
-        assert_allclose(dist.logcdf(x), dist0.logcdf(x) + z)
-        assert_allclose(dist.cdf(x), dist0.cdf(x) + z)
-        assert_allclose(dist.logccdf(x), dist0.logccdf(x) + z)
-        assert_allclose(dist.ccdf(x), dist0.ccdf(x) + z)
-        assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp) + z)
-        assert_allclose(dist.icdf(p), dist0.icdf(p) + z)
-        assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp) + z)
-        assert_allclose(dist.iccdf(p), dist0.iccdf(p) + z)
-        for i in range(1, 5):
-            assert_allclose(dist.moment(i, 'raw'), dist0.moment(i, 'raw'))
-            assert_allclose(dist.moment(i, 'central'), dist0.moment(i, 'central'))
-            assert_allclose(dist.moment(i, 'standardized'),
-                            dist0.moment(i, 'standardized'))
 
-        # These are tough to compare because of the way the shape works
-        # rng = np.random.default_rng(seed)
-        # rng0 = np.random.default_rng(seed)
-        # assert_allclose(dist.sample(x_result_shape, rng=rng),
-        #                 dist0.sample(x_result_shape, rng=rng0) * scale + loc)
-        # Should also try to test fit, plot?
+        with np.errstate(invalid='ignore', divide='ignore'):
+            assert_allclose(dist.logentropy(), dist0.logentropy() + z)
+            assert_allclose(dist.entropy(), dist0.entropy() + z)
+            assert_allclose(dist.median(), dist0.median() + z)
+            assert_allclose(dist.mode(), dist0.mode() + z)
+            assert_allclose(dist.mean(), dist0.mean() + z)
+            assert_allclose(dist.variance(), dist0.variance() + z)
+            assert_allclose(dist.standard_deviation(), dist0.standard_deviation() + z)
+            assert_allclose(dist.skewness(), dist0.skewness() + z)
+            assert_allclose(dist.kurtosis(), dist0.kurtosis() + z)
+            assert_allclose(dist.logpdf(x), dist0.logpdf(x)+z)
+            assert_allclose(dist.pdf(x), dist0.pdf(x) + z)
+            assert_allclose(dist.logcdf(x), dist0.logcdf(x) + z)
+            assert_allclose(dist.cdf(x), dist0.cdf(x) + z)
+            assert_allclose(dist.logccdf(x), dist0.logccdf(x) + z)
+            assert_allclose(dist.ccdf(x), dist0.ccdf(x) + z)
+            assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp) + z)
+            assert_allclose(dist.icdf(p), dist0.icdf(p) + z)
+            assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp) + z)
+            assert_allclose(dist.iccdf(p), dist0.iccdf(p) + z)
+            for i in range(1, 5):
+                assert_allclose(dist.moment(i, 'raw'), dist0.moment(i, 'raw'))
+                assert_allclose(dist.moment(i, 'central'), dist0.moment(i, 'central'))
+                assert_allclose(dist.moment(i, 'standardized'),
+                                dist0.moment(i, 'standardized'))
+
+            # These are tough to compare because of the way the shape works
+            # rng = np.random.default_rng(seed)
+            # rng0 = np.random.default_rng(seed)
+            # assert_allclose(dist.sample(x_result_shape, rng=rng),
+            #                 dist0.sample(x_result_shape, rng=rng0) * scale + loc)
+            # Should also try to test fit, plot?
 
 
 class TestFullCoverage:

@@ -202,7 +202,7 @@ class _Domain(ABC):
         Gets the numerical values of the domain endpoints, which may have been
         defined symbolically.
     __str__()
-        Returns a text representation of the domain (e.g. ``[-π, ∞)``).
+        Returns a text representation of the domain (e.g. ``[0, b)``).
         Used for generating documentation.
 
     """
@@ -1460,7 +1460,7 @@ class ContinuousDistribution:
     text.
 
     """
-    _parameterizations = []
+    _parameterizations = []  # type: ignore[var-annotated]
 
     ### Initialization
 
@@ -1842,7 +1842,7 @@ class ContinuousDistribution:
 
     def _validate_rng(self, rng):
         # Yet another RNG validating function. Unlike others in SciPy, if `rng
-        # is None`, this returns `None`. This reduces overhead (~30 µs on my
+        # is None`, this returns `None`. This reduces overhead (~.030 ms on my
         # machine) of distribution initialization by delaying a call to
         # `default_rng()` until the RNG will actually be used. It also
         # raises a distribution-specific error message to facilitate
@@ -2157,8 +2157,8 @@ class ContinuousDistribution:
         """
         # If this were a `cached_property`, we couldn't update the value
         # when the distribution parameters change.
-        # Caching is important, though, because calls to _support take 1~2 µs
-        # even when `a` and `b` are already the same shape.
+        # Caching is important, though, because calls to _support take a few
+        # microseconds even when `a` and `b` are already the same shape.
         if self._support_cache is not None:
             return self._support_cache
 
@@ -5029,11 +5029,11 @@ class ShiftedScaledDistribution(TransformedDistribution):
     """Distribution with a standard shift/scale transformation."""
     # Unclear whether infinite loc/scale will work reasonably in all cases
     _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
-    _loc_param = _RealParameter('loc', symbol='µ',
+    _loc_param = _RealParameter('loc', symbol=r'\mu',
                                 domain=_loc_domain, typical=(1, 2))
 
     _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
-    _scale_param = _RealParameter('scale', symbol='σ',
+    _scale_param = _RealParameter('scale', symbol=r'\sigma',
                                   domain=_scale_domain, typical=(0.1, 10))
 
     _parameterizations = [_Parameterization(_loc_param, _scale_param),

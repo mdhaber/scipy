@@ -32,17 +32,6 @@ are:
 Probability distributions
 =========================
 
-Random Variables
-----------------
-
-.. autosummary::
-   :toctree: generated/
-
-   ContinuousDistribution
-   Normal
-   Uniform
-   LogUniform
-
 Each univariate distribution is an instance of a subclass of `rv_continuous`
 (`rv_discrete` for discrete distributions):
 
@@ -466,6 +455,14 @@ tests) are listed above.
 
 The following functions are related to the tests above but do not belong in the
 above categories.
+
+Random Variables
+================
+
+.. autosummary::
+   :toctree: generated/
+
+   Normal
 
 Quasi-Monte Carlo
 =================
