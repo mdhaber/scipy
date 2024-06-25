@@ -145,12 +145,9 @@ def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
 
 class TestDistributions:
     @pytest.mark.filterwarnings("ignore")
-    # @pytest.mark.parametrize('family', (_LogUniform,))  # to check infrastructure
-    # @pytest.mark.parametrize('family', (StandardNormal,))
-    # @pytest.mark.parametrize('family', (Normal,))
     @pytest.mark.parametrize('family', (StandardNormal, Normal, _LogUniform))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
-    def test_basic(self, family, data, seed):
+    def test_support_moments_sample(self, family, data, seed):
         rng = np.random.default_rng(seed)
 
         # relative proportions of valid, endpoint, out of bounds, and NaN params
@@ -161,50 +158,56 @@ class TestDistributions:
                                                    max_side=20))
 
         check_support(dist)
-
-        methods = {'log/exp', 'quadrature'}
-        check_dist_func(dist, 'entropy', None, result_shape, methods)
-        check_dist_func(dist, 'logentropy', None, result_shape, methods)
-
-        methods = {'icdf'}
-        check_dist_func(dist, 'median', None, result_shape, methods)
-
-        methods = {'optimization'}
-        check_dist_func(dist, 'mode', None, result_shape, methods)
-
-        methods = {'cache'}  #  weak test right now
-        check_dist_func(dist, 'mean', None, result_shape, methods)
-        check_dist_func(dist, 'variance', None, result_shape, methods)
-        check_dist_func(dist, 'skewness', None, result_shape, methods)
-        check_dist_func(dist, 'kurtosis', None, result_shape, methods)
-        assert_allclose(dist.standard_deviation()**2, dist.variance())
-
-        check_moment_funcs(dist, result_shape)
+        check_moment_funcs(dist, result_shape)  # this needs to get split up
         check_sample_shape_NaNs(dist, 'sample', sample_shape, result_shape)
 
-        methods = {'log/exp'}
-        check_dist_func(dist, 'pdf', x, x_result_shape, methods)
-        check_dist_func(dist, 'logpdf', x, x_result_shape, methods)
+    @pytest.mark.filterwarnings("ignore")
+    @pytest.mark.parametrize('family', (StandardNormal, Normal, _LogUniform))
+    @pytest.mark.parametrize('func, methods, arg',
+                             [('entropy', {'log/exp', 'quadrature'}, None),
+                              ('logentropy', {'log/exp', 'quadrature'}, None),
+                              ('median', {'icdf'}, None),
+                              ('mode', {'optimization'}, None),
+                              ('mean', {'cache'}, None),
+                              ('variance', {'cache'}, None),
+                              ('skewness', {'cache'}, None),
+                              ('kurtosis', {'cache'}, None),
+                              ('pdf', {'log/exp'}, 'x'),
+                              ('logpdf', {'log/exp'}, 'x'),
+                              ('logcdf', {'log/exp', 'complement', 'quadrature'}, 'x'),
+                              ('cdf', {'log/exp', 'complement', 'quadrature'}, 'x'),
+                              ('logccdf', {'log/exp', 'complement', 'quadrature'}, 'x'),
+                              ('ccdf', {'log/exp', 'complement', 'quadrature'}, 'x'),
+                              ('ilogccdf', {'complement', 'inversion'}, 'logp'),
+                              ('iccdf', {'complement', 'inversion'}, 'p'),
+                              ])
+    @given(data=strategies.data(), seed=strategies.integers(min_value=0))
+    def test_funcs(self, family, data, seed, func, methods, arg):
+        rng = np.random.default_rng(seed)
 
-        methods = {'log/exp', 'complement', 'quadrature'}
-        check_dist_func(dist, 'logcdf', x, x_result_shape, methods)
-        check_dist_func(dist, 'cdf', x, x_result_shape, methods)
-        check_dist_func(dist, 'logccdf', x, x_result_shape, methods)
-        check_dist_func(dist, 'ccdf', x, x_result_shape, methods)
+        # relative proportions of valid, endpoint, out of bounds, and NaN params
+        proportions = (1, 1, 1, 1)
+        tmp = draw_distribution_from_family(family, data, rng, proportions)
+        dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape = tmp
+
+        args = {'x': x, 'p': p, 'logp': p}
+        if arg is None:
+            check_dist_func(dist, func, None, result_shape, methods)
+        elif arg in args:
+            check_dist_func(dist, func, args[arg], x_result_shape, methods)
+
+        if func == 'variance':
+            assert_allclose(dist.standard_deviation()**2, dist.variance())
 
         if not isinstance(dist, ShiftedScaledDistribution):
-            methods = {'quadrature'}
-            check_cdf2(dist, False, x, y, xy_result_shape, methods)
-            check_cdf2(dist, True, x, y, xy_result_shape, methods)
-            methods = {'addition'}
-            check_ccdf2(dist, False, x, y, xy_result_shape, methods)
-            check_ccdf2(dist, True, x, y, xy_result_shape, methods)
-
-        methods = {'complement', 'inversion'}
-        check_dist_func(dist, 'ilogcdf', logp, x_result_shape, methods)
-        check_dist_func(dist, 'icdf', p, x_result_shape, methods)
-        check_dist_func(dist, 'ilogccdf', logp, x_result_shape, methods)
-        check_dist_func(dist, 'iccdf', p, x_result_shape, methods)
+            if func == 'cdf':
+                methods = {'quadrature'}
+                check_cdf2(dist, False, x, y, xy_result_shape, methods)
+                check_cdf2(dist, True, x, y, xy_result_shape, methods)
+            elif func == 'ccdf':
+                methods = {'addition'}
+                check_ccdf2(dist, False, x, y, xy_result_shape, methods)
+                check_ccdf2(dist, True, x, y, xy_result_shape, methods)
 
     def test_plot(self):
         try:
@@ -450,6 +453,7 @@ def check_nans_and_edges(dist, fname, arg, res):
 
     if fname not in {'logmean', 'mean', 'logskewness', 'skewness', 'support'}:
         assert np.isfinite(res[all_valid & (endpoint_arg == 0)]).all()
+
 
 def check_moment_funcs(dist, result_shape):
     # Check that all computation methods of all distribution functions agree
