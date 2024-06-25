@@ -1,4 +1,3 @@
-import functools
 import pickle
 from copy import deepcopy
 
@@ -16,7 +15,7 @@ from scipy.stats._distribution_infrastructure import (
     oo, _Domain, _RealDomain, _Parameter, _Parameterization, _RealParameter,
     ContinuousDistribution, ShiftedScaledDistribution, _fiinfo,
     _generate_domain_support)
-from scipy.stats._new_distributions import LogUniform, StandardNormal, Normal
+from scipy.stats._new_distributions import StandardNormal, Normal, _LogUniform, _Uniform
 
 class Test_RealDomain:
     rng = np.random.default_rng(349849812549824)
@@ -81,7 +80,7 @@ class Test_RealDomain:
         assert_equal(res, ref)
 
     @pytest.mark.parametrize('case', [
-        (-np.inf, np.pi, False, True, "(-∞, π]"),
+        (-np.inf, np.pi, False, True, r"(-\infty, \pi]"),
         ('a', 5, True, False, "[a, 5)")
     ])
     def test_str(self, case):
@@ -146,10 +145,10 @@ def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
 
 class TestDistributions:
     @pytest.mark.filterwarnings("ignore")
-    # @pytest.mark.parametrize('family', (LogUniform,))
+    # @pytest.mark.parametrize('family', (_LogUniform,))  # to check infrastructure
     # @pytest.mark.parametrize('family', (StandardNormal,))
     # @pytest.mark.parametrize('family', (Normal,))
-    @pytest.mark.parametrize('family', (StandardNormal, LogUniform, Normal))
+    @pytest.mark.parametrize('family', (StandardNormal, Normal, _LogUniform))
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_basic(self, family, data, seed):
         rng = np.random.default_rng(seed)
@@ -182,7 +181,6 @@ class TestDistributions:
 
         check_moment_funcs(dist, result_shape)
         check_sample_shape_NaNs(dist, 'sample', sample_shape, result_shape)
-        check_sample_shape_NaNs(dist, 'qmc_sample', sample_shape, result_shape)
 
         methods = {'log/exp'}
         check_dist_func(dist, 'pdf', x, x_result_shape, methods)
@@ -214,7 +212,7 @@ class TestDistributions:
         except ImportError:
             return
 
-        X = stats.Uniform(a=0., b=1.)
+        X = _Uniform(a=0., b=1.)
         ax = X.plot()
         assert ax == plt.gca()
 
@@ -223,9 +221,7 @@ def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape):
     full_shape = sample_shape + result_shape
     if fname == 'sample':
         sample_method = dist.sample
-    elif fname == 'qmc_sample':
-        sample_method = functools.partial(dist.sample,
-                                          qmc_engine=stats.qmc.Halton)
+
     methods = {'inverse_transform'}
     if dist._overrides(f'_{fname}_formula'):
         methods.add('formula')
@@ -571,10 +567,10 @@ def check_moment_funcs(dist, result_shape):
         assert_allclose(dist.moment(i, 'standardized'), ref, atol=atol*10**i)
 
 
-@pytest.mark.parametrize('family', (LogUniform, StandardNormal))
+@pytest.mark.parametrize('family', (StandardNormal,))
 @pytest.mark.parametrize('x_shape', [tuple(), (2, 3)])
 @pytest.mark.parametrize('dist_shape', [tuple(), (4, 1)])
-@pytest.mark.parametrize('fname', ['qmc_sample', 'sample'])
+@pytest.mark.parametrize('fname', ['sample'])
 def test_sample_against_cdf(family, dist_shape, x_shape, fname):
     rng = np.random.default_rng(842582438235635)
     num_parameters = family._num_parameters()
@@ -590,9 +586,7 @@ def test_sample_against_cdf(family, dist_shape, x_shape, fname):
 
     if fname == 'sample':
         sample_method = dist.sample
-    elif fname == 'qmc_sample':
-        sample_method = functools.partial(dist.sample,
-                                          qmc_engine=stats.qmc.Halton)
+
     x = sample_method(sample_size, rng=rng)
     assert x.shape == sample_array_shape
 
@@ -744,8 +738,6 @@ def test_input_validation():
         dist.kurtosis(convention='coconut')
 
 
-
-
 # I removed `None` from this list. The current behavior is to generate a new
 # `default_rng()` every time it is needed. We should not generate it during
 # initialization because it increases the time by more than 50%!
@@ -754,7 +746,7 @@ def test_deepcopy_pickle(seed):
     kwargs = dict(a=[-1, 2], b=10)
     if seed:
         kwargs['rng'] = np.random.default_rng(seed)
-    dist1 = LogUniform(**kwargs)
+    dist1 = _Uniform(**kwargs)
     dist2 = deepcopy(dist1)
     dist3 = pickle.loads(pickle.dumps(dist1))
     res1, res2, res3 = dist1.sample(), dist2.sample(), dist3.sample()
@@ -845,13 +837,13 @@ class TestAttributes:
             def _entropy_formula(self, *args, **kwargs):
                 return wrong_entropy
 
-        X0 = stats.Uniform(a=0., b=0.5)
+        X0 = _Uniform(a=0., b=0.5)
         assert_allclose(TestDist(tol=1e-10).logentropy(), X0.logentropy())
         assert_allclose(TestDist().logentropy(), np.log(wrong_entropy))
 
 
     def test_iv_policy(self):
-        X = stats.Uniform(a=0, b=1)
+        X = _Uniform(a=0, b=1)
         assert X.pdf(2) == 0
 
         X.iv_policy = 'skip_all'
@@ -859,11 +851,11 @@ class TestAttributes:
 
         # Tests _set_invalid_nan
         a, b = np.asarray(1.), np.asarray(0.)  # invalid parameters
-        X = stats.Uniform(a=a, b=b, iv_policy='skip_all')
+        X = _Uniform(a=a, b=b, iv_policy='skip_all')
         assert X.pdf(np.asarray(2.)) == -1
 
         # Tests _set_invalid_nan_property
-        class MyUniform(stats.Uniform):
+        class MyUniform(_Uniform):
             def _entropy_formula(self, *args, **kwargs):
                 return 'incorrect'
 
@@ -979,8 +971,6 @@ class TestTransforms:
         # rng0 = np.random.default_rng(seed)
         # assert_allclose(dist.sample(x_result_shape, rng=rng),
         #                 dist0.sample(x_result_shape, rng=rng0) * scale + loc)
-        # assert_allclose(dist.qmc_sample(x_result_shape, rng=rng),
-        #                 dist0.qmc_sample(x_result_shape, rng=rng0) * scale + loc)
         # Should also try to test fit, plot?
 
 
@@ -1040,15 +1030,15 @@ class TestFullCoverage:
         msg = _generate_domain_support(Normal)
         assert "accepts one parameterization" in msg
 
-        msg = _generate_domain_support(LogUniform)
+        msg = _generate_domain_support(_LogUniform)
         assert "accepts two parameterizations" in msg
 
     def test_ContinuousDistribution__str__(self):
-        X = stats.Uniform(a=0, b=1)
-        assert str(X) == "Uniform(a=0.0, b=1.0)"
+        X = _Uniform(a=0, b=1)
+        assert str(X) == "_Uniform(a=0.0, b=1.0)"
 
-        X = stats.Uniform(a=np.zeros(4), b=1)
-        assert str(X) == "Uniform(a, b, shape=(4,))"
+        X = _Uniform(a=np.zeros(4), b=1)
+        assert str(X) == "_Uniform(a, b, shape=(4,))"
 
-        X = stats.Uniform(a=np.zeros(4, dtype=np.float32), b=np.ones(4, dtype=np.float32))
-        assert str(X) == "Uniform(a, b, shape=(4,), dtype=float32)"
+        X = _Uniform(a=np.zeros(4, dtype=np.float32), b=np.ones(4, dtype=np.float32))
+        assert str(X) == "_Uniform(a, b, shape=(4,), dtype=float32)"

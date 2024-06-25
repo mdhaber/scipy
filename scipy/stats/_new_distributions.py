@@ -6,36 +6,9 @@ import numpy as np
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
-    oo, TransformedDistribution, _combine_docs)
+    oo, _combine_docs)
 
-__all__ = ['Normal', 'Uniform', 'LogUniform']
-
-def factorial(n):
-    return special.gamma(n + 1)
-
-
-class OrderStatisticDistribution(TransformedDistribution):
-
-    # These should really be _IntegerDomain/_IntegerParameter
-    _r_domain = _RealDomain(endpoints=(1, 'n'), inclusive=(True, True))
-    _r_param = _RealParameter('r', domain=_r_domain, typical=(1, 2))
-
-    _n_domain = _RealDomain(endpoints=(1, np.inf), inclusive=(True, True))
-    _n_param = _RealParameter('n', domain=_n_domain, typical=(1, 4))
-
-    _r_domain.define_parameters(_n_param)
-
-    _parameterizations = [_Parameterization(_r_param, _n_param)]
-
-    def _overrides(self, method_name):
-        return method_name == '_pdf_formula'
-
-    def _pdf_formula(self, x, r, n, **kwargs):
-        factor = factorial(n) / (factorial(r-1) * factorial(n-r))
-        fX = self._dist._pdf_dispatch(x, **kwargs)
-        FX = self._dist._cdf_dispatch(x, **kwargs)
-        cFX = self._dist._ccdf_dispatch(x, **kwargs)
-        return factor * fX * FX**(r-1) * cFX**(n-r)
+__all__ = ['Normal']
 
 
 class Normal(ContinuousDistribution):
@@ -56,9 +29,9 @@ class Normal(ContinuousDistribution):
     _sigma_domain = _RealDomain(endpoints=(0, oo))
     _x_support = _RealDomain(endpoints=(-oo, oo))
 
-    _mu_param = _RealParameter('mu',  symbol=r'µ', domain=_mu_domain,
+    _mu_param = _RealParameter('mu',  symbol=r'\mu', domain=_mu_domain,
                                typical=(-1, 1))
-    _sigma_param = _RealParameter('sigma', symbol=r'σ', domain=_sigma_domain,
+    _sigma_param = _RealParameter('sigma', symbol=r'\sigma', domain=_sigma_domain,
                                   typical=(0.5, 1.5))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-1, 1))
 
@@ -224,7 +197,8 @@ class StandardNormal(Normal):
         return rng.normal(size=full_shape)[()]
 
 
-class LogUniform(ContinuousDistribution):
+# currently for testing only
+class _LogUniform(ContinuousDistribution):
     r"""Log-uniform distribution.
 
     The probability density function of the log-uniform distribution is:
@@ -290,30 +264,8 @@ class LogUniform(ContinuousDistribution):
         return t1 * t2
 
 
-class LogLaplace(ContinuousDistribution):
-    """Log-Laplace distribution."""
-
-    _mu_domain = _RealDomain(endpoints=(-oo, oo))
-    _b_domain = _RealDomain(endpoints=(0, oo))
-    _x_support = _RealDomain(endpoints=(0, np.inf), inclusive=(False, False))
-
-    _mu_param = _RealParameter('mu', domain=_mu_domain, symbol='µ', typical=(-1e2, 1e2))
-    _b_param = _RealParameter('b', domain=_b_domain, typical=(1, 10))
-    _x_param = _RealParameter('x', domain=_x_support, typical=(1, 10))
-
-    _parameterizations = [_Parameterization(_mu_param, _b_param)]
-    _variable = _x_param
-
-    def _pdf_formula(self, x, *, mu, b, **kwargs):
-        return 1/(2*b*x) * np.exp(-np.abs(np.log(x) - mu)/b)
-
-    def _moment_raw_formula(self, order, *, mu, b, **kwargs):
-        with np.errstate(divide='ignore'):
-            c2, n2 = b**-2, order**2
-            return np.where(n2 < c2, c2 / (c2 - n2), np.inf)
-
-
-class Uniform(ContinuousDistribution):
+# currently for testing only
+class _Uniform(ContinuousDistribution):
     r"""Uniform distribution.
 
     The probability density function of the uniform distribution is:
@@ -356,83 +308,6 @@ class Uniform(ContinuousDistribution):
     def _mode_formula(self, *, a, b, ab, **kwargs):
         return a + 0.5*ab
 
-# class CircularDistribution(ShiftedScaledDistribution):
-#     """Class that represents a circular statistical distribution."""
-#     # Define 2-arg cdf functions
-#     # Define 2-arg inverse CDF - one argument is left quantile
-#     # Define mean, median, mode, variance, standard_deviation, entropy
-#     # Raise error on use of moment functions?
-#     # Should support be -inf, inf because that is the range of values that
-#     #  produce nonzero pdf? Or should support be the left and right wrap
-#     #  points? The trouble with left and right wrap points is that this
-#     #  triggers `_set_invalid_nan` to zero the pdf. We'd need to adjust
-#     #  `_set_invalid_nan` for circular distributions. (We probably need to
-#     #  do that anyway.) The nice thing about using the left and right wrap
-#     #  points is that some other methods would begin to do sensible things
-#     #  by default. For example, I think `qmc_sample` would begin to work.
-#     _a_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
-#     _a_param = _RealParameter('a', domain=_a_domain)
-#
-#     _b_domain = _RealDomain(endpoints=('a', oo), inclusive=(True, True))
-#     _b_param = _RealParameter('b', domain=_b_domain)
-#
-#     _parameterizations = [_Parameterization(_a_param, _b_param)]
-#
-#     def _process_parameters(self, a, b, **kwargs):
-#         scale = b - a
-#         parameters = self._dist._process_parameters(**kwargs)
-#         parameters.update(dict(a=a, b=b, scale=scale))
-#         return parameters
-#
-#     def _transform(self, x, a, b, scale, **kwargs):
-#         x01 = (x - a)/scale  # shift/scale to 0-1
-#         x01 %= 1  # wrap to 0-1
-#         return 2*np.pi*x01 - np.pi  # shift/scale to -π, π
-#
-#     def _itransform(self, x, a, b, scale, **kwargs):
-#         x01 = (x + np.pi)/(2*np.pi)  # shift/scale to 0-1
-#         return scale*x01 + a  # shift/scale to a, b
-#
-#     def _support(self, a, b, scale, **kwargs):
-#         return np.full_like(a, -np.inf), np.full_like(b, np.inf)
-#
-#     def _pdf_dispatch(self, x, *args, a, b, scale, **kwargs):
-#         x = self._transform(x, a, b, scale)
-#         pdf = self._dist._pdf_dispatch(x, *args, **kwargs)
-#         return pdf / abs(scale) * 2*np.pi
-#
-#     def _sample_dispatch(self, sample_shape, full_shape, *,
-#                          method, rng, **kwargs):
-#         rvs = self._dist._sample_dispatch(
-#             sample_shape, full_shape, method=method, rng=rng, **kwargs)
-#         return self._itransform(rvs, **kwargs)
-#
-
-# class VonMises(CircularDistribution):
-#     def __init__(self, *args, mu, kappa, a=-np.pi, b=np.pi, **kwargs):
-#         super().__init__(_VonMises(mu=mu, kappa=kappa), *args,
-#                          a=a, b=b, **kwargs)
-#
-#
-# class _VonMises(ContinuousDistribution):
-#
-#     _mu_domain = _RealDomain(endpoints=(-np.pi, np.pi), inclusive=(True, True))
-#     _kappa_domain = _RealDomain(endpoints=(0, oo), inclusive=(False, False))
-#
-#     _mu_param = _RealParameter('mu', symbol='µ', domain=_mu_domain,
-#                                typical=(-1, 1))
-#     _kappa_param = _RealParameter('kappa', symbol='κ', domain=_kappa_domain,
-#                                   typical=(0.1, 10))
-#     _x_param = _RealParameter('x', domain=_mu_domain, typical=(-1, 1))
-#
-#     _parameterizations = [_Parameterization(_mu_param, _kappa_param)]
-#     _variable = _x_param
-#
-#     def _pdf_formula(self, x, mu, kappa, **kwargs):
-#         return np.exp(kappa * np.cos(x - mu))/(2*np.pi*special.i0(kappa))
-#
-#     def _sample_formula(self, sample_shape, full_shape, rng, mu, kappa, **kwargs):
-#         return rng.vonmises(mu=mu, kappa=kappa, size=full_shape)[()]
 
 _docfile = "_new_distribution_docs.json"
 _docdir = os.path.dirname(__file__)
@@ -446,7 +321,7 @@ if __name__ == "__main__":
     with open(_docpath, 'w') as f:
         json.dump(docs, f, indent="    ")
 
-with open(_docpath, 'r') as f:
+with open(_docpath) as f:
     docs = json.load(f)
     for dist_name in __all__:
         _module[dist_name].__doc__ = docs[dist_name]

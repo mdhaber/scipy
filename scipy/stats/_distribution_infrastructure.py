@@ -6,7 +6,7 @@ import numpy as np
 
 from scipy._lib._util import _lazywhere
 from scipy._lib._docscrape import ClassDoc, NumpyDocString
-from scipy import special, optimize
+from scipy import special
 from scipy.integrate._tanhsinh import _tanhsinh
 from scipy.optimize._bracket import _bracket_root, _bracket_minimum
 from scipy.optimize._chandrupatla import _chandrupatla, _chandrupatla_minimize
@@ -202,11 +202,11 @@ class _Domain(ABC):
         Gets the numerical values of the domain endpoints, which may have been
         defined symbolically.
     __str__()
-        Returns a text representation of the domain (e.g. `[-π, ∞)`).
+        Returns a text representation of the domain (e.g. ``[-π, ∞)``).
         Used for generating documentation.
 
     """
-    symbols = {np.inf: "∞", -np.inf: "-∞", np.pi: "π", -np.pi: "-π"}
+    symbols = {np.inf: r"\infty", -np.inf: r"-\infty", np.pi: r"\pi", -np.pi: r"-\pi"}
 
     @abstractmethod
     def contains(self, x):
@@ -560,7 +560,7 @@ class _Parameter(ABC):
 
     def __str__(self):
         r""" String representation of the parameter for use in documentation."""
-        return f"`{self.name}` for :math:`{self.symbol} ∈ {str(self.domain)}`"
+        return f"`{self.name}` for :math:`{self.symbol} \\in {str(self.domain)}`"
 
     def draw(self, size=None, *, rng=None, domain='typical', proportions=None,
              parameter_values=None):
@@ -1359,15 +1359,12 @@ def _generate_example(dist_family):
     >>> np.allclose(np.exp(X.logentropy()), X.entropy())
     True
 
-    Pseudo-random and quasi-Monte Carlo samples can be drawn from
+    Pseudo-random samples can be drawn from
     the underlying distribution using ``sample``.
 
     >>> rng = np.random.default_rng(2354873452)
     >>> X.sample(shape=(4,), rng=rng)
     {repr(X.sample(shape=(4,), rng=rng))}
-    >>> n = 200
-    >>> s = X.sample(shape=(n,), rng=rng, qmc_engine=stats.qmc.Halton)
-    >>> assert np.count_nonzero(s < X.median()) == n/2
     """
     # remove the indentation due to use of block quote within function;
     # eliminate blank first line
@@ -1414,8 +1411,6 @@ class ContinuousDistribution:
     plot
 
     sample
-
-    fit
 
     moment
 
@@ -1973,7 +1968,6 @@ class ContinuousDistribution:
 
         a = -np.ones_like(xmin)
         b = np.ones_like(xmax)
-        d = xmax - xmin
 
         i = np.isfinite(xmin) & np.isfinite(xmax)
         a[i] = xmin[i]
@@ -4135,8 +4129,8 @@ class ContinuousDistribution:
     # See the note corresponding with the "Distribution Parameters" for more
     # information.
 
-    def sample(self, shape=(), *, method=None, rng=None, qmc_engine=None):
-        """Random or quasi-Monte Carlo sample from the distribution.
+    def sample(self, shape=(), *, method=None, rng=None):
+        """Random sample from the distribution.
 
         Parameters
         ----------
@@ -4160,27 +4154,6 @@ class ContinuousDistribution:
             The pseudorandom number generator instance with which to generate
             the sample. If `None` (default), a new generator is instantiated
             with fresh, unpredictable entropy from the operating system.
-        qmc_engine : `scipy.stats.qmc.QMCEngine` subclass, optional
-            A QMC engine class with which to generate a quasi-Monte Carlo sample.
-            An instance of the `qmc_engine` class will be created and provided
-            with `rng` (e.g. for use with shuffling). Typically, the use of
-            `qmc_engine` with ``method='formula'`` will be incompatible.
-
-        Notes
-        -----
-        The values of a quasi-Monte Carlo sequence are not statistically
-        independent; the sequence is designed to have low-discrepancy.
-        The output of `sample` is always formed with this low-discrepancy
-        sequence aligned along axis ``0``. Separate slices along axis ``0``
-        (e.g. separate columns of a 2D output) are separate low-discrepancy
-        sequences; the low-discrepancy properties hold *only* along axis
-        ``0``, not along other axes. By default, many `QMCEngine` classes
-        use a pseudorandom number generator (provided by `rng`, in this case)
-        to *scramble* these separate sequences so they are statistically
-        independent. Consequently, the following simple rule holds for
-        quasi-Monte Carlo samples drawn using `QMCEngine` classes that
-        employ scrambling: each slice along axis ``0`` of the result is a
-        statistically independent low-discrepancy sequence.
 
         References
         ----------
@@ -4202,23 +4175,6 @@ class ContinuousDistribution:
         >>> np.count_nonzero(x <= octiles, axis=0)
         array([ 148,  263,  387,  516,  636,  751,  865, 1000])  # may vary
 
-        Generate a Quasi-Monte Carlo sample:
-
-        >>> x = X.sample((1000, 1), qmc_engine=stats.qmc.Halton)
-        >>> np.count_nonzero(x <= octiles, axis=0)
-        array([ 125,  250,  375,  500,  625,  750,  875, 1000])
-
-        The QMC sample has low discrepancy along axis 0:
-
-        >>> x = X.sample((1000, 3, 1), qmc_engine=stats.qmc.Halton)
-        >>> np.count_nonzero(x <= octiles, axis=0)
-        array([[ 125,  250,  375,  500,  625,  750,  875, 1000],
-               [ 124,  249,  374,  498,  624,  750,  875, 1000],
-               [ 124,  249,  374,  498,  624,  750,  874, 1000]])
-
-        The shape of the result is the sum of the `shape` parameter
-        and the shape of the broadcasted distribution parameter arrays.
-
         >>> X = stats.Uniform(a=np.zeros((3, 1)), b=np.ones(2))
         >>> X.a.shape,
         (3, 2)
@@ -4233,16 +4189,9 @@ class ContinuousDistribution:
         full_shape = sample_shape + self._shape
         rng = self._validate_rng(rng) or self.rng or np.random.default_rng()
 
-        if qmc_engine is None:
-            res = self._sample_dispatch(sample_shape, full_shape, method=method,
-                                        rng=rng, **self._parameters)
-        else:
-            # needs input validation for qrng
-            d = int(np.prod(full_shape[1:]))
-            length = full_shape[0] if full_shape else 1
-            qrng = qmc_engine(d=d, seed=rng)
-            res = self._qmc_sample_dispatch(length, full_shape, method=method,
-                                            qrng=qrng, **self._parameters)
+        res = self._sample_dispatch(sample_shape, full_shape, method=method,
+                                    rng=rng, **self._parameters)
+
         return res.astype(self._dtype, copy=False)
 
     @_dispatch
@@ -4259,23 +4208,6 @@ class ContinuousDistribution:
 
     def _sample_inverse_transform(self, sample_shape, full_shape, *, rng, **params):
         uniform = rng.random(size=full_shape, dtype=self._dtype)
-        return self._icdf_dispatch(uniform, **params)
-
-    @_dispatch
-    def _qmc_sample_dispatch(self, length, full_shape, *, method, qrng, **params):
-        # make sure that tests catch if sample is 0d array
-        if self._overrides('_qmc_sample_formula'):
-            method = self._qmc_sample_formula
-        else:
-            method = self._qmc_sample_inverse_transform
-        return method
-
-    def _qmc_sample_formula(self, length, full_shape, *, qrng, **params):
-        raise NotImplementedError(self._not_implemented)
-
-    def _qmc_sample_inverse_transform(self, length, full_shape, *, qrng, **params):
-        uniform = qrng.random(length)
-        uniform = np.reshape(uniform, full_shape).astype(self._dtype)
         return self._icdf_dispatch(uniform, **params)
 
     ### Moments
@@ -4751,7 +4683,7 @@ class ContinuousDistribution:
         Compare against a histogram of a random sample.
 
         >>> ax = X.plot()
-        >>> sample = X.sample(10000, qmc_engine=stats.qmc.Halton)
+        >>> sample = X.sample(10000)
         >>> ax.hist(sample, density=True, bins=50, alpha=0.5)
         >>> plt.show()
 
@@ -4973,166 +4905,8 @@ class ContinuousDistribution:
     #         return np.reshape(res, x.shape)
     #
     #     return _differentiate(f, self._parameters[var]).df
-
-    def fit(self, parameters, objective):
-        """Fit the distribution parameters to meet an objective.
-
-        Parameters
-        ----------
-        parameters : iterable of str or dict
-            An iterable containing the names of distribution parameters to be
-            adjusted to meet the `objective`. If a dictionary, the value
-            corresponding with each parameter name is a 2-tuple containing
-            lower and upper bounds of the parameter.
-        objective : callable or dict
-            If a callable, this is a scalar-valued function to be maximized by
-            adjusting the specified `parameters` of the random variable.
-
-            Otherwise, this is a dictionary with the following keys:
-
-            * ``'f'``: a callable as above, but may be vector-valued.
-            * ``'input'`` (optional): a tuple of arguments to be passed to the callable.
-            * ``'output'`` (optional): the desired output of the callable. If an array,
-              the objective is to minimize the Euclidean norm of the residual. Strings
-              ``'maximize'`` (default) and ``'minimize'`` are also recognized.
-
-            If the callable is recognized as a method of the distribution,
-            additional constraints may be imposed on the distribution parameters. For
-            instance, if the callable is `llf`, then the first
-            element of `input` represents observations of the random variable, so a
-            constraint ensures that the observations remain within the support.
-
-        Notes
-        -----
-        To use this method, the shape parameters of the distribution must be scalars.
-        If the distribution parameters are arrays, a ``NotImplementedError`` is raised.
-
-        Currently, this method does not return a result; rather, it modifies the
-        parameters of the provided distribution instance. In the future, a result
-        object with information about the optimization status may be returned.
-
-        Examples
-        --------
-        Instantiate a distribution with the desired parameters:
-
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from scipy import stats
-        >>> X = stats.Normal(mu=0., sigma=1.)
-        >>> rng = np.random.default_rng()
-
-        Adjust the shape parameters to fit the distribution to data using maximum
-        likelihood estimation.
-
-        >>> data = X.sample(1000, rng=rng)
-        >>> X.fit(['mu', 'sigma'], dict(f=X.llf, input=(data,)))
-        >>> X.plot()
-        >>> plt.hist(data, density=True, alpha=0.5)
-        >>> plt.show()
-
-        Adjust the shape parameters to achieve a desired mean and standard deviation.
-
-        >>> X.fit(['mu', 'sigma'],
-        ...       dict(f=lambda: [X.mean(), X.standard_deviation()],
-        ...            output=[1, 2]))
-        >>> X.mean(), X.standard_deviation()
-        (1.0000000860089517, 1.9999999399112434)
-
-        """
-        # add `_fit` implementation methods
-
-        # The value added, compared to requiring the user to optimize/solve
-        # on their own:
-        # - (potentially) more efficient calls to private rather than public functions
-        # - (potentially) more efficient changes in parameter values
-        # - (potentially) automatically include constraints
-        # - convenience (least important)
-
-        # this should probably be in a context manager to make sure it gets set back
-        # rather than turning input validation off, call private function?
-        iv_policy = self.iv_policy
-        self.iv_policy = 'skip_all'
-        x0 = [getattr(self, parameter) for parameter in parameters]
-
-        if callable(objective):
-            f = objective
-            args = ()
-            output = 'maximize'
-        else:
-            f = objective['f']
-            args = objective.get('input', ())  # should do input validation on these
-            output = objective.get('output', 'maximize')
-
-        if output == 'maximize':
-            def objective(x):
-                self._update_parameters(**dict(zip(parameters, x)))
-                return -f(*args)
-        elif output == 'minimize':
-            def objective(x):
-                self._update_parameters(**dict(zip(parameters, x)))
-                return f(*args)
-        else:
-            output = np.asarray(output)
-            def objective(x):
-                self._update_parameters(**dict(zip(parameters, x)))
-                return np.linalg.norm(f(*args) - output)
-
-        param_info = self._parameterization.parameters
-        bounds = np.asarray([param_info[param_name].domain.endpoints
-                             for param_name in parameters], dtype=object)
-        # should use bounds when possible
-        numerical_bounds = []
-        constraints = []
-
-        for i, bound in enumerate(bounds):
-            a, b = bound
-            str_a, str_b = isinstance(a, str), isinstance(b, str)
-            numerical_bound = [a if not str_a else -np.inf, b if not str_b else np.inf]
-            numerical_bounds.append(numerical_bound)
-
-            if str_a or str_b:
-                def g(x):
-                    p = dict(zip(parameters, x))
-                    name = parameters[i]
-                    a, b = param_info[name].domain.get_numerical_endpoints(p)
-                    var = x[i]
-                    res = []
-                    if str_a:
-                        res = var - a
-                    if str_b:
-                        res = b - var
-                    return res
-                constraints.append(optimize.NonlinearConstraint(g, 0, np.inf))
-
-        if f in {self.llf, self.pdf, self.logpdf, self.cdf,
-                 self.logcdf, self.ccdf, self.logccdf}:
-
-            data = np.asarray(args[0])
-            data_min, data_max = np.min(data), np.max(data)
-
-            # for now, assume that support bounds cannot become
-            # infinite by changing parameters
-            a, b = self.support()
-            inf_a, inf_b = np.isinf(a), np.isinf(b)
-
-            if not inf_a or not inf_b:
-                def g(x):
-                    self._update_parameters(**dict(zip(parameters, x)))
-                    a, b = self.support()
-                    res = []
-                    if not inf_a:
-                        res.append(data_min - a)
-                    if not inf_b:
-                        res.append(b - data_max)
-                    return res
-                constraints.append(optimize.NonlinearConstraint(g, 0, np.inf))
-
-        res = optimize.minimize(objective, x0, constraints=constraints,
-                                bounds=numerical_bounds)
-        self.iv_policy = iv_policy
-        self._update_parameters(**dict(zip(parameters, res.x)))
-        return
-
+    #
+    # fit method removed for initial PR
 
 # Rough sketch of how we might shift/scale distributions. The purpose of
 # making it a separate class is for
@@ -5411,12 +5185,6 @@ class ShiftedScaledDistribution(TransformedDistribution):
                          method, rng, **params):
         rvs = self._dist._sample_dispatch(
             sample_shape, full_shape, method=method, rng=rng, **params)
-        return self._itransform(rvs, **params)
-
-    def _qmc_sample_dispatch(self, length, full_shape, *,
-                             method, qrng, **params):
-        rvs = self._dist._qmc_sample_dispatch(
-            length, full_shape, method=method, qrng=qrng, **params)
         return self._itransform(rvs, **params)
 
     def __add__(self, loc):
