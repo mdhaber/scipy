@@ -88,6 +88,7 @@ class Test_RealDomain:
         domain = _RealDomain(endpoints=case[:2], inclusive=case[2:4])
         assert str(domain) == case[4]
 
+    @pytest.mark.slow
     @given(a=strategies.one_of(
         strategies.decimals(allow_nan=False),
         strategies.characters(whitelist_categories="L"),  # type: ignore[arg-type]
@@ -196,7 +197,7 @@ class TestDistributions:
         dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape = tmp
 
         args = {'x': x, 'p': p, 'logp': p}
-        with np.errstate(invalid='ignore', divide='ignore'):
+        with np.errstate(invalid='ignore', divide='ignore', over='ignore'):
             if arg is None:
                 check_dist_func(dist, func, None, result_shape, methods)
             elif arg in args:
