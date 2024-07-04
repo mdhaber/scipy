@@ -39,6 +39,7 @@ from scipy import sparse
 from scipy.spatial import distance_matrix
 
 from scipy.optimize import milp, LinearConstraint
+from scipy.optimize.elementwise import find_root
 from scipy._lib._util import (check_random_state, _get_nan,
                               _rename_parameter, _contains_nan,
                               AxisError, _lazywhere)
@@ -10648,7 +10649,7 @@ def _rankdata(x, method, return_ties=False):
     return ranks
 
 
-def expectile(a, alpha=0.5, *, weights=None):
+def expectile(a, alpha=0.5, *, axis=0, weights=None):
     r"""Compute the expectile at the specified level.
 
     Expectiles are a generalization of the expectation in the same way as
@@ -10661,6 +10662,11 @@ def expectile(a, alpha=0.5, *, weights=None):
         Array containing numbers whose expectile is desired.
     alpha : float, default: 0.5
         The level of the expectile; e.g., ``alpha=0.5`` gives the mean.
+    axis : int or None, default: 0
+        If an int, the axis of the input along which to compute the statistic.
+        The statistic of each axis-slice (e.g. row) of the input will appear
+        in a corresponding element of the output. If ``None``, the input will
+        be raveled before computing the statistic.
     weights : array_like, optional
         An array of weights associated with the values in `a`.
         The `weights` must be broadcastable to the same shape as `a`.
@@ -10751,27 +10757,35 @@ def expectile(a, alpha=0.5, *, weights=None):
     if weights is not None:
         weights = np.broadcast_to(weights, a.shape)
 
+
     # This is the empirical equivalent of Eq. (13) with identification
     # function from Table 9 (omitting a factor of 2) in [2] (their y is our
     # data a, their x is our t)
-    def first_order(t):
-        return np.average(np.abs((a <= t) - alpha) * (t - a), weights=weights)
+    def first_order(t, *indices):
+        return _xp_mean(np.abs((a[*indices] <= t.ravel()) - alpha) * (t.ravel() - a[*indices]), axis=axis, weights=weights).reshape(t.shape)
 
+    # x0 = np.amin(a, axis=axis)
+    # x1 = np.amax(a, axis=axis)
     if alpha >= 0.5:
-        x0 = np.average(a, weights=weights)
-        x1 = np.amax(a)
+        x0 = _xp_mean(a, axis=axis, weights=weights, keepdims=True)
+        x1 = np.amax(a, axis=axis, keepdims=True)
     else:
-        x1 = np.average(a, weights=weights)
-        x0 = np.amin(a)
+        x1 = _xp_mean(a, axis=axis, weights=weights, keepdims=True)
+        x0 = np.amin(a, axis=axis, keepdims=True)
 
-    if x0 == x1:
-        # a has a single unique element
-        return x0
+    out = x0
+    indices = np.where(x0 != x1)[:-1]
+
+    # # need to update this
+    # if x0 == x1:
+    #     # a has a single unique element
+    #     return x0
 
     # Note that the expectile is the unique solution, so no worries about
     # finding a wrong root.
-    res = root_scalar(first_order, x0=x0, x1=x1)
-    return res.root
+    res = find_root(first_order, (x0-1e-6, x1+1e-6), args=indices)
+    out[*indices] = res.x
+    return out
 
 
 LinregressResult = _make_tuple_bunch('LinregressResult',
