@@ -1845,8 +1845,9 @@ class ContinuousDistribution:
         # Yet another RNG validating function. Unlike others in SciPy, if `rng
         # is None`, this returns `None`. This reduces overhead (~.030 ms on my
         # machine) of distribution initialization by delaying a call to
-        # `default_rng()` until the RNG will actually be used. It also
-        # raises a distribution-specific error message to facilitate
+        # `default_rng()` until the RNG will actually be used, and it prevents
+        # unseeded Generators from being stored.
+        # It also raises a distribution-specific error message to facilitate
         #  identification of the source of the error.
         if self.validation_policy == _SKIP_ALL:
             return rng
