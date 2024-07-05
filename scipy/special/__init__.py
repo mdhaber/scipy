@@ -811,7 +811,15 @@ from ._ufuncs import *
 from ._support_alternative_backends import (
     log_ndtr, ndtr, ndtri, erf, erfc, i0, i0e, i1, i1e, gammaln,
     gammainc, gammaincc, logit, expit, entr, rel_entr, xlogy,
-    chdtr, chdtrc, betainc, betaincc, stdtr)
+    chdtr, chdtrc, betainc, betaincc, stdtr, j0, k0, k0e,
+    k1, k1e, y0, y1, yn, bdtr, bdtrc, bdtri, btdtr, btdtri,
+    fdtr, fdtrc, fdtri, gdtr, gdtrc, nbdtr, nbdtrc, nbdtri,
+    pdtr, pdtrc, pdtri, boxcox, boxcox1p, inv_boxcox, inv_boxcox1p,
+    kl_div, huber, pseudo_huber, gamma, gammaincinv, gammainccinv,
+    beta, betaln, psi, rgamma, poch, ellipk,
+    ellipkm1, ellipj,  erfcx, erfinv, erfcinv, exp1, expi, expn,
+    exprel, zetac, cbrt, exp10, exp2, radian, cosdg, sindg,
+    tandg, cotdg, log1p, exp1, cosm1)
 
 from . import _basic
 from ._basic import *

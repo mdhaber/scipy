@@ -251,7 +251,7 @@ hypothesis.configuration.set_hypothesis_home_dir(
 # The first is designed for our own CI runs; the latter also
 # forces determinism and is designed for use via scipy.test()
 hypothesis.settings.register_profile(
-    name="nondeterministic", deadline=None, print_blob=True,
+    name="nondeterministic", deadline=None, print_blob=True, max_examples=1000,
 )
 hypothesis.settings.register_profile(
     name="deterministic",

@@ -1,5 +1,7 @@
 import pytest
 
+from hypothesis import given, strategies, reproduce_failure  # noqa: F401
+import hypothesis.extra.numpy as npst
 from scipy.special._support_alternative_backends import (get_array_special_func,
                                                          array_special_func_map)
 from scipy.conftest import array_api_compatible
@@ -51,37 +53,22 @@ def test_rel_entr_generic(dtype):
 # @pytest.mark.usefixtures("skip_xp_backends")
 # `reversed` is for developer convenience: test new function first = less waiting
 @pytest.mark.parametrize('f_name_n_args', reversed(array_special_func_map.items()))
-@pytest.mark.parametrize('dtype', ['float32', 'float64'])
-@pytest.mark.parametrize('shapes', [[(0,)]*4, [tuple()]*4, [(10,)]*4,
-                                    [(10,), (11, 1), (12, 1, 1), (13, 1, 1, 1)]])
-def test_support_alternative_backends(xp, f_name_n_args, dtype, shapes):
+@given(data=strategies.data())
+def test_support_alternative_backends(xp, data, f_name_n_args):
     f_name, n_args = f_name_n_args
-    shapes = shapes[:n_args]
     f = getattr(special, f_name)
 
+    mbs = npst.mutually_broadcastable_shapes(num_shapes=n_args)
+    shapes, final_shape = data.draw(mbs)
+
+    dtype = data.draw(strategies.sampled_from(['float32', 'float64']))
     dtype_np = getattr(np, dtype)
     dtype_xp = getattr(xp, dtype)
 
-    # # To test the robustness of the alternative backend's implementation,
-    # # use Hypothesis to generate arguments
-    # from hypothesis import given, strategies, reproduce_failure, assume
-    # import hypothesis.extra.numpy as npst
-    # @given(data=strategies.data())
-    # mbs = npst.mutually_broadcastable_shapes(num_shapes=n_args)
-    # shapes, final_shape = data.draw(mbs)
-    # elements = dict(allow_subnormal=False)  # consider min_value, max_value
-    # args_np = [np.asarray(data.draw(npst.arrays(dtype_np, shape, elements=elements)),
-    #                       dtype=dtype_np)
-    #            for shape in shapes]
-
-    # For CI, be a little more forgiving; just generate normally distributed arguments
-    rng = np.random.default_rng(984254252920492019)
-    args_np = [rng.standard_normal(size=shape, dtype=dtype_np) for shape in shapes]
-
-    if (is_jax(xp) and f_name == 'gammaincc'  # google/jax#20699
-            or f_name == 'chdtrc'):  # gh-20972
-        args_np[0] = np.abs(args_np[0])
-        args_np[1] = np.abs(args_np[1])
+    elements = dict(min_value=dtype_np(-10), max_value=dtype_np(10),
+                    allow_subnormal=False)
+    args_np = [np.asarray(data.draw(npst.arrays(dtype_np, shape, elements=elements)))
+               for shape in shapes]
 
     args_xp = [xp.asarray(arg[()], dtype=dtype_xp) for arg in args_np]
 
