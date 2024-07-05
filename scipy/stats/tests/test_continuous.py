@@ -755,21 +755,34 @@ def test_input_validation():
         dist.kurtosis(convention='coconut')
 
 
-# I removed `None` from this list. The current behavior is to generate a new
-# `default_rng()` every time it is needed. We should not generate it during
-# initialization because it increases the time by more than 50%!
-@pytest.mark.parametrize('seed', [23434924629239023])
-def test_deepcopy_pickle(seed):
-    kwargs = dict(a=[-1, 2], b=10)
-    if seed:
-        kwargs['rng'] = np.random.default_rng(seed)
-    dist1 = _Uniform(**kwargs)
-    dist2 = deepcopy(dist1)
-    dist3 = pickle.loads(pickle.dumps(dist1))
-    res1, res2, res3 = dist1.sample(), dist2.sample(), dist3.sample()
-    assert_equal(res2, res1)
-    assert_equal(res3, res1)
+def test_rng_deepcopy_pickle():
+    # test behavior of `rng` attribute and copy behavior
+    def _check_copies(dist1, comparison):
+        dist2 = deepcopy(dist1)
+        dist3 = pickle.loads(pickle.dumps(dist1))
+        res1, res2, res3 = dist1.sample(), dist2.sample(), dist3.sample()
+        assert np.all(comparison(res2, res1))
+        assert np.all(comparison(res3, res1))
 
+    kwargs = dict(a=[-1, 2], b=10)
+    dist1 = _Uniform(**kwargs, rng=np.random.default_rng(23434924629239023))
+    assert isinstance(dist1.rng, np.random.Generator)
+    _check_copies(dist1, np.equal)
+
+    dist1.rng = np.random.default_rng(23434924629239024)
+    assert isinstance(dist1.rng, np.random.Generator)
+    _check_copies(dist1, np.equal)
+
+    # # If not provided, we generate a new `default_rng()` every time it is needed.
+    # # This saves time during initialization and prevents gotchas associated with
+    # # copying an unseeded `ContinuousDistribution` instance.
+    dist1.rng = None
+    assert dist1.rng is None
+    _check_copies(dist1, np.not_equal)
+
+    dist1 = _Uniform(**kwargs)
+    assert dist1.rng is None
+    _check_copies(dist1, np.not_equal)
 
 class TestAttributes:
     def test_cache_policy(self):
