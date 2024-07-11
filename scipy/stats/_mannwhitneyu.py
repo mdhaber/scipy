@@ -220,6 +220,27 @@ def _mwu_choose_method(n1, n2, ties):
 MannwhitneyuResult = namedtuple('MannwhitneyuResult', ('statistic', 'pvalue'))
 
 
+def _mwu_result_unpacker(res):
+    if hasattr(res, 'zstatistic'):
+        return res.statistic, res.pvalue, res.zstatistic
+    else:
+        return res.statistic, res.pvalue
+
+
+def _mwu_result_object(statistic, pvalue, zstatistic=None):
+    res = MannwhitneyuResult(statistic, pvalue)
+    if zstatistic is not None:
+        res.zstatistic = zstatistic
+    return res
+
+
+def _mwu_outputs(kwds):
+    method = kwds.get('method', 'auto')
+    if method == 'approx':
+        return 3
+    return 2
+
+
 @_axis_nan_policy_factory(MannwhitneyuResult, n_samples=2)
 def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
                  axis=0, method="auto"):
@@ -291,6 +312,15 @@ def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
             Notes for the test statistic corresponding with sample `y`.
         pvalue : float
             The associated *p*-value for the chosen `alternative`.
+        zstatistic : array_like
+            When ``method = 'approx'``, this is the normalized z-statistic::
+
+                z = (T - mn - d) / se
+
+            where ``T`` is `statistic` as defined above, ``mn`` is the mean of the
+            distribution under the null hypothesis, ``d`` is a continuity
+            correction, and ``se`` is the standard error.
+            When ``method != 'asymptotic'``, this attribute is not available.
 
     Notes
     -----
@@ -447,6 +477,7 @@ def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
 
     x, y, use_continuity, alternative, axis_int, method = (
         _mwu_input_validation(x, y, use_continuity, alternative, axis, method))
+    output_z = True if method == 'approx' else False
 
     x, y, xy = _broadcast_concatenate(x, y, axis)
 
@@ -491,4 +522,7 @@ def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
     # This could happen for exact test when U = m*n/2
     p = np.clip(p, 0, 1)
 
-    return MannwhitneyuResult(U1, p)
+    res = MannwhitneyuResult(U1, p)
+    if output_z:
+        res.zstatistic = z[()]
+    return res

@@ -6712,8 +6712,9 @@ class TestMannWhitneyU:
     def test_mannwhitneyu_result_attributes(self):
         # test for namedtuple attribute results
         attributes = ('statistic', 'pvalue')
-        res = stats.mannwhitneyu(self.X, self.Y, alternative="less")
+        res = stats.mannwhitneyu(self.X, self.Y)
         check_named_results(res, attributes)
+
 
 
 def test_pointbiserial():
