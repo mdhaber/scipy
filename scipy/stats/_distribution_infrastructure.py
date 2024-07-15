@@ -1488,7 +1488,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        **params : array
+        **params : array_like
             Desired numerical values of the distribution parameters. Any or all
             of the parameters initially used to instantiate the distribution
             may be modified. Parameters used in alternative parameterizations
@@ -2856,7 +2856,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : array
+        x : array_like
             The argument of the log-PDF.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the log-PDF. By default (``None``), the
@@ -2951,7 +2951,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : array
+        x : array_like
             The argument of the PDF.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the PDF. By default (``None``), the
@@ -3048,7 +3048,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : array
+        x, y : array_like
             The arguments of the log-CDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
             The strategy used to evaluate the log-CDF.
@@ -3232,7 +3232,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : array
+        x, y : array_like
             The arguments of the CDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
             The strategy used to evaluate the CDF.
@@ -3408,7 +3408,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : array
+        x, y : array_like
             The arguments of the log-CCDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
             The strategy used to evaluate the log-CCDF.
@@ -3566,7 +3566,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : array
+        x, y : array_like
             The arguments of the CCDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
             The strategy used to evaluate the CCDF.
@@ -3720,7 +3720,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        logp : array
+        logp : array_like
             The argument of the inverse log-CDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse log-CDF.
@@ -3821,7 +3821,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        p : array
+        p : array_like
             The argument of the inverse CDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse CDF.
@@ -3924,7 +3924,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : array
+        x : array_like
             The argument of the inverse log-CCDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse log-CCDF.
@@ -4026,7 +4026,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        p : array
+        p : array_like
             The argument of the inverse CCDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse CCDF.
@@ -4847,8 +4847,8 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        sample : array
-            The given sample for to calculate the LLF.
+        sample : array_like
+            The given sample for which to calculate the LLF.
         axis : int or tuple of ints
             The axis over which the reducing operation (sum of logarithms) is performed.
 
