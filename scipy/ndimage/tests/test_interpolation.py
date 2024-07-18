@@ -123,8 +123,9 @@ class TestNdimageInterpolation:
                                         [1, 1, 1, 1]])
 
     @pytest.mark.parametrize('order', range(0, 6))
-    def test_geometric_transform01(self, order):
-        data = np.array([1])
+    @pytest.mark.parametrize('dtype', types)
+    def test_geometric_transform01(self, order, dtype):
+        data = np.array([1], dtype=dtype)
 
         def mapping(x):
             return x
@@ -1080,9 +1081,10 @@ class TestNdimageInterpolation:
         )
 
     @pytest.mark.parametrize('order', range(0, 6))
-    def test_zoom1(self, order):
+    @pytest.mark.parametrize('dtype', types)
+    def test_zoom1(self, order, dtype):
         for z in [2, [2, 2]]:
-            arr = np.array(list(range(25))).reshape((5, 5)).astype(float)
+            arr = np.array(list(range(25))).reshape((5, 5)).astype(dtype)
             arr = ndimage.zoom(arr, z, order=order)
             assert_equal(arr.shape, (10, 10))
             assert_(np.all(arr[-1, :] != 0))
@@ -1105,7 +1107,7 @@ class TestNdimageInterpolation:
         assert_array_almost_equal(out2, np.array([[1, 1, 2, 2]]))
 
     @pytest.mark.parametrize('order', range(0, 6))
-    @pytest.mark.parametrize('dtype', [np.float64, np.complex128])
+    @pytest.mark.parametrize('dtype', [np.float32, np.float64, np.complex128])
     def test_zoom_affine01(self, order, dtype):
         data = np.asarray([[1, 2, 3, 4],
                               [5, 6, 7, 8],
@@ -1161,46 +1163,50 @@ class TestNdimageInterpolation:
     @pytest.mark.parametrize('zoom', [(1, 1), (3, 5), (8, 2), (8, 8)])
     @pytest.mark.parametrize('mode', ['nearest', 'reflect', 'mirror',
                                       'grid-wrap', 'grid-constant'])
-    def test_zoom_grid_by_int_order0(self, shape, zoom, mode):
+    @pytest.mark.parametrize('dtype', types)
+    def test_zoom_grid_by_int_order0(self, shape, zoom, mode, dtype):
         # When grid_mode is True,  order 0 zoom should be the same as
         # replication via np.kron. The only exceptions to this are the
         # non-grid modes 'constant' and 'wrap'.
-        x = np.arange(np.prod(shape), dtype=float).reshape(shape)
+        x = np.arange(np.prod(shape), dtype=dtype).reshape(shape)
         assert_array_almost_equal(
             ndimage.zoom(x, zoom, order=0, mode=mode, grid_mode=True),
             np.kron(x, np.ones(zoom))
         )
 
     @pytest.mark.parametrize('mode', ['constant', 'wrap'])
-    def test_zoom_grid_mode_warnings(self, mode):
+    @pytest.mark.parametrize('dtype', types)
+    def test_zoom_grid_mode_warnings(self, mode, dtype):
         # Warn on use of non-grid modes when grid_mode is True
-        x = np.arange(9, dtype=float).reshape((3, 3))
+        x = np.arange(9, dtype=dtype).reshape((3, 3))
         with pytest.warns(UserWarning,
                           match="It is recommended to use mode"):
             ndimage.zoom(x, 2, mode=mode, grid_mode=True),
 
     @pytest.mark.parametrize('order', range(0, 6))
-    def test_rotate01(self, order):
+    @pytest.mark.parametrize('dtype', types)
+    def test_rotate01(self, order, dtype):
         data = np.array([[0, 0, 0, 0],
                          [0, 1, 1, 0],
-                         [0, 0, 0, 0]], dtype=np.float64)
+                         [0, 0, 0, 0]], dtype=dtype)
         out = ndimage.rotate(data, 0, order=order)
         assert_array_almost_equal(out, data)
 
     @pytest.mark.parametrize('order', range(0, 6))
-    def test_rotate02(self, order):
+    @pytest.mark.parametrize('dtype', types)
+    def test_rotate02(self, order, dtype):
         data = np.array([[0, 0, 0, 0],
                          [0, 1, 0, 0],
-                         [0, 0, 0, 0]], dtype=np.float64)
+                         [0, 0, 0, 0]], dtype=dtype)
         expected = np.array([[0, 0, 0],
                             [0, 0, 0],
                             [0, 1, 0],
-                            [0, 0, 0]], dtype=np.float64)
+                            [0, 0, 0]], dtype=dtype)
         out = ndimage.rotate(data, 90, order=order)
         assert_array_almost_equal(out, expected)
 
     @pytest.mark.parametrize('order', range(0, 6))
-    @pytest.mark.parametrize('dtype', [np.float64, np.complex128])
+    @pytest.mark.parametrize('dtype', types)
     def test_rotate03(self, order, dtype):
         data = np.array([[0, 0, 0, 0, 0],
                          [0, 1, 1, 0, 0],
@@ -1217,13 +1223,14 @@ class TestNdimageInterpolation:
         assert_array_almost_equal(out, expected)
 
     @pytest.mark.parametrize('order', range(0, 6))
-    def test_rotate04(self, order):
+    @pytest.mark.parametrize('dtype', types)
+    def test_rotate04(self, order, dtype):
         data = np.array([[0, 0, 0, 0, 0],
                          [0, 1, 1, 0, 0],
-                         [0, 0, 0, 0, 0]], dtype=np.float64)
+                         [0, 0, 0, 0, 0]], dtype=dtype)
         expected = np.array([[0, 0, 0, 0, 0],
                              [0, 0, 1, 0, 0],
-                             [0, 0, 1, 0, 0]], dtype=np.float64)
+                             [0, 0, 1, 0, 0]], dtype=dtype)
         out = ndimage.rotate(data, 90, reshape=False, order=order)
         assert_array_almost_equal(out, expected)
 

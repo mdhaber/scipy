@@ -183,6 +183,7 @@ int NI_BinaryErosion(PyArrayObject* input, PyArrayObject* strct,
                 CASE_GET_MASK(NPY_INT, npy_int, msk_value, pm);
                 CASE_GET_MASK(NPY_LONG, npy_long, msk_value, pm);
                 CASE_GET_MASK(NPY_LONGLONG, npy_longlong, msk_value, pm);
+                CASE_GET_MASK(NPY_HALF, npy_half, msk_value, pm);
                 CASE_GET_MASK(NPY_FLOAT, npy_float, msk_value, pm);
                 CASE_GET_MASK(NPY_DOUBLE, npy_double, msk_value, pm);
              default:
@@ -236,6 +237,10 @@ int NI_BinaryErosion(PyArrayObject* input, PyArrayObject* strct,
                                 pi, out, oo, struct_size, msk_value,
                                 bdr_value, border_flag_value, center_is_true,
                                 _true, _false, pchange);
+            CASE_NI_ERODE_POINT(NPY_HALF, npy_half,
+                                pi, out, oo, struct_size, msk_value,
+                                bdr_value, border_flag_value, center_is_true,
+                                _true, _false, pchange);
             CASE_NI_ERODE_POINT(NPY_FLOAT, npy_float,
                                 pi, out, oo, struct_size, msk_value,
                                 bdr_value, border_flag_value, center_is_true,
@@ -261,6 +266,7 @@ int NI_BinaryErosion(PyArrayObject* input, PyArrayObject* strct,
             CASE_OUTPUT(NPY_INT, npy_int, po, out);
             CASE_OUTPUT(NPY_LONG, npy_long, po, out);
             CASE_OUTPUT(NPY_LONGLONG, npy_longlong, po, out);
+            CASE_OUTPUT(NPY_HALF, npy_half, po, out);
             CASE_OUTPUT(NPY_FLOAT, npy_float, po, out);
             CASE_OUTPUT(NPY_DOUBLE, npy_double, po, out);
         default:
@@ -514,6 +520,12 @@ int NI_BinaryErosion2(PyArrayObject* array, PyArrayObject* strct,
                               block1, block2, border_flag_value,
                               _true, _false, mklist);
             CASE_ERODE_POINT2(NPY_LONGLONG, npy_longlong,
+                              struct_size, offsets, coordinate_offsets,
+                              pi, oo, PyArray_NDIM(array), list1, list2,
+                              current_coordinates1, current_coordinates2,
+                              block1, block2, border_flag_value,
+                              _true, _false, mklist);
+            CASE_ERODE_POINT2(NPY_HALF, npy_half,
                               struct_size, offsets, coordinate_offsets,
                               pi, oo, PyArray_NDIM(array), list1, list2,
                               current_coordinates1, current_coordinates2,

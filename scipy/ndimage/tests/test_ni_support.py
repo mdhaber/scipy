@@ -8,9 +8,9 @@ from .._ni_support import _get_output
     'dtype',
     [
         # String specifiers
-        'f4', 'float32', 'complex64', 'complex128',
+        'f2', 'f4', 'float16', 'float32', 'complex64', 'complex128',
         # Type and dtype specifiers
-        np.float32, float, np.dtype('f4'),
+        np.half, np.float16, np.float32, float, np.dtype('f2'), np.dtype('f4'),
         # Derive from input
         None,
     ],

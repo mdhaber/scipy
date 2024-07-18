@@ -418,6 +418,7 @@ int NI_FourierFilter(PyArrayObject *input, PyArrayObject* parameter_array,
                 CASE_FOURIER_FILTER_RR(NPY_INT, npy_int, pi, tmp);
                 CASE_FOURIER_FILTER_RR(NPY_LONG, npy_long, pi, tmp);
                 CASE_FOURIER_FILTER_RR(NPY_LONGLONG, npy_longlong, pi, tmp);
+                CASE_FOURIER_FILTER_RR(NPY_HALF, npy_half, pi, tmp);
                 CASE_FOURIER_FILTER_RR(NPY_FLOAT, npy_float, pi, tmp);
                 CASE_FOURIER_FILTER_RR(NPY_DOUBLE, npy_double, pi, tmp);
             default:
@@ -426,6 +427,7 @@ int NI_FourierFilter(PyArrayObject *input, PyArrayObject* parameter_array,
                 goto exit;
             }
             switch (PyArray_TYPE(output)) {
+                CASE_FOURIER_OUT_RR(NPY_HALF, npy_half, po, tmp);
                 CASE_FOURIER_OUT_RR(NPY_FLOAT, npy_float, po, tmp);
                 CASE_FOURIER_OUT_RR(NPY_DOUBLE, npy_double, po, tmp);
                 CASE_FOURIER_OUT_RC(NPY_CFLOAT, npy_cfloat, F, po, tmp);
@@ -567,6 +569,8 @@ int NI_FourierShift(PyArrayObject *input, PyArrayObject* shift_array,
             CASE_FOURIER_SHIFT_R(NPY_LONG, npy_long,
                                  pi, tmp, r, i, cost, sint);
             CASE_FOURIER_SHIFT_R(NPY_LONGLONG, npy_longlong,
+                                 pi, tmp, r, i, cost, sint);
+            CASE_FOURIER_SHIFT_R(NPY_HALF, npy_half,
                                  pi, tmp, r, i, cost, sint);
             CASE_FOURIER_SHIFT_R(NPY_FLOAT, npy_float,
                                  pi, tmp, r, i, cost, sint);

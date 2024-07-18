@@ -43,6 +43,7 @@ ctypedef fused data_t:
     np.uint16_t
     np.uint32_t
     np.uint64_t
+    np.float16_t
     np.float32_t
     np.float64_t
 

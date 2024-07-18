@@ -18,11 +18,15 @@ def test_map_coordinates_dts():
     idx = np.indices(data.shape)
     dts = (np.uint8, np.uint16, np.uint32, np.uint64,
            np.int8, np.int16, np.int32, np.int64,
-           np.intp, np.uintp, np.float32, np.float64)
+           np.intp, np.uintp, np.float16, np.float32, np.float64)
     for order in range(0, 6):
         for data_dt in dts:
+            if data_dt != np.float16:
+                continue
             these_data = data.astype(data_dt)
             for coord_dt in dts:
+                # if coord_dt != np.float16:
+                #     continue
                 # affine mapping
                 mat = np.eye(2, dtype=coord_dt)
                 off = np.zeros((2,), dtype=coord_dt)

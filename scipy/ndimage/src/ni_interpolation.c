@@ -451,6 +451,8 @@ NI_GeometricTransform(PyArrayObject *input, int (*map)(npy_intp*, double*,
                                      p, icoor, irank, cstride);
                 CASE_MAP_COORDINATES(NPY_LONGLONG, npy_longlong,
                                      p, icoor, irank, cstride);
+                CASE_MAP_COORDINATES(NPY_HALF, npy_half,
+                                     p, icoor, irank, cstride);
                 CASE_MAP_COORDINATES(NPY_FLOAT, npy_float,
                                      p, icoor, irank, cstride);
                 CASE_MAP_COORDINATES(NPY_DOUBLE, npy_double,
@@ -568,6 +570,8 @@ NI_GeometricTransform(PyArrayObject *input, int (*map)(npy_intp*, double*,
                                           coeff, pi, idx);
                         CASE_INTERP_COEFF(NPY_LONGLONG, npy_longlong,
                                           coeff, pi, idx);
+                        CASE_INTERP_COEFF(NPY_HALF, npy_half,
+                                          coeff, pi, idx);
                         CASE_INTERP_COEFF(NPY_FLOAT, npy_float,
                                           coeff, pi, idx);
                         CASE_INTERP_COEFF(NPY_DOUBLE, npy_double,
@@ -602,6 +606,7 @@ NI_GeometricTransform(PyArrayObject *input, int (*map)(npy_intp*, double*,
             CASE_INTERP_OUT_INT(INT, npy_int, po, t);
             CASE_INTERP_OUT_INT(LONG, npy_long, po, t);
             CASE_INTERP_OUT_INT(LONGLONG, npy_longlong, po, t);
+            CASE_INTERP_OUT(NPY_HALF, npy_half, po, t);
             CASE_INTERP_OUT(NPY_FLOAT, npy_float, po, t);
             CASE_INTERP_OUT(NPY_DOUBLE, npy_double, po, t);
         default:
@@ -951,6 +956,8 @@ int NI_ZoomShift(PyArrayObject *input, PyArrayObject* zoom_ar,
                                           coeff, pi, idx);
                         CASE_INTERP_COEFF(NPY_LONGLONG, npy_longlong,
                                           coeff, pi, idx);
+                        CASE_INTERP_COEFF(NPY_HALF, npy_half,
+                                          coeff, pi, idx);
                         CASE_INTERP_COEFF(NPY_FLOAT, npy_float,
                                           coeff, pi, idx);
                         CASE_INTERP_COEFF(NPY_DOUBLE, npy_double,
@@ -985,6 +992,7 @@ int NI_ZoomShift(PyArrayObject *input, PyArrayObject* zoom_ar,
             CASE_INTERP_OUT_INT(INT, npy_int, po, t);
             CASE_INTERP_OUT_INT(LONG, npy_long, po, t);
             CASE_INTERP_OUT_INT(LONGLONG, npy_longlong, po, t);
+            CASE_INTERP_OUT(NPY_HALF, npy_half, po, t);
             CASE_INTERP_OUT(NPY_FLOAT, npy_float, po, t);
             CASE_INTERP_OUT(NPY_DOUBLE, npy_double, po, t);
         default:

@@ -266,6 +266,9 @@ int NI_Correlate(PyArrayObject* input, PyArrayObject* weights,
             CASE_CORRELATE_POINT(NPY_LONGLONG, npy_longlong,
                                  pi, ww, oo, filter_size, cvalue, tmp,
                                  border_flag_value);
+            CASE_CORRELATE_POINT(NPY_HALF, npy_half,
+                                 pi, ww, oo, filter_size, cvalue, tmp,
+                                 border_flag_value);
             CASE_CORRELATE_POINT(NPY_FLOAT, npy_float,
                                  pi, ww, oo, filter_size, cvalue, tmp,
                                  border_flag_value);
@@ -288,6 +291,7 @@ int NI_Correlate(PyArrayObject* input, PyArrayObject* weights,
             CASE_FILTER_OUT(NPY_INT, npy_int, po, tmp);
             CASE_FILTER_OUT(NPY_LONG, npy_long, po, tmp);
             CASE_FILTER_OUT(NPY_LONGLONG, npy_longlong, po, tmp);
+            CASE_FILTER_OUT(NPY_HALF, npy_half, po, tmp);
             CASE_FILTER_OUT(NPY_FLOAT, npy_float, po, tmp);
             CASE_FILTER_OUT(NPY_DOUBLE, npy_double, po, tmp);
             default:
@@ -632,6 +636,9 @@ int NI_MinOrMaxFilter(PyArrayObject* input, PyArrayObject* footprint,
             CASE_MIN_OR_MAX_POINT(NPY_LONGLONG, npy_longlong,
                                   pi, oo, filter_size, cvalue, minimum, tmp,
                                   border_flag_value, ss);
+            CASE_MIN_OR_MAX_POINT(NPY_HALF, npy_half,
+                                  pi, oo, filter_size, cvalue, minimum, tmp,
+                                  border_flag_value, ss);
             CASE_MIN_OR_MAX_POINT(NPY_FLOAT, npy_float,
                                   pi, oo, filter_size, cvalue, minimum, tmp,
                                   border_flag_value, ss);
@@ -654,6 +661,7 @@ int NI_MinOrMaxFilter(PyArrayObject* input, PyArrayObject* footprint,
             CASE_FILTER_OUT(NPY_INT, npy_int, po, tmp);
             CASE_FILTER_OUT(NPY_LONG, npy_long, po, tmp);
             CASE_FILTER_OUT(NPY_LONGLONG, npy_longlong, po, tmp);
+            CASE_FILTER_OUT(NPY_HALF, npy_half, po, tmp);
             CASE_FILTER_OUT(NPY_FLOAT, npy_float, po, tmp);
             CASE_FILTER_OUT(NPY_DOUBLE, npy_double, po, tmp);
             default:
@@ -818,6 +826,9 @@ int NI_RankFilter(PyArrayObject* input, int rank,
             CASE_RANK_POINT(NPY_LONGLONG, npy_longlong,
                             pi, oo, filter_size, cvalue, rank, buffer, tmp,
                             border_flag_value);
+            CASE_RANK_POINT(NPY_HALF, npy_half,
+                            pi, oo, filter_size, cvalue, rank, buffer, tmp,
+                            border_flag_value);
             CASE_RANK_POINT(NPY_FLOAT, npy_float,
                             pi, oo, filter_size, cvalue, rank, buffer, tmp,
                             border_flag_value);
@@ -840,6 +851,7 @@ int NI_RankFilter(PyArrayObject* input, int rank,
             CASE_FILTER_OUT(NPY_INT, npy_int, po, tmp);
             CASE_FILTER_OUT(NPY_LONG, npy_long, po, tmp);
             CASE_FILTER_OUT(NPY_LONGLONG, npy_longlong, po, tmp);
+            CASE_FILTER_OUT(NPY_HALF, npy_half, po, tmp);
             CASE_FILTER_OUT(NPY_FLOAT, npy_float, po, tmp);
             CASE_FILTER_OUT(NPY_DOUBLE, npy_double, po, tmp);
             default:
@@ -1025,6 +1037,9 @@ int NI_GenericFilter(PyArrayObject* input,
             CASE_FILTER_POINT(NPY_LONGLONG, npy_longlong,
                               pi, oo, filter_size, cvalue, tmp,
                               border_flag_value, function, data, buffer);
+            CASE_FILTER_POINT(NPY_HALF, npy_half,
+                              pi, oo, filter_size, cvalue, tmp,
+                              border_flag_value, function, data, buffer);
             CASE_FILTER_POINT(NPY_FLOAT, npy_float,
                               pi, oo, filter_size, cvalue, tmp,
                               border_flag_value, function, data, buffer);
@@ -1048,6 +1063,7 @@ int NI_GenericFilter(PyArrayObject* input,
             CASE_FILTER_OUT(NPY_INT, npy_int, po, tmp);
             CASE_FILTER_OUT(NPY_LONG, npy_long, po, tmp);
             CASE_FILTER_OUT(NPY_LONGLONG, npy_longlong, po, tmp);
+            CASE_FILTER_OUT(NPY_HALF, npy_half, po, tmp);
             CASE_FILTER_OUT(NPY_FLOAT, npy_float, po, tmp);
             CASE_FILTER_OUT(NPY_DOUBLE, npy_double, po, tmp);
             default:

@@ -121,6 +121,8 @@ int NI_FindObjects(PyArrayObject* input, npy_intp max_label,
                                    pi, regions, input, max_label, ii);
             CASE_FIND_OBJECT_POINT(NPY_LONGLONG, npy_longlong,
                                    pi, regions, input, max_label, ii);
+            CASE_FIND_OBJECT_POINT(NPY_HALF, npy_half,
+                                   pi, regions, input, max_label, ii);
             CASE_FIND_OBJECT_POINT(NPY_FLOAT, npy_float,
                                    pi, regions, input, max_label, ii);
             CASE_FIND_OBJECT_POINT(NPY_DOUBLE, npy_double,
