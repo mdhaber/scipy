@@ -2,6 +2,7 @@ import numpy as np
 from collections import namedtuple
 from scipy import special
 from scipy import stats
+from scipy.stats import _morestats
 from scipy.stats._stats_py import _rankdata
 from ._axis_nan_policy import _axis_nan_policy_factory
 
@@ -199,8 +200,9 @@ def _mwu_input_validation(x, y, use_continuity, alternative, axis, method):
         method = method.lower()
         if method not in methods:
             raise ValueError(f'`method` must be one of {methods}.')
+    output_z = True if method == 'asymptotic' else False
 
-    return x, y, use_continuity, alternative, axis_int, method
+    return x, y, use_continuity, alternative, axis_int, method, output_z
 
 
 def _mwu_choose_method(n1, n2, ties):
@@ -217,10 +219,11 @@ def _mwu_choose_method(n1, n2, ties):
     return "exact"
 
 
-MannwhitneyuResult = namedtuple('MannwhitneyuResult', ('statistic', 'pvalue'))
-
-
-@_axis_nan_policy_factory(MannwhitneyuResult, n_samples=2)
+@_axis_nan_policy_factory(
+    _morestats.wilcoxon_result_object, n_samples=2,
+    result_to_tuple=_morestats.wilcoxon_result_unpacker,
+    n_outputs=_morestats.wilcoxon_outputs,
+)
 def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
                  axis=0, method="auto"):
     r'''Perform the Mann-Whitney U rank test on two independent samples.
@@ -283,7 +286,7 @@ def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
 
     Returns
     -------
-    res : MannwhitneyuResult
+    res : WilcoxonResult
         An object containing attributes:
 
         statistic : float
@@ -291,6 +294,15 @@ def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
             Notes for the test statistic corresponding with sample `y`.
         pvalue : float
             The associated *p*-value for the chosen `alternative`.
+        zstatistic : array_like
+            When ``method = 'asymptotic'``, this is the normalized z-statistic::
+
+                z = (U - mn - d) / se
+
+            where ``U`` is `statistic` as defined above, ``mn`` is the mean of the
+            distribution under the null hypothesis, ``d`` is a continuity
+            correction, and ``se`` is the standard error.
+            When ``method != 'asymptotic'``, this attribute is not available.
 
     Notes
     -----
@@ -445,7 +457,7 @@ def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
 
     '''
 
-    x, y, use_continuity, alternative, axis_int, method = (
+    x, y, use_continuity, alternative, axis_int, method, output_z = (
         _mwu_input_validation(x, y, use_continuity, alternative, axis, method))
 
     x, y, xy = _broadcast_concatenate(x, y, axis)
@@ -491,4 +503,7 @@ def mannwhitneyu(x, y, use_continuity=True, alternative="two-sided",
     # This could happen for exact test when U = m*n/2
     p = np.clip(p, 0, 1)
 
-    return MannwhitneyuResult(U1, p)
+    res = _morestats.WilcoxonResult(statistic=U1, pvalue=p[()])
+    if output_z:
+        res.zstatistic = z[()]
+    return res

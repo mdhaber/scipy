@@ -657,6 +657,20 @@ class TestMannWhitneyU:
         assert_allclose(res.statistic, res2.statistic, rtol=1e-15)
         assert_allclose(res.pvalue, res2.pvalue, rtol=1e-15)
 
+    def test_mannwhitneyu_has_zstatistic(self):
+        rng = np.random.default_rng(89426135444)
+        x, y = rng.random(15), rng.random(14)
+
+        res = stats.mannwhitneyu(x, y, method="asymptotic", alternative='greater')
+        ref = stats.norm.isf(res.pvalue)
+        assert_allclose(res.zstatistic, ref)
+
+        res = stats.mannwhitneyu(x, y, method="exact")
+        assert not hasattr(res, 'zstatistic')
+
+        res = stats.mannwhitneyu(x, y)
+        assert not hasattr(res, 'zstatistic')
+
 
 class TestSomersD(_TestPythranFunc):
     def setup_method(self):

@@ -958,7 +958,7 @@ def boxcox_llf(lmb, data):
     if xp.isdtype(dt, 'integral'):
         data = xp.asarray(data, dtype=xp.float64)
         dt = xp.float64
-    
+
     logdata = xp.log(data)
 
     # Compute the variance of the transformed data.
@@ -3452,7 +3452,7 @@ def wilcoxon_result_object(statistic, pvalue, zstatistic=None):
 
 def wilcoxon_outputs(kwds):
     method = kwds.get('method', 'auto')
-    if method == 'approx':
+    if method == 'approx' or method =='asymptotic':
         return 3
     return 2
 
@@ -4336,7 +4336,7 @@ def directional_stats(samples, *, axis=0, normalize=True):
     """
     xp = array_namespace(samples)
     samples = xp.asarray(samples)
-    
+
     if samples.ndim < 2:
         raise ValueError("samples must at least be two-dimensional. "
                          f"Instead samples has shape: {tuple(samples.shape)}")
