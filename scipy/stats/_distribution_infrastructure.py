@@ -5207,13 +5207,14 @@ class ShiftedScaledDistribution(TransformedDistribution):
         return self.__add__(other)
 
     def __rsub__(self, other):
-        return self.__add__(other)
+        return self.__neg__().__add__(other)
 
     def __rmul__(self, other):
-        return self.__add__(other)
+        return self.__mul__(other)
 
     def __rtruediv__(self, other):
-        return self.__add__(other)
+        message = "Division by a random variable is not yet implemented."
+        raise NotImplementedError(message)
 
     def __neg__(self):
         return self * -1
