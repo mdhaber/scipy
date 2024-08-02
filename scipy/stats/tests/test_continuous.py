@@ -133,12 +133,12 @@ def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
     x_shape = data.draw(npst.broadcastable_shapes(result_shape,
                                                   min_side=min_side))
     x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
-                            proportions=proportions, rng=rng)
+                            proportions=proportions, rng=rng, domain='typical')
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
     y_shape = data.draw(npst.broadcastable_shapes(x_result_shape,
                                                   min_side=min_side))
     y = dist._variable.draw(y_shape, parameter_values=dist._parameters,
-                            proportions=proportions, rng=rng)
+                            proportions=proportions, rng=rng, domain='typical')
     xy_result_shape = np.broadcast_shapes(y_shape, x_result_shape)
     p_domain = _RealDomain((0, 1), (True, True))
     p = p_domain.draw(x_shape, proportions=proportions, rng=rng)
@@ -148,9 +148,16 @@ def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
     return dist, x, y, p, logp, result_shape, x_result_shape, xy_result_shape
 
 
+families = [
+    StandardNormal,
+    Normal,
+    _LogUniform
+]
+
+
 class TestDistributions:
     @pytest.mark.fail_slow(60)  # need to break up check_moment_funcs
-    @pytest.mark.parametrize('family', (StandardNormal, Normal, _LogUniform))
+    @pytest.mark.parametrize('family', families)
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_support_moments_sample(self, family, data, seed):
         rng = np.random.default_rng(seed)
@@ -168,7 +175,7 @@ class TestDistributions:
             check_sample_shape_NaNs(dist, 'sample', sample_shape, result_shape)
 
     @pytest.mark.fail_slow(10)
-    @pytest.mark.parametrize('family', (StandardNormal, Normal, _LogUniform))
+    @pytest.mark.parametrize('family', families)
     @pytest.mark.parametrize('func, methods, arg',
                              [('entropy', {'log/exp', 'quadrature'}, None),
                               ('logentropy', {'log/exp', 'quadrature'}, None),

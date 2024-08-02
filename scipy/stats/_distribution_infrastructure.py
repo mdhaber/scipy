@@ -15,7 +15,7 @@ oo = np.inf
 # in case we need to distinguish between None and not specified
 _null = object()
 def _isnull(x):
-    return type(x) == object or x is None
+    return type(x) is object or x is None
 
 __all__ = ['ContinuousDistribution']
 
@@ -425,7 +425,7 @@ class _RealDomain(_SimpleDomain):
         parameter_values = parameter_values or {}
         rng = rng or np.random.default_rng()
         proportions = (1, 0, 0, 0) if proportions is None else proportions
-        pvals = np.abs(proportions)/np.sum(proportions)
+        pvals = proportions / np.sum(proportions)
 
         a, b = self.get_numerical_endpoints(parameter_values)
         a, b = np.broadcast_arrays(a, b)
@@ -562,7 +562,7 @@ class _Parameter(ABC):
         r""" String representation of the parameter for use in documentation."""
         return f"`{self.name}` for :math:`{self.symbol} \\in {str(self.domain)}`"
 
-    def draw(self, size=None, *, rng=None, domain='typical', proportions=None,
+    def draw(self, size=None, *, rng=None, domain='domain', proportions=None,
              parameter_values=None):
         r""" Draw random values of the parameter for use in testing.
 
@@ -762,7 +762,7 @@ class _Parameterization:
         messages = [str(param) for name, param in self.parameters.items()]
         return ", ".join(messages)
 
-    def draw(self, sizes=None, rng=None, proportions=None):
+    def draw(self, sizes=None, rng=None, proportions=None, domain='domain'):
         r"""Draw random values of all parameters for use in testing.
 
         Parameters
@@ -780,6 +780,9 @@ class _Parameterization:
             domain, are on the boundary of the parameter's domain, are outside
             the parameter's domain, and have value NaN. For more information,
             see the `draw` method of the _Parameter subclasses.
+        domain : str
+            The domain of the `_Parameter` from which to draw. Default is
+            "domain" (the *full* domain); alternative is "typical".
 
         Returns
         -------
@@ -797,7 +800,9 @@ class _Parameterization:
         for size, param in zip(sizes, self.parameters.values()):
             parameter_values[param.name] = param.draw(
                 size, rng=rng, proportions=proportions,
-                parameter_values=parameter_values)
+                parameter_values=parameter_values,
+                domain=domain
+            )
 
         return parameter_values
 
@@ -1909,7 +1914,8 @@ class ContinuousDistribution:
             i_parameterization = rng.integers(0, max(0, n - 1), endpoint=True)
 
         parameterization = cls._parameterizations[i_parameterization]
-        parameters = parameterization.draw(sizes, rng, proportions=proportions)
+        parameters = parameterization.draw(sizes, rng, proportions=proportions,
+                                           domain='typical')
         return cls(**parameters)
 
     @classmethod
