@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 
 import numpy as np
+from numpy import inf
 
 from scipy._lib._util import _lazywhere
 from scipy._lib._docscrape import ClassDoc, NumpyDocString
@@ -11,7 +12,6 @@ from scipy.integrate._tanhsinh import _tanhsinh
 from scipy.optimize._bracket import _bracket_root, _bracket_minimum
 from scipy.optimize._chandrupatla import _chandrupatla, _chandrupatla_minimize
 
-oo = np.inf
 # in case we need to distinguish between None and not specified
 _null = object()
 def _isnull(x):
@@ -100,7 +100,7 @@ _NO_CACHE = "no_cache"
 #     - What should the default value be?
 #     - What should the other values be?
 #     Or should we just eliminate this policy?
-# 3.  `iv_policy` is supported in a few places, but it should be checked for
+# 3.  `validation_policy` is supported in a few places, but it should be checked for
 #     consistency. I have the same questions as for `cache_policy`.
 # 4.  `tol` is currently notional. I think there needs to be way to set
 #     separate `atol` and `rtol`. Some ways I imagine it being used:
@@ -255,11 +255,11 @@ class _SimpleDomain(_Domain):
         Determines whether the argument is contained within the domain
 
     """
-    def __init__(self, endpoints=(-oo, oo), inclusive=(False, False)):
+    def __init__(self, endpoints=(-inf, inf), inclusive=(False, False)):
         a, b = endpoints
         self.endpoints = np.asarray(a)[()], np.asarray(b)[()]
         self.inclusive = inclusive
-        # self.all_inclusive = (endpoints == (-oo, oo)
+        # self.all_inclusive = (endpoints == (-inf, inf)
         #                       and inclusive == (True, True))
 
     def define_parameters(self, *parameters):
@@ -820,8 +820,8 @@ def _set_invalid_nan(f):
 
     endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
-    replacements = {'logpdf': (-oo, -oo), 'pdf': (0, 0),
-                    '_logcdf1': (-oo, 0), '_logccdf1': (0, -oo),
+    replacements = {'logpdf': (-inf, -inf), 'pdf': (0, 0),
+                    '_logcdf1': (-inf, 0), '_logccdf1': (0, -inf),
                     '_cdf1': (0, 1), '_ccdf1': (1, 0)}
     replace_strict = {'pdf', 'logpdf'}
     replace_exact = {'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
@@ -830,7 +830,7 @@ def _set_invalid_nan(f):
 
     @functools.wraps(f)
     def filtered(self, x, *args, **kwargs):
-        if self.iv_policy == _SKIP_ALL:
+        if self.validation_policy == _SKIP_ALL:
             return f(self, x, *args, **kwargs)
 
         method_name = f.__name__
@@ -953,7 +953,7 @@ def _set_invalid_nan_property(f):
 
     @functools.wraps(f)
     def filtered(self, *args, **kwargs):
-        if self.iv_policy == _SKIP_ALL:
+        if self.validation_policy == _SKIP_ALL:
             return f(self, *args, **kwargs)
 
         res = f(self, *args, **kwargs)
@@ -1384,7 +1384,7 @@ class ContinuousDistribution:
         The desired relative tolerance of calculations. Left unspecified,
         calculations may be faster; when provided, calculations may be
         more likely to meet the desired accuracy.
-    iv_policy : {None, "skip_all"}
+    validation_policy : {None, "skip_all"}
         Specifies the level of input validation to perform. Left unspecified,
         input validation is performed to ensure appropriate behavior in edge
         case (e.g. parameters out of domain, argument outside of distribution
@@ -1464,10 +1464,10 @@ class ContinuousDistribution:
 
     ### Initialization
 
-    def __init__(self, *, tol=_null, iv_policy=None, cache_policy=None,
+    def __init__(self, *, tol=_null, validation_policy=None, cache_policy=None,
                  rng=None, **parameters):
         self.tol = tol
-        self.iv_policy = iv_policy
+        self.validation_policy = validation_policy
         self.cache_policy = cache_policy
         self.rng = rng
         self._not_implemented = (
@@ -1483,18 +1483,18 @@ class ContinuousDistribution:
         parameters = {key: val for key, val in parameters.items() if val is not None}
         self._update_parameters(**parameters)
 
-    def _update_parameters(self, *, iv_policy=None, **params):
+    def _update_parameters(self, *, validation_policy=None, **params):
         r""" Update the numerical values of distribution parameters.
 
         Parameters
         ----------
-        **params : array
+        **params : array_like
             Desired numerical values of the distribution parameters. Any or all
             of the parameters initially used to instantiate the distribution
             may be modified. Parameters used in alternative parameterizations
             are not accepted.
 
-        iv_policy : str
+        validation_policy : str
             To be documented. See Question 3 at the top.
         """
 
@@ -1508,7 +1508,7 @@ class ContinuousDistribution:
         self._size = 1
         self._dtype = np.float64
 
-        if (iv_policy or self.iv_policy) == _SKIP_ALL:
+        if (validation_policy or self.validation_policy) == _SKIP_ALL:
             parameters = self._process_parameters(**parameters)
         elif not len(self._parameterizations):
             if parameters:
@@ -1731,7 +1731,7 @@ class ContinuousDistribution:
         self._cache_policy = cache_policy
 
     @property
-    def iv_policy(self):
+    def validation_policy(self):
         r"""{None, "skip_all"}:
         Specifies the level of input validation to perform. Left unspecified,
         input validation is performed to ensure appropriate behavior in edge
@@ -1740,17 +1740,18 @@ class ContinuousDistribution:
         Use ``'skip_all'`` to avoid the computational overhead of these
         checks when rough edges are acceptable.
         """
-        return self._iv_policy
+        return self._validation_policy
 
-    @iv_policy.setter
-    def iv_policy(self, iv_policy):
-        iv_policy = str(iv_policy).lower() if iv_policy is not None else None
+    @validation_policy.setter
+    def validation_policy(self, validation_policy):
+        validation_policy = (str(validation_policy).lower()
+                             if validation_policy is not None else None)
         iv_policies = {None, 'skip_all'}
-        if iv_policy not in iv_policies:
-            message = (f"Attribute `iv_policy` of `{self.__class__.__name__}` "
+        if validation_policy not in iv_policies:
+            message = (f"Attribute `validation_policy` of `{self.__class__.__name__}` "
                        f"must be one of {iv_policies}, if specified.")
             raise ValueError(message)
-        self._iv_policy = iv_policy
+        self._validation_policy = validation_policy
 
     @property
     def rng(self):
@@ -1844,10 +1845,11 @@ class ContinuousDistribution:
         # Yet another RNG validating function. Unlike others in SciPy, if `rng
         # is None`, this returns `None`. This reduces overhead (~.030 ms on my
         # machine) of distribution initialization by delaying a call to
-        # `default_rng()` until the RNG will actually be used. It also
-        # raises a distribution-specific error message to facilitate
+        # `default_rng()` until the RNG will actually be used, and it prevents
+        # unseeded Generators from being stored.
+        # It also raises a distribution-specific error message to facilitate
         #  identification of the source of the error.
-        if self.iv_policy == _SKIP_ALL:
+        if self.validation_policy == _SKIP_ALL:
             return rng
 
         if rng is not None and not isinstance(rng, np.random.Generator):
@@ -1863,7 +1865,7 @@ class ContinuousDistribution:
         # Is quite flexible about what is allowed as an integer, and it
         # raises a distribution-specific error message to facilitate
         # identification of the source of the error.
-        if self.iv_policy == _SKIP_ALL:
+        if self.validation_policy == _SKIP_ALL:
             return order
 
         order = np.asarray(order, dtype=self._dtype)[()]
@@ -2854,7 +2856,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : array
+        x : array_like
             The argument of the log-PDF.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the log-PDF. By default (``None``), the
@@ -2949,7 +2951,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : array
+        x : array_like
             The argument of the PDF.
         method : {None, 'formula', 'logexp'}
             The strategy used to evaluate the PDF. By default (``None``), the
@@ -3046,7 +3048,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : array
+        x, y : array_like
             The arguments of the log-CDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
             The strategy used to evaluate the log-CDF.
@@ -3230,7 +3232,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : array
+        x, y : array_like
             The arguments of the CDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'subtraction'}
             The strategy used to evaluate the CDF.
@@ -3406,7 +3408,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : array
+        x, y : array_like
             The arguments of the log-CCDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
             The strategy used to evaluate the log-CCDF.
@@ -3564,7 +3566,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x, y : array
+        x, y : array_like
             The arguments of the CCDF. `x` is required; `y` is optional.
         method : {None, 'formula', 'logexp', 'complement', 'quadrature', 'addition'}
             The strategy used to evaluate the CCDF.
@@ -3718,7 +3720,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        logp : array
+        logp : array_like
             The argument of the inverse log-CDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse log-CDF.
@@ -3819,7 +3821,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        p : array
+        p : array_like
             The argument of the inverse CDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse CDF.
@@ -3922,7 +3924,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        x : array
+        x : array_like
             The argument of the inverse log-CCDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse log-CCDF.
@@ -4024,7 +4026,7 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        p : array
+        p : array_like
             The argument of the inverse CCDF.
         method : {None, 'formula', 'complement', 'inversion'}
             The strategy used to evaluate the inverse CCDF.
@@ -4845,8 +4847,8 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        sample : array
-            The given sample for to calculate the LLF.
+        sample : array_like
+            The given sample for which to calculate the LLF.
         axis : int or tuple of ints
             The axis over which the reducing operation (sum of logarithms) is performed.
 
@@ -5005,7 +5007,7 @@ class TransformedDistribution(ContinuousDistribution):
         self._dist.reset_cache()
         super().reset_cache()
 
-    def _update_parameters(self, *, iv_policy=None, **params):
+    def _update_parameters(self, *, validation_policy=None, **params):
         # maybe broadcast everything before processing?
         parameters = {}
         # There may be some issues with _original_parameters
@@ -5014,7 +5016,7 @@ class TransformedDistribution(ContinuousDistribution):
         # self._original_parameters.
         parameters.update(self._dist._original_parameters)
         parameters.update(params)
-        super()._update_parameters(iv_policy=iv_policy, **parameters)
+        super()._update_parameters(validation_policy=validation_policy, **parameters)
 
     def _process_parameters(self, **params):
         return self._dist._process_parameters(**params)
@@ -5028,11 +5030,11 @@ class TransformedDistribution(ContinuousDistribution):
 class ShiftedScaledDistribution(TransformedDistribution):
     """Distribution with a standard shift/scale transformation."""
     # Unclear whether infinite loc/scale will work reasonably in all cases
-    _loc_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _loc_domain = _RealDomain(endpoints=(-inf, inf), inclusive=(True, True))
     _loc_param = _RealParameter('loc', symbol=r'\mu',
                                 domain=_loc_domain, typical=(1, 2))
 
-    _scale_domain = _RealDomain(endpoints=(-oo, oo), inclusive=(True, True))
+    _scale_domain = _RealDomain(endpoints=(-inf, inf), inclusive=(True, True))
     _scale_param = _RealParameter('scale', symbol=r'\sigma',
                                   domain=_scale_domain, typical=(0.1, 10))
 
@@ -5205,13 +5207,14 @@ class ShiftedScaledDistribution(TransformedDistribution):
         return self.__add__(other)
 
     def __rsub__(self, other):
-        return self.__add__(other)
+        return self.__neg__().__add__(other)
 
     def __rmul__(self, other):
-        return self.__add__(other)
+        return self.__mul__(other)
 
     def __rtruediv__(self, other):
-        return self.__add__(other)
+        message = "Division by a random variable is not yet implemented."
+        raise NotImplementedError(message)
 
     def __neg__(self):
         return self * -1
