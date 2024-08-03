@@ -394,108 +394,56 @@ class _RealDomain(_SimpleDomain):
 
         return f"{left}{a}, {b}{right}"
 
-    def draw(self, size=None, rng=None, proportions=None, parameter_values=None):
+    def draw(self, n, type, min, max, squeezed_base_shape, rng=None):
         r""" Draw random values from the domain.
 
         Parameters
         ----------
-        size : tuple of ints
-            The shape of the array of valid values to be drawn.
+        n : int
+            The number of values to be drawn from the domain.
+        type : str
+            A string indicating whether the values are
+
+            - strictly within the domain ('in'),
+            - at one of the two endpoints ('on'),
+            - strictly outside the domain ('out'), or
+            - NaN ('nan').
+        min, max : ndarray
+            The endpoints of the domain.
+        squeezed_based_shape : tuple of ints
+            See _RealParameter.draw.
         rng : np.Generator
             The Generator used for drawing random values.
-        proportions : tuple of numbers
-            A tuple of four non-negative numbers that indicate the expected
-            relative proportion of elements that:
-
-            - are strictly within the domain,
-            - are at one of the two endpoints,
-            - are strictly outside the domain, and
-            - are NaN,
-
-            respectively. Default is (1, 0, 0, 0). The number of elements in
-            each category is drawn from the multinomial distribution with
-            `np.prod(size)` as the number of trials and `proportions` as the
-            event probabilities. The values in `proportions` are automatically
-            normalized to sum to 1.
-        parameter_values : dict
-            Map between the names of parameters (that define the endpoints)
-            and numerical values (arrays).
 
         """
-        parameter_values = parameter_values or {}
         rng = rng or np.random.default_rng()
-        proportions = (1, 0, 0, 0) if proportions is None else proportions
-        pvals = proportions / np.sum(proportions)
-
-        a, b = self.get_numerical_endpoints(parameter_values)
-        a, b = np.broadcast_arrays(a, b)
-        min = np.maximum(a, _fiinfo(a).min/10) if np.any(np.isinf(a)) else a
-        max = np.minimum(b, _fiinfo(b).max/10) if np.any(np.isinf(b)) else b
-
-        base_shape = min.shape
-        extended_shape = np.broadcast_shapes(size, base_shape)
-        n_extended = np.prod(extended_shape)
-        n_base = np.prod(base_shape)
-        n = int(n_extended / n_base) if n_extended else 0
-
-        n_in, n_on, n_out, n_nan = rng.multinomial(n, pvals)
-
-        # `min` and `max` can have singleton dimensions that correspond with
-        # non-singleton dimensions in `size`. We need to be careful to avoid
-        # shuffling results (e.g. a value that was generated for the domain
-        # [min[i], max[i]] ends up at index j). To avoid this:
-        # - Squeeze the singleton dimensions out of `min`/`max`. Squeezing is
-        #   often not the right thing to do, but here is equivalent to moving
-        #   all the dimensions that are singleton in `min`/`max` (which may be
-        #   non-singleton in the result) to the left. This is what we want.
-        # - Now all the non-singleton dimensions of the result are on the left.
-        #   Ravel them to a single dimension of length `n`, which is now along
-        #   the 0th axis.
-        # - Reshape the 0th axis back to the required dimensions, and move
-        #   these axes back to their original places.
-        base_shape_padded = ((1,)*(len(extended_shape) - len(base_shape))
-                             + base_shape)
-        base_singletons = np.where(np.asarray(base_shape_padded)==1)[0]
-        new_base_singletons = tuple(range(len(base_singletons)))
-        # Base singleton dimensions are going to get expanded to these lengths
-        shape_expansion = np.asarray(extended_shape)[base_singletons]
-
-        # assert(np.prod(shape_expansion) == n)  # check understanding
-        # min = np.reshape(min, base_shape_padded)
-        # max = np.reshape(max, base_shape_padded)
-        # min = np.moveaxis(min, base_singletons, new_base_singletons)
-        # max = np.moveaxis(max, base_singletons, new_base_singletons)
-        # squeezed_base_shape = max.shape[len(base_singletons):]
-        # assert np.all(min.reshape(squeezed_base_shape) == min.squeeze())
-        # assert np.all(max.reshape(squeezed_base_shape) == max.squeeze())
-
-        min = min.squeeze()
-        max = max.squeeze()
-        squeezed_base_shape = max.shape
 
         # get copies of min and max with no nans so that uniform doesn't fail
         min_nn, max_nn = min.copy(), max.copy()
         i = np.isnan(min_nn) | np.isnan(max_nn)
         min_nn[i] = 0
         max_nn[i] = 1
-        z_in = rng.uniform(min_nn, max_nn, size=(n_in,) + squeezed_base_shape)
 
-        z_on_shape = (n_on,) + squeezed_base_shape
-        z_on = np.ones(z_on_shape)
-        i = rng.random(size=n_on) < 0.5
-        z_on[i] = min
-        z_on[~i] = max
+        if type == 'in':
+            z = rng.uniform(min_nn, max_nn, size=(n,) + squeezed_base_shape)
 
-        z_out = rng.uniform(min_nn-10, max_nn+10,
-                            size=(n_out,) + squeezed_base_shape)
+        elif type == 'on':
+            z_on_shape = (n,) + squeezed_base_shape
+            z = np.ones(z_on_shape)
+            i = rng.random(size=n) < 0.5
+            z[i] = min
+            z[~i] = max
 
-        z_nan = np.full((n_nan,) + squeezed_base_shape, np.nan)
+        elif type == 'out':
+            # make this work for infinite bounds
+            z = min_nn - rng.uniform(size=(n,) + squeezed_base_shape)
+            zr = max_nn + rng.uniform(size=(n,) + squeezed_base_shape)
+            i = rng.random(size=n) < 0.5
+            z[i] = zr[i]
 
-        z = np.concatenate((z_in, z_on, z_out, z_nan), axis=0)
-        z = rng.permuted(z, axis=0)
+        elif type == 'nan':
+            z = np.full((n,) + squeezed_base_shape, np.nan)
 
-        z = np.reshape(z, tuple(shape_expansion) + squeezed_base_shape)
-        z = np.moveaxis(z, new_base_singletons, base_singletons)
         return z
 
 
@@ -562,7 +510,7 @@ class _Parameter(ABC):
         r""" String representation of the parameter for use in documentation."""
         return f"`{self.name}` for :math:`{self.symbol} \\in {str(self.domain)}`"
 
-    def draw(self, size=None, *, rng=None, domain='domain', proportions=None,
+    def draw(self, size=None, *, rng=None, region='domain', proportions=None,
              parameter_values=None):
         r""" Draw random values of the parameter for use in testing.
 
@@ -572,8 +520,8 @@ class _Parameter(ABC):
             The shape of the array of valid values to be drawn.
         rng : np.Generator
             The Generator used for drawing random values.
-        domain : str
-            The domain of the `_Parameter` from which to draw. Default is
+        region : str
+            The region of the `_Parameter` from which to draw. Default is
             "domain" (the *full* domain); alternative is "typical". An
             enhancement would give a way to interpolate between the two.
         proportions : tuple of numbers
@@ -596,11 +544,76 @@ class _Parameter(ABC):
 
         """
         parameter_values = parameter_values or {}
-        domain = getattr(self, domain)
+        domain = getattr(self, 'domain')
         proportions = (1, 0, 0, 0) if proportions is None else proportions
 
-        return domain.draw(size=size, rng=rng, proportions=proportions,
-                           parameter_values=parameter_values)
+        pvals = proportions / np.sum(proportions)
+
+        a, b = domain.get_numerical_endpoints(parameter_values)
+        a, b = np.broadcast_arrays(a, b)
+
+        base_shape = a.shape
+        extended_shape = np.broadcast_shapes(size, base_shape)
+        n_extended = np.prod(extended_shape)
+        n_base = np.prod(base_shape)
+        n = int(n_extended / n_base) if n_extended else 0
+
+        n_in, n_on, n_out, n_nan = rng.multinomial(n, pvals)
+
+        # `min` and `max` can have singleton dimensions that correspond with
+        # non-singleton dimensions in `size`. We need to be careful to avoid
+        # shuffling results (e.g. a value that was generated for the domain
+        # [min[i], max[i]] ends up at index j). To avoid this:
+        # - Squeeze the singleton dimensions out of `min`/`max`. Squeezing is
+        #   often not the right thing to do, but here is equivalent to moving
+        #   all the dimensions that are singleton in `min`/`max` (which may be
+        #   non-singleton in the result) to the left. This is what we want.
+        # - Now all the non-singleton dimensions of the result are on the left.
+        #   Ravel them to a single dimension of length `n`, which is now along
+        #   the 0th axis.
+        # - Reshape the 0th axis back to the required dimensions, and move
+        #   these axes back to their original places.
+        base_shape_padded = ((1,)*(len(extended_shape) - len(base_shape))
+                             + base_shape)
+        base_singletons = np.where(np.asarray(base_shape_padded)==1)[0]
+        new_base_singletons = tuple(range(len(base_singletons)))
+        # Base singleton dimensions are going to get expanded to these lengths
+        shape_expansion = np.asarray(extended_shape)[base_singletons]
+
+        # assert(np.prod(shape_expansion) == n)  # check understanding
+        # min = np.reshape(min, base_shape_padded)
+        # max = np.reshape(max, base_shape_padded)
+        # min = np.moveaxis(min, base_singletons, new_base_singletons)
+        # max = np.moveaxis(max, base_singletons, new_base_singletons)
+        # squeezed_base_shape = max.shape[len(base_singletons):]
+        # assert np.all(min.reshape(squeezed_base_shape) == min.squeeze())
+        # assert np.all(max.reshape(squeezed_base_shape) == max.squeeze())
+
+        # min = np.maximum(a, _fiinfo(a).min/10) if np.any(np.isinf(a)) else a
+        # max = np.minimum(b, _fiinfo(b).max/10) if np.any(np.isinf(b)) else b
+        min = np.asarray(a.squeeze())
+        max = np.asarray(b.squeeze())
+        squeezed_base_shape = max.shape
+
+        if region == 'typical':
+            typical = getattr(self, 'typical')
+            a, b = typical.get_numerical_endpoints(parameter_values)
+            a, b = np.broadcast_arrays(a, b)
+            min_here = np.asarray(a.squeeze())
+            max_here = np.asarray(b.squeeze())
+            z_in = typical.draw(n_in, 'in', min_here, max_here, squeezed_base_shape, rng=rng)
+        else:
+            z_in = domain.draw(n_in, 'in', min, max, squeezed_base_shape, rng=rng)
+        z_on = domain.draw(n_on, 'on', min, max, squeezed_base_shape, rng=rng)
+        z_out = domain.draw(n_out, 'out', min, max, squeezed_base_shape, rng=rng)
+        z_nan= domain.draw(n_nan, 'nan', min, max, squeezed_base_shape, rng=rng)
+
+        z = np.concatenate((z_in, z_on, z_out, z_nan), axis=0)
+        z = rng.permuted(z, axis=0)
+
+        z = np.reshape(z, tuple(shape_expansion) + squeezed_base_shape)
+        z = np.moveaxis(z, new_base_singletons, base_singletons)
+        return z
 
     @abstractmethod
     def validate(self, arr):
@@ -762,7 +775,7 @@ class _Parameterization:
         messages = [str(param) for name, param in self.parameters.items()]
         return ", ".join(messages)
 
-    def draw(self, sizes=None, rng=None, proportions=None, domain='domain'):
+    def draw(self, sizes=None, rng=None, proportions=None, region='domain'):
         r"""Draw random values of all parameters for use in testing.
 
         Parameters
@@ -801,7 +814,7 @@ class _Parameterization:
             parameter_values[param.name] = param.draw(
                 size, rng=rng, proportions=proportions,
                 parameter_values=parameter_values,
-                domain=domain
+                region=region
             )
 
         return parameter_values
@@ -1181,7 +1194,7 @@ def _logexpxmexpy(x, y):
     # TODO: deal with x == y better
     i = np.isneginf(np.real(y))
     if np.any(i):
-        y = y.copy()
+        y = np.asarray(y.copy())
         y[i] = np.finfo(y.dtype).min
     x, y = np.broadcast_arrays(x, y)
     res = np.asarray(special.logsumexp([x, y+np.pi*1j], axis=0))
@@ -1915,7 +1928,7 @@ class ContinuousDistribution:
 
         parameterization = cls._parameterizations[i_parameterization]
         parameters = parameterization.draw(sizes, rng, proportions=proportions,
-                                           domain='typical')
+                                           region='typical')
         return cls(**parameters)
 
     @classmethod

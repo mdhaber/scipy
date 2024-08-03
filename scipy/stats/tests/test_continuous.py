@@ -133,15 +133,16 @@ def draw_distribution_from_family(family, data, rng, proportions, min_side=0):
     x_shape = data.draw(npst.broadcastable_shapes(result_shape,
                                                   min_side=min_side))
     x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
-                            proportions=proportions, rng=rng, domain='typical')
+                            proportions=proportions, rng=rng, region='typical')
     x_result_shape = np.broadcast_shapes(x_shape, result_shape)
     y_shape = data.draw(npst.broadcastable_shapes(x_result_shape,
                                                   min_side=min_side))
     y = dist._variable.draw(y_shape, parameter_values=dist._parameters,
-                            proportions=proportions, rng=rng, domain='typical')
+                            proportions=proportions, rng=rng, region='typical')
     xy_result_shape = np.broadcast_shapes(y_shape, x_result_shape)
     p_domain = _RealDomain((0, 1), (True, True))
-    p = p_domain.draw(x_shape, proportions=proportions, rng=rng)
+    p_var = _RealParameter('p', domain=p_domain)
+    p = p_var.draw(x_shape, proportions=proportions, rng=rng)
     with np.errstate(divide='ignore', invalid='ignore'):
         logp = np.log(p)
 
