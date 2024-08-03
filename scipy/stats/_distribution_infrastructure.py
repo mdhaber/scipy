@@ -601,7 +601,8 @@ class _Parameter(ABC):
             a, b = np.broadcast_arrays(a, b)
             min_here = np.asarray(a.squeeze())
             max_here = np.asarray(b.squeeze())
-            z_in = typical.draw(n_in, 'in', min_here, max_here, squeezed_base_shape, rng=rng)
+            z_in = typical.draw(n_in, 'in', min_here, max_here, squeezed_base_shape,
+                                rng=rng)
         else:
             z_in = domain.draw(n_in, 'in', min, max, squeezed_base_shape, rng=rng)
         z_on = domain.draw(n_on, 'on', min, max, squeezed_base_shape, rng=rng)
