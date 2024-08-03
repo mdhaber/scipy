@@ -2,9 +2,10 @@ import pickle
 from copy import deepcopy
 
 import numpy as np
+from numpy import inf
 import pytest
 from numpy.testing import assert_allclose, assert_equal
-from hypothesis import strategies, given, reproduce_failure  # noqa: F401
+from hypothesis import strategies, given, reproduce_failure, settings  # noqa: F401
 import hypothesis.extra.numpy as npst
 
 from scipy import stats
@@ -12,7 +13,7 @@ from scipy.stats._fit import _kolmogorov_smirnov
 from scipy.stats._ksstats import kolmogn
 
 from scipy.stats._distribution_infrastructure import (
-    oo, _Domain, _RealDomain, _Parameter, _Parameterization, _RealParameter,
+    _Domain, _RealDomain, _Parameter, _Parameterization, _RealParameter,
     ContinuousDistribution, ShiftedScaledDistribution, _fiinfo,
     _generate_domain_support)
 from scipy.stats._new_distributions import StandardNormal, Normal, _LogUniform, _Uniform
@@ -158,6 +159,7 @@ families = [
 
 class TestDistributions:
     @pytest.mark.fail_slow(60)  # need to break up check_moment_funcs
+    @settings(max_examples=20)
     @pytest.mark.parametrize('family', families)
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_support_moments_sample(self, family, data, seed):
@@ -195,6 +197,7 @@ class TestDistributions:
                               ('ilogccdf', {'complement', 'inversion'}, 'logp'),
                               ('iccdf', {'complement', 'inversion'}, 'p'),
                               ])
+    @settings(max_examples=20)
     @given(data=strategies.data(), seed=strategies.integers(min_value=0))
     def test_funcs(self, family, data, seed, func, methods, arg):
         rng = np.random.default_rng(seed)
@@ -300,7 +303,7 @@ def check_dist_func(dist, fname, arg, result_shape, methods):
 
     # Remove this after fixing `draw`
     tol_override = {'atol': 1e-15}
-    # Mean can be 0, which makes logmean -oo.
+    # Mean can be 0, which makes logmean -inf.
     if fname in {'logmean', 'mean', 'logskewness', 'skewness'}:
         tol_override = {'atol': 1e-15}
     elif fname in {'mode'}:
@@ -407,7 +410,7 @@ def check_nans_and_edges(dist, fname, arg, res):
     if fname in {'icdf', 'iccdf'}:
         arg_domain = _RealDomain(endpoints=(0, 1), inclusive=(True, True))
     elif fname in {'ilogcdf', 'ilogccdf'}:
-        arg_domain = _RealDomain(endpoints=(-oo, 0), inclusive=(True, True))
+        arg_domain = _RealDomain(endpoints=(-inf, 0), inclusive=(True, True))
     else:
         arg_domain = dist._variable.domain
 
@@ -442,9 +445,9 @@ def check_nans_and_edges(dist, fname, arg, res):
         assert_equal(res[endpoint_arg_minus & ~valid_arg], 0)
         assert_equal(res[endpoint_arg_plus & ~valid_arg], 0)
     elif fname in {'logcdf'}:
-        assert_equal(res[outside_arg_minus], -oo)
+        assert_equal(res[outside_arg_minus], -inf)
         assert_equal(res[outside_arg_plus], 0)
-        assert_equal(res[endpoint_arg_minus], -oo)
+        assert_equal(res[endpoint_arg_minus], -inf)
         assert_equal(res[endpoint_arg_plus], 0)
     elif fname in {'cdf'}:
         assert_equal(res[outside_arg_minus], 0)
@@ -453,9 +456,9 @@ def check_nans_and_edges(dist, fname, arg, res):
         assert_equal(res[endpoint_arg_plus], 1)
     elif fname in {'logccdf'}:
         assert_equal(res[outside_arg_minus], 0)
-        assert_equal(res[outside_arg_plus], -oo)
+        assert_equal(res[outside_arg_plus], -inf)
         assert_equal(res[endpoint_arg_minus], 0)
-        assert_equal(res[endpoint_arg_plus], -oo)
+        assert_equal(res[endpoint_arg_plus], -inf)
     elif fname in {'ccdf'}:
         assert_equal(res[outside_arg_minus], 1)
         assert_equal(res[outside_arg_plus], 0)
@@ -764,21 +767,34 @@ def test_input_validation():
         dist.kurtosis(convention='coconut')
 
 
-# I removed `None` from this list. The current behavior is to generate a new
-# `default_rng()` every time it is needed. We should not generate it during
-# initialization because it increases the time by more than 50%!
-@pytest.mark.parametrize('seed', [23434924629239023])
-def test_deepcopy_pickle(seed):
-    kwargs = dict(a=[-1, 2], b=10)
-    if seed:
-        kwargs['rng'] = np.random.default_rng(seed)
-    dist1 = _Uniform(**kwargs)
-    dist2 = deepcopy(dist1)
-    dist3 = pickle.loads(pickle.dumps(dist1))
-    res1, res2, res3 = dist1.sample(), dist2.sample(), dist3.sample()
-    assert_equal(res2, res1)
-    assert_equal(res3, res1)
+def test_rng_deepcopy_pickle():
+    # test behavior of `rng` attribute and copy behavior
+    def _check_copies(dist1, comparison):
+        dist2 = deepcopy(dist1)
+        dist3 = pickle.loads(pickle.dumps(dist1))
+        res1, res2, res3 = dist1.sample(), dist2.sample(), dist3.sample()
+        assert np.all(comparison(res2, res1))
+        assert np.all(comparison(res3, res1))
 
+    kwargs = dict(a=[-1, 2], b=10)
+    dist1 = _Uniform(**kwargs, rng=np.random.default_rng(23434924629239023))
+    assert isinstance(dist1.rng, np.random.Generator)
+    _check_copies(dist1, np.equal)
+
+    dist1.rng = np.random.default_rng(23434924629239024)
+    assert isinstance(dist1.rng, np.random.Generator)
+    _check_copies(dist1, np.equal)
+
+    # # If not provided, we generate a new `default_rng()` every time it is needed.
+    # # This saves time during initialization and prevents gotchas associated with
+    # # copying an unseeded `ContinuousDistribution` instance.
+    dist1.rng = None
+    assert dist1.rng is None
+    _check_copies(dist1, np.not_equal)
+
+    dist1 = _Uniform(**kwargs)
+    assert dist1.rng is None
+    _check_copies(dist1, np.not_equal)
 
 class TestAttributes:
     def test_cache_policy(self):
@@ -872,12 +888,12 @@ class TestAttributes:
         X = _Uniform(a=0, b=1)
         assert X.pdf(2) == 0
 
-        X.iv_policy = 'skip_all'
+        X.validation_policy = 'skip_all'
         assert X.pdf(np.asarray(2.)) == 1
 
         # Tests _set_invalid_nan
         a, b = np.asarray(1.), np.asarray(0.)  # invalid parameters
-        X = _Uniform(a=a, b=b, iv_policy='skip_all')
+        X = _Uniform(a=a, b=b, validation_policy='skip_all')
         assert X.pdf(np.asarray(2.)) == -1
 
         # Tests _set_invalid_nan_property
@@ -888,16 +904,16 @@ class TestAttributes:
             def _moment_raw_formula(self, order, **params):
                 return 'incorrect'
 
-        X = MyUniform(a=a, b=b, iv_policy='skip_all')
+        X = MyUniform(a=a, b=b, validation_policy='skip_all')
         assert X.entropy() == 'incorrect'
 
         # Tests _validate_order_kind
         assert X.moment(kind='raw', order=-1) == 'incorrect'
 
         # Test input validation
-        message = "Attribute `iv_policy` of `MyUniform`..."
+        message = "Attribute `validation_policy` of `MyUniform`..."
         with pytest.raises(ValueError, match=message):
-            X.iv_policy = "invalid"
+            X.validation_policy = "invalid"
 
 
 class TestTransforms:

@@ -3,10 +3,12 @@ import json
 import os
 
 import numpy as np
+from numpy import inf
+
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
     ContinuousDistribution, _RealDomain, _RealParameter, _Parameterization,
-    oo, _combine_docs)
+    _combine_docs)
 
 __all__ = ['Normal']
 
@@ -25,9 +27,9 @@ class Normal(ContinuousDistribution):
     # `ShiftedScaledDistribution` allows this to be generated automatically from
     # an instance of `StandardNormal`, but the normal distribution is so frequently
     # used that it's worth a bit of code duplication to get better performance.
-    _mu_domain = _RealDomain(endpoints=(-oo, oo))
-    _sigma_domain = _RealDomain(endpoints=(0, oo))
-    _x_support = _RealDomain(endpoints=(-oo, oo))
+    _mu_domain = _RealDomain(endpoints=(-inf, inf))
+    _sigma_domain = _RealDomain(endpoints=(0, inf))
+    _x_support = _RealDomain(endpoints=(-inf, inf))
 
     _mu_param = _RealParameter('mu',  symbol=r'\mu', domain=_mu_domain,
                                typical=(-1, 1))
@@ -129,7 +131,7 @@ class StandardNormal(Normal):
         f(x) = \frac{1}{\sqrt{2 \pi}} \exp \left( -\frac{1}{2} x^2 \right)
 
     """
-    _x_support = _RealDomain(endpoints=(-oo, oo))
+    _x_support = _RealDomain(endpoints=(-inf, inf))
     _x_param = _RealParameter('x', domain=_x_support, typical=(-5, 5))
     _variable = _x_param
     _parameterizations = []
@@ -214,10 +216,10 @@ class _LogUniform(ContinuousDistribution):
 
     """
 
-    _a_domain = _RealDomain(endpoints=(0, oo))
-    _b_domain = _RealDomain(endpoints=('a', oo))
-    _log_a_domain = _RealDomain(endpoints=(-oo, oo))
-    _log_b_domain = _RealDomain(endpoints=('log_a', oo))
+    _a_domain = _RealDomain(endpoints=(0, inf))
+    _b_domain = _RealDomain(endpoints=('a', inf))
+    _log_a_domain = _RealDomain(endpoints=(-inf, inf))
+    _log_b_domain = _RealDomain(endpoints=('log_a', inf))
     _x_support = _RealDomain(endpoints=('a', 'b'), inclusive=(True, True))
 
     _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 0.9))
@@ -277,8 +279,8 @@ class _Uniform(ContinuousDistribution):
 
     """
 
-    _a_domain = _RealDomain(endpoints=(-oo, oo))
-    _b_domain = _RealDomain(endpoints=('a', oo))
+    _a_domain = _RealDomain(endpoints=(-inf, inf))
+    _b_domain = _RealDomain(endpoints=('a', inf))
     _x_support = _RealDomain(endpoints=('a', 'b'), inclusive=(False, False))
 
     _a_param = _RealParameter('a', domain=_a_domain, typical=(1e-3, 0.9))
