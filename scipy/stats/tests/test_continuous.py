@@ -425,38 +425,42 @@ def check_nans_and_edges(dist, fname, arg, res):
     a = np.broadcast_to(a, res.shape)
     b = np.broadcast_to(b, res.shape)
 
+    outside_arg_minus = (outside_arg == -1) & valid_parameters
+    outside_arg_plus = (outside_arg == 1) & valid_parameters
+    endpoint_arg_minus = (endpoint_arg == -1) & valid_parameters
+    endpoint_arg_plus = (endpoint_arg == 1) & valid_parameters
     # Writing this independently of how the are set in the distribution
     # infrastructure. That is very compact; this is very verbose.
     if fname in {'logpdf'}:
-        assert_equal(res[outside_arg == -1], -np.inf)
-        assert_equal(res[outside_arg == 1], -np.inf)
-        assert_equal(res[(endpoint_arg == -1) & ~valid_arg], -np.inf)
-        assert_equal(res[(endpoint_arg == 1) & ~valid_arg], -np.inf)
+        assert_equal(res[outside_arg_minus], -np.inf)
+        assert_equal(res[outside_arg_plus], -np.inf)
+        assert_equal(res[endpoint_arg_minus & ~valid_arg], -np.inf)
+        assert_equal(res[endpoint_arg_plus & ~valid_arg], -np.inf)
     elif fname in {'pdf'}:
-        assert_equal(res[outside_arg == -1], 0)
-        assert_equal(res[outside_arg == 1], 0)
-        assert_equal(res[(endpoint_arg == -1) & ~valid_arg], 0)
-        assert_equal(res[(endpoint_arg == 1) & ~valid_arg], 0)
+        assert_equal(res[outside_arg_minus], 0)
+        assert_equal(res[outside_arg_plus], 0)
+        assert_equal(res[endpoint_arg_minus & ~valid_arg], 0)
+        assert_equal(res[endpoint_arg_plus & ~valid_arg], 0)
     elif fname in {'logcdf'}:
-        assert_equal(res[outside_arg == -1], -oo)
-        assert_equal(res[outside_arg == 1], 0)
-        assert_equal(res[endpoint_arg == -1], -oo)
-        assert_equal(res[endpoint_arg == 1], 0)
+        assert_equal(res[outside_arg_minus], -oo)
+        assert_equal(res[outside_arg_plus], 0)
+        assert_equal(res[endpoint_arg_minus], -oo)
+        assert_equal(res[endpoint_arg_plus], 0)
     elif fname in {'cdf'}:
-        assert_equal(res[outside_arg == -1], 0)
-        assert_equal(res[outside_arg == 1], 1)
-        assert_equal(res[endpoint_arg == -1], 0)
-        assert_equal(res[endpoint_arg == 1], 1)
+        assert_equal(res[outside_arg_minus], 0)
+        assert_equal(res[outside_arg_plus], 1)
+        assert_equal(res[endpoint_arg_minus], 0)
+        assert_equal(res[endpoint_arg_plus], 1)
     elif fname in {'logccdf'}:
-        assert_equal(res[outside_arg == -1], 0)
-        assert_equal(res[outside_arg == 1], -oo)
-        assert_equal(res[endpoint_arg == -1], 0)
-        assert_equal(res[endpoint_arg == 1], -oo)
+        assert_equal(res[outside_arg_minus], 0)
+        assert_equal(res[outside_arg_plus], -oo)
+        assert_equal(res[endpoint_arg_minus], 0)
+        assert_equal(res[endpoint_arg_plus], -oo)
     elif fname in {'ccdf'}:
-        assert_equal(res[outside_arg == -1], 1)
-        assert_equal(res[outside_arg == 1], 0)
-        assert_equal(res[endpoint_arg == -1], 1)
-        assert_equal(res[endpoint_arg == 1], 0)
+        assert_equal(res[outside_arg_minus], 1)
+        assert_equal(res[outside_arg_plus], 0)
+        assert_equal(res[endpoint_arg_minus], 1)
+        assert_equal(res[endpoint_arg_plus], 0)
     elif fname in {'ilogcdf', 'icdf'}:
         assert_equal(res[outside_arg == -1], np.nan)
         assert_equal(res[outside_arg == 1], np.nan)
