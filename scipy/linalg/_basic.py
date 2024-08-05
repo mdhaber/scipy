@@ -273,6 +273,7 @@ def solve(a, b, lower=False, overwrite_a=False,
 
 def _solve(a, b, overwrite_a=False, overwrite_b=False,
            check_finite=True, transposed=False):
+    n = a.shape[0]
     below, above = bandwidth(a)
     if below == above == 0:
         return (b.T / np.diag(a)).T
@@ -280,7 +281,7 @@ def _solve(a, b, overwrite_a=False, overwrite_b=False,
         # update to consider trans=2
         return solve_triangular(a, b, lower=(above==0), overwrite_b=overwrite_b,
                                 check_finite=check_finite, trans=transposed)
-    elif above == 1 and below == 1:
+    elif above <= 1 and below <= 1:
         a = a.T if transposed else a
         # todo: introduce new public solve_tridiagonal function
         _gtsv = get_lapack_funcs('gtsv', (a, b))
@@ -288,8 +289,11 @@ def _solve(a, b, overwrite_a=False, overwrite_b=False,
         d = np.diag(a, 0)
         du = np.diag(a, 1)
         return _gtsv(dl, d, du, b)[3]
-
-
+    elif above <= n/5 and below <= n/5:  # heuristic for whether to use "banded"
+        a = a.T if transposed else a
+        l_and_u = (below, above)
+        ab = _to_banded(l_and_u, a)
+        return solve_banded(l_and_u, ab, b, overwrite_b=overwrite_b, check_finite=check_finite)
     if issymmetric(a):
         try:
             a = a.T if transposed else a
@@ -299,6 +303,20 @@ def _solve(a, b, overwrite_a=False, overwrite_b=False,
             pass
 
     return None
+
+
+def _to_banded(l_and_u, a):
+    # TODO: compile with Pythran
+    n = a.shape[0]
+    below, above = l_and_u
+    rows = above + below + 1
+    ab = np.zeros((rows, n), dtype=a.dtype)
+    ab[above] = np.diag(a)
+    for i in range(1, above + 1):
+        ab[above - i, i:] = np.diag(a, i)
+    for i in range(1, below + 1):
+        ab[above + i, :-i] = np.diag(a, -i)
+    return ab
 
 
 def solve_triangular(a, b, trans=0, lower=False, unit_diagonal=False,
