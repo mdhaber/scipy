@@ -13,7 +13,10 @@ from ._misc import LinAlgError, _datacopied, LinAlgWarning
 from ._decomp import _asarray_validated
 from . import _decomp, _decomp_svd
 from ._solve_toeplitz import levinson
-from ._cythonized_array_utils import find_det_from_lu
+from ._decomp_cholesky import cho_factor, cho_solve
+from ._cythonized_array_utils import (find_det_from_lu, bandwidth, issymmetric,
+                                      ishermitian)
+
 
 __all__ = ['solve', 'solve_triangular', 'solveh_banded', 'solve_banded',
            'solve_toeplitz', 'solve_circulant', 'inv', 'det', 'lstsq',
@@ -49,7 +52,7 @@ def _solve_check(n, info, lamch=None, rcond=None):
 
 
 def solve(a, b, lower=False, overwrite_a=False,
-          overwrite_b=False, check_finite=True, assume_a='gen',
+          overwrite_b=False, check_finite=True, assume_a=None,
           transposed=False):
     """
     Solves the linear equation set ``a @ x == b`` for the unknown ``x``
@@ -141,6 +144,13 @@ def solve(a, b, lower=False, overwrite_a=False,
     array([ True,  True,  True], dtype=bool)
 
     """
+    if assume_a is None and not lower:
+        res = _solve(a, b, overwrite_a, overwrite_b,
+                     check_finite, transposed)
+        if res is not None:
+            return res
+        assume_a = 'gen' if assume_a is None else assume_a
+
     # Flags for 1-D or N-D right-hand side
     b_is_1D = False
 
@@ -259,6 +269,36 @@ def solve(a, b, lower=False, overwrite_a=False,
         x = x.ravel()
 
     return x
+
+
+def _solve(a, b, overwrite_a=False, overwrite_b=False,
+           check_finite=True, transposed=False):
+    below, above = bandwidth(a)
+    if below == above == 0:
+        return (b.T / np.diag(a)).T
+    elif above == 0 or below == 0:
+        # update to consider trans=2
+        return solve_triangular(a, b, lower=(above==0), overwrite_b=overwrite_b,
+                                check_finite=check_finite, trans=transposed)
+    elif above == 1 and below == 1:
+        a = a.T if transposed else a
+        # todo: introduce new public solve_tridiagonal function
+        _gtsv = get_lapack_funcs('gtsv', (a, b))
+        dl = np.diag(a, -1)
+        d = np.diag(a, 0)
+        du = np.diag(a, 1)
+        return _gtsv(dl, d, du, b)[3]
+
+
+    if issymmetric(a):
+        try:
+            a = a.T if transposed else a
+            factor = cho_factor(a, overwrite_a=overwrite_a, check_finite=check_finite)
+            return cho_solve(factor, b)
+        except np.linalg.LinAlgError:
+            pass
+
+    return None
 
 
 def solve_triangular(a, b, trans=0, lower=False, unit_diagonal=False,
