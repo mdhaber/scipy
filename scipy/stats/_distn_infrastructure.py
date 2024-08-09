@@ -1936,7 +1936,7 @@ class rv_continuous(rv_generic):
         return dct
 
     def _ppf_to_solve(self, x, q, *args):
-        return self.cdf(*(x, )+args)-q
+        return self._cdf(*(x, )+args)-q
 
     def _ppf_single(self, q, *args):
         factor = 10.
@@ -1960,7 +1960,7 @@ class rv_continuous(rv_generic):
 
     # moment from definition
     def _mom_integ0(self, x, m, *args):
-        return x**m * self.pdf(x, *args)
+        return x**m * self._pdf(x, *args)
 
     def _mom0_sc(self, m, *args):
         _a, _b = self._get_support(*args)
@@ -1969,7 +1969,7 @@ class rv_continuous(rv_generic):
 
     # moment calculated using ppf
     def _mom_integ1(self, q, m, *args):
-        return (self.ppf(q, *args))**m
+        return (self._ppf(q, *args))**m
 
     def _mom1_sc(self, m, *args):
         return integrate.quad(self._mom_integ1, 0, 1, args=(m,)+args)[0]
@@ -2856,7 +2856,7 @@ class rv_continuous(rv_generic):
             return h
         else:
             # try with different limits if integration problems
-            low, upp = self.ppf([1e-10, 1. - 1e-10], *args)
+            low, upp = self._ppf([1e-10, 1. - 1e-10], *args)
             if np.isinf(_b):
                 upper = upp
             else:
@@ -3841,7 +3841,7 @@ class rv_discrete(rv_generic):
         else:
             ub = ub - loc   # convert bound for standardized distribution
         if conditional:
-            invfac = self.sf(lb-1, *args) - self.sf(ub, *args)
+            invfac = self._sf(lb-1, *args) - self._sf(ub, *args)
         else:
             invfac = 1.0
 
