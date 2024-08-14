@@ -174,22 +174,23 @@ Multivariate distributions
 .. autosummary::
    :toctree: generated/
 
-   multivariate_normal    -- Multivariate normal distribution
-   matrix_normal          -- Matrix normal distribution
-   dirichlet              -- Dirichlet
-   dirichlet_multinomial  -- Dirichlet multinomial distribution
-   wishart                -- Wishart
-   invwishart             -- Inverse Wishart
-   multinomial            -- Multinomial distribution
-   special_ortho_group    -- SO(N) group
-   ortho_group            -- O(N) group
-   unitary_group          -- U(N) group
-   random_correlation     -- random correlation matrices
-   multivariate_t         -- Multivariate t-distribution
-   multivariate_hypergeom -- Multivariate hypergeometric distribution
-   random_table           -- Distribution of random tables with given marginals
-   uniform_direction      -- Uniform distribution on S(N-1)
-   vonmises_fisher        -- Von Mises-Fisher distribution
+   multivariate_normal      -- Multivariate normal distribution
+   matrix_normal            -- Matrix normal distribution
+   dirichlet                -- Dirichlet
+   dirichlet_multinomial    -- Dirichlet multinomial distribution
+   wishart                  -- Wishart
+   invwishart               -- Inverse Wishart
+   multinomial              -- Multinomial distribution
+   special_ortho_group      -- SO(N) group
+   ortho_group              -- O(N) group
+   unitary_group            -- U(N) group
+   random_correlation       -- random correlation matrices
+   multivariate_t           -- Multivariate t-distribution
+   multivariate_hypergeom   -- Multivariate hypergeometric distribution
+   normal_inverse_gaussian  -- Normal inverse Gaussian distribution
+   random_table             -- Distribution of random tables with given marginals
+   uniform_direction        -- Uniform distribution on S(N-1)
+   vonmises_fisher          -- Von Mises-Fisher distribution
 
 `scipy.stats.multivariate_normal` methods accept instances
 of the following class to represent the covariance.
