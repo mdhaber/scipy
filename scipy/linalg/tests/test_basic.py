@@ -12,7 +12,7 @@ from numpy.testing import (assert_equal, assert_almost_equal, assert_,
 import pytest
 from pytest import raises as assert_raises
 
-from scipy.linalg import (solve, inv, det, lstsq, pinv, pinv3, pinvh, norm,
+from scipy.linalg import (solve, inv, det, lstsq, pinv, pinvh, norm,
                           solve_banded, solveh_banded, solve_triangular,
                           solve_circulant, circulant, LinAlgError, block_diag,
                           matrix_balance, qr, LinAlgWarning)
@@ -1536,65 +1536,53 @@ class TestLstsq:
         dt_nonempty = lstsq(np.eye(2, dtype=dt_a), np.ones(2, dtype=dt_b))[0].dtype
         assert x.dtype == dt_nonempty
 
-class TestPinv:
+class PinvTest:
     def setup_method(self):
         np.random.seed(1234)
 
     def test_simple_real(self):
         a = array([[1, 2, 3], [4, 5, 6], [7, 8, 10]], dtype=float)
-        a_pinv = pinv(a)
-        assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
-        a_pinv = pinv3(a)
+        a_pinv = self.pinv(a)
         assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
 
     def test_simple_complex(self):
         a = (array([[1, 2, 3], [4, 5, 6], [7, 8, 10]],
              dtype=float) + 1j * array([[10, 8, 7], [6, 5, 4], [3, 2, 1]],
                                        dtype=float))
-        a_pinv = pinv(a)
-        assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
-        a_pinv = pinv3(a)
+        a_pinv = self.pinv(a)
         assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
 
     def test_simple_singular(self):
         a = array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=float)
-        a_pinv = pinv(a)
-        a_pinv3 = pinv3(a)
+        a_pinv = self.pinv(a)
         expected = array([[-6.38888889e-01, -1.66666667e-01, 3.05555556e-01],
                           [-5.55555556e-02, 1.30136518e-16, 5.55555556e-02],
                           [5.27777778e-01, 1.66666667e-01, -1.94444444e-01]])
         assert_array_almost_equal(a_pinv, expected)
-        assert_array_almost_equal(a_pinv3, expected)
 
     def test_simple_cols(self):
         a = array([[1, 2, 3], [4, 5, 6]], dtype=float)
-        a_pinv = pinv(a)
-        a_pinv3 = pinv3(a)
+        a_pinv = self.pinv(a)
         expected = array([[-0.94444444, 0.44444444],
                           [-0.11111111, 0.11111111],
                           [0.72222222, -0.22222222]])
         assert_array_almost_equal(a_pinv, expected)
-        assert_array_almost_equal(a_pinv3, expected)
 
     def test_simple_rows(self):
         a = array([[1, 2], [3, 4], [5, 6]], dtype=float)
-        a_pinv = pinv(a)
-        a_pinv3 = pinv3(a)
+        a_pinv = self.pinv(a)
         expected = array([[-1.33333333, -0.33333333, 0.66666667],
                           [1.08333333, 0.33333333, -0.41666667]])
         assert_array_almost_equal(a_pinv, expected)
-        assert_array_almost_equal(a_pinv3, expected)
 
     def test_check_finite(self):
         a = array([[1, 2, 3], [4, 5, 6.], [7, 8, 10]])
-        a_pinv = pinv(a, check_finite=False)
-        assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
-        a_pinv = pinv3(a, check_finite=False)
+        a_pinv = self.pinv(a, check_finite=False)
         assert_array_almost_equal(dot(a, a_pinv), np.eye(3))
 
     def test_native_list_argument(self):
         a = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-        a_pinv = pinv(a)
+        a_pinv = self.pinv(a)
         expected = array([[-6.38888889e-01, -1.66666667e-01, 3.05555556e-01],
                           [-5.55555556e-02, 1.30136518e-16, 5.55555556e-02],
                           [5.27777778e-01, 1.66666667e-01, -1.94444444e-01]])
@@ -1612,7 +1600,7 @@ class TestPinv:
         # svds of a_m is ~ [116.906, 4.234, tiny, tiny, tiny]
         # svds of a is ~ [116.906, 4.234, 4.62959e-04, tiny, tiny]
         # Just abs cutoff such that we arrive at a_modified
-        a_p = pinv(a_m, atol=atol, rtol=0.)
+        a_p = self.pinv(a_m, atol=atol, rtol=0.)
         adiff1 = a @ a_p @ a - a
         adiff2 = a_m @ a_p @ a_m - a_m
         # Now adiff1 should be around atol value while adiff2 should be
@@ -1621,7 +1609,7 @@ class TestPinv:
         assert_allclose(np.linalg.norm(adiff2), 5e-14, atol=5.e-14)
 
         # Now do the same but remove another sv ~4.234 via rtol
-        a_p = pinv(a_m, atol=atol, rtol=rtol)
+        a_p = self.pinv(a_m, atol=atol, rtol=rtol)
         adiff1 = a @ a_p @ a - a
         adiff2 = a_m @ a_p @ a_m - a_m
         assert_allclose(np.linalg.norm(adiff1), 4.233, rtol=0.01)
@@ -1630,9 +1618,29 @@ class TestPinv:
     @pytest.mark.parametrize('dt', [float, np.float32, complex, np.complex64])
     def test_empty(self, dt):
         a = np.empty((0, 0), dtype=dt)
-        a_pinv = pinv(a)
+        a_pinv = self.pinv(a)
         assert a_pinv.size == 0
-        assert a_pinv.dtype == pinv(np.eye(2, dtype=dt)).dtype
+        assert a_pinv.dtype == self.pinv(np.eye(2, dtype=dt)).dtype
+
+
+class TestPinvSVD(PinvTest):
+    pinv = lambda self, *args, **kwargs: pinv(*args, **kwargs, method='svd')
+
+
+class TestPinvEigh(PinvTest):
+    pinv = lambda self, *args, **kwargs: pinv(*args, **kwargs, method='eigh')
+
+    def test_simple_singular(self):
+        pytest.mark.skip("`method='eigh' only suitable for matrices of full rank")
+
+    def test_native_list_argument(self):
+        A = [[1, 2], [3, 4]]
+        res = self.pinv(A)
+        ref = pinv(A)
+        assert_allclose(res, ref)
+
+    def test_atol_rtol(self):
+        pytest.mark.skip("Tolerances don't work with with `method='eigh'`")
 
 
 class TestPinvSymmetric:
