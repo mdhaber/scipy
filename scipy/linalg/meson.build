@@ -110,32 +110,29 @@ py3.extension_module('_decomp_interpolative',
   subdir: 'scipy/linalg'
 )
 
-# _solve_toeplitz
-if use_pythran
-  _solve_toeplitz_cpp = custom_target('_solve_toeplitz',
-    output: ['_solve_toeplitz.cpp'],
-    input: '_solve_toeplitz.py',
-    command: [pythran, '-E', '@INPUT@', '-o', '@OUTDIR@/_solve_toeplitz.cpp']
-  )
+_linalg_pythran_cpp = custom_target('_linalg_pythran',
+  output: ['_linalg_pythran.cpp'],
+  input: '_linalg_pythran.py',
+  command: [pythran, '-E', '@INPUT@', '-o', '@OUTDIR@/_linalg_pythran.cpp']
+)
 
-  py3.extension_module('_solve_toeplitz',
-    [_solve_toeplitz_cpp],
-    cpp_args: cpp_args_pythran,
-    dependencies: [pythran_dep, np_dep],
-    link_args: version_link_args,
-    install: true,
-    subdir: 'scipy/linalg'
-  )
-else
-  py3.extension_module('_solve_toeplitz',
-    linalg_init_cython_gen.process('_solve_toeplitz.pyx'),
-    c_args: cython_c_args,
-    dependencies: np_dep,
-    link_args: version_link_args,
-    install: true,
-    subdir: 'scipy/linalg'
-  )
-endif
+py3.extension_module('_linalg_pythran',
+  [_linalg_pythran_cpp],
+  cpp_args: cpp_args_pythran,
+  dependencies: [pythran_dep, np_dep],
+  link_args: version_link_args,
+  install: true,
+  subdir: 'scipy/linalg'
+)
+
+py3.extension_module('_solve_toeplitz',
+  linalg_init_cython_gen.process('_solve_toeplitz.pyx'),
+  c_args: cython_c_args,
+  dependencies: np_dep,
+  link_args: version_link_args,
+  install: true,
+  subdir: 'scipy/linalg'
+)
 
 # _matfuncs_sqrtm_triu:
 py3.extension_module('_matfuncs_sqrtm_triu',
