@@ -7,6 +7,7 @@ from numpy import asarray_chkfinite, asarray, atleast_2d, empty_like
 from ._misc import LinAlgError, _datacopied
 from .lapack import get_lapack_funcs
 from ._decomp import _asarray_validated
+from ._linalg_pythran import _cholesky_update
 
 
 __all__ = ['cholesky', 'cho_factor', 'cho_solve', 'cholesky_banded',
@@ -458,27 +459,15 @@ def cholesky_update(R, z, *, downdate=False, lower=False, overwrite_R=False,
         raise ValueError("Complex input is not supported.")
 
     if eps is None:
-        eps = n * np.finfo(R1.dtype).eps
+        eps = float(n * np.finfo(R1.dtype).eps)
     if eps < 0:
         raise ValueError("`eps` must be non-negative.")
 
     R = R.T if lower else R
 
-    # Initialization
-    alpha, beta = empty_like(z), empty_like(z)
-    alpha[-1], beta[-1] = 1., 1.
-    sign = -1 if downdate else 1
-
-    # Main algorithm
-    for r in range(n):
-        a = z[r] / R[r, r]
-        alpha[r] = alpha[r - 1] + sign * a**2
-        if alpha[r] < eps:  # numerically zero or negative
-            raise LinAlgError('The Cholesky factor becomes nonpositive'
-                              f'with this downdate at step {r}')
-        beta[r] = alpha[r]**0.5
-        z[r + 1:] -= a * R[r, r + 1:]
-        R[r, r:] *= beta[r] / beta[r - 1]
-        R[r, r + 1:] += sign * a / (beta[r] * beta[r - 1]) * z[r + 1:]
+    R = _cholesky_update(R, z, eps, downdate)
+    if R is None:
+        message = 'The update/downdate results in a non- positive definite matrix.'
+        raise LinAlgError(message)
 
     return R if not lower else R.T
