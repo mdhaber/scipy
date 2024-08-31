@@ -100,6 +100,12 @@
         "_cdflib_wrappers.pxd": {
             "bdtrin": "ddd->d"        }
     },
+    "beta_unregularized": {
+        "boost_special_functions.h++": {
+            "beta_unregularized_float": "fff->f",
+            "beta_unregularized_double": "ddd->d"
+        }
+    },
     "betainc": {
         "boost_special_functions.h++": {
             "ibeta_float": "fff->f",

@@ -850,6 +850,38 @@ add_newdoc("btdtrib",
     """)
 
 add_newdoc(
+    "beta_unregularized",
+    r"""
+    beta_unregularized(a, b, x, out=None)
+
+    (Unregularized) Incomplete beta function.
+
+    Computes the (unregularized) incomplete beta function, defined as [1]_:
+
+    .. math::
+
+        B_x(a, b) = \int_0^x t^{a-1}(1-t)^{b-1}dt,
+
+    for :math:`0 \leq x \leq 1`. The range is [0, 1].
+
+    Parameters
+    ----------
+    a, b : array_like
+           Positive, real-valued parameters
+    x : array_like
+        Real-valued such that :math:`0 \leq x \leq 1`,
+        the upper limit of integration
+    out : ndarray, optional
+        Optional output array for the function values
+
+    Returns
+    -------
+    scalar or ndarray
+        Value of the regularized incomplete beta function
+        
+    """)
+
+add_newdoc(
     "betainc",
     r"""
     betainc(a, b, x, out=None)

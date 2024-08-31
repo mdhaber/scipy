@@ -69,6 +69,49 @@ boost::math::policies::user_overflow_error(const char* function, const char* mes
 
 template<typename Real>
 static inline
+Real beta_unregularized_wrap(Real a, Real b, Real x)
+{
+    Real y;
+
+    if (isnan(a) || isnan(b) || isnan(x)) {
+        return NAN;
+    }
+    if ((a <= 0) || (b <= 0) || (x < 0) || (x > 1)) {
+        sf_error("beta_unregularized", SF_ERROR_DOMAIN, NULL);
+        return NAN;
+    }
+    try {
+        y = boost::math::beta(a, b, x, SpecialPolicy());
+    } catch (const std::domain_error& e) {
+        sf_error("beta_unregularized", SF_ERROR_DOMAIN, NULL);
+        y = NAN;
+    } catch (const std::overflow_error& e) {
+        sf_error("beta_unregularized", SF_ERROR_OVERFLOW, NULL);
+        y = INFINITY;
+    } catch (const std::underflow_error& e) {
+        sf_error("beta_unregularized", SF_ERROR_UNDERFLOW, NULL);
+        y = 0;
+    } catch (...) {
+        sf_error("beta_unregularized", SF_ERROR_OTHER, NULL);
+        y = NAN;
+    }
+    return y;
+}
+
+float
+beta_unregularized_float(float a, float b, float x)
+{
+    return beta_unregularized_wrap(a, b, x);
+}
+
+double
+beta_unregularized_double(double a, double b, double x)
+{
+    return beta_unregularized_wrap(a, b, x);
+}
+
+template<typename Real>
+static inline
 Real ibeta_wrap(Real a, Real b, Real x)
 {
     Real y;
