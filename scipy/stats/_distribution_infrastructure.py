@@ -13,6 +13,13 @@ from scipy.optimize._bracket import _bracket_root, _bracket_minimum
 from scipy.optimize._chandrupatla import _chandrupatla, _chandrupatla_minimize
 
 # in case we need to distinguish between None and not specified
+# Typically this is used to determine whether the tolerance has been set by the
+# user and make a decision about which method to use to evaluate a distribution
+# function. Sometimes, the logic does not consider the value of the tolerance,
+# only whether this has been defined or not. This is not intended to be the
+# best possible logic; the intent is to establish the structure, which can
+# be refined in follow-up work.
+# See https://github.com/scipy/scipy/pull/21050#discussion_r1714195433.
 _null = object()
 def _isnull(x):
     return type(x) is object or x is None
@@ -873,9 +880,7 @@ def _set_invalid_nan(f):
             try:
                 shape = np.broadcast_shapes(x.shape, shape)
                 x = np.broadcast_to(x, shape)
-                # Should we broadcast the distribution parameters to match shape of x?
-                # Should we copy if we broadcast to avoid passing a view to developer
-                # functions?
+                # Should we broadcast the distribution parameters to this shape, too?
             except ValueError as e:
                 message = (
                     f"The argument provided to `{self.__class__.__name__}"
@@ -2024,6 +2029,15 @@ class ContinuousDistribution:
         # Determines whether a class overrides a specified method.
         # Returns True if the method implementation exists and is the same as
         # that of the `ContinuousDistribution` class; otherwise returns False.
+
+        # Sometimes we use `_overrides` to check whether a certain method is overridden
+        # and if so, call it. This begs the questions of why we don't do the more
+        # obvious thing: restructure so that if the private method is overridden,
+        # Python will call it instead of the inherited version automatically. The short
+        # answer is that there are multiple ways a use might wish to evaluate a method,
+        # and simply overriding the method with a formula is not always the best option.
+        # For more complete discussion of the considerations, see:
+        # https://github.com/scipy/scipy/pull/21050#discussion_r1707798901
         method = getattr(self.__class__, method_name, None)
         super_method = getattr(ContinuousDistribution, method_name, None)
         return method is not super_method
