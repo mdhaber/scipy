@@ -758,7 +758,7 @@ def test_input_validation():
         dist.pdf([1, 2])
 
     message = "Parameter `c` must be of real dtype."
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(TypeError, match=message):
         Test2(c=[1, object()], d=[1, 2])
 
     message = "Parameter `convention` of `Test2.kurtosis` must be one of..."
@@ -1037,8 +1037,7 @@ class TestFullCoverage:
 
     @pytest.mark.parametrize(("dtype_in", "dtype_out"),
                               [(np.float16, np.float16),
-                               (np.int16, np.float64),
-                               (np.complex128, np.float64)])
+                               (np.int16, np.float64)])
     def test_RealParameter_uncommon_dtypes(self, dtype_in, dtype_out):
         domain = _RealDomain((-1, 1))
         parameter = _RealParameter('x', domain=domain)

@@ -213,6 +213,10 @@ class _Domain(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def draw(self, n):
+        raise NotImplementedError()
+
+    @abstractmethod
     def get_numerical_endpoints(self, x):
         raise NotImplementedError()
 
@@ -358,7 +362,7 @@ class _SimpleDomain(_Domain):
 
 
 class _RealDomain(_SimpleDomain):
-    r""" Represents a simply-connected subset of the real line.
+    r""" Represents a simply-connected subset of the real line; i.e., an interval
 
     Completes the implementation of the `_SimpleDomain` class for simple
     domains on the real line.
@@ -394,14 +398,14 @@ class _RealDomain(_SimpleDomain):
 
         return f"{left}{a}, {b}{right}"
 
-    def draw(self, n, type, min, max, squeezed_base_shape, rng=None):
+    def draw(self, n, type_, min, max, squeezed_base_shape, rng=None):
         r""" Draw random values from the domain.
 
         Parameters
         ----------
         n : int
             The number of values to be drawn from the domain.
-        type : str
+        type_ : str
             A string indicating whether the values are
 
             - strictly within the domain ('in'),
@@ -424,25 +428,27 @@ class _RealDomain(_SimpleDomain):
         min_nn[i] = 0
         max_nn[i] = 1
 
-        if type == 'in':
-            z = rng.uniform(min_nn, max_nn, size=(n,) + squeezed_base_shape)
+        shape = (n,) + squeezed_base_shape
 
-        elif type == 'on':
-            z_on_shape = (n,) + squeezed_base_shape
+        if type_ == 'in':
+            z = rng.uniform(min_nn, max_nn, size=shape)
+
+        elif type_ == 'on':
+            z_on_shape = shape
             z = np.ones(z_on_shape)
             i = rng.random(size=n) < 0.5
             z[i] = min
             z[~i] = max
 
-        elif type == 'out':
+        elif type_ == 'out':
             # make this work for infinite bounds
-            z = min_nn - rng.uniform(size=(n,) + squeezed_base_shape)
-            zr = max_nn + rng.uniform(size=(n,) + squeezed_base_shape)
+            z = min_nn - rng.uniform(size=shape)
+            zr = max_nn + rng.uniform(size=shape)
             i = rng.random(size=n) < 0.5
             z[i] = zr[i]
 
-        elif type == 'nan':
-            z = np.full((n,) + squeezed_base_shape, np.nan)
+        elif type_ == 'nan':
+            z = np.full(shape, np.nan)
 
         return z
 
@@ -455,7 +461,8 @@ class _IntegerDomain(_SimpleDomain):
 
     To be completed when needed.
     """
-    pass
+    def __init__(self):
+        raise NotImplementedError
 
 
 class _Parameter(ABC):
@@ -544,7 +551,7 @@ class _Parameter(ABC):
 
         """
         parameter_values = parameter_values or {}
-        domain = getattr(self, 'domain')
+        domain = self.domain
         proportions = (1, 0, 0, 0) if proportions is None else proportions
 
         pvals = proportions / np.sum(proportions)
@@ -596,7 +603,7 @@ class _Parameter(ABC):
         squeezed_base_shape = max.shape
 
         if region == 'typical':
-            typical = getattr(self, 'typical')
+            typical = self.typical
             a, b = typical.get_numerical_endpoints(parameter_values)
             a, b = np.broadcast_arrays(a, b)
             min_here = np.asarray(a.squeeze())
@@ -669,13 +676,9 @@ class _RealParameter(_Parameter):
             pass
         elif np.issubdtype(arr.dtype, np.integer):
             arr = np.asarray(arr, dtype=np.float64)
-        elif np.issubdtype(arr.dtype, np.complexfloating):
-            real_arr = np.real(arr)
-            valid_dtype = (real_arr == arr)
-            arr = real_arr
         else:
             message = f"Parameter `{self.name}` must be of real dtype."
-            raise ValueError(message)
+            raise TypeError(message)
 
         valid = self.domain.contains(arr, parameter_values)
         valid = valid & valid_dtype if valid_dtype is not None else valid
