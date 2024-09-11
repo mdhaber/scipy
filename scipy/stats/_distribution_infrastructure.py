@@ -572,6 +572,7 @@ class _Parameter(ABC):
         n_base = np.prod(base_shape)
         n = int(n_extended / n_base) if n_extended else 0
 
+        rng = np.random.default_rng(rng)
         n_in, n_on, n_out, n_nan = rng.multinomial(n, pvals)
 
         # `min` and `max` can have singleton dimensions that correspond with
