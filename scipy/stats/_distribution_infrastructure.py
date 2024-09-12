@@ -2873,7 +2873,7 @@ class ContinuousDistribution:
     ## Probability Density Functions
 
     @_set_invalid_nan
-    def logpdf(self, x, *, method=None):
+    def logpdf(self, x, /, *, method=None):
         r"""Log of the probability density function
 
         The probability density function ("PDF"), denoted :math:`f(x)`, is the
@@ -2973,7 +2973,7 @@ class ContinuousDistribution:
         return np.log(self._pdf_dispatch(x, **params))
 
     @_set_invalid_nan
-    def pdf(self, x, *, method=None):
+    def pdf(self, x, /, *, method=None):
         r"""Probability density function
 
         The probability density function ("PDF"), denoted :math:`f(x)`, is the
@@ -3058,7 +3058,7 @@ class ContinuousDistribution:
 
     ## Cumulative Distribution Functions
 
-    def logcdf(self, x, y=None, *, method=None):
+    def logcdf(self, x, y=None, /, *, method=None):
         r"""Log of the cumulative distribution function
 
         The cumulative distribution function ("CDF"), denoted :math:`F(x)`, is
@@ -3247,7 +3247,7 @@ class ContinuousDistribution:
         return self._quadrature(self._logpdf_dispatch, limits=(a, x),
                                 params=params, log=True)
 
-    def cdf(self, x, y=None, *, method=None):
+    def cdf(self, x, y=None, /, *, method=None):
         r"""Cumulative distribution function
 
         The cumulative distribution function ("CDF"), denoted :math:`F(x)`, is
@@ -3419,7 +3419,7 @@ class ContinuousDistribution:
         return self._quadrature(self._pdf_dispatch, limits=(a, x),
                                 params=params)
 
-    def logccdf(self, x, y=None, *, method=None):
+    def logccdf(self, x, y=None, /, *, method=None):
         r"""Log of the complementary cumulative distribution function
 
         The complementary cumulative distribution function ("CCDF"), denoted
@@ -3582,7 +3582,7 @@ class ContinuousDistribution:
         return self._quadrature(self._logpdf_dispatch, limits=(x, b),
                                 params=params, log=True)
 
-    def ccdf(self, x, y=None, *, method=None):
+    def ccdf(self, x, y=None, /, *, method=None):
         r"""Complementary cumulative distribution function
 
         The complementary cumulative distribution function ("CCDF"), denoted
@@ -3741,7 +3741,7 @@ class ContinuousDistribution:
     ## Inverse cumulative distribution functions
 
     @_set_invalid_nan
-    def ilogcdf(self, logp, *, method=None):
+    def ilogcdf(self, logp, /, *, method=None):
         r"""Inverse of the logarithm of the cumulative distribution function.
 
         The inverse of the logarithm of the cumulative distribution function
@@ -3844,7 +3844,7 @@ class ContinuousDistribution:
         return self._solve_bounded(self._logcdf_dispatch, x, params=params)
 
     @_set_invalid_nan
-    def icdf(self, p, *, method=None):
+    def icdf(self, p, /, *, method=None):
         r"""Inverse of the cumulative distribution function.
 
         The inverse of the cumulative distribution function ("inverse CDF"),
@@ -3946,7 +3946,7 @@ class ContinuousDistribution:
         return self._solve_bounded(self._cdf_dispatch, x, params=params)
 
     @_set_invalid_nan
-    def ilogccdf(self, logp, *, method=None):
+    def ilogccdf(self, logp, /, *, method=None):
         r"""Inverse of the log of the complementary cumulative distribution function.
 
         The inverse of the logarithm of the complementary cumulative distribution
@@ -4048,7 +4048,7 @@ class ContinuousDistribution:
         return self._solve_bounded(self._logccdf_dispatch, x, params=params)
 
     @_set_invalid_nan
-    def iccdf(self, p, *, method=None):
+    def iccdf(self, p, /, *, method=None):
         r"""Inverse complementary cumulative distribution function.
 
         The inverse complementary cumulative distribution function ("inverse CCDF"),
@@ -4865,7 +4865,7 @@ class ContinuousDistribution:
     # quantities should make us question that choice. It can still accomodate
     # these methods reasonably efficiently.
 
-    def llf(self, sample, *, axis=-1):
+    def llf(self, sample, /, *, axis=-1):
         r"""Log-likelihood function
 
         Given a sample :math:`x`, the log-likelihood function (LLF) is the logarithm
