@@ -612,7 +612,8 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         Initial guess for the parameters (length N). If None, then the
         initial values will all be 1 (if the number of parameters for the
         function can be determined using introspection, otherwise a
-        ValueError is raised).
+        ValueError is raised). Used for all values of `method` except
+        'direct', 'shgo', and 'dual_annealing'; ignored otherwise.
     sigma : None or scalar or M-length sequence or MxM array, optional
         Determines the uncertainty in `ydata`. If we define residuals as
         ``r = ydata - f(xdata, *popt)``, then the interpretation of `sigma`
@@ -659,12 +660,21 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
           parameters). Use ``np.inf`` with an appropriate sign to disable
           bounds on all or some parameters.
 
-    method : {'lm', 'trf', 'dogbox'}, optional
-        Method to use for optimization. See `least_squares` for more details.
+        Used for all values of `method` except 'basinhopping' and methods
+        of `minimize` that do not accept bounds; ignored otherwise.
+    method : str, optional
+        Method to use for optimization. Available options include:
+
+            - 'lm', 'trf', and 'dogbox'; see `least_squares` for
+              more details.
+            - 'basinhopping', 'differential_evolution', 'shgo', 'dual_annealing',
+              and 'direct'; see documentation of corresponding functions.
+            - all methods accepted by the ``method`` parameter of `minimize`;
+              see documentation of `minimize`.
+
         Default is 'lm' for unconstrained problems and 'trf' if `bounds` are
-        provided. The method 'lm' won't work when the number of observations
-        is less than the number of variables, use 'trf' or 'dogbox' in this
-        case.
+        provided. For method 'lm' the number of observations must be greater
+        than or equal to the number of parameters.
 
         .. versionadded:: 0.17
     jac : callable, string or None, optional
@@ -673,7 +683,9 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         array_like structure. It will be scaled according to provided `sigma`.
         If None (default), the Jacobian will be estimated numerically.
         String keywords for 'trf' and 'dogbox' methods can be used to select
-        a finite difference scheme, see `least_squares`.
+        a finite difference scheme, see `least_squares`. Used by all values
+        of `method` except those that correspdong with a global optimizer
+        or method of `minimize` that does not use a gradient; ignored otherwise.
 
         .. versionadded:: 0.18
     full_output : boolean, optional
@@ -696,8 +708,9 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
 
         .. versionadded:: 1.11
     **kwargs
-        Keyword arguments passed to `leastsq` for ``method='lm'`` or
-        `least_squares` otherwise.
+        Keyword arguments passed to `leastsq` for ``method='lm'``,
+        `least_squares` for 'trf' and 'dogbox', `minimize` for methods
+        of `minimize`, or the global optimizer corresponding with `method`.
 
     Returns
     -------
