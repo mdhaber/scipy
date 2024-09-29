@@ -5,7 +5,7 @@ import numpy as np
 from numpy import (atleast_1d, triu, shape, transpose, zeros, prod, greater,
                    asarray, inf,
                    finfo, inexact, issubdtype, dtype)
-from scipy import linalg, differentiate
+from scipy import linalg, differentiate, optimize
 from scipy.linalg import svd, cholesky, solve_triangular, LinAlgError
 from scipy._lib._util import _asarray_validated, _lazywhere, _contains_nan
 from scipy._lib._util import getfullargspec_no_self as _getfullargspec
@@ -1037,7 +1037,7 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         ysize = xdata.shape[-1]  # how could this be otherwise, even with gh-7018?
         bounds = None if bounds == (-np.inf, np.inf) else Bounds(lb, ub)
         popt, pcov, infodict, errmsg, ier, cost = (
-            _curve_fit_other(func, jac, p0, bounds, method))
+            _curve_fit_other(func, jac, p0, bounds, kwargs, method))
 
     warn_cov = False
     if pcov is None or np.isnan(pcov).any():
@@ -1063,14 +1063,30 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         return popt, pcov
 
 
-def _curve_fit_other(f, grad, p0, bounds, method):
+def _minimize(f, x0, jac, bounds, kwargs, method):
+    if method == 'basinhopping':
+        return optimize.basinhopping(f, x0=x0, **kwargs)
+    if method == 'direct':
+        return optimize.direct(f, bounds, **kwargs)
+    elif method == 'shgo':
+        return optimize.shgo(f, bounds, options=dict(jac=jac), **kwargs)
+    elif method == 'differential_evolution':
+        return optimize.differential_evolution(f, bounds, x0=x0, **kwargs)
+    elif method == 'dual_annealing':
+        return optimize.dual_annealing(f, bounds, **kwargs)
+    else:
+        return minimize(f, x0, jac=jac, bounds=bounds, method=method, **kwargs)
+
+
+def _curve_fit_other(f, grad, p0, bounds, kwargs, method):
 
     def chisq(p):
         p = np.expand_dims(p, axis=-1)
         return 0.5 * np.sum(f(p) ** 2, axis=-1)
 
     if not callable(grad):
-        res = minimize(chisq, p0, jac=grad, bounds=bounds, method=method)
+        res = _minimize(chisq, p0, jac=grad, bounds=bounds,
+                        kwargs=kwargs, method=method)
         hess = differentiate.hessian(chisq, res.x).ddf
 
     else:
@@ -1078,13 +1094,14 @@ def _curve_fit_other(f, grad, p0, bounds, method):
             p = np.expand_dims(p, axis=-1)
             return np.sum(f(p) * np.swapaxes(grad(p), 0, 1), axis=-1)
 
-        res = minimize(chisq, p0, jac=dchisq, bounds=bounds, method=method)
+        res = _minimize(chisq, p0, jac=dchisq, bounds=bounds,
+                        kwargs=kwargs, method=method)
         hess = differentiate.jacobian(dchisq, res.x).df
 
     pcov = 2 * np.linalg.inv(hess)
 
     infodict = {'nfev': res.nfev, 'fvec': f(res.x)}
-    return res.x, pcov, infodict, res.message, res.status, res.fun
+    return res.x, pcov, infodict, res.message, res.get('status', None), res.fun
 
 
 def check_gradient(fcn, Dfcn, x0, args=(), col_deriv=0):
