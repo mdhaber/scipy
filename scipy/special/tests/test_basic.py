@@ -35,13 +35,16 @@ from numpy.testing import (assert_equal, assert_almost_equal,
         assert_, assert_allclose, assert_array_almost_equal_nulp,
         suppress_warnings)
 
+from scipy.conftest import array_api_compatible, skip_xp_backends
+from scipy._lib._array_api_no_0d import xp_assert_close
+from scipy._lib._util import np_long, np_ulong
+
 from scipy import special
 import scipy.special._ufuncs as cephes
 from scipy.special import ellipe, ellipk, ellipkm1
 from scipy.special import elliprc, elliprd, elliprf, elliprg, elliprj
 from scipy.special import softplus
 from scipy.special import mathieu_odd_coef, mathieu_even_coef, stirling2
-from scipy._lib._util import np_long, np_ulong
 
 from scipy.special._basic import _FACTORIALK_LIMITS_64BITS, \
     _FACTORIALK_LIMITS_32BITS
@@ -49,6 +52,9 @@ from scipy.special._testutils import with_special_errors, \
      assert_func_equal, FuncData
 
 import math
+
+pytestmark = [pytest.mark.usefixtures("skip_xp_backends")]
+skip_xp_backends = pytest.mark.skip_xp_backends
 
 
 class TestCephes:
@@ -3681,8 +3687,9 @@ class TestRiccati:
         assert_array_almost_equal(C, special.riccati_yn(n, x), 8)
 
 
+@array_api_compatible
 class TestSoftplus:
-    def test_softplus(self):
+    def test_softplus(self, xp):
         # Test cases for the softplus function. Selected based on Eq.(10) of:
         # Mächler, M. (2012). log1mexp-note.pdf. Rmpfr: R MPFR - Multiple Precision
         # Floating-Point Reliable. Retrieved from:
@@ -3696,6 +3703,7 @@ class TestSoftplus:
         a3 = rng.uniform(18, 33.3, size=n)
         a4 = rng.uniform(33.33, 100, size=n)
         a = np.stack([a1, a2, a3, a4])
+        a = xp.asarray(a)
 
         # from mpmath import mp
         # mp.dps = 100
@@ -3707,19 +3715,21 @@ class TestSoftplus:
                [1.8425343736349797, 9.488245799395577e-15, 7.225195764021444e-08],
                [31.253760266045106, 27.758244090327832, 29.995959179643634],
                [73.26040086468937, 76.24944728617226, 37.83955519155184]]
+        ref = xp.asarray(ref)
 
         res = softplus(a)
-        assert_allclose(res, ref, rtol=1e-15)
+        xp_assert_close(res, ref, rtol=1e-15)
 
+    @skip_xp_backends(np_only=True, reason='Only NumPy supports the kwargs')
     def test_softplus_with_kwargs(self):
         x = np.arange(5) - 2
         out = np.ones(5)
-        ref = out.copy()
+        ref = np.ones(5)
         where = x > 0
 
         softplus(x, out=out, where=where)
         ref[where] = softplus(x[where])
-        assert_allclose(out, ref)
+        xp_assert_close(out, ref)
 
 
 class TestRound:
