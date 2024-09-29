@@ -5,7 +5,7 @@ import numpy as np
 from numpy import (atleast_1d, triu, shape, transpose, zeros, prod, greater,
                    asarray, inf,
                    finfo, inexact, issubdtype, dtype)
-from scipy import linalg
+from scipy import linalg, differentiate
 from scipy.linalg import svd, cholesky, solve_triangular, LinAlgError
 from scipy._lib._util import _asarray_validated, _lazywhere, _contains_nan
 from scipy._lib._util import getfullargspec_no_self as _getfullargspec
@@ -13,7 +13,7 @@ from ._optimize import OptimizeResult, _check_unknown_options, OptimizeWarning
 from ._lsq import least_squares
 # from ._lsq.common import make_strictly_feasible
 from ._lsq.least_squares import prepare_bounds
-from scipy.optimize._minimize import Bounds
+from scipy.optimize._minimize import Bounds, minimize
 
 __all__ = ['fsolve', 'leastsq', 'fixed_point', 'curve_fit']
 
@@ -1008,7 +1008,7 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         cost = np.sum(infodict['fvec'] ** 2)
         if ier not in [1, 2, 3, 4]:
             raise RuntimeError("Optimal parameters not found: " + errmsg)
-    else:
+    elif method in {'trf', 'dogbox'}:
         # Rename maxfev (leastsq) to max_nfev (least_squares), if specified.
         if 'max_nfev' not in kwargs:
             kwargs['max_nfev'] = kwargs.pop('maxfev', None)
@@ -1033,6 +1033,11 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         s = s[s > threshold]
         VT = VT[:s.size]
         pcov = np.dot(VT.T / s**2, VT)
+    else:
+        ysize = xdata.shape[-1]  # how could this be otherwise, even with gh-7018?
+        bounds = None if bounds == (-np.inf, np.inf) else Bounds(lb, ub)
+        popt, pcov, infodict, errmsg, ier, cost = (
+            _curve_fit_other(func, jac, p0, bounds, method))
 
     warn_cov = False
     if pcov is None or np.isnan(pcov).any():
@@ -1056,6 +1061,30 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         return popt, pcov, infodict, errmsg, ier
     else:
         return popt, pcov
+
+
+def _curve_fit_other(f, grad, p0, bounds, method):
+
+    def chisq(p):
+        p = np.expand_dims(p, axis=-1)
+        return 0.5 * np.sum(f(p) ** 2, axis=-1)
+
+    if not callable(grad):
+        res = minimize(chisq, p0, jac=grad, bounds=bounds, method=method)
+        hess = differentiate.hessian(chisq, res.x).ddf
+
+    else:
+        def dchisq(p):
+            p = np.expand_dims(p, axis=-1)
+            return np.sum(f(p) * np.swapaxes(grad(p), 0, 1), axis=-1)
+
+        res = minimize(chisq, p0, jac=dchisq, bounds=bounds, method=method)
+        hess = differentiate.jacobian(dchisq, res.x).df
+
+    pcov = 2 * np.linalg.inv(hess)
+
+    infodict = {'nfev': res.nfev, 'fvec': f(res.x)}
+    return res.x, pcov, infodict, res.message, res.status, res.fun
 
 
 def check_gradient(fcn, Dfcn, x0, args=(), col_deriv=0):
