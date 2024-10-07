@@ -12,8 +12,46 @@ import numpy as np
 from scipy.spatial import KDTree, Rectangle, distance_matrix, cKDTree
 from scipy.spatial._ckdtree import cKDTreeNode
 from scipy.spatial import minkowski_distance
+from scipy import spatial
 
 import itertools
+
+
+class TestKDTree2:
+    def structure_test(self, tree, node, indices, level):
+        if node == -1:
+            return
+
+        # ran out of time  - sort, check center index, and re-run on left and right sides
+        n, k = len(indices), tree.data.shape[1]
+        axis = level % k
+        assert tree.axis[node] == axis
+        indices = indices[np.argsort(tree.data[indices, axis])]
+        assert indices[n // 2] == node
+
+        left, right = indices[:n // 2], indices[n // 2 + 1:]
+        self.structure_test(tree, tree.children[node, 0], left, level + 1)
+        self.structure_test(tree, tree.children[node, 1], right, level + 1)
+
+    @pytest.mark.parametrize('n', np.logspace(1, 3, 5))
+    @pytest.mark.parametrize('dim', [1, 2, 3])
+    def test_basic(self, n, dim):
+        n = int(n)
+        rng = np.random.default_rng(n)
+        data = rng.random((n, dim))
+        qpoint = rng.random(dim)
+        res_tree = spatial.kdtree2(data)
+
+        # Test Structure
+        self.structure_test(res_tree, res_tree.root, np.arange(n), 0)
+
+        # Test Query
+        ref_tree = spatial.KDTree(data)
+        res_node, res_dist = res_tree.nearest_neighbor(qpoint)
+        ref_dist, ref_node = ref_tree.query(qpoint, 1)
+        assert_equal(res_node, ref_node)
+        assert_allclose(res_dist**0.5, ref_dist, rtol=1e-15)
+
 
 @pytest.fixture(params=[KDTree, cKDTree])
 def kdtree_type(request):
