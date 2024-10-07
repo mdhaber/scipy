@@ -124,6 +124,7 @@ py3.install_sources([
     '__init__.py',
     '_geometric_slerp.py',
     '_kdtree.py',
+    '_kdtree2.py',
     '_plotutils.py',
     '_procrustes.py',
     '_spherical_voronoi.py',

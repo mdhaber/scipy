@@ -108,6 +108,7 @@ Warnings / Errors used in :mod:`scipy.spatial`
 """  # noqa: E501
 
 from ._kdtree import *
+from ._kdtree2 import kdtree2
 from ._ckdtree import *
 from ._qhull import *
 from ._spherical_voronoi import SphericalVoronoi
