@@ -42,35 +42,36 @@ class kdtree2:
             self.children[node, 1] = right[0]
 
     def distance(self, point1, point2):
-        return np.sum((point1 - point2)**2)
+        return np.sum((point1 - point2)**2)**0.5
 
     def nearest_neighbor(self, point):
         node, distance = self._nearest_neighbor(point, self.root)
         return node, distance
 
     def _nearest_neighbor(self, point, node):
-        axis = self.axis[node]
-
         if node == -1:
             return node, np.inf
 
-        best_node = node
-        best_distance = self.distance(point, self.data[node])
+        axis = self.axis[node]
+        splitting_plane_distance = point[axis] - self.data[node, axis]
+        if splitting_plane_distance < 0:
+            near, far = self.children[node]
+        else:
+            far, near = self.children[node]
 
-        right = int(point[axis] > self.data[node, axis])
-        right_node, right_distance = self._nearest_neighbor(point, self.children[node, right])
-        if right_distance < best_distance:
-            best_node = right_node
-            best_distance = right_distance
+        # Distance to closest near-side node
+        best_node, best_distance = self._nearest_neighbor(point, near)
 
-        other_node = self.children[node, 1-right]
-        if (other_node >= 0) and (abs(point[axis] - self.data[node, axis]) > best_distance**0.5):
-            return best_node, best_distance
+        # Distance to current node
+        this_distance = self.distance(point, self.data[node])
+        if this_distance < best_distance:
+            best_node, best_distance = node, this_distance
 
-        other_node, other_distance = self._nearest_neighbor(point, self.children[node, 1-right])
-        if other_distance < best_distance:
-            best_node = other_node
-            best_distance = other_distance
+        # Distance to closest far-side node
+        if abs(splitting_plane_distance < best_distance):
+            far_node, far_distance = self._nearest_neighbor(point, far)
+            if far_distance < best_distance:
+                best_node, best_distance = far_node, far_distance
 
         return best_node, best_distance
 

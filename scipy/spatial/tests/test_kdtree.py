@@ -34,7 +34,7 @@ class TestKDTree2:
         self.structure_test(tree, tree.children[node, 1], right, level + 1)
 
     @pytest.mark.parametrize('n', np.logspace(1, 3, 5))
-    @pytest.mark.parametrize('dim', [1, 2, 3])
+    @pytest.mark.parametrize('dim', [1, 2, 8])
     def test_basic(self, n, dim):
         n = int(n)
         rng = np.random.default_rng(n)
@@ -50,7 +50,7 @@ class TestKDTree2:
         res_node, res_dist = res_tree.nearest_neighbor(qpoint)
         ref_dist, ref_node = ref_tree.query(qpoint, 1)
         assert_equal(res_node, ref_node)
-        assert_allclose(res_dist**0.5, ref_dist, rtol=1e-15)
+        assert_allclose(res_dist, ref_dist, rtol=1e-15)
 
 
 @pytest.fixture(params=[KDTree, cKDTree])
