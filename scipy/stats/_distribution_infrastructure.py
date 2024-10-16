@@ -6,7 +6,7 @@ import numpy as np
 from numpy import inf
 
 from scipy._lib._util import _lazywhere
-from scipy._lib._docscrape import ClassDoc, NumpyDocString
+from scipy._lib._docscrape import ClassDoc, FunctionDoc, NumpyDocString
 from scipy import special
 from scipy.integrate._tanhsinh import _tanhsinh
 from scipy.optimize._bracket import _bracket_root, _bracket_minimum
@@ -181,6 +181,177 @@ _NO_CACHE = "no_cache"
 # - result_dtype
 # - is_subdtype
 # It is much faster to check whether these are necessary than to do them.
+
+
+class _ProbabilityDistribution(ABC):
+    @abstractmethod
+    def support(self):
+        """rSupport of the random variable
+
+        The support of a random variable is set of all possible outcomes;
+        i.e., the subset of the domain of argument :math:`x` for which
+        the probability density function (or probability mass function, as
+         appropriate) :math:`f(x)` is nonzero.
+
+        This function returns lower and upper bounds of the support.
+
+        Returns
+        -------
+        out : tuple of Array
+            The lower and upper bounds of the support.
+
+        See Also
+        --------
+        pdf
+
+        References
+        ----------
+        .. [1] Support (mathematics), *Wikipedia*,
+               https://en.wikipedia.org/wiki/Support_(mathematics)
+
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def sample(self, shape, *, rng):
+        r"""Random sample from the distribution.
+
+        Parameters
+        ----------
+        shape : tuple of ints, default: ()
+            The shape of the sample to draw. If the parameters of the distribution
+            underlying the random variable are arrays of shape ``param_shape``,
+            the output array will be of shape ``shape + param_shape``.
+        rng : `numpy.random.Generator`, optional
+            Pseudorandom number generator state. When `rng` is None, a new
+            `numpy.random.Generator` is created using entropy from the
+            operating system. Types other than `numpy.random.Generator` are
+            passed to `numpy.random.default_rng` to instantiate a `Generator`.
+
+        References
+        ----------
+        .. [1] Sampling (statistics), *Wikipedia*,
+               https://en.wikipedia.org/wiki/Sampling_(statistics)
+
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def moment(self, order, kind):
+        r"""Raw, central, or standard moment of positive integer order.
+
+        Parameters
+        ----------
+        order : int
+            The integer order of the moment; i.e. :math:`n` in the formulae above.
+        kind : {'raw', 'central', 'standardized'}
+            Whether to return the raw (default), central, or standardized moment
+            defined above.
+
+        Returns
+        -------
+        out : array
+            The moment of the random variable of the specified order and kind.
+
+        See Also
+        --------
+        pdf
+        mean
+        variance
+        standard_deviation
+        skewness
+        kurtosis
+
+        References
+        ----------
+        .. [1] Moment, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Moment_(mathematics)
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def mean(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def median(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def mode(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def variance(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def standard_deviation(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def skewness(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def kurtosis(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def pdf(self, x, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def pmf(self, x, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def logpdf(self, x, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def logpmf(self, x, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def cdf(self, x, y, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def icdf(self, p, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def ccdf(self, x, y, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def iccdf(self, p, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def logcdf(self, x, y, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def ilogcdf(self, logp, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def logccdf(self, x, y, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def ilogccdf(self, logp, /):
+        raise NotImplementedError
+
+    @abstractmethod
+    def entropy(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def logentropy(self):
+        raise NotImplementedError
 
 
 class _Domain(ABC):
@@ -2059,28 +2230,7 @@ class ContinuousDistribution:
     # and we use quadrature otherwise.
 
     def support(self):
-        r"""Support of the random variable
-
-        The support of a random variable is set of all possible outcomes;
-        i.e., the subset of the domain of argument :math:`x` for which
-        the probability density function :math:`f(x)` is nonzero.
-
-        This function returns lower and upper bounds of the support.
-
-        Returns
-        -------
-        out : tuple of Array
-            The lower and upper bounds of the support.
-
-        See Also
-        --------
-        pdf
-
-        References
-        ----------
-        .. [1] Support (mathematics), *Wikipedia*,
-               https://en.wikipedia.org/wiki/Support_(mathematics)
-
+        r"""
         Notes
         -----
         Suppose a continuous probability distribution has support ``(l, r)``.
@@ -4129,14 +4279,9 @@ class ContinuousDistribution:
     # information.
 
     def sample(self, shape=(), *, method=None, rng=None):
-        """Random sample from the distribution.
-
+        r"""
         Parameters
         ----------
-        shape : tuple of ints, default: ()
-            The shape of the sample to draw. If the parameters of the distribution
-            underlying the random variable are arrays of shape ``param_shape``,
-            the output array will be of shape ``shape + param_shape``.
         method : {None, 'formula', 'inverse_transform'}
             The strategy used to produce the sample. By default (``None``),
             the infrastructure chooses between the following options,
@@ -4149,16 +4294,6 @@ class ContinuousDistribution:
             Not all `method` options are available for all distributions.
             If the selected `method` is not available, a `NotImplementedError``
             will be raised.
-        rng : `numpy.random.Generator`, optional
-            Pseudorandom number generator state. When `rng` is None, a new
-            `numpy.random.Generator` is created using entropy from the
-            operating system. Types other than `numpy.random.Generator` are
-            passed to `numpy.random.default_rng` to instantiate a `Generator`.
-
-        References
-        ----------
-        .. [1] Sampling (statistics), *Wikipedia*,
-               https://en.wikipedia.org/wiki/Sampling_(statistics)
 
         Examples
         --------
@@ -4298,11 +4433,6 @@ class ContinuousDistribution:
 
         Parameters
         ----------
-        order : int
-            The integer order of the moment; i.e. :math:`n` in the formulae above.
-        kind : {'raw', 'central', 'standardized'}
-            Whether to return the raw (default), central, or standardized moment
-            defined above.
         method : {None, 'formula', 'general', 'transform', 'normalize', 'quadrature', 'cache'}
             The strategy used to evaluate the moment. By default (``None``),
             the infrastructure chooses between the following options,
@@ -4337,62 +4467,6 @@ class ContinuousDistribution:
         standard_deviation
         skewness
         kurtosis
-
-        Notes
-        -----
-        Not all distributions have finite moments of all orders; moments of some
-        orders may be undefined or infinite. If a formula for the moment is not
-        specifically implemented for the chosen distribution, SciPy will attempt
-        to compute the moment via a generic method, which may yield a finite
-        result where none exists. This is not a critical bug, but an opportunity
-        for an enhancement.
-
-        The definition of a raw moment in the summary is specific to the raw moment
-        about the origin. The raw moment about any point :math:`a` is:
-
-        .. math::
-
-            E[(X-a)^n] = \int_{\chi} (x-a)^n f(x) dx
-
-        In this notation, a raw moment about the origin is :math:`\mu'_n = E[x^n]`,
-        and a central moment is :math:`\mu_n = E[(x-\mu)^n]`, where :math:`\mu`
-        is the first raw moment; i.e. the mean.
-
-        The ``'transform'`` method takes advantage of the following relationships
-        between moments taken about different points :math:`a` and :math:`b`.
-
-        .. math::
-
-            E[(X-b)^n] =  \sum_{i=0}^n E[(X-a)^i] {n \choose i} (a - b)^{n-i}
-
-        For instance, to transform the raw moment to the central moment, we let
-        :math:`b = \mu` and :math:`a = 0`.
-
-        The distribution infrastructure provides flexibility for distribution
-        authors to implement separate formulas for raw moments, central moments,
-        and standardized moments of any order. By default, the moment of the
-        desired order and kind is evaluated from the formula if such a formula
-        is available; if not, the infrastructure uses any formulas that are
-        available rather than resorting directly to numerical integration.
-        For instance, if formulas for the first three raw moments are
-        available and the third standardized moments is desired, the
-        infrastructure will evaluate the raw moments and perform the transforms
-        and standardization required. The decision tree is somewhat complex,
-        but the strategy for obtaining a moment of a given order and kind
-        (possibly as an intermediate step due to the recursive nature of the
-        transform formula above) roughly follows this order of priority:
-
-        #. Use cache (if order of same moment and kind has been calculated)
-        #. Use formula (if available)
-        #. Transform between raw and central moment and/or normalize to convert
-           between central and standardized moments (if efficient)
-        #. Use a generic result true for most distributions (if available)
-        #. Use quadrature
-
-        References
-        ----------
-        .. [1] Moment, *Wikipedia*,
-               https://en.wikipedia.org/wiki/Moment_(mathematics)
 
         Examples
         --------
@@ -5219,3 +5293,17 @@ class ShiftedScaledDistribution(TransformedDistribution):
 
     def __neg__(self):
         return self * -1
+
+
+fields = set(NumpyDocString.sections)
+fields.remove('index')
+
+for method in {'support', 'sample'}:
+    doc = FunctionDoc(getattr(ContinuousDistribution, method))
+    superdoc = FunctionDoc(getattr(_ProbabilityDistribution, method))
+    for field in fields:
+        if field in {"Summary"}:
+            doc[field] = superdoc[field]
+        else:
+            doc[field] += superdoc[field]
+    getattr(ContinuousDistribution, method).__doc__ = str(doc)
