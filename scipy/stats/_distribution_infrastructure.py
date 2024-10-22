@@ -4632,7 +4632,13 @@ class ContinuousDistribution:
     def _logmoment_quad(self, order, logcenter, **params):
         def logintegrand(x, order, logcenter, **params):
             logpdf = self._logpdf_dispatch(x, **params)
-            return logpdf + order*_logexpxmexpy(np.log(x+0j), logcenter)
+            logx = np.log(x+0j)
+            # if logx == logcenter, `_logexpxmexpy` returns (-inf + 0j)
+            # multiplying by order produces (-inf + nan j) - bad
+            out = np.asarray(logpdf + order*_logexpxmexpy(logx, logcenter))
+            i = (logx == logcenter)
+            out[i] = logpdf[i]
+            return out
         return self._quadrature(logintegrand, args=(order, logcenter),
                                 params=params, log=True)
 

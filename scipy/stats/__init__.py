@@ -465,6 +465,7 @@ Random Variables
    :toctree: generated/
 
    Normal
+   Uniform
 
 Quasi-Monte Carlo
 =================
@@ -634,7 +635,7 @@ from ._fit import fit, goodness_of_fit
 from ._covariance import Covariance
 from ._sensitivity_analysis import *
 from ._survival import *
-from ._new_distributions import Normal
+from ._new_distributions import Normal, Uniform
 from ._mgc import multiscale_graphcorr
 
 
