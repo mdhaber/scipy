@@ -5219,3 +5219,121 @@ class ShiftedScaledDistribution(TransformedDistribution):
 
     def __neg__(self):
         return self * -1
+
+
+class TruncatedDistribution(TransformedDistribution):
+    """Distribution with a standard shift/scale transformation."""
+    # Unclear whether infinite loc/scale will work reasonably in all cases
+    _lb_domain = _RealDomain(endpoints=(-inf, 'ub'), inclusive=(True, False))
+    _lb_param = _RealParameter('lb', symbol=r'b_l',
+                                domain=_lb_domain, typical=(0.1, 0.2))
+
+    _ub_domain = _RealDomain(endpoints=('lb', inf), inclusive=(False, True))
+    _ub_param = _RealParameter('ub', symbol=r'b_u',
+                                  domain=_ub_domain, typical=(0.8, 0.9))
+
+    _parameterizations = [_Parameterization(_lb_param, _ub_param),
+                          _Parameterization(_lb_param),
+                          _Parameterization(_ub_param)]
+
+    def _process_parameters(self, lb=None, ub=None, **params):
+        lb = lb if lb is not None else np.full_like(lb, -np.inf)[()]
+        ub = ub if ub is not None else np.full_like(ub, np.inf)[()]
+        parameters = self._dist._process_parameters(**params)
+        parameters.update(dict(lb=lb, ub=ub))
+        return parameters
+
+    def _lognormalization(self, **params):
+        return self._dist._logcdf2_dispatch(*self._support(**params), **params)
+
+    def _normalization(self, **params):
+        return self._dist._cdf2_dispatch(*self._support(**params), **params)
+
+    def _support(self, lb, ub, **params):
+        a, b = self._dist._support(**params)
+        return np.maximum(a, lb), np.minimum(b, ub)
+
+    def _overrides(self, method_name):
+        return False
+
+    # def _entropy_dispatch(self, *args, loc, scale, sign, **params):
+    #     return (self._dist._entropy_dispatch(*args, **params)
+    #             + np.log(abs(scale)))
+    #
+    # def _logentropy_dispatch(self, *args, loc, scale, sign, **params):
+    #     lH0 = self._dist._logentropy_dispatch(*args, **params)
+    #     lls = np.log(np.log(abs(scale))+0j)
+    #     return special.logsumexp(np.broadcast_arrays(lH0, lls), axis=0)
+    #
+    # def _median_dispatch(self, *, method, loc, scale, sign, **params):
+    #     raw = self._dist._median_dispatch(method=method, **params)
+    #     return self._itransform(raw, loc, scale)
+    #
+    # def _mode_dispatch(self, *, method, loc, scale, sign, **params):
+    #     raw = self._dist._mode_dispatch(method=method, **params)
+    #     return self._itransform(raw, loc, scale)
+
+    def _logpdf_dispatch(self, x, *args, method=None, **params):
+        lognorm = self._lognormalization(**params)
+        logpdf = self._dist._logpdf_dispatch(x, *args, method=method, **params)
+        return logpdf - lognorm
+
+    def _pdf_dispatch(self, x, *args, method=None, **params):
+        norm = self._normalization(**params)
+        pdf = self._dist._pdf_dispatch(x, *args, method=method, **params)
+        return pdf / norm
+
+    # # Sorry about the magic. This is just a draft to show the behavior.
+    # @_shift_scale_distribution_function
+    # def _logcdf_dispatch(self, x, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_distribution_function
+    # def _cdf_dispatch(self, x, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_distribution_function
+    # def _logccdf_dispatch(self, x, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_distribution_function
+    # def _ccdf_dispatch(self, x, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_distribution_function_2arg
+    # def _logcdf2_dispatch(self, x, y, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_distribution_function_2arg
+    # def _cdf2_dispatch(self, x, y, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_distribution_function_2arg
+    # def _logccdf2_dispatch(self, x, y, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_distribution_function_2arg
+    # def _ccdf2_dispatch(self, x, y, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_inverse_function
+    # def _ilogcdf_dispatch(self, x, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_inverse_function
+    # def _icdf_dispatch(self, x, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_inverse_function
+    # def _ilogccdf_dispatch(self, x, *, method=None, **params):
+    #     pass
+    #
+    # @_shift_scale_inverse_function
+    # def _iccdf_dispatch(self, x, *, method=None, **params):
+    #     pass
+
+    def _sample_dispatch(self, sample_shape, full_shape, *,
+                         method, rng, **params):
+        rvs = self._dist._sample_dispatch(
+            sample_shape, full_shape, method=method, rng=rng, **params)
+        return self._itransform(rvs, **params)
