@@ -311,6 +311,69 @@ class _Uniform(ContinuousDistribution):
         return a + 0.5*ab
 
 
+class Dirac(ContinuousDistribution):
+    r"""Dirac (degenerate) distribution
+
+    The probability density function of the normal distribution is:
+
+    .. math::
+
+        f(x) = \frac{1}{\sigma \sqrt{2 \pi}} \exp {
+            \left( -\frac{1}{2}\left( \frac{x - \mu}{\sigma} \right)^2 \right)}
+
+    """
+
+    _x_support = _RealDomain(endpoints=(0, 0), inclusive=(True, True))
+    _x_param = _RealParameter('x', domain=_x_support, typical=(-1, 1))
+    _variable = _x_param
+
+    def _logpdf_formula(self, x, **kwargs):
+        out = np.full_like(x, -np.inf)
+        out[x == 0] = np.inf
+        return out
+
+    def _ilogcdf_formula(self, logp, **kwargs):
+        out = np.zeros_like(logp)
+        out[np.isnan(logp)] = np.nan
+        return out
+
+    # def _iccdf_formula(self, x, **kwargs):
+    #     return StandardNormal._iccdf_formula(self, x) * sigma + mu
+    #
+    # def _ilogccdf_formula(self, x, **kwargs):
+    #     return StandardNormal._ilogccdf_formula(self, x) * sigma + mu
+
+    def _logentropy_formula(self, **kwargs):
+        return np.asarray(-np.inf, dtype=self._dtype) + 0j
+
+    def _median_formula(self, **kwargs):
+        return np.asarray(0, dtype=self._dtype)[()]
+
+    def _mode_formula(self, **kwargs):
+        return np.asarray(0, dtype=self._dtype)[()]
+
+    # def _moment_raw_formula(self, order, **kwargs):
+    #     if order == 0:
+    #         return np.ones_like(mu)
+    #     elif order == 1:
+    #         return mu
+    #     else:
+    #         return None
+    # _moment_raw_formula.orders = [0, 1]  # type: ignore[attr-defined]
+    #
+    # def _moment_central_formula(self, order, **kwargs):
+    #     if order == 0:
+    #         return np.ones_like(mu)
+    #     elif order % 2:
+    #         return np.zeros_like(mu)
+    #     else:
+    #         # exact is faster (and obviously more accurate) for reasonable orders
+    #         return sigma**order * special.factorial2(int(order) - 1, exact=True)
+    #
+    def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):
+        return rng.uniform(size=full_shape) * 0
+
+
 # Distribution classes need only define the summary and beginning of the extended
 # summary portion of the class documentation. All other documentation, including
 # examples, is generated automatically. This may be time-consuming for distributions
