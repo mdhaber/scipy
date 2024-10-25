@@ -466,6 +466,7 @@ Random Variables
    :toctree: generated/
 
    Normal
+   Delta
    Mixture
 
 Quasi-Monte Carlo
@@ -637,7 +638,7 @@ from ._covariance import Covariance
 from ._sensitivity_analysis import *
 from ._survival import *
 from ._distribution_infrastructure import Mixture
-from ._new_distributions import Normal
+from ._new_distributions import Normal, Delta
 from ._mgc import multiscale_graphcorr
 
 

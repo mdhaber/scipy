@@ -311,15 +311,21 @@ class _Uniform(ContinuousDistribution):
         return a + 0.5*ab
 
 
-class Dirac(ContinuousDistribution):
-    r"""Dirac (degenerate) distribution
+class Delta(ContinuousDistribution):
+    r"""Dirac delta (degenerate) distribution
 
-    The probability density function of the normal distribution is:
+    The probability density function of the delta distribution is described
+    (informally) as
 
     .. math::
 
-        f(x) = \frac{1}{\sigma \sqrt{2 \pi}} \exp {
-            \left( -\frac{1}{2}\left( \frac{x - \mu}{\sigma} \right)^2 \right)}
+    f(x) =
+        \begin{cases}
+            0 & x = 0 \\
+            \infty & \text{otherwise}
+        \end{cases}
+
+    such that the total probability mass is :math:`1`.
 
     """
 
@@ -328,20 +334,10 @@ class Dirac(ContinuousDistribution):
     _variable = _x_param
 
     def _logpdf_formula(self, x, **kwargs):
-        out = np.full_like(x, -np.inf)
-        out[x == 0] = np.inf
-        return out
+        return np.where(x == 0, np.inf, -np.inf).astype(x.dtype, copy=False)[()]
 
     def _ilogcdf_formula(self, logp, **kwargs):
-        out = np.zeros_like(logp)
-        out[np.isnan(logp)] = np.nan
-        return out
-
-    # def _iccdf_formula(self, x, **kwargs):
-    #     return StandardNormal._iccdf_formula(self, x) * sigma + mu
-    #
-    # def _ilogccdf_formula(self, x, **kwargs):
-    #     return StandardNormal._ilogccdf_formula(self, x) * sigma + mu
+        return np.where(np.isnan(logp), np.nan, 0).astype(logp.dtype, copy=False)[()]
 
     def _logentropy_formula(self, **kwargs):
         return np.asarray(-np.inf, dtype=self._dtype) + 0j
@@ -352,26 +348,14 @@ class Dirac(ContinuousDistribution):
     def _mode_formula(self, **kwargs):
         return np.asarray(0, dtype=self._dtype)[()]
 
-    # def _moment_raw_formula(self, order, **kwargs):
-    #     if order == 0:
-    #         return np.ones_like(mu)
-    #     elif order == 1:
-    #         return mu
-    #     else:
-    #         return None
-    # _moment_raw_formula.orders = [0, 1]  # type: ignore[attr-defined]
-    #
-    # def _moment_central_formula(self, order, **kwargs):
-    #     if order == 0:
-    #         return np.ones_like(mu)
-    #     elif order % 2:
-    #         return np.zeros_like(mu)
-    #     else:
-    #         # exact is faster (and obviously more accurate) for reasonable orders
-    #         return sigma**order * special.factorial2(int(order) - 1, exact=True)
-    #
+    def _moment_raw_formula(self, order, **kwargs):
+        if order == 0:
+            return np.asarray(1, dtype=self._dtype)[()]
+        else:
+            return np.asarray(0, dtype=self._dtype)[()]
+
     def _sample_formula(self, sample_shape, full_shape, rng, **kwargs):
-        return rng.uniform(size=full_shape) * 0
+        return np.full(full_shape, 0, dtype=self._dtype)
 
 
 # Distribution classes need only define the summary and beginning of the extended

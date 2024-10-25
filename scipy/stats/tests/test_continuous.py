@@ -1208,3 +1208,41 @@ class TestMixture:
         assert X.components[0] == components[0]
         X.weights[0] = weights[1]
         assert X.weights[0] == weights[0]
+
+
+class TestDelta:
+    def test_basic(self):
+        X = stats.Delta()
+
+        assert_allclose(X.logentropy(), -np.inf)
+        assert_allclose(X.entropy(), 0)
+        assert_allclose(X.mode(), 0)
+        assert_allclose(X.median(), 0)
+        assert_allclose(X.mean(), 0)
+        assert_allclose(X.variance(), 0)
+        assert_allclose(X.standard_deviation(), 0)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            # OK to produce a warning here?
+            assert_allclose(X.skewness(), np.nan)
+            assert_allclose(X.kurtosis(), np.nan)
+
+        x = [-1, 0, 1]
+        logpdf = [-np.inf, np.inf, -np.inf]
+        logcdf = [-np.inf, 0, 0]
+        logccdf = [0, -np.inf, -np.inf]
+        assert_allclose(X.logpdf(x), logpdf)
+        assert_allclose(X.pdf(x), np.exp(logpdf))
+        assert_allclose(X.logcdf(x), logcdf)
+        assert_allclose(X.cdf(x), np.exp(logcdf))
+        assert_allclose(X.logccdf(x), logccdf)
+        assert_allclose(X.ccdf(x), np.exp(logccdf))
+
+        logp = [-np.inf, -1, 0, 1]
+        x = [0, 0, 0, np.nan]
+        assert_allclose(X.ilogcdf(logp), x)
+        assert_allclose(X.icdf(np.exp(logp)), x)
+        assert_allclose(X.ilogccdf(logp), x)
+        assert_allclose(X.iccdf(np.exp(logp)), x)
+
+        x = X.sample(10, rng=4843598425897245)
+        assert np.all(x == 0)

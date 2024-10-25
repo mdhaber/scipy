@@ -2600,6 +2600,9 @@ class ContinuousDistribution(_ProbabilityDistribution):
     def _icdf_dispatch(self, x, method=None, **params):
         if self._overrides('_icdf_formula'):
             method = self._icdf_formula
+        elif (self._overrides('_ilogcdf_formula')
+              or self._overrides('_ilogccdf_formula')):
+            method = self._icdf_logexp
         elif _isnull(self.tol) and self._overrides('_iccdf_formula'):
             method = self._icdf_complement
         else:
@@ -2608,6 +2611,9 @@ class ContinuousDistribution(_ProbabilityDistribution):
 
     def _icdf_formula(self, x, **params):
         raise NotImplementedError(self._not_implemented)
+
+    def _icdf_logexp(self, x, **params):
+        return self._ilogcdf_dispatch(np.log(x), **params)
 
     def _icdf_complement(self, x, **params):
         return self._iccdf_dispatch(1 - x, **params)
@@ -2646,6 +2652,9 @@ class ContinuousDistribution(_ProbabilityDistribution):
     def _iccdf_dispatch(self, x, method=None, **params):
         if self._overrides('_iccdf_formula'):
             method = self._iccdf_formula
+        elif (self._overrides('_ilogccdf_formula')
+              or self._overrides('_ilogcdf_formula')):
+            method = self._iccdf_logexp
         elif _isnull(self.tol) and self._overrides('_icdf_formula'):
             method = self._iccdf_complement
         else:
@@ -2654,6 +2663,9 @@ class ContinuousDistribution(_ProbabilityDistribution):
 
     def _iccdf_formula(self, x, **params):
         raise NotImplementedError(self._not_implemented)
+
+    def _iccdf_logexp(self, x, **params):
+        return self._ilogccdf_dispatch(np.log(x), **params)
 
     def _iccdf_complement(self, x, **params):
         return self._icdf_dispatch(1 - x, **params)
