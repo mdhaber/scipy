@@ -39,6 +39,7 @@ from scipy import sparse
 from scipy.spatial import distance_matrix
 
 from scipy.optimize import milp, LinearConstraint
+from scipy.optimize._chandrupatla import _chandrupatla
 from scipy._lib._util import (check_random_state, _get_nan,
                               _rename_parameter, _contains_nan,
                               AxisError, _lazywhere)
@@ -10099,7 +10100,7 @@ def _rankdata(x, method, return_ties=False):
     return ranks
 
 
-def expectile(a, alpha=0.5, *, weights=None):
+def expectile(a, alpha=0.5, *, weights=None, axis=0):
     r"""Compute the expectile at the specified level.
 
     Expectiles are a generalization of the expectation in the same way as
@@ -10193,10 +10194,10 @@ def expectile(a, alpha=0.5, *, weights=None):
     >>> weights = [1, 3, 1, 1]
 
     """
-    if alpha < 0 or alpha > 1:
-        raise ValueError(
-            "The expectile level alpha must be in the range [0, 1]."
-        )
+    # if alpha < 0 or alpha > 1:
+    #     raise ValueError(
+    #         "The expectile level alpha must be in the range [0, 1]."
+    #     )
     a = np.asarray(a)
 
     if weights is not None:
@@ -10206,23 +10207,17 @@ def expectile(a, alpha=0.5, *, weights=None):
     # function from Table 9 (omitting a factor of 2) in [2] (their y is our
     # data a, their x is our t)
     def first_order(t):
-        return np.average(np.abs((a <= t) - alpha) * (t - a), weights=weights)
-
-    if alpha >= 0.5:
-        x0 = np.average(a, weights=weights)
-        x1 = np.amax(a)
-    else:
-        x1 = np.average(a, weights=weights)
-        x0 = np.amin(a)
-
-    if x0 == x1:
-        # a has a single unique element
-        return x0
+        t = np.moveaxis(t, -1, 0)
+        out = np.average(np.abs((a <= t) - alpha) * (t - a), weights=weights, axis=axis, keepdims=True)
+        out = np.moveaxis(out, 0, -1)
+        return out
 
     # Note that the expectile is the unique solution, so no worries about
     # finding a wrong root.
-    res = root_scalar(first_order, x0=x0, x1=x1)
-    return res.root
+    x0 = np.min(a, axis=-1, keepdims=True)
+    x1 = np.max(a, axis=-1, keepdims=True)
+    res = _chandrupatla(first_order, x0, x1, preserve_shape=True)
+    return res.x
 
 
 LinregressResult = _make_tuple_bunch('LinregressResult',

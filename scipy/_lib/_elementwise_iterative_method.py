@@ -86,7 +86,8 @@ def _initialize(func, xs, args, complex_ok=False, preserve_shape=None, xp=None):
     xat = xp.asarray(1.).dtype if xp.isdtype(xat, "integral") else xat
     xs, args = xas[:nx], xas[nx:]
     xs = [xp.asarray(x, dtype=xat) for x in xs]  # use copy=False when implemented
-    fs = [xp.asarray(func(x, *args)) for x in xs]
+    args_n = [arg[..., xp.newaxis] for arg in args]
+    fs = [xp.asarray(func(x[..., xp.newaxis], *args_n))[..., 0] for x in xs]
     shape = xs[0].shape
     fshape = fs[0].shape
 

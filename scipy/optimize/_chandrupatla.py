@@ -10,7 +10,8 @@ from scipy._lib._array_api import xp_sign, xp_copy, xp_take_along_axis
 
 
 def _chandrupatla(func, a, b, *, args=(), xatol=None, xrtol=None,
-                  fatol=None, frtol=0, maxiter=None, callback=None):
+                  fatol=None, frtol=0, maxiter=None, callback=None,
+                  preserve_shape=False):
     """Find the root of an elementwise function using Chandrupatla's algorithm.
 
     For each element of the output of `func`, `chandrupatla` seeks the scalar
@@ -130,7 +131,7 @@ def _chandrupatla(func, a, b, *, args=(), xatol=None, xrtol=None,
     func, args, xatol, xrtol, fatol, frtol, maxiter, callback = res
 
     # Initialization
-    temp = eim._initialize(func, (a, b), args)
+    temp = eim._initialize(func, (a, b), args, preserve_shape=preserve_shape)
     func, xs, fs, args, shape, dtype, xp = temp
     x1, x2 = xs
     f1, f2 = fs
@@ -239,7 +240,7 @@ def _chandrupatla(func, a, b, *, args=(), xatol=None, xrtol=None,
     return eim._loop(work, callback, shape, maxiter, func, args, dtype,
                      pre_func_eval, post_func_eval, check_termination,
                      post_termination_check, customize_result, res_work_pairs,
-                     xp=xp)
+                     preserve_shape=preserve_shape, xp=xp)
 
 
 def _chandrupatla_iv(func, args, xatol, xrtol,
