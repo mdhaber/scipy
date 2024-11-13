@@ -1155,8 +1155,7 @@ def _qmc_quad_iv(func, a, b, n_points, n_estimates, qrng, log):
                    "`qrng.random().shape[-1]` must equal `a.shape[0]`.")
         raise ValueError(message)
 
-    rng_seed = getattr(qrng, 'rng_seed', None)
-    rng = stats._qmc.check_random_state(rng_seed)
+    rng = getattr(qrng, 'rng_seed', None)
 
     if log not in {True, False}:
         message = "`log` must be boolean (`True` or `False`)."
