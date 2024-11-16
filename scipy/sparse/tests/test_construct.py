@@ -7,7 +7,6 @@ from numpy.testing import (assert_equal, assert_,
 import pytest
 from pytest import raises as assert_raises
 from scipy._lib._testutils import check_free_memory
-from scipy._lib._util import check_random_state
 
 from scipy.sparse import (csr_matrix, coo_matrix,
                           csr_array, coo_array,
@@ -24,34 +23,19 @@ sparse_formats = ['csr','csc','coo','bsr','dia','lil','dok']
 #TODO check whether format=XXX is respected
 
 
-def _sprandn(m, n, density=0.01, format="coo", dtype=None,
-             rng=None, random_state=None):
+def _sprandn(m, n, density=0.01, format="coo", dtype=None, rng=None):
     # Helper function for testing.
-    if random_state is not None:
-        rng = check_random_state(random_state)
-    else:
-        rng = np.random.default_rng(rng)
+    rng = np.random.default_rng(rng)
     data_rvs = rng.standard_normal
-    if random_state is None:
-        return construct.random(m, n, density, format, dtype,
-                                rng=rng, data_rvs=data_rvs)
-    return construct.random(m, n, density, format, dtype,
-                            random_state=rng, data_rvs=data_rvs)
+    return construct.random(m, n, density, format, dtype, rng, data_rvs)
 
 
-def _sprandn_array(m, n, density=0.01, format="coo", dtype=None,
-                   rng=None, random_state=None):
+def _sprandn_array(m, n, density=0.01, format="coo", dtype=None, rng=None):
     # Helper function for testing.
-    if random_state is not None:
-        rng = check_random_state(random_state)
-    else:
-        rng = np.random.default_rng(rng)
+    rng = np.random.default_rng(rng)
     data_sampler = rng.standard_normal
-    if random_state is None:
-        return construct.random_array((m, n), density=density, format=format,
-                                      dtype=dtype, rng=rng, data_sampler=data_sampler)
     return construct.random_array((m, n), density=density, format=format, dtype=dtype,
-                                  random_state=rng, data_sampler=data_sampler)
+                                  rng=rng, data_sampler=data_sampler)
 
 
 class TestConstructUtils:
@@ -773,73 +757,24 @@ class TestConstructUtils:
             assert_raises(ValueError, lambda: f(5, 10, 1.1))
             assert_raises(ValueError, lambda: f(5, 10, -0.1))
 
-    @pytest.mark.parametrize("rng", [None, 4321, np.random.RandomState(4321),
-                                     np.random.default_rng(4321)])
+    @pytest.mark.parametrize("rng", [None, 4321, np.random.default_rng(4321)])
     def test_rand(self, rng):
         # Simple distributional checks for sparse.rand.
-        x = sprand(10, 20, density=0.5, dtype=np.float64, random_state=rng)
+        x = sprand(10, 20, density=0.5, dtype=np.float64, rng=rng)
         assert_(np.all(np.less_equal(0, x.data)))
         assert_(np.all(np.less_equal(x.data, 1)))
 
-        if not isinstance(rng, np.random.RandomState):  # not accepted by `rng`
-            x = sprand(10, 20, density=0.5, dtype=np.float64, rng=rng)
-            assert_(np.all(np.less_equal(0, x.data)))
-            assert_(np.all(np.less_equal(x.data, 1)))
-        else:
-            with assert_raises(TypeError, match="SeedSequence expects int"):
-                sprand(10, 20, density=0.5, dtype=np.float64, rng=rng)
-
-    @pytest.mark.parametrize("rng", [None, 4321, np.random.RandomState(4321),
-                                     np.random.default_rng(4321)])
+    @pytest.mark.parametrize("rng", [None, 4321, np.random.default_rng(4321)])
     def test_randn(self, rng):
         # Simple distributional checks for sparse.randn.
         # Statistically, some of these should be negative
         # and some should be greater than 1.
-        x = _sprandn(10, 20, density=0.5, dtype=np.float64, random_state=rng)
+        x = _sprandn(10, 20, density=0.5, dtype=np.float64, rng=rng)
         assert_(np.any(np.less(x.data, 0)))
         assert_(np.any(np.less(1, x.data)))
-        x = _sprandn_array(10, 20, density=0.5, dtype=np.float64, random_state=rng)
+        x = _sprandn_array(10, 20, density=0.5, dtype=np.float64, rng=rng)
         assert_(np.any(np.less(x.data, 0)))
         assert_(np.any(np.less(1, x.data)))
-
-        if isinstance(rng, np.random.RandomState):  # not accepted by `rng`
-            with assert_raises(TypeError, match="SeedSequence expects int"):
-                _sprandn(10, 20, density=0.5, dtype=np.float64, rng=rng)
-            with assert_raises(TypeError, match="SeedSequence expects int"):
-                _sprandn_array(10, 20, density=0.5, dtype=np.float64, rng=rng)
-        else:
-            x = _sprandn(10, 20, density=0.5, dtype=np.float64, rng=rng)
-            assert_(np.any(np.less(x.data, 0)))
-            assert_(np.any(np.less(1, x.data)))
-            x = _sprandn_array(10, 20, density=0.5, dtype=np.float64, rng=rng)
-            assert_(np.any(np.less(x.data, 0)))
-            assert_(np.any(np.less(1, x.data)))
-
-    @pytest.mark.parametrize(
-        "func", [construct.rand, construct.random, construct.random_array]
-    )
-    def test_random_state_during_SPEC_7_transition(self, func):
-        # preserve use of old random_state during SPEC 7 transition
-        default_rng = np.random.default_rng
-        RandomState = np.random.RandomState
-        shape = ((5, 10),) if func is construct.random_array else (5, 10)
-
-        x1 = func(*shape, density=0.1, random_state=4321)
-        x2 = func(*shape, density=0.1, random_state=RandomState(4321))
-        x3 = func(*shape, density=0.1, random_state=default_rng(4321))
-        x4 = func(*shape, density=0.1, rng=4321)
-        x5 = func(*shape, density=0.1, rng=default_rng(4321))
-        with assert_raises(TypeError, match="SeedSequence expects int"):
-            func(*shape, density=0.1, rng=RandomState(4321))
-
-        assert_equal(x1.data, x2.data)
-        assert_equal(x1.coords, x2.coords)
-        assert_equal(x3.data, x4.data)
-        assert_equal(x3.coords, x4.coords)
-        assert_equal(x3.data, x5.data)
-        assert_equal(x3.coords, x5.coords)
-        # assert_not_equal
-        assert_raises(AssertionError, assert_equal, x1.coords, x4.coords)
 
     def test_random_accept_str_dtype(self):
         # anything that np.dtype can convert to a dtype should be accepted
@@ -850,14 +785,14 @@ class TestConstructUtils:
         construct.random_array((10, 10, 10, 10, 10), dtype='d')
 
     def test_random_array_maintains_array_shape(self):
-        arr = construct.random_array((0, 4), density=0.3, dtype=int)
+        arr = construct.random_array((0, 4), density=0.3, dtype=int, rng=0)
         assert arr.shape == (0, 4)
 
-        arr = construct.random_array((10, 10, 10), density=0.3, dtype=int)
+        arr = construct.random_array((10, 10, 10), density=0.3, dtype=int, rng=0)
         assert arr.shape == (10, 10, 10)
 
-        arr = construct.random_array((10, 10, 10, 10, 10), density=0.3, dtype=int)
-        assert arr.shape == (10, 10, 10, 10, 10)
+        A = construct.random_array((10, 10, 10, 10, 10), density=0.3, dtype=int, rng=0)
+        assert A.shape == (10, 10, 10, 10, 10)
 
     def test_random_sparse_matrix_returns_correct_number_of_non_zero_elements(self):
         # A 10 x 10 matrix, with density of 12.65%, should have 13 nonzero elements.
