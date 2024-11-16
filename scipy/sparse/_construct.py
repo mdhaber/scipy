@@ -1244,7 +1244,7 @@ def _random(shape, density=0.01, format=None, dtype=None,
     return vals, ind
 
 
-@_transition_to_rng("random_state")
+@_transition_to_rng("random_state", position_num=5)
 def random(m, n, density=0.01, format='coo', dtype=None,
            rng=None, data_rvs=None):
     """Generate a sparse matrix of the given shape and density with randomly
@@ -1359,7 +1359,7 @@ def random(m, n, density=0.01, format='coo', dtype=None,
     return coo_matrix((vals, ind), shape=(m, n)).asformat(format)
 
 
-@_transition_to_rng("random_state")
+@_transition_to_rng("random_state", position_num=5)
 def rand(m, n, density=0.01, format="coo", dtype=None, rng=None):
     """Generate a sparse matrix of the given shape and density with uniformly
     distributed values.
