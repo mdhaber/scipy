@@ -7,7 +7,7 @@ from numpy.testing import (assert_equal, assert_,
 import pytest
 from pytest import raises as assert_raises
 from scipy._lib._testutils import check_free_memory
-from scipy._lib._util import check_random_state, _transition_to_rng
+from scipy._lib._util import check_random_state
 
 from scipy.sparse import (csr_matrix, coo_matrix,
                           csr_array, coo_array,
@@ -37,6 +37,7 @@ def _sprandn(m, n, density=0.01, format="coo", dtype=None,
                                 rng=rng, data_rvs=data_rvs)
     return construct.random(m, n, density, format, dtype,
                             random_state=rng, data_rvs=data_rvs)
+
 
 def _sprandn_array(m, n, density=0.01, format="coo", dtype=None,
                    rng=None, random_state=None):
