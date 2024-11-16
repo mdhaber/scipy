@@ -785,14 +785,15 @@ class TestConstructUtils:
         construct.random_array((10, 10, 10, 10, 10), dtype='d')
 
     def test_random_array_maintains_array_shape(self):
-        arr = construct.random_array((0, 4), density=0.3, dtype=int, rng=0)
+        # preserve use of old random_state during SPEC 7 transition
+        arr = construct.random_array((0, 4), density=0.3, dtype=int, random_state=0)
         assert arr.shape == (0, 4)
 
         arr = construct.random_array((10, 10, 10), density=0.3, dtype=int, rng=0)
         assert arr.shape == (10, 10, 10)
 
-        A = construct.random_array((10, 10, 10, 10, 10), density=0.3, dtype=int, rng=0)
-        assert A.shape == (10, 10, 10, 10, 10)
+        arr = construct.random_array((10, 10, 10, 10, 10), density=0.3, dtype=int, rng=0)
+        assert arr.shape == (10, 10, 10, 10, 10)
 
     def test_random_sparse_matrix_returns_correct_number_of_non_zero_elements(self):
         # A 10 x 10 matrix, with density of 12.65%, should have 13 nonzero elements.
