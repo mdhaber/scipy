@@ -113,7 +113,8 @@ class _SimpleDomain(_Domain):
         defined symbolically.
     contains(item, parameter_values)
         Determines whether the argument is contained within the domain
-
+    draw(n, type_, min, max, squeezed_base_shape, rng=None)
+        Draws random values based on the domain.
     """
     def __init__(self, endpoints=(-inf, inf), inclusive=(False, False)):
         a, b = endpoints
@@ -217,43 +218,6 @@ class _SimpleDomain(_Domain):
         return in_left & in_right
 
 
-class _RealDomain(_SimpleDomain):
-    r""" Represents a simply-connected subset of the real line; i.e., an interval
-
-    Completes the implementation of the `_SimpleDomain` class for simple
-    domains on the real line.
-
-    Methods
-    -------
-    define_parameters(*parameters)
-        (Inherited) Records any parameters used to define the endpoints of the
-        domain.
-    get_numerical_endpoints(parameter_values)
-        (Inherited) Gets the numerical values of the domain endpoints, which
-        may have been defined symbolically.
-    contains(item, parameter_values)
-        (Inherited) Determines whether the argument is contained within the
-        domain
-    __str__()
-        Returns a string representation of the domain, e.g. "[a, b)".
-    draw(size, rng, proportions, parameter_values)
-        Draws random values based on the domain. Proportions of values within
-        the domain, on the endpoints of the domain, outside the domain,
-        and having value NaN are specified by `proportions`.
-
-    """
-
-    def __str__(self):
-        a, b = self.endpoints
-        left_inclusive, right_inclusive = self.inclusive
-
-        left = "[" if left_inclusive else "("
-        a = self.symbols.get(a, f"{a}")
-        right = "]" if right_inclusive else ")"
-        b = self.symbols.get(b, f"{b}")
-
-        return f"{left}{a}, {b}{right}"
-
     def draw(self, n, type_, min, max, squeezed_base_shape, rng=None):
         r""" Draw random values from the domain.
 
@@ -278,6 +242,9 @@ class _RealDomain(_SimpleDomain):
         """
         rng = np.random.default_rng(rng)
 
+        def ints(*args, **kwargs): return rng.integers(*args, **kwargs, endpoint=True)
+        uniform = rng.uniform if isinstance(self, _RealDomain) else ints
+
         # get copies of min and max with no nans so that uniform doesn't fail
         min_nn, max_nn = min.copy(), max.copy()
         i = np.isnan(min_nn) | np.isnan(max_nn)
@@ -287,7 +254,7 @@ class _RealDomain(_SimpleDomain):
         shape = (n,) + squeezed_base_shape
 
         if type_ == 'in':
-            z = rng.uniform(min_nn, max_nn, size=shape)
+            z = uniform(min_nn, max_nn, size=shape)
 
         elif type_ == 'on':
             z_on_shape = shape
@@ -298,8 +265,8 @@ class _RealDomain(_SimpleDomain):
 
         elif type_ == 'out':
             # make this work for infinite bounds
-            z = min_nn - rng.uniform(size=shape)
-            zr = max_nn + rng.uniform(size=shape)
+            z = min_nn - uniform(1, 5, size=shape)
+            zr = max_nn + uniform(1, 5, size=shape)
             i = rng.random(size=n) < 0.5
             z[i] = zr[i]
 
@@ -309,16 +276,76 @@ class _RealDomain(_SimpleDomain):
         return z
 
 
-class _IntegerDomain(_SimpleDomain):
-    r""" Representation of a domain of consecutive integers.
+class _RealDomain(_SimpleDomain):
+    r""" Represents a simply-connected subset of the real line; i.e., an interval
 
-    Completes the implementation of the `_SimpleDomain` class for domains
-    composed of consecutive integer values.
+    Completes the implementation of the `_SimpleDomain` class for simple
+    domains on the real line.
 
-    To be completed when needed.
+    Methods
+    -------
+    define_parameters(*parameters)
+        (Inherited) Records any parameters used to define the endpoints of the
+        domain.
+    get_numerical_endpoints(parameter_values)
+        (Inherited) Gets the numerical values of the domain endpoints, which
+        may have been defined symbolically.
+    contains(item, parameter_values)
+        (Inherited) Determines whether the argument is contained within the
+        domain
+    draw(n, type_, min, max, squeezed_base_shape, rng=None)
+        (Inherited) Draws random values based on the domain.
+    __str__()
+        Returns a string representation of the domain, e.g. "[a, b)".
+
     """
-    def __init__(self):
-        raise NotImplementedError
+
+    def __str__(self):
+        a, b = self.endpoints
+        left_inclusive, right_inclusive = self.inclusive
+
+        left = "[" if left_inclusive else "("
+        a = self.symbols.get(a, f"{a}")
+        right = "]" if right_inclusive else ")"
+        b = self.symbols.get(b, f"{b}")
+
+        return f"{left}{a}, {b}{right}"
+
+
+class _IntegerDomain(_SimpleDomain):
+    r""" Represents an interval of integers
+
+    Completes the implementation of the `_SimpleDomain` class for simple
+    domains on the integers.
+
+    Methods
+    -------
+    define_parameters(*parameters)
+        (Inherited) Records any parameters used to define the endpoints of the
+        domain.
+    get_numerical_endpoints(parameter_values)
+        (Inherited) Gets the numerical values of the domain endpoints, which
+        may have been defined symbolically.
+    contains(item, parameter_values)
+        (Overridden) Determines whether the argument is contained within the
+        domain
+    draw(n, type_, min, max, squeezed_base_shape, rng=None)
+        (Inherited) Draws random values based on the domain.
+    __str__()
+        Returns a string representation of the domain, e.g. "{a, a+1, ..., b-1, b}".
+
+    """
+
+    def contains(self, item, parameter_values=None):
+        super_contains = super().contains(item, parameter_values)
+        integral = (item == np.round(item))
+        return super_contains and integral
+
+    def __str__(self):
+        a, b = self.endpoints
+        a = self.symbols.get(a, f"{a}")
+        b = self.symbols.get(b, f"{b}")
+        return f"{{{a}, {a+1}, ..., {b-1}, {b}}}"
 
 
 #### Parameters
@@ -691,6 +718,7 @@ def _set_invalid_nan(f):
     # Wrapper for input / output validation and standardization of distribution
     # functions that accept either the quantile or percentile as an argument:
     # logpdf, pdf
+    # logpmf, pmf
     # logcdf, cdf
     # logccdf, ccdf
     # ilogcdf, icdf
@@ -706,6 +734,7 @@ def _set_invalid_nan(f):
     endpoints = {'icdf': (0, 1), 'iccdf': (0, 1),
                  'ilogcdf': (-np.inf, 0), 'ilogccdf': (-np.inf, 0)}
     replacements = {'logpdf': (-inf, -inf), 'pdf': (0, 0),
+                    'logpmf': (-inf, -inf), 'pmf': (0, 0),
                     '_logcdf1': (-inf, 0), '_logccdf1': (0, -inf),
                     '_cdf1': (0, 1), '_ccdf1': (1, 0)}
     replace_strict = {'pdf', 'logpdf'}
@@ -2893,6 +2922,182 @@ class _ProbabilityDistribution(ABC):
 
     def _logpdf_logexp(self, x, **params):
         return np.log(self._pdf_dispatch(x, **params))
+
+    @_set_invalid_nan
+    def pmf(self, x, /, *, method=None):
+        r"""Probability mass function
+
+        The probability density function ("PMF"), denoted :math:`f(x)`, is the
+        probability that the random variable :math:`X` will assume the value :math:`x`.
+
+        .. math::
+
+            f(x) = P(X = x)
+
+        `pmf` accepts `x` for :math:`x`.
+
+        Parameters
+        ----------
+        x : array_like
+            The argument of the PMF.
+        method : {None, 'formula', 'logexp'}
+            The strategy used to evaluate the PMF. By default (``None``), the
+            infrastructure chooses between the following options, listed in
+            order of precedence.
+
+            - ``'formula'``: use a formula for the PMF itself
+            - ``'logexp'``: evaluate the log-PMF and exponentiate
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : array
+            The PMF evaluated at the argument `x`.
+
+        See Also
+        --------
+        cdf
+        logpmf
+
+        Notes
+        -----
+        Suppose a discrete probability distribution has support :math:`[l, r]`.
+        By definition of the support, the PMF evaluates to its minimum value
+        of :math:`0` outside the support; i.e. for :math:`x < l` or
+        :math:`x > r`.
+
+        References
+        ----------
+        .. [1] Probability mass function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Probability_mass_function
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> from scipy import stats
+        >>> X = stats.Binomial(n=10, b=0.5)
+
+        Evaluate the PMF at the desired argument:
+
+        >>> X.pmf(5)
+        0.5
+
+        """
+        return self._pmf_dispatch(x, method=method, **self._parameters)
+
+    @_dispatch
+    def _pmf_dispatch(self, x, *, method=None, **params):
+        if self._overrides('_pmf_formula'):
+            method = self._pmf_formula
+        else:
+            method = self._pmf_logexp
+        return method
+
+    def _pmf_formula(self, x, **params):
+        raise NotImplementedError(self._not_implemented)
+
+    def _pmf_logexp(self, x, **params):
+        return np.exp(self._logpmf_dispatch(x, **params))
+
+    @_set_invalid_nan
+    def logpmf(self, x, /, *, method=None):
+        r"""Log of the probability mass function
+
+        The probability density function ("PMF"), denoted :math:`f(x)`, is the
+        probability that the random variable :math:`X` will assume the value :math:`x`.
+
+        .. math::
+
+            f(x) = \frac{d}{dx} F(x)
+
+        `logpmf` computes the logarithm of the probability density function
+        ("log-PMF"), :math:`\log(f(x))`, but it may be numerically favorable
+        compared to the naive implementation (computing :math:`f(x)` and
+        taking the logarithm).
+
+        `logpmf` accepts `x` for :math:`x`.
+
+        Parameters
+        ----------
+        x : array_like
+            The argument of the log-PMF.
+        method : {None, 'formula', 'logexp'}
+            The strategy used to evaluate the log-PMF. By default (``None``), the
+            infrastructure chooses between the following options, listed in order
+            of precedence.
+
+            - ``'formula'``: use a formula for the log-PMF itself
+            - ``'logexp'``: evaluate the PMF and takes its logarithm
+
+            Not all `method` options are available for all distributions.
+            If the selected `method` is not available, a ``NotImplementedError``
+            will be raised.
+
+        Returns
+        -------
+        out : array
+            The log-PMF evaluated at the argument `x`.
+
+        See Also
+        --------
+        pmf
+        logcdf
+
+        Notes
+        -----
+        Suppose a continuous probability distribution has support :math:`[l, r]`.
+        By definition of the support, the log-PMF evaluates to its minimum value
+        of :math:`-\infty` (i.e. :math:`\log(0)`) outside the support; i.e. for
+        :math:`x < l` or :math:`x > r`.
+
+        For distributions with infinite support, it is common for `pmf` to return
+        a value of ``0`` when the argument is theoretically within the support;
+        this can occur because the true value of the PMF is too small to be
+        represented by the chosen dtype. The log-PMF, however, will often be finite
+        (not ``-inf``) over a much larger domain. Consequently, it may be preferred
+        to work with the logarithms of probabilities and probability densities to
+        avoid underflow.
+
+        References
+        ----------
+        .. [1] Probability density function, *Wikipedia*,
+               https://en.wikipedia.org/wiki/Probability_density_function
+
+        Examples
+        --------
+        Instantiate a distribution with the desired parameters:
+
+        >>> import numpy as np
+        >>> from scipy import stats
+        >>> X = stats.Uniform(a=-1.0, b=1.0)
+
+        Evaluate the log-PMF at the desired argument:
+
+        >>> X.logpmf(0.5)
+        -0.6931471805599453
+        >>> np.allclose(X.logpmf(0.5), np.log(X.pmf(0.5)))
+        True
+
+        """
+        return self._logpmf_dispatch(x, method=method, **self._parameters)
+
+    @_dispatch
+    def _logpmf_dispatch(self, x, *, method=None, **params):
+        if self._overrides('_logpmf_formula'):
+            method = self._logpmf_formula
+        elif _isnull(self.tol):  # ensure that developers override _logpmf
+            method = self._logpmf_logexp
+        return method
+
+    def _logpmf_formula(self, x, **params):
+        raise NotImplementedError(self._not_implemented)
+
+    def _logpmf_logexp(self, x, **params):
+        return np.log(self._pmf_dispatch(x, **params))
 
     def cdf(self, x, y=None, /, *, method=None):
         r"""Cumulative distribution function

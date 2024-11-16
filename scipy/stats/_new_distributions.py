@@ -7,13 +7,13 @@ from numpy import inf
 
 from scipy import special
 from scipy.stats._distribution_infrastructure import (
-    ContinuousDistribution
+    ContinuousDistribution, DiscreteDistribution
 )
 from scipy.stats._probability_distribution import (
-    _RealDomain, _RealParameter, _Parameterization, _combine_docs
+    _RealDomain, _RealParameter, _IntegerDomain, _Parameterization, _combine_docs
 )
 
-__all__ = ['Normal']
+__all__ = ['Normal', 'Binomial']
 
 
 class Normal(ContinuousDistribution):
@@ -314,6 +314,33 @@ class _Uniform(ContinuousDistribution):
         return a + 0.5*ab
 
 
+class Binomial(DiscreteDistribution):
+    r"""Binomial distribution with prescribed success probability and number of trials
+
+    The probability density function of the binomial distribution is:
+
+    .. math::
+
+        f(x) = {n \choose x} p^x (1 - p)^{n-x}
+
+    """
+    _n_domain = _IntegerDomain(endpoints=(0, inf), inclusive=(True, False))
+    _p_domain = _RealDomain(endpoints=(0, 1), inclusive=(True, True))
+    _x_support = _IntegerDomain(endpoints=(0, 'n'))
+
+    _n_param = _RealParameter('n', domain=_n_domain, typical=(10, 20))
+    _p_param = _RealParameter('p', domain=_p_domain, typical=(0.25, 0.75))
+    _x_param = _RealParameter('x', domain=_x_support, typical=(-1, 1))
+
+    _parameterizations = [_Parameterization(_n_param, _p_param)]
+    _variable = _x_param
+
+    def __init__(self, *, n, p, **kwargs):
+        super().__init__(n=n, p=p, **kwargs)
+
+    def _pmf_formula(self, x, *, n, p, **kwargs):
+        return special.binom(n, x) * p**x * (1 - p)**(n - x)
+
 # Distribution classes need only define the summary and beginning of the extended
 # summary portion of the class documentation. All other documentation, including
 # examples, is generated automatically. This may be time-consuming for distributions
@@ -336,9 +363,9 @@ if __name__ == "__main__":
         json.dump(docs, f, indent="    ")
     print("Successfully exported documentation")
 
-# When imported, load the dictionary from the file, and assign to each distribution
-# class's `__doc__` attribute the corresponding docstring.
-with open(_docpath) as f:
-    docs = json.load(f)
-    for dist_name in __all__:
-        _module[dist_name].__doc__ = docs[dist_name]
+# # When imported, load the dictionary from the file, and assign to each distribution
+# # class's `__doc__` attribute the corresponding docstring.
+# with open(_docpath) as f:
+#     docs = json.load(f)
+#     for dist_name in __all__:
+#         _module[dist_name].__doc__ = docs[dist_name]

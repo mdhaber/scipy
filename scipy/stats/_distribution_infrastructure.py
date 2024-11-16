@@ -134,6 +134,8 @@ class ContinuousDistribution(_ProbabilityDistribution):
         # and simply overriding the method with a formula is not always the best option.
         # For more complete discussion of the considerations, see:
         # https://github.com/scipy/scipy/pull/21050#discussion_r1707798901
+        if method_name in {'_logpmf_formula', '_pmf_formula'}:
+            return True
         method = getattr(self.__class__, method_name, None)
         super_method = getattr(ContinuousDistribution, method_name, None)
         return method is not super_method
@@ -172,6 +174,13 @@ class ContinuousDistribution(_ProbabilityDistribution):
         mode[mode_at_left] = a[mode_at_left]
         mode[mode_at_right] = b[mode_at_right]
         return mode[()]
+
+    ## Probability Density / Mass Functions
+    def _pmf_formula(self, x, **params):
+        return np.zeros_like(x)
+
+    def _logpmf_formula(self, x, **params):
+        return np.full_like(x, -np.inf)
 
     ## Cumulative Distribution Functions
 
@@ -498,3 +507,25 @@ class ContinuousDistribution(_ProbabilityDistribution):
 
 
 ContinuousDistribution.__doc__ = _doc.replace("{continuous}", 'continuous')
+
+
+class DiscreteDistribution(_ProbabilityDistribution):
+    ## Algorithms
+
+    ## Other
+
+    def _overrides(self, method_name):
+        if method_name in {'_logpdf_formula', '_pdf_formula'}:
+            return True
+        method = getattr(self.__class__, method_name, None)
+        super_method = getattr(DiscreteDistribution, method_name, None)
+        return method is not super_method
+
+    ### Distribution Properties
+
+    ## Probability Density / Mass Functions
+    def _logpdf_formula(self, x, **params):
+        return np.full_like(x, np.inf)
+
+    def _pdf_formula(self, x, **params):
+        return np.full_like(x, np.inf)
