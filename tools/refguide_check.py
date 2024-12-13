@@ -28,7 +28,7 @@ import docutils.core
 from docutils.parsers.rst import directives
 
 from numpydoc.docscrape_sphinx import get_doc_object
-from numpydoc.docscrape import NumpyDocString
+from numpydoc.docscrape import NumpyDocString, FunctionDoc
 from scipy.stats._distr_params import distcont, distdiscrete
 from scipy import stats
 
@@ -425,6 +425,15 @@ def check_rest(module, names, dots=True):
                    "Maybe forgot r\"\"\"?")
             results.append((full_name, False, msg))
             continue
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            if inspect.isfunction(obj) and not FunctionDoc(obj)['Parameters}']:
+                result = (full_name, False, f"Docstring has no 'Parameters' section")
+                results.append(result)
+            if inspect.isfunction(obj) and not FunctionDoc(obj)['Returns']:
+                result = (full_name, False, f"Docstring has no 'Returns' section")
+                results.append(result)
 
         try:
             src_file = short_path(inspect.getsourcefile(obj))
