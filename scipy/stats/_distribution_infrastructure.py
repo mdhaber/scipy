@@ -5162,95 +5162,50 @@ class RVadd(ContinuousDistribution):
                                '_logccdf_formula', '_ccdf_formula',
                                '_sample_formula'}
 
-    def _logpdf_formula(self, x, **params):
+    def _fun_formula(self, fun_name, x, **params):
+        log = 'log' in fun_name
+        zero = -np.inf if log else 0
+        fun_X = getattr(self._X, fun_name)
+        fun_Y = getattr(self._Y, fun_name)
         def integrand(y, x):
-            t1 = self._X._logpdf_dispatch(x - y, **self._X._parameters)
-            t2 = self._Y._logpdf_dispatch(y, **self._Y._parameters)
-            return t1 + t2
+            t1 = fun_X(x - y, **self._X._parameters)
+            t2 = (self._Y._logpdf_dispatch(y, **self._Y._parameters) if log
+                  else self._Y._pdf_dispatch(y, **self._Y._parameters))
+            return t1 + t2 if log else t1 * t2
 
-        kwargs = dict(preserve_shape=False, args=(x,), log=True)
+        kwargs = dict(preserve_shape=False, args=(x,), log=log)
         ax, bx = self._X.support()
         ay, by = self._Y.support()
         a = np.maximum(ay, x - bx)
         b = np.minimum(by, x - ax)
-        return self._quadrature(integrand, (a, b), **kwargs)
+        out = self._quadrature(integrand, (a, b), **kwargs)
+        if 'ccdf' in fun_name:
+            out2 = np.asarray(fun_Y(x - ax, **self._Y._parameters))
+            out2[x - ax > by] = zero
+            out = np.logaddexp(out, out2) if log else out + out2
+        elif 'cdf' in fun_name:
+            out2 = np.asarray(fun_Y(x - bx, **self._Y._parameters))
+            out2[x - bx < ay] = zero
+            out = np.logaddexp(out, out2) if log else out + out2
+        return out
+
+    def _logpdf_formula(self, x, **params):
+        return self._fun_formula('_logpdf_dispatch', x, **params)
 
     def _pdf_formula(self, x, **params):
-        def integrand(y, x):
-            t1 = self._X._pdf_dispatch(x - y, **self._X._parameters)
-            t2 = self._Y._pdf_dispatch(y, **self._Y._parameters)
-            return t1 * t2
-
-        kwargs = dict(preserve_shape=False, args=(x,), log=False)
-        ax, bx = self._X.support()
-        ay, by = self._Y.support()
-        a = np.maximum(ay, x - bx)
-        b = np.minimum(by, x - ax)
-        return self._quadrature(integrand, (a, b), **kwargs)
+        return self._fun_formula('_pdf_dispatch', x, **params)
 
     def _logcdf_formula(self, x, **params):
-        def integrand(y, x):
-            t1 = self._X._logcdf_dispatch(x - y, **self._X._parameters)
-            t2 = self._Y._logpdf_dispatch(y, **self._Y._parameters)
-            return t1 + t2
-
-        kwargs = dict(preserve_shape=False, args=(x,), log=True)
-        ax, bx = self._X.support()
-        ay, by = self._Y.support()
-        a = np.maximum(ay, x - bx)
-        b = np.minimum(by, x - ax)
-        out1 = self._quadrature(integrand, (a, b), **kwargs)
-        out2 = np.asarray(self._Y._logcdf_dispatch(x - bx, **self._Y._parameters))
-        out2[x - bx < ay] = -np.inf
-        return np.logaddexp(out1, out2)
+        return self._fun_formula('_logcdf_dispatch', x, **params)
 
     def _cdf_formula(self, x, **params):
-        def integrand(y, x):
-            t1 = self._X._cdf_dispatch(x - y, **self._X._parameters)
-            t2 = self._Y._pdf_dispatch(y, **self._Y._parameters)
-            return t1 * t2
-
-        kwargs = dict(preserve_shape=False, args=(x,), log=False)
-        ax, bx = self._X.support()
-        ay, by = self._Y.support()
-        a = np.maximum(ay, x - bx)
-        b = np.minimum(by, x - ax)
-        out1 = self._quadrature(integrand, (a, b), **kwargs)
-        out2 = np.asarray(self._Y._cdf_dispatch(x - bx, **self._Y._parameters))
-        out2[x - bx < ay] = 0
-        return out1 + out2
+        return self._fun_formula('_cdf_dispatch', x, **params)
 
     def _logccdf_formula(self, x, **params):
-        def integrand(y, x):
-            t1 = self._X._logccdf_dispatch(x - y, **self._X._parameters)
-            t2 = self._Y._logpdf_dispatch(y, **self._Y._parameters)
-            return t1 + t2
-
-        kwargs = dict(preserve_shape=False, args=(x,), log=True)
-        ax, bx = self._X.support()
-        ay, by = self._Y.support()
-        a = np.maximum(ay, x - bx)
-        b = np.minimum(by, x - ax)
-        out1 = self._quadrature(integrand, (a, b), **kwargs)
-        out2 = np.asarray(self._Y._logccdf_dispatch(x - ax, **self._Y._parameters))
-        out2[x - ax > by] = -np.inf
-        return np.logaddexp(out1, out2)
+        return self._fun_formula('_logccdf_dispatch', x, **params)
 
     def _ccdf_formula(self, x, **params):
-        def integrand(y, x):
-            t1 = self._X._ccdf_dispatch(x - y, **self._X._parameters)
-            t2 = self._Y._pdf_dispatch(y, **self._Y._parameters)
-            return t1 * t2
-
-        kwargs = dict(preserve_shape=False, args=(x,), log=False)
-        ax, bx = self._X.support()
-        ay, by = self._Y.support()
-        a = np.maximum(ay, x - bx)
-        b = np.minimum(by, x - ax)
-        out1 = self._quadrature(integrand, (a, b), **kwargs)
-        out2 = np.asarray(self._Y._ccdf_dispatch(x - ax, **self._Y._parameters))
-        out2[x - ax > by] = 0
-        return out1 + out2
+        return self._fun_formula('_ccdf_dispatch', x, **params)
 
     def _sample_formula(self, sample_shape, full_shape, *, rng, **params):
         common_kwargs = dict(sample_shape=sample_shape, full_shape=full_shape,
