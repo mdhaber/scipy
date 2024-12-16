@@ -5162,34 +5162,95 @@ class RVadd(ContinuousDistribution):
                                '_logccdf_formula', '_ccdf_formula',
                                '_sample_formula'}
 
-    def _distfun_formula(self, distfun, x, **params):
-        log = distfun.startswith('_log')
-        distfun = getattr(self._X, distfun)
-        def integrand(y, x):
-            t1 = distfun(x - y, **self._X._parameters)
-            t2 = self._Y._pdf_dispatch(y, **self._Y._parameters)
-            return t1 + t2 if log else t1 * t2
-
-        kwargs = dict(preserve_shape=True, args=(x,), log=log)
-        return self._quadrature(integrand, self._Y.support(), **kwargs)
-
     def _logpdf_formula(self, x, **params):
-        return self._distfun_formula('_logpdf_dispatch', x, **params)
+        def integrand(y, x):
+            t1 = self._X._logpdf_dispatch(x - y, **self._X._parameters)
+            t2 = self._Y._logpdf_dispatch(y, **self._Y._parameters)
+            return t1 + t2
+
+        kwargs = dict(preserve_shape=False, args=(x,), log=True)
+        ax, bx = self._X.support()
+        ay, by = self._Y.support()
+        a = np.maximum(ay, x - bx)
+        b = np.minimum(by, x - ax)
+        return self._quadrature(integrand, (a, b), **kwargs)
 
     def _pdf_formula(self, x, **params):
-        return self._distfun_formula('_pdf_dispatch', x, **params)
+        def integrand(y, x):
+            t1 = self._X._pdf_dispatch(x - y, **self._X._parameters)
+            t2 = self._Y._pdf_dispatch(y, **self._Y._parameters)
+            return t1 * t2
+
+        kwargs = dict(preserve_shape=False, args=(x,), log=False)
+        ax, bx = self._X.support()
+        ay, by = self._Y.support()
+        a = np.maximum(ay, x - bx)
+        b = np.minimum(by, x - ax)
+        return self._quadrature(integrand, (a, b), **kwargs)
 
     def _logcdf_formula(self, x, **params):
-        return self._distfun_formula('_logcdf_dispatch', x, **params)
+        def integrand(y, x):
+            t1 = self._X._logcdf_dispatch(x - y, **self._X._parameters)
+            t2 = self._Y._logpdf_dispatch(y, **self._Y._parameters)
+            return t1 + t2
+
+        kwargs = dict(preserve_shape=False, args=(x,), log=True)
+        ax, bx = self._X.support()
+        ay, by = self._Y.support()
+        a = np.maximum(ay, x - bx)
+        b = np.minimum(by, x - ax)
+        out1 = self._quadrature(integrand, (a, b), **kwargs)
+        out2 = np.asarray(self._Y._logcdf_dispatch(x - bx, **self._Y._parameters))
+        out2[x - bx < ay] = -np.inf
+        return np.logaddexp(out1, out2)
 
     def _cdf_formula(self, x, **params):
-        return self._distfun_formula('_cdf_dispatch', x, **params)
+        def integrand(y, x):
+            t1 = self._X._cdf_dispatch(x - y, **self._X._parameters)
+            t2 = self._Y._pdf_dispatch(y, **self._Y._parameters)
+            return t1 * t2
+
+        kwargs = dict(preserve_shape=False, args=(x,), log=False)
+        ax, bx = self._X.support()
+        ay, by = self._Y.support()
+        a = np.maximum(ay, x - bx)
+        b = np.minimum(by, x - ax)
+        out1 = self._quadrature(integrand, (a, b), **kwargs)
+        out2 = np.asarray(self._Y._cdf_dispatch(x - bx, **self._Y._parameters))
+        out2[x - bx < ay] = 0
+        return out1 + out2
 
     def _logccdf_formula(self, x, **params):
-        return self._distfun_formula('_logccdf_dispatch', x, **params)
+        def integrand(y, x):
+            t1 = self._X._logccdf_dispatch(x - y, **self._X._parameters)
+            t2 = self._Y._logpdf_dispatch(y, **self._Y._parameters)
+            return t1 + t2
+
+        kwargs = dict(preserve_shape=False, args=(x,), log=True)
+        ax, bx = self._X.support()
+        ay, by = self._Y.support()
+        a = np.maximum(ay, x - bx)
+        b = np.minimum(by, x - ax)
+        out1 = self._quadrature(integrand, (a, b), **kwargs)
+        out2 = np.asarray(self._Y._logccdf_dispatch(x - ax, **self._Y._parameters))
+        out2[x - ax > by] = -np.inf
+        return np.logaddexp(out1, out2)
 
     def _ccdf_formula(self, x, **params):
-        return self._distfun_formula('_ccdf_dispatch', x, **params)
+        def integrand(y, x):
+            t1 = self._X._ccdf_dispatch(x - y, **self._X._parameters)
+            t2 = self._Y._pdf_dispatch(y, **self._Y._parameters)
+            return t1 * t2
+
+        kwargs = dict(preserve_shape=False, args=(x,), log=False)
+        ax, bx = self._X.support()
+        ay, by = self._Y.support()
+        a = np.maximum(ay, x - bx)
+        b = np.minimum(by, x - ax)
+        out1 = self._quadrature(integrand, (a, b), **kwargs)
+        out2 = np.asarray(self._Y._ccdf_dispatch(x - ax, **self._Y._parameters))
+        out2[x - ax > by] = 0
+        return out1 + out2
 
     def _sample_formula(self, sample_shape, full_shape, *, rng, **params):
         common_kwargs = dict(sample_shape=sample_shape, full_shape=full_shape,
