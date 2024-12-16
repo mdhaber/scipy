@@ -1810,8 +1810,10 @@ class ContinuousDistribution(_ProbabilityDistribution):
         info.append(str_parameters)
         return f"{class_name}({', '.join(info)})"
 
-    def __add__(self, loc):
-        return ShiftedScaledDistribution(self, loc=loc)
+    def __add__(self, other):
+        if isinstance(other, ContinuousDistribution):
+            return RVadd(self, other)
+        return ShiftedScaledDistribution(self, loc=other)
 
     def __sub__(self, loc):
         return ShiftedScaledDistribution(self, loc=-loc)
@@ -1968,7 +1970,7 @@ class ContinuousDistribution(_ProbabilityDistribution):
     ## Algorithms
 
     def _quadrature(self, integrand, limits=None, args=None,
-                    params=None, log=False):
+                    params=None, log=False, preserve_shape=False):
         # Performs numerical integration of an integrand between limits.
         # Much of this should be added to `_tanhsinh`.
         a, b = self._support(**params) if limits is None else limits
@@ -1982,7 +1984,8 @@ class ContinuousDistribution(_ProbabilityDistribution):
         args = np.broadcast_arrays(*args)
         # If we know the median or mean, consider breaking up the interval
         rtol = None if _isnull(self.tol) else self.tol
-        res = _tanhsinh(f, a, b, args=args, log=log, rtol=rtol)
+        res = _tanhsinh(f, a, b, args=args, log=log, rtol=rtol,
+                        preserve_shape=preserve_shape)
         # For now, we ignore the status, but I want to return the error
         # estimate - see question 5 at the top.
         return res.integral
@@ -5136,3 +5139,88 @@ def log(X, /):
         raise NotImplementedError(message)
     return MonotonicTransformedDistribution(X, g=np.log, h=np.exp, dh=np.exp,
                                             logdh=lambda u: u)
+
+
+class RVadd(ContinuousDistribution):
+    # Fix when component distributions have finite support
+
+    def __init__(self, X, Y, *args, **kwargs):
+        self._copy_parameterization()
+
+        Xa, Xb = X.support()
+        Ya, Yb = Y.support()
+        _x_support = _RealDomain(endpoints=(Xa + Ya, Xb + Yb),
+                                 inclusive=(True, True))  # for now
+        self._variable = _RealParameter('x', domain=_x_support)
+        self._X = X
+        self._Y = Y
+        super().__init__(*args, **kwargs)
+
+    def _overrides(self, method_name):
+        return method_name in {'_logpdf_formula', '_pdf_formula',
+                               '_logcdf_formula', '_cdf_formula',
+                               '_logccdf_formula', '_ccdf_formula',
+                               '_sample_formula'}
+
+    def _distfun_formula(self, distfun, x, **params):
+        log = distfun.startswith('_log')
+        distfun = getattr(self._X, distfun)
+        def integrand(y, x):
+            t1 = distfun(x - y, **self._X._parameters)
+            t2 = self._Y._pdf_dispatch(y, **self._Y._parameters)
+            return t1 + t2 if log else t1 * t2
+
+        kwargs = dict(preserve_shape=True, args=(x,), log=log)
+        return self._quadrature(integrand, self._Y.support(), **kwargs)
+
+    def _logpdf_formula(self, x, **params):
+        return self._distfun_formula('_logpdf_dispatch', x, **params)
+
+    def _pdf_formula(self, x, **params):
+        return self._distfun_formula('_pdf_dispatch', x, **params)
+
+    def _logcdf_formula(self, x, **params):
+        return self._distfun_formula('_logcdf_dispatch', x, **params)
+
+    def _cdf_formula(self, x, **params):
+        return self._distfun_formula('_cdf_dispatch', x, **params)
+
+    def _logccdf_formula(self, x, **params):
+        return self._distfun_formula('_logccdf_dispatch', x, **params)
+
+    def _ccdf_formula(self, x, **params):
+        return self._distfun_formula('_ccdf_dispatch', x, **params)
+
+    def _sample_formula(self, sample_shape, full_shape, *, rng, **params):
+        common_kwargs = dict(sample_shape=sample_shape, full_shape=full_shape,
+                             rng=rng, method=None)
+        t1 = self._X._sample_dispatch(**common_kwargs, **self._X._parameters)
+        t2 = self._Y._sample_dispatch(**common_kwargs, **self._Y._parameters)
+        return t1 + t2
+
+    def _moment_raw_formula(self, order, **params):
+        if order != 1:
+            return None
+        common_kwargs = dict(order=order, methods=self._moment_methods)
+        t1 = self._X._moment_raw_dispatch(**common_kwargs, **self._X._parameters)
+        t2 = self._Y._moment_raw_dispatch(**common_kwargs, **self._Y._parameters)
+        return t1 + t2
+
+    def _moment_central_formula(self, order, **params):
+        if order != 2:
+            return None
+        common_kwargs = dict(order=order, methods=self._moment_methods)
+        t1 = self._X._moment_central_dispatch(**common_kwargs, **self._X._parameters)
+        t2 = self._Y._moment_central_dispatch(**common_kwargs, **self._Y._parameters)
+        return t1 + t2
+
+    def reset_cache(self):
+        self._X.reset_cache()
+        self._Y.reset_cache()
+        super().reset_cache()
+
+    def __repr__(self):
+        return f"{repr(self._X)} + {repr(self._Y)}"
+
+    def __str__(self):
+        return f"{str(self._X)} + {str(self._Y)}"
