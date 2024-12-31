@@ -318,7 +318,12 @@ def xp_assert_close(actual, desired, *, rtol=None, atol=0, check_namespace=True,
         err_msg = None if err_msg == '' else err_msg
         return xp.testing.assert_close(actual, desired, rtol=rtol, atol=atol,
                                        equal_nan=True, check_dtype=False, msg=err_msg)
-    # JAX uses `np.testing`
+    elif is_marray(xp):
+        np.testing.assert_equal(actual.mask, desired.mask, err_msg=err_msg)
+        return np.testing.assert_allclose(actual.data, desired.data, rtol=rtol,
+                                          atol=atol, err_msg=err_msg)
+
+    # JAX and strict use `np.testing`
     return np.testing.assert_allclose(actual, desired, rtol=rtol,
                                       atol=atol, err_msg=err_msg)
 
@@ -587,3 +592,6 @@ def xp_float_to_complex(arr: Array, xp: ModuleType | None = None) -> Array:
         arr = xp.astype(arr, xp.complex128)
 
     return arr
+
+def is_marray(xp):
+    return xp.__name__.startswith('marray')
