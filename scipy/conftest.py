@@ -171,8 +171,8 @@ if SCIPY_ARRAY_API and isinstance(SCIPY_ARRAY_API, str):
         pass
 
     try:
-        from scipy._lib.marray.marray import array_api_strict as mxp  # type: ignore[import-not-found]
-        xp_available_backends.update({'marray.array_api_strict': mxp})
+        from scipy._lib.marray.marray import numpy as mnp  # type: ignore[import-not-found]
+        xp_available_backends.update({'marray.numpy': mnp})
     except ImportError:
         pass
 
