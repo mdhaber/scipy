@@ -171,6 +171,12 @@ if SCIPY_ARRAY_API and isinstance(SCIPY_ARRAY_API, str):
         pass
 
     try:
+        from scipy._lib.marray.marray import array_api_strict as mxp  # type: ignore[import-not-found]
+        xp_available_backends.update({'marray.array_api_strict': mxp})
+    except ImportError:
+        pass
+
+    try:
         import jax.numpy  # type: ignore[import-not-found]
         xp_available_backends.update({'jax.numpy': jax.numpy})
         jax.config.update("jax_enable_x64", True)

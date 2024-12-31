@@ -9,6 +9,9 @@ if not fs.exists('array_api_compat/README.md')
   error('Missing the `array_api_compat` submodule! Run `git submodule update --init` to fix this.')
 endif
 if not fs.exists('array_api_extra/README.md')
+  error('Missing the `marray` submodule! Run `git submodule update --init` to fix this.')
+endif
+if not fs.exists('marray/README.md')
   error('Missing the `array_api_extra` submodule! Run `git submodule update --init` to fix this.')
 endif
 if not fs.exists('pocketfft/README.md')
@@ -234,6 +237,14 @@ py3.install_sources(
     'array_api_extra/src/array_api_extra/_funcs.py',
   ],
   subdir: 'scipy/_lib/array_api_extra',
+)
+
+py3.install_sources(
+  [
+    'marray/marray/__init__.py',
+    'marray/marray/_mask_text.py',
+  ],
+  subdir: 'scipy/_lib/marray/marray',
 )
 
 py3.install_sources(
