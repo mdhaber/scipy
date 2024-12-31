@@ -285,7 +285,11 @@ def xp_assert_equal(actual, desired, *, check_namespace=True, check_dtype=True,
         err_msg = None if err_msg == '' else err_msg
         return xp.testing.assert_close(actual, desired, rtol=0, atol=0, equal_nan=True,
                                        check_dtype=False, msg=err_msg)
-    # JAX uses `np.testing`
+    elif is_marray(xp):
+        np.testing.assert_equal(actual.mask, desired.mask, err_msg=err_msg)
+        return np.testing.assert_equal(actual.data, desired.data, err_msg=err_msg)
+
+    # JAX and strict use `np.testing`
     return np.testing.assert_array_equal(actual, desired, err_msg=err_msg)
 
 
