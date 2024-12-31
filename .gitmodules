@@ -32,3 +32,6 @@
 	path = subprojects/highs
 	url = https://github.com/scipy/HiGHs
 	shallow = true
+[submodule "scipy/_lib/marray"]
+	path = scipy/_lib/marray
+	url = https://github.com/mdhaber/marray.git
