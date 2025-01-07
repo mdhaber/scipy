@@ -36,7 +36,7 @@ bibliography: paper.bib
 
 # Summary
 
-Numerical integration, series summation, differentiation, optimization, and root finding are fundamental problems with applications in essentially all domains of science and engineering. Frequently, such problems do not arise individually, but rather in batches; e.g., differentiation of a single curve at many points or minimization of a function for many values of a parameter. In array computing, operations on batches of values can be vectorized. With NumPy [@numpy], operations on arrays expressed in Python can be evaluated as (sequential) loops in efficient native code, or in some cases in parallel with SIMD [@nep38]. Other Python array libraries such as CuPy [@cupy] and PyTorch [@pytorch] are able to exploit GPUs to parallelize vectorized computations. However, SciPy [@scipy] – the de facto standard Python library for solving the above problems – did not offer features to vectorize the solution process with NumPy [@numpy] arrays, let alone array library agnostic implementations.
+Numerical integration, series summation, differentiation, optimization, and root finding are fundamental problems with applications in essentially all domains of science and engineering. Frequently, such problems do not arise individually, but rather in batches; e.g., differentiation of a single curve at many points or minimization of a function for many values of a parameter. In array computing, operations on batches of values can be vectorized. With NumPy [@numpy], operations on arrays expressed in Python can be evaluated as (sequential) loops in efficient native code, or in some cases in parallel with SIMD [@nep38]. Other Python array libraries such as CuPy [@cupy], PyTorch [@pytorch], and JAX [@jax] are able to exploit GPUs to parallelize vectorized computations. However, SciPy [@scipy] – the de facto standard Python library for solving the above problems – did not offer features to vectorize the solution process with NumPy [@numpy] arrays, let alone array library agnostic implementations.
 
 This paper discusses several new features that fill this gap, included in SciPy 1.15.0:
 
@@ -45,7 +45,7 @@ This paper discusses several new features that fill this gap, included in SciPy 
 - `scipy.integrate.nsum` for summation of real-valued finite or infinite series,
 - `scipy.optimize.elementwise` for finding roots and minimization of a single-input, single-output function.
 
-Although the details of the algorithms are inherently distinct, these features rely on a common framework for elementwise iterative methods and share similar interfaces, and the same implementation works with several Python Array API Standard [@arrayapi] compatible arrays. These features will dramatically improve performance of end-user applications, and together, they form the backbone of SciPy's new random variable infrastructure.
+Although the details of the algorithms are inherently distinct, these features rely on a common framework for elementwise iterative methods and share similar interfaces, and the same implementation works with several Python Array API Standard [@arrayapi] compatible arrays, including CuPy and PyTorch. These features will dramatically improve performance of end-user applications, and together, they form the backbone of SciPy's new random variable infrastructure.
 
 # Statement of need
 
@@ -55,7 +55,7 @@ Before the release of SciPy 1.15.0, the need for these capabilities was partiall
 - Speed: the features take full advantage of vectorized user callables, avoiding slow Python loops and the excessive overhead of repeatedly calling compiled code. 
 - Prevalence: SciPy is one of the most popular scientific Python packages. If a scientific Python user needs these features, chances are that they already have SciPy installed, eliminating the need to find and learn a new package.
 - Ease-of-use: the API reference for these new functions is thorough, and the interfaces share common features and operate smoothly with other SciPy functions.
-- Dependability: as with all *new* SciPy code, these features were designed and implemented following good software development practices. They have been carefully peer-reviewed, and extensive unit tests protect against backward incompatible changes and regressions.
+- Dependability: as with all new SciPy code, these features were designed and implemented following good software development practices. They have been carefully peer-reviewed, and extensive unit tests protect against backward incompatible changes and regressions.
 
 # Acknowledgements
 
