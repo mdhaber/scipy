@@ -45,7 +45,7 @@ This paper discusses several new features that fill this gap, included in SciPy 
 - `scipy.integrate.nsum` for summation of real-valued finite or infinite series,
 - `scipy.optimize.elementwise` for finding roots and minimization of a single-input, single-output function.
 
-Although the details of the algorithms are inherently distinct, these features rely on a common framework for elementwise iterative methods and share similar interfaces. For example, `scipy.differentiate.derivative` accepts the scalar function to be differentiated as a Python callable, the points at which to evaluate the derivative as an N-dimensional array, and any other parameters of the callable as N-dimensional arrays. `derivative` passes abscissae and parameters to the callable as N-dimensional arrays, adaptively approximating the derivative(s) to achieve specified tolerances. Furthermore, arrays need not be NumPy arrays: the same implementation works with several Python Array API Standard [@arrayapi] compatible arrays. These features will dramatically improve performance of end-user applications, and together, they form the backbone of SciPy's new random variable infrastructure.
+Although the details of the algorithms are inherently distinct, these features rely on a common framework for elementwise iterative methods and share similar interfaces, and the same implementation works with several Python Array API Standard [@arrayapi] compatible arrays. These features will dramatically improve performance of end-user applications, and together, they form the backbone of SciPy's new random variable infrastructure.
 
 # Statement of need
 
