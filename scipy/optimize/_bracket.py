@@ -2,6 +2,7 @@ import numpy as np
 import scipy._lib._elementwise_iterative_method as eim
 from scipy._lib._util import _RichResult
 from scipy._lib._array_api import array_namespace, xp_ravel
+from scipy._lib import array_api_extra as xpx
 
 _ELIMITS = -1  # used in _bracket_root
 _ESTOPONESIDE = 2  # used in _bracket_root
@@ -210,12 +211,10 @@ def _bracket_root(func, xl0, xr0=None, *, xmin=None, xmax=None, factor=None,
     # end of the bracket `x` will shrink by `factor` each iteration.
     i = xp.isinf(limit)
     ni = ~i
-    d = xp.zeros_like(x)
-    d[i] = x[i] - x0[i]
-    d[ni] = limit[ni] - x[ni]
+    d = xp.where(i, x-x0, limit-x)
 
     status = xp.full_like(x, eim._EINPROGRESS, dtype=xp.int32)  # in progress
-    status[invalid_bracket] = eim._EINPUTERR
+    status = xp.where(invalid_bracket, eim._EINPUTERR, status)
     nit, nfev = 0, 1  # one function evaluation per side performed above
 
     work = _RichResult(x=x, x0=x0, f=f, limit=limit, factor=factor,
@@ -234,14 +233,14 @@ def _bracket_root(func, xl0, xr0=None, *, xmin=None, xmax=None, factor=None,
         # Unlimited brackets grow by `factor` by increasing distance from fixed
         # end to moving end.
         i = xp.isinf(work.limit)  # indices of unlimited brackets
-        work.d[i] *= work.factor[i]
-        x[i] = work.x0[i] + work.d[i]
+        work.d = xp.where(i, work.d*work.factor, work.d)
+        x = xp.where(i, work.x0 + work.d, x)
 
         # Limited brackets grow by decreasing the distance from the limit to
         # the moving end.
         ni = ~i  # indices of limited brackets
-        work.d[ni] /= work.factor[ni]
-        x[ni] = work.limit[ni] - work.d[ni]
+        work.d = xp.where(ni, work.d/work.factor, work.d)
+        x = xp.where(ni, work.limit - work.d, x)
 
         return x
 
@@ -262,8 +261,8 @@ def _bracket_root(func, xl0, xr0=None, *, xmin=None, xmax=None, factor=None,
         sf = xp.sign(work.f)
         sf_last = xp.sign(work.f_last)
         i = ((sf_last == -sf) | (sf_last == 0) | (sf == 0)) & ~stop
-        work.status[i] = eim._ECONVERGED
-        stop[i] = True
+        work.status = xp.where(i, eim._ECONVERGED, work.status)
+        stop = xp.where(i, True, stop)
 
         # Condition 2: the other side's search found a valid bracket.
         # (If we just found a bracket with the rightward search, we can stop
@@ -292,20 +291,19 @@ def _bracket_root(func, xl0, xr0=None, *, xmin=None, xmax=None, factor=None,
         j = j[also_stop == work.active[j]]
         # Now convert these to boolean indices to use with `work.status`.
         i = xp.zeros_like(stop)
-        i[j] = True  # boolean indices of elements that can also stop
+        xpx.at(i, j).set(True)
         i = i & ~stop
-        work.status[i] = _ESTOPONESIDE
-        stop[i] = True
+        work.status = xp.where(i, _ESTOPONESIDE, work.status)
+        stop = xp.where(i, True, stop)
 
         # Condition 3: moving end of bracket reaches limit
         i = (work.x == work.limit) & ~stop
-        work.status[i] = _ELIMITS
-        stop[i] = True
+        work.status = xp.where(i, _ELIMITS, work.status)
+        stop = xp.where(i, True, stop)
 
         # Condition 4: non-finite value encountered
-        i = ~(xp.isfinite(work.x) & xp.isfinite(work.f)) & ~stop
-        work.status[i] = eim._EVALUEERR
-        stop[i] = True
+        work.status = xp.where(i, eim._EVALUEERR, work.status)
+        stop = xp.where(i, True, stop)
 
         return stop
 
