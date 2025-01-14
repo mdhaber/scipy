@@ -3429,7 +3429,7 @@ class UnivariateDistribution(_ProbabilityDistribution):
         # - when the parameters of the distribution are an array,
         #   use the full range of abscissae for all curves
 
-        discrete = isinstance(self, DiscreteDistribution)
+        discrete = isinstance(self, UnivariateDistribution) and self._type == 'discrete'
         t_is_quantile = {'x', 'icdf', 'iccdf', 'ilogcdf', 'ilogccdf'}
         t_is_probability = {'cdf', 'ccdf', 'logcdf', 'logccdf'}
         valid_t = t_is_quantile.union(t_is_probability)
@@ -3571,6 +3571,10 @@ class UnivariateDistribution(_ProbabilityDistribution):
 
 
 class ContinuousDistribution(UnivariateDistribution):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._type = 'continuous'
+
     def _overrides(self, method_name):
         if method_name in {'_logpmf_formula', '_pmf_formula'}:
             return True
@@ -3590,6 +3594,10 @@ class ContinuousDistribution(UnivariateDistribution):
 
 
 class DiscreteDistribution(UnivariateDistribution):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._type = 'discrete'
+
     def _overrides(self, method_name):
         if method_name in {'_logpdf_formula', '_pdf_formula'}:
             return True
@@ -4019,7 +4027,7 @@ def _shift_scale_inverse_function(func):
              '_icdf_dispatch': '_iccdf_dispatch',
              '_ilogccdf_dispatch': '_ilogcdf_dispatch',
              '_iccdf_dispatch': '_icdf_dispatch'}
-    def wrapped(self, p, *args, loc, scale, sign, **kwargs):
+    def wrapped(self, p, /, *args, loc, scale, sign, **kwargs):
         item = func.__name__
 
         f = getattr(self._dist, item)
@@ -4034,14 +4042,15 @@ def _shift_scale_inverse_function(func):
     return wrapped
 
 
-class TransformedDistribution(ContinuousDistribution):
+class TransformedDistribution(UnivariateDistribution):
     def __init__(self, X, /, *args, **kwargs):
-        if not isinstance(X, ContinuousDistribution):
-            message = "Transformations are only supported for continuous RVs."
-            raise NotImplementedError(message)
+        # if not isinstance(X, ContinuousDistribution):
+        #     message = "Transformations are only supported for continuous RVs."
+        #     raise NotImplementedError(message)
         self._copy_parameterization()
         self._variable = X._variable
         self._dist = X
+        self._type = X._type
         if X._parameterization:
             # Add standard distribution parameters to our parameterization
             dist_parameters = X._parameterization.parameters
@@ -4763,7 +4772,7 @@ class Mixture(_ProbabilityDistribution):
         for var in components:
             # will generalize to other kinds of distributions when there
             # *are* other kinds of distributions
-            if not isinstance(var, ContinuousDistribution):
+            if not isinstance(var, UnivariateDistribution):
                 message = ("Each element of `components` must be an instance of "
                            "`ContinuousDistribution`.")
                 raise ValueError(message)
@@ -5118,16 +5127,16 @@ class MonotonicTransformedDistribution(TransformedDistribution):
     def _ccdf_dispatch(self, x, *args, **params):
         return self._cxdf(self._h(x), *args, **params)
 
-    def _ilogcdf_dispatch(self, p, *args, **params):
+    def _ilogcdf_dispatch(self, p, /, *args, **params):
         return self._g(self._ilogxdf(p, *args, **params))
 
-    def _icdf_dispatch(self, p, *args, **params):
+    def _icdf_dispatch(self, p, /, *args, **params):
         return self._g(self._ixdf(p, *args, **params))
 
-    def _ilogccdf_dispatch(self, p, *args, **params):
+    def _ilogccdf_dispatch(self, p, /, *args, **params):
         return self._g(self._ilogcxdf(p, *args, **params))
 
-    def _iccdf_dispatch(self, p, *args, **params):
+    def _iccdf_dispatch(self, p, /, *args, **params):
         return self._g(self._icxdf(p, *args, **params))
 
     def _sample_dispatch(self, sample_shape, full_shape, *,
