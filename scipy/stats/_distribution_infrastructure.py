@@ -4763,9 +4763,9 @@ class Mixture(_ProbabilityDistribution):
         for var in components:
             # will generalize to other kinds of distributions when there
             # *are* other kinds of distributions
-            if not isinstance(var, ContinuousDistribution):
+            if not isinstance(var, UnivariateDistribution):
                 message = ("Each element of `components` must be an instance of "
-                           "`ContinuousDistribution`.")
+                           "`UnivariateDistribution`.")
                 raise ValueError(message)
             if not var._shape == ():
                 message = "All elements of `components` must have scalar shapes."
@@ -4820,13 +4820,13 @@ class Mixture(_ProbabilityDistribution):
         out = self._full(0, *args)
         for var, weight in zip(self._components, self._weights):
             out += getattr(var, fun)(*args) * weight
-        return out
+        return out[()]
 
     def _logsum(self, fun, *args):
         out = self._full(-np.inf, *args)
         for var, log_weight in zip(self._components, np.log(self._weights)):
             np.logaddexp(out, getattr(var, fun)(*args) + log_weight, out=out)
-        return out
+        return out[()]
 
     def support(self):
         a = self._full(np.inf)
@@ -4854,10 +4854,40 @@ class Mixture(_ProbabilityDistribution):
 
     def entropy(self, *, method=None):
         self._raise_if_method(method)
-        return _tanhsinh(lambda x: -self.pdf(x) * self.logpdf(x),
-                         *self.support()).integral
+
+        def integrand(x):
+            pdf = self.pdf(x)
+            logpdf = self.logpdf(x)
+            res = np.asarray(pdf * logpdf)
+            # Positive infinities correspond with discrete points of support
+            # and should not be included here. Negative infinity contribution
+            # should be zero.
+            res[np.isinf(logpdf)] = 0
+            return -res
+
+        def summand(x):
+            pmf = self.pmf(x)
+            logpmf = self.logpmf(x)
+            res = np.asarray(pmf * logpmf)
+            res[np.isinf(logpmf)] = 0
+            return -res
+
+        integral = _tanhsinh(integrand, *self.support()).integral
+        sum = nsum(summand, *self.support()).sum
+        return integral + sum
 
     def mode(self, *, method=None):
+        # Maybe raise NotImplementedError in the initial PR if discrete
+        # distributions are present?
+        # If any discrete distributions are present, it is probably most
+        # appropriate to define the mode to be wherever the PMF is maximum.
+        # In some cases, the maximum of the modes of the components will work,
+        # but in general, that would just be a reasonable guess. Really,
+        # we'd need to perform minimization and round just like we do for
+        # any regular discrete distribution. To do the minimization, though,
+        # the callable needs to be continuous, and the public PMF method is
+        # not. We'd either have to interpolate between PMF values or call
+        # the private PMF method.
         self._raise_if_method(method)
         a, b = self.support()
         def f(x): return -self.pdf(x)
@@ -4954,28 +4984,39 @@ class Mixture(_ProbabilityDistribution):
         args = (x,) if y is None else (x, y)
         return self._logsum('logccdf', *args)
 
-    def _invert(self, fun, p):
+    # Probably only want to use `nudge` if there are discrete components?
+    def _invert(self, fun, p, nudge=0):
         xmin, xmax = self.support()
         fun = getattr(self, fun)
         f = lambda x, p: fun(x) - p  # noqa: E731 is silly
         res = _bracket_root(f, xl0=self.mean(), xmin=xmin, xmax=xmax, args=(p,))
-        return _chandrupatla(f, a=res.xl, b=res.xr, args=(p,)).x
+        res = _chandrupatla(f, a=res.xl, b=res.xr, args=(p,))
+        if nudge == 0:
+            return res.x
+        # We'll probably want to adjust this based on what gh-22312 does
+        # with `_solve_bounded` to prevent slow termination when the
+        # correct result is the left end of the support.
+        i = (res.fl >= 0) if nudge > 0 else (res.fl <= 0)
+        res = np.where(i, res.xl, res.xr)
+        # also need to make sure to return NaN if p < 0 or p > 1
+        res[np.isnan(p)] = np.nan
+        return res
 
     def icdf(self, p, /, *, method=None):
         self._raise_if_method(method)
-        return self._invert('cdf', p)
+        return self._invert('cdf', p, nudge=+1)
 
     def iccdf(self, p, /, *, method=None):
         self._raise_if_method(method)
-        return self._invert('ccdf', p)
+        return self._invert('ccdf', p, nudge=-1)
 
     def ilogcdf(self, p, /, *, method=None):
         self._raise_if_method(method)
-        return self._invert('logcdf', p)
+        return self._invert('logcdf', p, nudge=+1)
 
     def ilogccdf(self, p, /, *, method=None):
         self._raise_if_method(method)
-        return self._invert('logccdf', p)
+        return self._invert('logccdf', p, nudge=-1)
 
     def sample(self, shape=(), *, rng=None, method=None):
         self._raise_if_method(method)
