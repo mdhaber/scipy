@@ -61,22 +61,22 @@ def _quantile_iv(x, p, method, axis, nan_policy, keepdims):
     y = xp.moveaxis(y, axis, -1)
     p = xp.moveaxis(p, axis, -1)
 
-    if contains_nans:
-        nans = xp.isnan(y)
-        non_nan = xp.astype(~nans, xp.uint64)
-        n_int = xp.sum(non_nan, axis=-1, keepdims=True)
-        n = xp.astype(n_int, dtype)
+    # if contains_nans:
+    nans = xp.isnan(y)
+    non_nan = xp.astype(~nans, xp.uint64)
+    n_int = xp.sum(non_nan, axis=-1, keepdims=True)
+    n = xp.astype(n_int, dtype)
 
-        nan_out = xp.any(n == 0, axis=-1)
-        if nan_policy == 'propagate':
-            nan_out |= xp.any(nans, axis=-1)
+    nan_out = xp.any(n == 0, axis=-1)
+    if nan_policy == 'propagate':
+        nan_out |= xp.any(nans, axis=-1)
 
-        if xp.any(nan_out):
-            y = xp.asarray(y, copy=True)  # ensure writable
-            y[nan_out] = np.nan
-            n[nan_out] = y.shape[-1]
-    else:
-        n = xp.astype(xp.asarray(y.shape[-1]), dtype)
+    if xp.any(nan_out):
+        y = xp.asarray(y, copy=True)  # ensure writable
+        y[nan_out] = np.nan
+        n[nan_out] = y.shape[-1]
+    # else:
+    #     n = xp.astype(xp.asarray(y.shape[-1]), dtype)
 
     p_mask = (p > 1) | (p < 0) | xp.isnan(p)
     if xp.any(p_mask):
