@@ -124,3 +124,21 @@ def test_zscore(fun, axis, xp):
     ref = xp.asarray(fun(*narrays, nan_policy='omit', axis=axis))
     xp_assert_close(res.data[~res.mask], ref[~xp.isnan(ref)])
     xp_assert_equal(res.mask, marrays[0].mask)
+
+
+@skip_backend('jax.numpy', reason="JAX doesn't allow item assignment.")
+@skip_backend('torch', reason="array-api-compat#242")
+@skip_backend('cupy', reason="special functions won't work")
+@pytest.mark.parametrize('axis', [0, 1, None])
+def test_ttest_1samp(axis, xp):
+    mxp, marrays, narrays = get_arrays(2, xp=xp)
+    marrays[1] = mxp.mean(marrays[1], axis=axis, keepdims=axis is not None)
+    narrays[1] = np.nanmean(narrays[1], axis=axis, keepdims=axis is not None)
+    res = stats.ttest_1samp(*marrays, axis=axis)
+    ref = stats.ttest_1samp(*narrays, nan_policy='omit', axis=axis)
+    xp_assert_close(res.statistic.data, xp.asarray(ref.statistic))
+    xp_assert_close(res.pvalue.data, xp.asarray(ref.pvalue))
+    res_ci = res.confidence_interval()
+    ref_ci = ref.confidence_interval()
+    xp_assert_close(res_ci.low.data, xp.asarray(ref_ci.low))
+    xp_assert_close(res_ci.high.data, xp.asarray(ref_ci.high))

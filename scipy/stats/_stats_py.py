@@ -28,6 +28,7 @@ References
 """
 import warnings
 import math
+import functools
 from math import gcd
 from collections import namedtuple
 from collections.abc import Sequence
@@ -1237,6 +1238,13 @@ def _length_nonmasked(x, axis, keepdims=False):
     return (xp_size(x) if axis is None else
             # compact way to deal with axis tuples or ints
             int(np.prod(np.asarray(x.shape)[np.asarray(axis)])))
+
+
+def _share_masks(*args, xp):
+    if hasattr(args[0], 'mask') and not isinstance(args[0], np.ndarray):
+        mask = functools.reduce(lambda x, y: x | y, (arg.mask for arg in args))
+        args = [xp.asarray(arg.data, mask=mask) for arg in args]
+    return args[0] if len(args) == 1 else args
 
 
 @_axis_nan_policy_factory(
@@ -6088,10 +6096,10 @@ def ttest_1samp(a, popmean, axis=0, nan_policy="propagate", alternative="two-sid
     xp = array_namespace(a)
     a, axis = _chk_asarray(a, axis, xp=xp)
 
-    n = a.shape[axis]
+    n = _length_nonmasked(a, axis)
     df = n - 1
 
-    if n == 0:
+    if a.shape[axis] == 0:
         # This is really only needed for *testing* _axis_nan_policy decorator
         # It won't happen when the decorator is used.
         NaN = _get_nan(a)
@@ -6147,7 +6155,7 @@ def _t_confidence_interval(df, t, confidence_level, alternative, dtype=None, xp=
         low, high = xp.broadcast_arrays(special.stdtrit(df, p), inf)
     elif alternative == 0:  # 'two-sided'
         tail_probability = (1 - confidence_level)/2
-        p = xp.asarray([tail_probability, 1-tail_probability])
+        p = xp.stack((tail_probability, 1-tail_probability))
         # axis of p must be the zeroth and orthogonal to all the rest
         p = xp.reshape(p, tuple([2] + [1]*xp.asarray(df).ndim))
         ci = special.stdtrit(df, p)
