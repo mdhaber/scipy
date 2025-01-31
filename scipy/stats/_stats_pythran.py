@@ -342,11 +342,224 @@ def bvn(xl, xu, yl, yu, r):
     return max(0, min(1, p))
 
 
-# def compute_bvn(x, cov):
-#     # Standardize x using the covariance matrix
-#     dh = x[0] / np.sqrt(cov[0, 0])  # Normalize x
-#     dk = x[1] / np.sqrt(cov[1, 1])  # Normalize y
-#     r = cov[0, 1] / np.sqrt(cov[0, 0] * cov[1, 1])  # Compute correlation
+def bvnl(dh, dk, r):
+    return bvnu(-dh, -dk, r)
+
+### Trivariate Normal
+
+#TVN
+#  A function for computing trivariate normal probabilities.
+#    p = tvn( lw, up, cr, epsi )
+#  Parameters
+#     lw  array of lower integration limits.
+#     up  array of upper integration limits.
+#     cr   array of correlation coefficients, in order c21, c31, c32.
+#     epsi  optional (default = 1e-7) absolute accuracy; highest accuracy
+#            for most computations is approximately 1e-14.
+#  Example
+#   p = tvn( [-3,-4,-inf], [inf,4,3], [.3,-.4,.5] )
 #
-#     # Call bvnu with the transformed variables
-#     return bvnu(-dh, -dk, r)
+#
+#TVNL
+#     A function for computing trivariate normal probabilities.
+#     It calculates the probability that x(i) < h(i), for i = 1, 2, 3.
+#    h     real array of three upper limits for probability distribution
+#    r     real array of three correlation coefficients, r should
+#          contain the lower left portion of the correlation matrix R.
+#          r should contain the values r21, r31, r32 in that order.
+#    epsi  optional (default = 1e-7) absolute accuracy; maximum accuracy
+#            for most computations is approximately 1e-14.
+#   Example: p = tvnl( [1 2 4], [.3 .4 -.6] )
+#
+
+#     This function uses algorithms developed from the ideas
+#     described in the papers:
+#       R.L. Plackett, Biometrika 41(1954), pp. 351-360.
+#       Z. Drezner, Math. Comp. 62(1994), pp. 289-294.
+#     with adaptive integration from (0,0,r32) for R.
+#     The software is based on work described in the paper
+#      "Numerical Computation of Rectangular Bivariate and Trivariate
+#        Normal and t Probabilities", by
+#          Alan Genz
+#          Department of Mathematics
+#          Washington State University
+#          Pullman, WA 99164-3113
+#          Email : alangenz@wsu.edu
+#     This file contains functions tvnl (trivariate normal), bvnl
+#      (bivariate normal), phid (univariate normal), plus support functions.
+#
+#   Copyright (C) 2011, Alan Genz,  All rights reserved.
+
+
+# pythran export tvn(float[:], float[:], float[:], float)
+def tvn(lw, up, cr, epsi=1e-7):
+    """
+    Compute trivariate normal probabilities.
+    """
+    ep = max(1e-14, epsi)
+    lw, up = np.asarray(lw), np.asarray(up)
+    lu = np.vstack((lw, up)) if lw.ndim == 1 else np.hstack((lw, up))
+
+    tvn_val = tvnl(up, cr, ep) - tvnl(lw, cr, ep)
+    tvn_val -= tvnl([lu[0, 0], lu[1, 1], lu[1, 2]], cr, ep)
+    tvn_val -= tvnl([lu[1, 0], lu[0, 1], lu[1, 2]], cr, ep)
+    tvn_val -= tvnl([lu[1, 0], lu[1, 1], lu[0, 2]], cr, ep)
+    tvn_val += tvnl([lu[0, 0], lu[0, 1], lu[1, 2]], cr, ep)
+    tvn_val += tvnl([lu[0, 0], lu[1, 1], lu[0, 2]], cr, ep)
+    tvn_val += tvnl([lu[1, 0], lu[0, 1], lu[0, 2]], cr, ep)
+
+    return np.clip(tvn_val, 0, 1)
+
+
+# pythran export tvnl(float[:], float[:], float)
+def tvnl(h, r, epsi=1e-7):
+    """
+    Compute trivariate normal probability for upper limits h and correlation r.
+    """
+    epst = max(1e-14, epsi)
+
+    if np.any(np.isneginf(h)):
+        return 0.0
+
+    if np.isposinf(h[0]):
+        if np.isposinf(h[1]):
+            return 1.0 if np.isposinf(h[2]) else phid(h[2])
+        return phid(h[1]) if np.isposinf(h[2]) else bvnl(h[1], h[2], r[2])
+
+    if np.isposinf(h[1]):
+        return phid(h[0]) if np.isposinf(h[2]) else bvnl(h[0], h[2], r[1])
+
+    if np.isposinf(h[2]):
+        return bvnl(h[0], h[1], r[0])
+
+    h1, h2, h3 = h
+    r12, r13, r23 = r
+
+    if abs(r12) > abs(r13):
+        h2, h3 = h3, h2
+        r12, r13 = r13, r12
+    if abs(r13) > abs(r23):
+        h1, h2 = h2, h1
+        r23, r13 = r13, r23
+
+    if abs(h1) + abs(h2) + abs(h3) < epst:
+        tvn_val = (1 + 2 * (np.arcsin(r12) + np.arcsin(r13) + np.arcsin(r23)) / np.pi) / 8
+    elif abs(r12) + abs(r13) < epst:
+        tvn_val = phid(h1) * bvnl(h2, h3, r23)
+    elif abs(r13) + abs(r23) < epst:
+        tvn_val = phid(h3) * bvnl(h1, h2, r12)
+    elif abs(r12) + abs(r23) < epst:
+        tvn_val = phid(h2) * bvnl(h1, h3, r13)
+    elif 1 - r23 < epst:
+        tvn_val = bvnl(h1, min(h2, h3), r12)
+    elif r23 + 1 < epst and h2 > -h3:
+        tvn_val = bvnl(h1, h2, r12) - bvnl(h1, -h3, r12)
+    else:
+        a12, a13 = np.arcsin(r12), np.arcsin(r13)
+        tvn_val = adonet(lambda x: tvnf(x, h1, h2, h3, r23, a12, a13), 0, 1, epst) / (2 * np.pi)
+        tvn_val += bvnl(h2, h3, r23) * phid(h1)
+
+    return max(0, min(tvn_val, 1))
+
+
+def krnrdt(a, b, f):
+    """
+    Kronrod integration rule
+    """
+    wg0 = 0.2729250867779007
+    wg = np.array([0.05566856711617449, 0.1255803694649048, 0.1862902109277352,
+                   0.2331937645919914, 0.2628045445102478])
+
+    xgk = np.array([0.9963696138895427, 0.9782286581460570, 0.9416771085780681,
+                    0.8870625997680953, 0.8160574566562211, 0.7301520055740492,
+                    0.6305995201619651, 0.5190961292068118, 0.3979441409523776,
+                    0.2695431559523450, 0.1361130007993617])
+
+    wgk0 = 0.1365777947111183
+    wgk = np.array([0.00976544104596129, 0.02715655468210443, 0.04582937856442671,
+                     0.06309742475037484, 0.07866457193222764, 0.09295309859690074,
+                     0.1058720744813894, 0.1167395024610472, 0.1251587991003195,
+                     0.1312806842298057, 0.1351935727998845])
+
+    wid = (b - a) / 2
+    cen = (b + a) / 2
+    fc = f(cen)
+    resg = fc * wg0
+    resk = fc * wgk0
+
+    for j in range(5):
+        t = wid * xgk[2*j]
+        fc = f(cen - t) + f(cen + t)
+        resk += wgk[2*j] * fc
+        t = wid * xgk[2*j+1]
+        fc = f(cen - t) + f(cen + t)
+        resk += wgk[2*j+1] * fc
+        resg += wg[j] * fc
+
+    t = wid * xgk[10]
+    fc = f(cen - t) + f(cen + t)
+    resk = wid * (resk + wgk[10] * fc)
+    err = abs(resk - wid * resg)
+
+    return resk, err
+
+
+def adonet(f, a, b, tol, nl=100):
+    x = np.zeros(nl)
+    y = np.zeros(nl)
+    err = np.zeros(nl)
+    fi = np.zeros(nl)
+
+    x[0], y[0] = a, b
+    fi[0], err[0] = krnrdt(a, b, f)
+    n = 1
+
+    while 4 * np.sqrt(np.sum(err[:n] ** 2)) > tol and n < nl:
+        i = np.argmax(err[:n])
+        mid = (x[i] + y[i]) / 2
+        x[n], y[n] = mid, y[i]
+        y[i] = mid
+
+        fi[i], err[i] = krnrdt(x[i], y[i], f)
+        fi[n], err[n] = krnrdt(x[n], y[n], f)
+        n += 1
+
+    return np.sum(fi[:n])
+
+
+def tvnf(x, h1, h2, h3, r23, a12, a13):
+    f = 0
+    r12, rr2 = sincs(a12 * x)
+    r13, rr3 = sincs(a13 * x)
+
+    if abs(a12) > 0:
+        f += a12 * pntgnd(h1, h2, h3, r13, r23, r12, rr2)
+    if abs(a13) > 0:
+        f += a13 * pntgnd(h1, h3, h2, r12, r23, r13, rr3)
+
+    return f
+
+
+def sincs(x):
+    ee = (np.pi / 2 - abs(x)) ** 2
+    if ee < 5e-5:
+        cs = ee * (1 - ee * (1 - 2 * ee / 15) / 3)
+        sx = (1 - ee * (1 - ee / 12) / 2) * np.sign(x)
+    else:
+        sx = np.sin(x)
+        cs = 1 - sx * sx
+    return sx, cs
+
+
+def pntgnd(ba, bb, bc, ra, rb, r, rr):
+    dt = rr * (rr - (ra - rb) ** 2 - 2 * ra * rb * (1 - r))
+    if dt <= 0:
+        return 0
+    bt = (bc * rr + ba * (r * rb - ra) + bb * (r * ra - rb)) / np.sqrt(dt)
+    ft = (ba - r * bb) ** 2 / rr + bb ** 2
+    if bt > -10 and ft < 100:
+        f = np.exp(-ft / 2)
+        if bt < 10:
+            f *= phid(bt)
+        return f
+    return 0
