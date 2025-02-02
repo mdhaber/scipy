@@ -1666,12 +1666,13 @@ def skewtest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
     a, axis = _chk_asarray(a, axis, xp=xp)
 
     b2 = skew(a, axis, _no_deco=True)
+
     n = xp.asarray(_length_nonmasked(a, axis), dtype=b2.dtype)
-    nan_out = n < 8
-    if xp.any(nan_out):
-        message = ("`skewtest` requires at least 8 observations; "
-                   f"only {n=} observations were given.")
-        warnings.warn(message, stacklevel=2)
+    n[n < 8] = xp.nan
+    if xp.any(xp.isnan(n)):
+        message = ("`skewtest` requires at least 8 valid observations;"
+                   "slices with fewer observations will produce NaNs.")
+        warnings.warn(message, SmallSampleWarning, stacklevel=2)
 
     with np.errstate(divide='ignore', invalid='ignore'):
         y = b2 * xp.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
@@ -1683,10 +1684,6 @@ def skewtest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
         y = xp.where(y == 0, xp.asarray(1, dtype=y.dtype), y)
         Z = delta * xp.log(y / alpha + xp.sqrt((y / alpha)**2 + 1))
         pvalue = _get_pvalue(Z, _SimpleNormal(), alternative, xp=xp)
-
-    Z, pvalue = xp.asarray(Z), xp.asarray(pvalue)
-    Z[nan_out] = xp.nan
-    pvalue[nan_out] = xp.nan
 
     Z = Z[()] if Z.ndim == 0 else Z
     pvalue = pvalue[()] if pvalue.ndim == 0 else pvalue
@@ -1772,14 +1769,14 @@ def kurtosistest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
     xp = array_namespace(a)
     a, axis = _chk_asarray(a, axis, xp=xp)
 
-    n = xp.asarray(_length_nonmasked(a, axis))
-    nan_out = n < 5
-    if xp.any(nan_out):
-        message = ("`kurtosistest` requires at least 5 observations; "
-                   f"only {xp.min(n)=} observations were given.")
-        warnings.warn(message, stacklevel=2)
     b2 = kurtosis(a, axis, fisher=False, _no_deco=True)
-    n = xp.astype(n, b2.dtype)
+
+    n = xp.asarray(_length_nonmasked(a, axis), dtype=b2.dtype)
+    n[n < 5] = xp.nan
+    if xp.any(xp.isnan(n)):
+        message = ("`kurtosistest` requires at least 5 valid observations; "
+                   "slices with fewer observations will produce NaNs.")
+        warnings.warn(message, SmallSampleWarning, stacklevel=2)
 
     E = 3.0*(n-1) / (n+1)
     varb2 = 24.0*n*(n-2)*(n-3) / ((n+1)*(n+1.)*(n+3)*(n+5))  # [1]_ Eq. 1
@@ -1801,10 +1798,6 @@ def kurtosistest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
 
     Z = (term1 - term2) / (2/(9.0*A))**0.5  # [1]_ Eq. 5
     pvalue = _get_pvalue(Z, _SimpleNormal(), alternative, xp=xp)
-
-    Z, pvalue = xp.asarray(Z), xp.asarray(pvalue)
-    Z[nan_out] = xp.nan
-    pvalue[nan_out] = xp.nan
 
     Z = Z[()] if Z.ndim == 0 else Z
     pvalue = pvalue[()] if pvalue.ndim == 0 else pvalue

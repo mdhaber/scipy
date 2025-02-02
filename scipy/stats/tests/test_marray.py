@@ -151,8 +151,7 @@ def test_ttest(f_name, axis, xp):
 @skip_backend('jax.numpy', reason="JAX doesn't allow item assignment.")
 @skip_backend('torch', reason="array-api-compat#242")
 @skip_backend('cupy', reason="special functions won't work")
-@pytest.mark.filterwarnings("ignore::UserWarning")  # warnings tested elsewhere
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")  # warnings tested elsewhere
+@pytest.mark.filterwarnings("ignore::scipy.stats._axis_nan_policy.SmallSampleWarning")
 @pytest.mark.parametrize('f_name', ['skewtest', 'kurtosistest', 'normaltest'])
 @pytest.mark.parametrize('axis', [0, 1, None])
 def test_normality_tests(f_name, axis, xp):
