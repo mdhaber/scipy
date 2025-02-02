@@ -40,7 +40,7 @@ from scipy import sparse
 from scipy.spatial import distance_matrix
 
 from scipy.optimize import milp, LinearConstraint
-from scipy._lib._array_api import is_lazy_array
+from scipy._lib._array_api import is_lazy_array, xp_ravel
 from scipy._lib._util import (check_random_state, _get_nan,
                               _rename_parameter, _contains_nan,
                               AxisError, _lazywhere)
@@ -6214,7 +6214,7 @@ def _equal_var_ttest_denom(v1, n1, v2, n2, xp=None):
     v1 = xp.where(xp.asarray(n1 == 1), zero, v1)
     v2 = xp.where(xp.asarray(n2 == 1), zero, v2)
 
-    df = n1 + n2 - 2.0
+    df = xp.asarray(n1 + n2 - 2.0)
     svar = ((n1 - 1) * v1 + (n2 - 1) * v2) / df
     denom = xp.sqrt(svar * (1.0 / n1 + 1.0 / n2))
     return df, denom
@@ -6652,6 +6652,9 @@ def ttest_ind(a, b, *, axis=0, equal_var=True, nan_policy='propagate',
     if xp.isdtype(b.dtype, 'integral'):
         b = xp.astype(b, default_float)
 
+    if axis is None:
+        a, b, axis = xp_ravel(a), xp_ravel(b), 0
+
     if not (0 <= trim < .5):
         raise ValueError("Trimming percentage should be 0 <= `trim` < .5.")
 
@@ -6694,8 +6697,8 @@ def ttest_ind(a, b, *, axis=0, equal_var=True, nan_policy='propagate',
         return TtestResult(t, prob, df=df, alternative=alternative_nums[alternative],
                            standard_error=denom, estimate=estimate)
 
-    n1 = xp.asarray(a.shape[axis], dtype=a.dtype)
-    n2 = xp.asarray(b.shape[axis], dtype=b.dtype)
+    n1 = _length_nonmasked(a, axis)
+    n2 = _length_nonmasked(b, axis)
 
     if trim == 0:
         with np.errstate(divide='ignore', invalid='ignore'):
@@ -7057,7 +7060,7 @@ def ttest_rel(a, b, axis=0, nan_policy='propagate', alternative="two-sided"):
     TtestResult(statistic=-5.879467544540889, pvalue=7.540777129099917e-09, df=499)
 
     """
-    return ttest_1samp(a - b, popmean=0, axis=axis, alternative=alternative,
+    return ttest_1samp(a - b, popmean=0., axis=axis, alternative=alternative,
                        _no_deco=True)
 
 
