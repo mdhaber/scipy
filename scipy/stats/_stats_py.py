@@ -7260,6 +7260,7 @@ def _power_divergence(f_obs, f_exp, ddof, axis, lambda_, sum_check=True):
         bshape = _broadcast_shapes((f_obs_float.shape, f_exp.shape))
         f_obs_float = xp.broadcast_to(f_obs_float, bshape)
         f_exp = xp.broadcast_to(f_exp, bshape)
+        f_obs_float, f_exp = _share_masks(f_obs_float, f_exp, xp=xp)
 
         if sum_check:
             dtype_res = xp.result_type(f_obs.dtype, f_exp.dtype)
@@ -7303,8 +7304,7 @@ def _power_divergence(f_obs, f_exp, ddof, axis, lambda_, sum_check=True):
 
     stat = xp.sum(terms, axis=axis)
 
-    num_obs = xp_size(terms) if axis is None else terms.shape[axis]
-    ddof = xp.asarray(ddof)
+    num_obs = _length_nonmasked(terms, axis)
 
     df = xp.asarray(num_obs - 1 - ddof)
     chi2 = _SimpleChi2(df)

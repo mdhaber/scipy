@@ -42,7 +42,8 @@ def get_array_special_func(f_name, xp, n_array_args):
         if hasattr(array_args[0], 'mask') and not isinstance(array_args[0], np.ndarray):
             data_args = [np.asarray(arg.data) for arg in array_args]
             out = _f(*data_args, *other_args, **kwargs)
-            mask = functools.reduce(lambda x, y: x | y, (arg.mask for arg in array_args))
+            mask = functools.reduce(lambda x, y: x | y,
+                                    (arg.mask for arg in array_args))
             return _xp.asarray(out, mask=mask)
         else:
             array_args = [np.asarray(arg) for arg in array_args]

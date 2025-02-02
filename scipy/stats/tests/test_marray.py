@@ -1,10 +1,10 @@
-from contextlib import nullcontext
 import pytest
 import numpy as np
 from scipy import stats
 
 from scipy._lib._array_api import xp_assert_close, xp_assert_equal
 from scipy.stats._stats_py import _xp_mean, _xp_var
+from scipy.stats._axis_nan_policy import _axis_nan_policy_factory
 skip_backend = pytest.mark.skip_xp_backends
 
 
@@ -152,7 +152,8 @@ def test_ttest(f_name, axis, xp):
 @skip_backend('torch', reason="array-api-compat#242")
 @skip_backend('cupy', reason="special functions won't work")
 @pytest.mark.filterwarnings("ignore::scipy.stats._axis_nan_policy.SmallSampleWarning")
-@pytest.mark.parametrize('f_name', ['skewtest', 'kurtosistest', 'normaltest', 'jarque_bera'])
+@pytest.mark.parametrize('f_name', ['skewtest', 'kurtosistest',
+                                    'normaltest', 'jarque_bera'])
 @pytest.mark.parametrize('axis', [0, 1, None])
 def test_normality_tests(f_name, axis, xp):
     f = getattr(stats, f_name)
@@ -163,3 +164,53 @@ def test_normality_tests(f_name, axis, xp):
 
     xp_assert_close(res.statistic.data, xp.asarray(ref.statistic))
     xp_assert_close(res.pvalue.data, xp.asarray(ref.pvalue))
+
+
+def pd_nsamples(kwargs):
+    return 2 if kwargs.get('f_exp', None) is not None else 1
+
+
+@_axis_nan_policy_factory(lambda *args: tuple(args), paired=True, n_samples=pd_nsamples)
+def power_divergence_ref(f_obs, f_exp=None, *,  ddof, lambda_, axis=0):
+    return stats.power_divergence(f_obs, f_exp, axis=axis, ddof=ddof, lambda_=lambda_)
+
+
+@skip_backend('jax.numpy', reason="JAX doesn't allow item assignment.")
+@skip_backend('torch', reason="array-api-compat#242")
+@skip_backend('cupy', reason="special functions won't work")
+@pytest.mark.parametrize('lambda_', ['pearson', 'log-likelihood', 'freeman-tukey',
+                                     'mod-log-likelihood', 'neyman', 'cressie-read',
+                                     'chisquare'])
+@pytest.mark.parametrize('ddof', [0, 1])
+@pytest.mark.parametrize('axis', [0, 1, None])
+def test_power_divergence_chisquare(lambda_, ddof, axis, xp):
+    mxp, marrays, narrays = get_arrays(2, xp=xp, shape=(5, 6))
+
+    kwargs = dict(axis=axis, ddof=ddof)
+    if lambda_ == 'chisquare':
+        lambda_ = "pearson"
+        def f(*args, **kwargs):
+            return stats.chisquare(*args, **kwargs)
+    else:
+        def f(*args, **kwargs):
+            return stats.power_divergence(*args, lambda_=lambda_, **kwargs)
+
+    # test 1-arg
+    res = f(marrays[0], **kwargs)
+    ref = power_divergence_ref(narrays[0], nan_policy='omit', lambda_=lambda_, **kwargs)
+
+    xp_assert_close(res.statistic.data, xp.asarray(ref[0]))
+    xp_assert_close(res.pvalue.data, xp.asarray(ref[1]))
+
+    # test 2-arg
+    common_mask = np.isnan(narrays[0]) | np.isnan(narrays[1])
+    normalize = (np.nansum(narrays[1] * ~common_mask, axis=axis, keepdims=True)
+                 / np.nansum(narrays[0] * ~common_mask, axis=axis, keepdims=True))
+    marrays[0] *= xp.asarray(normalize)
+    narrays[0] *= normalize
+
+    res = f(*marrays, **kwargs)
+    ref = power_divergence_ref(*narrays, nan_policy='omit', lambda_=lambda_, **kwargs)
+
+    xp_assert_close(res.statistic.data, xp.asarray(ref[0]))
+    xp_assert_close(res.pvalue.data, xp.asarray(ref[1]))
