@@ -1943,19 +1943,14 @@ def jarque_bera(x, *, axis=None):
     For a more detailed example, see :ref:`hypothesis_jarque_bera`.
     """
     xp = array_namespace(x)
-    x = xp.asarray(x)
-    if axis is None:
-        x = xp.reshape(x, (-1,))
-        axis = 0
+    x, axis = _chk_asarray(x, axis, xp=xp)
 
-    n = x.shape[axis]
-    if n == 0:
-        raise ValueError('At least one observation is required.')
-
-    mu = xp.mean(x, axis=axis, keepdims=True)
+    mu = _xp_mean(x, axis=axis, keepdims=True)
     diffx = x - mu
     s = skew(diffx, axis=axis, _no_deco=True)
     k = kurtosis(diffx, axis=axis, _no_deco=True)
+
+    n = xp.asarray(_length_nonmasked(x, axis), dtype=mu.dtype)
     statistic = n / 6 * (s**2 + k**2 / 4)
 
     chi2 = _SimpleChi2(xp.asarray(2.))

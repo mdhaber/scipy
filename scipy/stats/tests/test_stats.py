@@ -6676,18 +6676,15 @@ class TestJarqueBera:
         assert JB1 == JB2 == JB3 == jb_test1.statistic == jb_test2.statistic == jb_test3.statistic  # noqa: E501
         assert p1 == p2 == p3 == jb_test1.pvalue == jb_test2.pvalue == jb_test3.pvalue
 
-    def test_jarque_bera_size(self, xp):
+    @skip_xp_backends('array_api_strict', reason='Noisy; see TestSkew')
+    def test_jarque_bera_too_few_observations(self, xp):
         x = xp.asarray([])
-        if is_numpy(xp):
-            with pytest.warns(SmallSampleWarning, match=too_small_1d_not_omit):
-                res = stats.jarque_bera(x)
+
+        with pytest.warns(SmallSampleWarning, match=too_small_1d_not_omit):
+            res = stats.jarque_bera(x)
             NaN = xp.asarray(xp.nan)
             xp_assert_equal(res.statistic, NaN)
             xp_assert_equal(res.pvalue, NaN)
-        else:
-            message = "At least one observation is required."
-            with pytest.raises(ValueError, match=message):
-                res = stats.jarque_bera(x)
 
     def test_axis(self, xp):
         rng = np.random.RandomState(seed=122398129)
