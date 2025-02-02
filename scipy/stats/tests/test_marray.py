@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 import pytest
 import numpy as np
 from scipy import stats
@@ -145,3 +146,21 @@ def test_ttest(f_name, axis, xp):
     ref_ci = ref.confidence_interval()
     xp_assert_close(res_ci.low.data, xp.asarray(ref_ci.low))
     xp_assert_close(res_ci.high.data, xp.asarray(ref_ci.high))
+
+
+@skip_backend('jax.numpy', reason="JAX doesn't allow item assignment.")
+@skip_backend('torch', reason="array-api-compat#242")
+@skip_backend('cupy', reason="special functions won't work")
+@pytest.mark.filterwarnings("ignore::UserWarning")  # warnings tested elsewhere
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")  # warnings tested elsewhere
+@pytest.mark.parametrize('f_name', ['skewtest', 'kurtosistest', 'normaltest'])
+@pytest.mark.parametrize('axis', [0, 1, None])
+def test_normality_tests(f_name, axis, xp):
+    f = getattr(stats, f_name)
+    mxp, marrays, narrays = get_arrays(1, xp=xp, shape=(10, 11))
+
+    res = f(*marrays, axis=axis)
+    ref = f(*narrays, nan_policy='omit', axis=axis)
+
+    xp_assert_close(res.statistic.data, xp.asarray(ref.statistic))
+    xp_assert_close(res.pvalue.data, xp.asarray(ref.pvalue))

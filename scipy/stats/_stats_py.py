@@ -1666,22 +1666,27 @@ def skewtest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
     a, axis = _chk_asarray(a, axis, xp=xp)
 
     b2 = skew(a, axis, _no_deco=True)
-    n = a.shape[axis]
-    if n < 8:
+    n = xp.asarray(_length_nonmasked(a, axis), dtype=b2.dtype)
+    nan_out = n < 8
+    if xp.any(nan_out):
         message = ("`skewtest` requires at least 8 observations; "
                    f"only {n=} observations were given.")
-        raise ValueError(message)
+        warnings.warn(message, stacklevel=2)
 
-    y = b2 * math.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
-    beta2 = (3.0 * (n**2 + 27*n - 70) * (n+1) * (n+3) /
-             ((n-2.0) * (n+5) * (n+7) * (n+9)))
-    W2 = -1 + math.sqrt(2 * (beta2 - 1))
-    delta = 1 / math.sqrt(0.5 * math.log(W2))
-    alpha = math.sqrt(2.0 / (W2 - 1))
-    y = xp.where(y == 0, xp.asarray(1, dtype=y.dtype), y)
-    Z = delta * xp.log(y / alpha + xp.sqrt((y / alpha)**2 + 1))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        y = b2 * xp.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
+        beta2 = (3.0 * (n**2 + 27*n - 70) * (n+1) * (n+3) /
+                 ((n-2.0) * (n+5) * (n+7) * (n+9)))
+        W2 = -1 + xp.sqrt(2 * (beta2 - 1))
+        delta = 1 / xp.sqrt(0.5 * xp.log(W2))
+        alpha = xp.sqrt(2.0 / (W2 - 1))
+        y = xp.where(y == 0, xp.asarray(1, dtype=y.dtype), y)
+        Z = delta * xp.log(y / alpha + xp.sqrt((y / alpha)**2 + 1))
+        pvalue = _get_pvalue(Z, _SimpleNormal(), alternative, xp=xp)
 
-    pvalue = _get_pvalue(Z, _SimpleNormal(), alternative, xp=xp)
+    Z, pvalue = xp.asarray(Z), xp.asarray(pvalue)
+    Z[nan_out] = xp.nan
+    pvalue[nan_out] = xp.nan
 
     Z = Z[()] if Z.ndim == 0 else Z
     pvalue = pvalue[()] if pvalue.ndim == 0 else pvalue
@@ -1767,17 +1772,14 @@ def kurtosistest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
     xp = array_namespace(a)
     a, axis = _chk_asarray(a, axis, xp=xp)
 
-    n = a.shape[axis]
-
-    if n < 5:
+    n = xp.asarray(_length_nonmasked(a, axis))
+    nan_out = n < 5
+    if xp.any(nan_out):
         message = ("`kurtosistest` requires at least 5 observations; "
-                   f"only {n=} observations were given.")
-        raise ValueError(message)
-    if n < 20:
-        message = ("`kurtosistest` p-value may be inaccurate with fewer than 20 "
-                   f"observations; only {n=} observations were given.")
+                   f"only {xp.min(n)=} observations were given.")
         warnings.warn(message, stacklevel=2)
     b2 = kurtosis(a, axis, fisher=False, _no_deco=True)
+    n = xp.astype(n, b2.dtype)
 
     E = 3.0*(n-1) / (n+1)
     varb2 = 24.0*n*(n-2)*(n-3) / ((n+1)*(n+1.)*(n+3)*(n+5))  # [1]_ Eq. 1
@@ -1798,8 +1800,11 @@ def kurtosistest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
         warnings.warn(msg, RuntimeWarning, stacklevel=2)
 
     Z = (term1 - term2) / (2/(9.0*A))**0.5  # [1]_ Eq. 5
-
     pvalue = _get_pvalue(Z, _SimpleNormal(), alternative, xp=xp)
+
+    Z, pvalue = xp.asarray(Z), xp.asarray(pvalue)
+    Z[nan_out] = xp.nan
+    pvalue[nan_out] = xp.nan
 
     Z = Z[()] if Z.ndim == 0 else Z
     pvalue = pvalue[()] if pvalue.ndim == 0 else pvalue
