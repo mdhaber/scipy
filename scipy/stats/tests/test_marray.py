@@ -214,3 +214,29 @@ def test_power_divergence_chisquare(lambda_, ddof, axis, xp):
 
     xp_assert_close(res.statistic.data, xp.asarray(ref[0]))
     xp_assert_close(res.pvalue.data, xp.asarray(ref[1]))
+
+@skip_backend('jax.numpy', reason="JAX doesn't allow item assignment.")
+@skip_backend('torch', reason="array-api-compat#242")
+@skip_backend('cupy', reason="special functions won't work")
+@pytest.mark.parametrize('method', ['fisher', 'pearson', 'mudholkar_george',
+                                    'tippett', 'stouffer'])
+@pytest.mark.parametrize('axis', [0, 1, None])
+def test_combine_pvalues(method, axis, xp):
+    mxp, marrays, narrays = get_arrays(2, xp=xp, shape=(10, 11))
+
+    kwargs = dict(method=method, axis=axis)
+    res = stats.combine_pvalues(marrays[0], **kwargs)
+    ref = stats.combine_pvalues(narrays[0], nan_policy='omit', **kwargs)
+
+    xp_assert_close(res.statistic.data, xp.asarray(ref.statistic))
+    xp_assert_close(res.pvalue.data, xp.asarray(ref.pvalue))
+
+    if method != 'stouffer':
+        return
+
+    res = stats.combine_pvalues(marrays[0], weights=marrays[1], **kwargs)
+    ref = stats.combine_pvalues(narrays[0], weights=narrays[1],
+                                nan_policy='omit', **kwargs)
+
+    xp_assert_close(res.statistic.data, xp.asarray(ref.statistic))
+    xp_assert_close(res.pvalue.data, xp.asarray(ref.pvalue))

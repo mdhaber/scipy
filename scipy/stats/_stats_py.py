@@ -1668,7 +1668,7 @@ def skewtest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
     b2 = skew(a, axis, _no_deco=True)
 
     n = xp.asarray(_length_nonmasked(a, axis), dtype=b2.dtype)
-    n[n < 8] = xp.nan
+    n = xpx.at(n, n < 8).set(xp.nan)
     if xp.any(xp.isnan(n)):
         message = ("`skewtest` requires at least 8 valid observations;"
                    "slices with fewer observations will produce NaNs.")
@@ -1772,7 +1772,7 @@ def kurtosistest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
     b2 = kurtosis(a, axis, fisher=False, _no_deco=True)
 
     n = xp.asarray(_length_nonmasked(a, axis), dtype=b2.dtype)
-    n[n < 5] = xp.nan
+    n = xpx.at(n, n < 5).set(xp.nan)
     if xp.any(xp.isnan(n)):
         message = ("`kurtosistest` requires at least 5 valid observations; "
                    "slices with fewer observations will produce NaNs.")
@@ -8921,46 +8921,45 @@ def combine_pvalues(pvalues, method='fisher', weights=None, *, axis=0):
     .. [8] https://en.wikipedia.org/wiki/Extensions_of_Fisher%27s_method
 
     """
-    xp = array_namespace(pvalues)
-    pvalues = xp.asarray(pvalues)
+    xp = array_namespace(pvalues, weights)
+    pvalues, weights = xp_broadcast_promote(pvalues, weights,
+                                            force_floating=True, xp=xp)
+
     if xp_size(pvalues) == 0:
         # This is really only needed for *testing* _axis_nan_policy decorator
         # It won't happen when the decorator is used.
         NaN = _get_nan(pvalues)
         return SignificanceResult(NaN, NaN)
 
-    n = pvalues.shape[axis]
-    # used to convert Python scalar to the right dtype
-    one = xp.asarray(1, dtype=pvalues.dtype)
+    n = _length_nonmasked(pvalues, axis)
+    n = xp.asarray(n, dtype=pvalues.dtype)
 
     if method == 'fisher':
         statistic = -2 * xp.sum(xp.log(pvalues), axis=axis)
-        chi2 = _SimpleChi2(2*n*one)
+        chi2 = _SimpleChi2(2*n)
         pval = _get_pvalue(statistic, chi2, alternative='greater',
                            symmetric=False, xp=xp)
     elif method == 'pearson':
         statistic = 2 * xp.sum(xp.log1p(-pvalues), axis=axis)
-        chi2 = _SimpleChi2(2*n*one)
+        chi2 = _SimpleChi2(2*n)
         pval = _get_pvalue(-statistic, chi2, alternative='less', symmetric=False, xp=xp)
     elif method == 'mudholkar_george':
-        normalizing_factor = math.sqrt(3/n)/xp.pi
+        normalizing_factor = xp.sqrt(3/n)/xp.pi
         statistic = (-xp.sum(xp.log(pvalues), axis=axis)
                      + xp.sum(xp.log1p(-pvalues), axis=axis))
-        nu = 5*n  + 4
-        approx_factor = math.sqrt(nu / (nu - 2))
-        t = _SimpleStudentT(nu*one)
+        nu = 5*n + 4
+        approx_factor = xp.sqrt(nu / (nu - 2))
+        t = _SimpleStudentT(nu)
         pval = _get_pvalue(statistic * normalizing_factor * approx_factor, t,
                            alternative="greater", xp=xp)
     elif method == 'tippett':
         statistic = xp.min(pvalues, axis=axis)
-        beta = _SimpleBeta(one, n*one)
+        beta = _SimpleBeta(xp.ones_like(n), n)
         pval = _get_pvalue(statistic, beta, alternative='less', symmetric=False, xp=xp)
     elif method == 'stouffer':
         if weights is None:
             weights = xp.ones_like(pvalues, dtype=pvalues.dtype)
-        elif weights.shape[axis] != n:
-            raise ValueError("pvalues and weights must be of the same "
-                             "length along `axis`.")
+        pvalues, weights = _share_masks(pvalues, weights, xp=xp)
 
         norm = _SimpleNormal()
         Zi = norm.isf(pvalues)
