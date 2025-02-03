@@ -150,8 +150,11 @@ def _lazywhere(cond, arrays, f, fillvalue=None, f2=None):
                 dtype = (temp1 * fillvalue).dtype
         else:
            dtype = xp.result_type(temp1.dtype, fillvalue)
-        out = xp.full(cond.shape, dtype=dtype,
-                      fill_value=xp.asarray(fillvalue, dtype=dtype))
+        # whenever mdhaber/marray#89 is resolved, `data` won't need to be extracted here
+        # whenever PAAPIS 2024.12 is released, no need for fill_value to be an array
+        fill_value = xp.asarray(fillvalue, dtype=dtype)
+        fill_value = fill_value.data if hasattr(fill_value, 'mask') else fill_value
+        out = xp.full(cond.shape, dtype=dtype, fill_value=fill_value)
     else:
         ncond = ~cond
         temp2 = xp.asarray(f2(*(arr[ncond] for arr in arrays)))
@@ -1063,7 +1066,10 @@ def _get_nan(*data, xp=None):
     except DTypePromotionError:
         # fallback to float64
         dtype = xp.float64
-    return xp.asarray(xp.nan, dtype=dtype)[()]
+    res = xp.asarray(xp.nan, dtype=dtype)[()]
+    # whenever mdhaber/marray#89 is resolved, could just return `res`
+    # whenever PAAPIS 2024.12 is released, no need to return an array
+    return res.data if hasattr(res, 'mask') else res
 
 
 def normalize_axis_index(axis, ndim):
