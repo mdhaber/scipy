@@ -209,3 +209,28 @@ def _poisson_binom(k, args, tp):
             cache[p] = np.cumsum(pmf) if tp=='cdf' else pmf
         out[i] = cache[p][k[i]]
     return out
+
+
+# pythran export _median_filter(float64[:, :], float64[:, :], (int, int))
+def _median_filter(x, base, size):
+    return _filter(np.median, x, base, size)
+
+
+def _filter(f, x, base, size):
+    iter_ = [0] * x.ndim
+    iter_axis = -1
+    out = []
+    while iter_[0] < x.shape[0]:
+        if iter_[iter_axis] >= x.shape[iter_axis]:
+            iter_[iter_axis] = 0
+            iter_axis -= 1
+            continue
+        elif iter_axis != -1:
+            iter_[iter_axis] += 1
+            iter_axis = -1
+            continue
+
+        out.append(f(base[iter_[0]:iter_[0] + size[0], iter_[1]:iter_[1] + size[1]]))
+        iter_[-1] += 1
+
+    return out
