@@ -332,6 +332,6 @@ and therefore to find roots of a `BSpline` object, you need convert to `PPoly` f
 See methods `PPoly.from_bernstein_basis`, `PPoly.from_spline`,
 `BPoly.from_power_basis`, and `BSpline.from_power_basis` for details about conversion.
 
-In floating-point arithmetic though, conversions always incur some precision loss;
-whether this is significant is problem-dependent. It is therefore recommended to
+In floating-point arithmetic, though, conversions always incur some precision loss.
+Whether this is significant is problem-dependent, so it is therefore recommended to
 exercise caution when converting between bases.
