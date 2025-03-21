@@ -1699,7 +1699,7 @@ def cramervonmises_2samp(x, y, method='auto'):
     return CramerVonMisesResult(statistic=t, pvalue=p)
 
 
-class TukeyHSDResult:
+class GamesHowellResult:
     """Result of `scipy.stats.tukey_hsd`.
 
     Attributes
@@ -1727,11 +1727,11 @@ class TukeyHSDResult:
            28 November 2020.
     """
 
-    def __init__(self, statistic, pvalue, _nobs, _ntreatments, _stand_err):
+    def __init__(self, statistic, pvalue, _k, _df, _stand_err):
         self.statistic = statistic
         self.pvalue = pvalue
-        self._ntreatments = _ntreatments
-        self._nobs = _nobs
+        self._df = _df
+        self._k = _k
         self._stand_err = _stand_err
         self._ci = None
         self._ci_cl = None
@@ -1742,8 +1742,8 @@ class TukeyHSDResult:
         # it will be called with the default CL of .95.
         if self._ci is None:
             self.confidence_interval(confidence_level=.95)
-        s = ("Tukey's HSD Pairwise Group Comparisons"
-             f" ({self._ci_cl*100:.1f}% Confidence Interval)\n")
+        s = (f"Games-Howell Pairwise Group Comparisons"
+             f" ({self._ci_cl * 100:.1f}% Confidence Interval)\n")
         s += "Comparison  Statistic  p-value  Lower CI  Upper CI\n"
         for i in range(self.pvalue.shape[0]):
             for j in range(self.pvalue.shape[0]):
@@ -1795,30 +1795,26 @@ class TukeyHSDResult:
                [ 8.249159,  3.649159,  7.989159],
                [ 3.909159, -0.690841,  3.649159]])
         """
-        # check to see if the supplied confidence level matches that of the
-        # previously computed CI.
         if (self._ci is not None and self._ci_cl is not None and
                 confidence_level == self._ci_cl):
             return self._ci
 
         if not 0 < confidence_level < 1:
             raise ValueError("Confidence level must be between 0 and 1.")
-        # determine the critical value of the studentized range using the
-        # appropriate confidence level, number of treatments, and degrees
-        # of freedom as determined by the number of data less the number of
-        # treatments. ("Confidence limits for Tukey's method")[1]. Note that
-        # in the cases of unequal sample sizes there will be a criterion for
-        # each group comparison.
-        params = (confidence_level, self._nobs, self._ntreatments - self._nobs)
+
+        params = (confidence_level, self._k, self._df)
         srd = distributions.studentized_range.ppf(*params)
-        # also called maximum critical value, the Tukey criterion is the
-        # studentized range critical value * the square root of mean square
-        # error over the sample size.
-        tukey_criterion = srd * self._stand_err
+
+        # ref.2 p.6
+        # H0 was rejected if $|v| \ge q(\alpha, K, \nu)/\sqrt{2}$
+        # games-howell criterion with different values in array
+        # make it into a matrix for the operation with the statistic
+        temp = srd * self._stand_err / np.sqrt(2)
+        criterion = abs(_make_matrix(self._k, temp, temp))
         # the confidence levels are determined by the
-        # `mean_differences` +- `tukey_criterion`
-        upper_conf = self.statistic + tukey_criterion
-        lower_conf = self.statistic - tukey_criterion
+        # `mean_differences` +- `criterion`
+        upper_conf = self.statistic + criterion
+        lower_conf = self.statistic - criterion
         self._ci = ConfidenceInterval(low=lower_conf, high=upper_conf)
         self._ci_cl = confidence_level
         return self._ci
@@ -1838,7 +1834,7 @@ def _tukey_hsd_iv(args):
     return args
 
 
-def tukey_hsd(*args):
+def games_howell(*args):
     """Perform Tukey's HSD test for equality of means over multiple treatments.
 
     Tukey's honestly significant difference (HSD) test performs pairwise
@@ -1986,99 +1982,6 @@ def tukey_hsd(*args):
     (2 - 0) -4.620  5.140
     (2 - 1) -9.220  0.540
     """
-    args = _tukey_hsd_iv(args)
-    ntreatments = len(args)
-    means = np.asarray([np.mean(arg) for arg in args])
-    nsamples_treatments = np.asarray([a.size for a in args])
-    nobs = np.sum(nsamples_treatments)
-
-    # determine mean square error [5]. Note that this is sometimes called
-    # mean square error within.
-    mse = (np.sum([np.var(arg, ddof=1) for arg in args] *
-                  (nsamples_treatments - 1)) / (nobs - ntreatments))
-
-    # The calculation of the standard error differs when treatments differ in
-    # size. See ("Unequal sample sizes")[1].
-    if np.unique(nsamples_treatments).size == 1:
-        # all input groups are the same length, so only one value needs to be
-        # calculated [1].
-        normalize = 2 / nsamples_treatments[0]
-    else:
-        # to compare groups of differing sizes, we must compute a variance
-        # value for each individual comparison. Use broadcasting to get the
-        # resulting matrix. [3], verified against [4] (page 308).
-        normalize = 1 / nsamples_treatments + 1 / nsamples_treatments[None].T
-
-    # the standard error is used in the computation of the tukey criterion and
-    # finding the p-values.
-    stand_err = np.sqrt(normalize * mse / 2)
-
-    # the mean difference is the test statistic.
-    mean_differences = means[None].T - means
-
-    # Calculate the t-statistic to use within the survival function of the
-    # studentized range to get the p-value.
-    t_stat = np.abs(mean_differences) / stand_err
-
-    params = t_stat, ntreatments, nobs - ntreatments
-    pvalues = distributions.studentized_range.sf(*params)
-
-    return TukeyHSDResult(mean_differences, pvalues, ntreatments,
-                          nobs, stand_err)
-
-
-class GamesHowellResult:
-    def __init__(self, statistic, pvalue, _k, _df, _stand_err):
-        self.statistic = statistic
-        self.pvalue = pvalue
-        self._df = _df
-        self._k = _k
-        self._stand_err = _stand_err
-        self._ci = None
-        self._ci_cl = None
-
-    def __str__(self):
-        if self._ci is None:
-            self.confidence_interval(confidence_level=.95)
-        s = (f"Games-Howell Pairwise Group Comparisons"
-             f" ({self._ci_cl*100:.1f}% Confidence Interval)\n")
-        s += "Comparison  Statistic  p-value  Lower CI  Upper CI\n"
-        for i in range(self.pvalue.shape[0]):
-            for j in range(self.pvalue.shape[0]):
-                if i != j:
-                    s += (f" ({i} - {j}) {self.statistic[i, j]:>10.3f}"
-                          f"{self.pvalue[i, j]:>10.3f}"
-                          f"{self._ci.low[i, j]:>10.3f}"
-                          f"{self._ci.high[i, j]:>10.3f}\n")
-        return s
-
-    def confidence_interval(self, confidence_level=.95):
-        if (self._ci is not None and self._ci_cl is not None and
-                confidence_level == self._ci_cl):
-            return self._ci
-
-        if not 0 < confidence_level < 1:
-            raise ValueError("Confidence level must be between 0 and 1.")
-
-        params = (confidence_level, self._k, self._df)
-        srd = distributions.studentized_range.ppf(*params)
-
-        # ref.2 p.6
-        # H0 was rejected if $|v| \ge q(\alpha, K, \nu)/\sqrt{2}$
-        # games-howell criterion with different values in array
-        # make it into a matrix for the operation with the statistic
-        temp = srd * self._stand_err / np.sqrt(2)
-        criterion = abs(_make_matrix(self._k, temp, temp))
-        # the confidence levels are determined by the
-        # `mean_differences` +- `criterion`
-        upper_conf = self.statistic + criterion
-        lower_conf = self.statistic - criterion
-        self._ci = ConfidenceInterval(low=lower_conf, high=upper_conf)
-        self._ci_cl = confidence_level
-        return self._ci
-
-
-def games_howell(*args):
     args = _tukey_hsd_iv(args)
     ntreatments = len(args)
     means = np.asarray([np.mean(arg) for arg in args])
