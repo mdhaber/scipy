@@ -392,7 +392,19 @@ class Binomial(DiscreteDistribution):
         super().__init__(n=n, p=p, **kwargs)
 
     def _pmf_formula(self, x, *, n, p, **kwargs):
-        return special.binom(n, x) * p**x * (1 - p)**(n - x)
+        return special._ufuncs._binom_pmf(x, n, p)
+
+    def _cdf_formula(self, x, *, n, p, **kwargs):
+        return special._ufuncs._binom_cdf(x, n, p)
+
+    def _ccdf_formula(self, x, *, n, p, **kwargs):
+        return special._ufuncs._binom_sf(x, n, p)
+
+    def _icdf_formula(self, x, *, n, p, **kwargs):
+        return special._ufuncs._binom_ppf(x, n, p)
+
+    def _iccdf_formula(self, x, *, n, p, **kwargs):
+        return special._ufuncs._binom_isf(x, n, p)
 
 
 # Distribution classes need only define the summary and beginning of the extended
