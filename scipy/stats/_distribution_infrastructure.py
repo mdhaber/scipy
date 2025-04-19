@@ -509,8 +509,8 @@ class _IntegerInterval(_Interval):
 
     def __str__(self):
         a, b = self.endpoints
-        a = self.symbols.get(a, f"{a}")
-        b = self.symbols.get(b, f"{b}")
+        a = self.symbols.get(a, a)
+        b = self.symbols.get(b, b)
         ap1 = f"{a} + 1" if isinstance(a, str) else f"{a + 1}"
         bm1 = f"{b} - 1" if isinstance(b, str) else f"{b - 1}"
         return f"{{{a}, {ap1}, ..., {bm1}, {b}}}"
