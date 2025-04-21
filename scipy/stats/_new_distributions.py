@@ -394,6 +394,15 @@ class Binomial(DiscreteDistribution):
     def _pmf_formula(self, x, *, n, p, **kwargs):
         return special._ufuncs._binom_pmf(x, n, p)
 
+    def _logpmf_formula(self, x, *, n, p, **kwargs):
+        # This implementation is from the ``scipy.stats.binom`` and could be improved
+        # by using a more numerically sound implementation of the absolute value of
+        # the binomial coefficient.
+        combiln = (
+            special.gammaln(n+1) - (special.gammaln(x+1) + special.gammaln(n-x+1))
+        )
+        return combiln + special.xlogy(x, p) + special.xlog1py(n-x, -p)
+
     def _cdf_formula(self, x, *, n, p, **kwargs):
         return special._ufuncs._binom_cdf(x, n, p)
 
