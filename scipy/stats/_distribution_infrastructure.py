@@ -3705,14 +3705,18 @@ class DiscreteDistribution(UnivariateDistribution):
         ccdf_y = self._ccdf_dispatch(y, **params)
         _cdf, args = _kwargs2args(self._cdf_dispatch, kwargs=params)
         cdf_xm1 = _lazywhere(x - 1 >= a, [x - 1] + args, _cdf, fillvalue=0)
-        return ccdf_y + cdf_xm1
+        res = np.asarray(ccdf_y + cdf_xm1)
+        res[np.isnan(x)] = np.nan
+        return res[()]
 
     def _logccdf2_addition(self, x, y, **params):
         a, _ = self._support(**params)
         logccdf_y = self._logccdf_dispatch(y, **params)
         _logcdf, args = _kwargs2args(self._logcdf_dispatch, kwargs=params)
         logcdf_xm1 = _lazywhere(x - 1 >= a, [x - 1] + args, _logcdf, fillvalue=-np.inf)
-        return special.logsumexp([logccdf_y, logcdf_xm1], axis=0)
+        res = np.asarray(special.logsumexp([logccdf_y, logcdf_xm1], axis=0))
+        res[np.isnan(x)] = np.nan
+        return res[()]
 
     def _icdf_inversion(self, x, **params):
         res = self._solve_bounded(self._cdf_dispatch, x, params=params, xatol=1)
