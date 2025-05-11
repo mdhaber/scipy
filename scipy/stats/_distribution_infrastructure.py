@@ -7,6 +7,7 @@ import math
 import numpy as np
 from numpy import inf
 
+import scipy._lib.array_api_extra as xpx
 from scipy._lib._array_api import xp_promote
 from scipy._lib._util import _rng_spawn, _RichResult
 from scipy._lib._docscrape import ClassDoc, NumpyDocString
@@ -1232,7 +1233,7 @@ def _fiinfo(x):
         return np.iinfo(x)
 
 
-def _kwargs2args(f, args=None, kwargs=None):
+def _kwargs2args(f, args=None, kwargs=None, x_arg=True):
     # Wraps a function that accepts a primary argument `x`, secondary
     # arguments `args`, and secondary keyward arguments `kwargs` such that the
     # wrapper accepts only `x` and `args`. The keyword arguments are extracted
@@ -1246,8 +1247,12 @@ def _kwargs2args(f, args=None, kwargs=None):
     names = list(kwargs.keys())
     n_args = len(args)
 
-    def wrapped(x, *args):
-        return f(x, *args[:n_args], **dict(zip(names, args[n_args:])))
+    if x_arg:
+        def wrapped(x, *args):
+            return f(x, *args[:n_args], **dict(zip(names, args[n_args:])))
+    else:
+        def wrapped(*args):
+            return f(*args[:n_args], **dict(zip(names, args[n_args:])))
 
     args = tuple(args) + tuple(kwargs.values())
 
@@ -3679,18 +3684,35 @@ class DiscreteDistribution(UnivariateDistribution):
             "continuous distributions.")
 
     def _solve_bounded_discrete(self, func, p, params, comp):
-        res = self._solve_bounded(func, p, params=params, xatol=0.9)
-        x = np.asarray(np.floor(res.xr))
+        # I'm starting to think we may want to go back to using `res.x` instead of
+        # `res.xr` to find the desired integer point.
+        # `res.x` has the advantage that NaNs will propagate automatically
+        # I think `res.x` can also avoid the special logic for when _chandrupatla finds
+        #  the exact inverse before the bracket width has been reduced to the desired
+        #  level.
+        # Using `res.xr` can also be problematic when `func` is not monotonically
+        #  increasing.
 
-        # if _chandrupatla finds exact inverse, the bracket may not have been reduced
-        # enough for `np.floor(res.x)` to be the appropriate value of `x`.
-        mask = res.fun == 0
-        x[mask] = np.floor(res.x[mask])
+        # name argument _p to avoid conflict with shape parameter p
+        def solver(_p, **_params):  # name _p avoids conflict with shape parameter p
+            res = self._solve_bounded(func, _p, params=_params, xatol=0.9)
+            x = np.floor(res.xr)
 
+            # if _chandrupatla finds exact inverse, the bracket may not have been reduced
+            # enough for `np.floor(res.x)` to be the appropriate value of `x`.
+            mask = res.fun == 0
+            x[mask] = np.floor(res.x[mask])
+            return x
+
+        # If there is no solution within the bracket, `solver` will fail.
+        # Only use `solver` when there is a solution, otherwise, the right answer
+        # for discrete distributions is the left end of the bracket.
         xmin, xmax = self._support(**params)
         p, xmin, xmax = np.broadcast_arrays(p, xmin, xmax)
         mask = comp(func(xmin, **params), p)
-        x[mask] = xmin[mask]
+        solver, args = _kwargs2args(solver, args=(p,), kwargs=params, x_arg=False)
+
+        x = xpx.apply_where(~mask, args, solver, fill_value=xmin)
 
         return x
 
