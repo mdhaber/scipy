@@ -3684,25 +3684,12 @@ class DiscreteDistribution(UnivariateDistribution):
             "continuous distributions.")
 
     def _solve_bounded_discrete(self, func, p, params, comp):
-        # I'm starting to think we may want to go back to using `res.x` instead of
-        # `res.xr` to find the desired integer point.
-        # `res.x` has the advantage that NaNs will propagate automatically
-        # I think `res.x` can also avoid the special logic for when _chandrupatla finds
-        #  the exact inverse before the bracket width has been reduced to the desired
-        #  level.
-        # Using `res.xr` can also be problematic when `func` is not monotonically
-        #  increasing.
-
         # name argument _p to avoid conflict with shape parameter p
         def solver(_p, **_params):  # name _p avoids conflict with shape parameter p
-            res = self._solve_bounded(func, _p, params=_params, xatol=0.9)
-            x = np.floor(res.xr)
-
-            # if _chandrupatla finds exact inverse, the bracket may not have been reduced
-            # enough for `np.floor(res.x)` to be the appropriate value of `x`.
-            mask = res.fun == 0
-            x[mask] = np.floor(res.x[mask])
-            return x
+            res = self._solve_bounded(func, _p, params=_params, xatol=0.4)
+            x = np.round(res.x)
+            f = func(x, **_params) - _p
+            return np.where(comp(f, 0), x, x+1 if comp == np.greater_equal else x - 1)
 
         # If there is no solution within the bracket, `solver` will fail.
         # Only use `solver` when there is a solution, otherwise, the right answer
@@ -3729,13 +3716,13 @@ class DiscreteDistribution(UnivariateDistribution):
         # or floor(x) + 1.
         x = self._solve_bounded_discrete(func, p, params=params, comp=comp)
         # comp should be <= for ccdf, >= for cdf.
-        f = func(x, **params)
-        res = np.where(comp(f, p), x, x + 1.0)
+        # f = func(x, **params)
+        # res = np.where(comp(f, p), x, x + 1.0)
         # xr is a bracket endpoint, and will usually be a finite value even when
         # the computed result should be nan. We need to explicitly handle this
         # case.
-        res[np.isnan(f) | np.isnan(p)] = np.nan
-        return res[()]
+        # res[np.isnan(f) | np.isnan(p)] = np.nan
+        return x[()] # res[()]
 
     def _icdf_inversion(self, x, **params):
         return self._base_discrete_inversion(x, self._cdf_dispatch,
