@@ -1447,7 +1447,7 @@ class TestTransforms:
         X = stats.Binomial(n=10, p=0.5)
         # This is applied at the top level TransformedDistribution,
         # so testing one subclass is enough
-        message = "Transformations are currently only supported for continuous RVs."
+        message = "Monotonic transforms are currently only supported for continuous RVs."
         with pytest.raises(NotImplementedError, match=message):
             stats.exp(X)
 
