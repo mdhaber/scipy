@@ -188,7 +188,7 @@ def gmean(a, axis=0, dtype=None, weights=None):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Input array or object that can be converted to an array.
     axis : int or None, optional
         Axis along which the geometric mean is computed. Default is 0.
@@ -196,13 +196,13 @@ def gmean(a, axis=0, dtype=None, weights=None):
     dtype : dtype, optional
         Type to which the input arrays are cast before the calculation is
         performed.
-    weights : array_like, optional
+    weights : real floating array_like, optional
         The `weights` array must be broadcastable to the same shape as `a`.
         Default is None, which gives each value a weight of 1.0.
 
     Returns
     -------
-    gmean : ndarray
+    gmean : real floating array or scalar
         See `dtype` parameter above.
 
     See Also
@@ -272,7 +272,7 @@ def hmean(a, axis=0, dtype=None, *, weights=None):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Input array, masked array or object that can be converted to an array.
     axis : int or None, optional
         Axis along which the harmonic mean is computed. Default is 0.
@@ -283,7 +283,7 @@ def hmean(a, axis=0, dtype=None, *, weights=None):
         dtype of `a`, unless `a` has an integer `dtype` with a precision less
         than that of the default platform integer. In that case, the default
         platform integer is used.
-    weights : array_like, optional
+    weights : real floating array_like, optional
         The weights array can either be 1-D (in which case its length must be
         the size of `a` along the given `axis`) or of the same shape as `a`.
         Default is None, which gives each value a weight of 1.0.
@@ -292,7 +292,7 @@ def hmean(a, axis=0, dtype=None, *, weights=None):
 
     Returns
     -------
-    hmean : ndarray
+    hmean : real floating array or scalar
         See `dtype` parameter above.
 
     See Also
@@ -381,7 +381,7 @@ def pmean(a, p, *, axis=0, dtype=None, weights=None):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Input array, masked array or object that can be converted to an array.
     p : int or float
         Exponent.
@@ -394,14 +394,14 @@ def pmean(a, p, *, axis=0, dtype=None, weights=None):
         dtype of `a`, unless `a` has an integer `dtype` with a precision less
         than that of the default platform integer. In that case, the default
         platform integer is used.
-    weights : array_like, optional
+    weights : real floating array_like, optional
         The weights array can either be 1-D (in which case its length must be
         the size of `a` along the given `axis`) or of the same shape as `a`.
         Default is None, which gives each value a weight of 1.0.
 
     Returns
     -------
-    pmean : ndarray, see `dtype` parameter above.
+    pmean : real floating array or scalar
         Output array containing the power mean values.
 
     See Also
@@ -505,7 +505,7 @@ def mode(a, axis=0, nan_policy='propagate', keepdims=False):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Numeric, n-dimensional array of which to find mode(s).
     axis : int or None, optional
         Axis along which to operate. Default is 0. If None, compute over
@@ -525,9 +525,9 @@ def mode(a, axis=0, nan_policy='propagate', keepdims=False):
 
     Returns
     -------
-    mode : ndarray
+    mode : real numeric array or scalar
         Array of modal values.
-    count : ndarray
+    count : integral array or scalar
         Array of counts for each mode.
 
     Notes
@@ -646,7 +646,7 @@ def tmean(a, limits=None, inclusive=(True, True), axis=None):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Array of values.
     limits : None or (lower limit, upper limit), optional
         Values in the input array less than the lower limit or greater than the
@@ -662,7 +662,7 @@ def tmean(a, limits=None, inclusive=(True, True), axis=None):
 
     Returns
     -------
-    tmean : ndarray
+    tmean : real floating array or scalar
         Trimmed mean.
 
     See Also
@@ -701,7 +701,7 @@ def tvar(a, limits=None, inclusive=(True, True), axis=0, ddof=1):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Array of values.
     limits : None or (lower limit, upper limit), optional
         Values in the input array less than the lower limit or greater than the
@@ -720,7 +720,7 @@ def tvar(a, limits=None, inclusive=(True, True), axis=0, ddof=1):
 
     Returns
     -------
-    tvar : float
+    tvar : real floating array or scalar
         Trimmed variance.
 
     Notes
@@ -762,7 +762,7 @@ def tmin(a, lowerlimit=None, axis=0, inclusive=True, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Array of values.
     lowerlimit : None or float, optional
         Values in the input array less than the given limit will be ignored.
@@ -777,7 +777,7 @@ def tmin(a, lowerlimit=None, axis=0, inclusive=True, nan_policy='propagate'):
 
     Returns
     -------
-    tmin : float, int or ndarray
+    tmin : real numeric array or scalar
         Trimmed minimum.
 
     Examples
@@ -825,7 +825,7 @@ def tmax(a, upperlimit=None, axis=0, inclusive=True, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Array of values.
     upperlimit : None or float, optional
         Values in the input array greater than the given limit will be ignored.
@@ -840,7 +840,7 @@ def tmax(a, upperlimit=None, axis=0, inclusive=True, nan_policy='propagate'):
 
     Returns
     -------
-    tmax : float, int or ndarray
+    tmax : real numeric array or scalar
         Trimmed maximum.
 
     Examples
@@ -888,7 +888,7 @@ def tstd(a, limits=None, inclusive=(True, True), axis=0, ddof=1):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Array of values.
     limits : None or (lower limit, upper limit), optional
         Values in the input array less than the lower limit or greater than the
@@ -907,7 +907,7 @@ def tstd(a, limits=None, inclusive=(True, True), axis=0, ddof=1):
 
     Returns
     -------
-    tstd : float
+    tstd : real floating array or scalar
         Trimmed sample standard deviation.
 
     Notes
@@ -941,7 +941,7 @@ def tsem(a, limits=None, inclusive=(True, True), axis=0, ddof=1):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Array of values.
     limits : None or (lower limit, upper limit), optional
         Values in the input array less than the lower limit or greater than the
@@ -960,7 +960,7 @@ def tsem(a, limits=None, inclusive=(True, True), axis=0, ddof=1):
 
     Returns
     -------
-    tsem : float
+    tsem : real floating array or scalar
         Trimmed standard error of the mean.
 
     Notes
@@ -1060,7 +1060,7 @@ def moment(a, order=1, axis=0, nan_policy='propagate', *, center=None):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
        Input array.
     order : int or 1-D array_like of ints, optional
        Order of central moment that is returned. Default is 1.
@@ -1082,8 +1082,8 @@ def moment(a, order=1, axis=0, nan_policy='propagate', *, center=None):
 
     Returns
     -------
-    n-th moment about the `center` : ndarray or float
-       The appropriate moment along the given axis or over all values if axis
+    moment : real floating array or scalar
+       The appropriate central moment along the given axis or over all values if axis
        is None. The denominator for the moment calculation is the number of
        observations, no degrees of freedom correction is done.
 
@@ -1284,7 +1284,7 @@ def skew(a, axis=0, bias=True, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : ndarray
+    a : real floating array_like
         Input array.
     axis : int or None, optional
         Axis along which skewness is calculated. Default is 0.
@@ -1301,7 +1301,7 @@ def skew(a, axis=0, bias=True, nan_policy='propagate'):
 
     Returns
     -------
-    skewness : ndarray
+    skewness : real floating array or scalar
         The skewness of values along an axis, returning NaN where all values
         are equal.
 
@@ -1389,7 +1389,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array
+    a : real floating array_like
         Data for which the kurtosis is calculated.
     axis : int or None, optional
         Axis along which the kurtosis is calculated. Default is 0.
@@ -1406,7 +1406,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy='propagate'):
 
     Returns
     -------
-    kurtosis : array
+    kurtosis : real floating array or scalar
         The kurtosis of values along an axis, returning NaN where all values
         are equal.
 
@@ -1490,7 +1490,7 @@ def describe(a, axis=0, ddof=1, bias=True, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Input data.
     axis : int or None, optional
         Axis along which statistics are calculated. Default is 0.
@@ -1510,22 +1510,22 @@ def describe(a, axis=0, ddof=1, bias=True, nan_policy='propagate'):
 
     Returns
     -------
-    nobs : int or ndarray of ints
+    nobs : integral array or scalar
         Number of observations (length of data along `axis`).
         When 'omit' is chosen as nan_policy, the length along each axis
         slice is counted separately.
-    minmax: tuple of ndarrays or floats
+    minmax: tuple of real numeric arrays or scalars
         Minimum and maximum value of `a` along the given axis.
-    mean : ndarray or float
+    mean : real floating array or scalar
         Arithmetic mean of `a` along the given axis.
-    variance : ndarray or float
+    variance : real floating array or scalar
         Unbiased variance of `a` along the given axis; denominator is number
         of observations minus one.
-    skewness : ndarray or float
+    skewness : real floating array or scalar
         Skewness of `a` along the given axis, based on moment calculations
         with denominator equal to the number of observations, i.e. no degrees
         of freedom correction.
-    kurtosis : ndarray or float
+    kurtosis : real floating array or scalar
         Kurtosis (Fisher) of `a` along the given axis.  The kurtosis is
         normalized so that it is zero for the normal distribution.  No
         degrees of freedom are used.
@@ -1622,7 +1622,7 @@ def skewtest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
 
     Parameters
     ----------
-    a : array
+    a : real floating array_like
         The data to be tested. Must contain at least eight observations.
     axis : int or None, optional
        Axis along which statistics are calculated. Default is 0.
@@ -1731,7 +1731,7 @@ def kurtosistest(a, axis=0, nan_policy='propagate', alternative='two-sided'):
 
     Parameters
     ----------
-    a : array
+    a : real floating array_like
         Array of the sample data. Must contain at least five observations.
     axis : int or None, optional
        Axis along which to compute test. Default is 0. If None,
@@ -1847,7 +1847,7 @@ def normaltest(a, axis=0, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         The array containing the sample to be tested. Must contain
         at least eight observations.
     axis : int or None, optional
@@ -1927,7 +1927,7 @@ def jarque_bera(x, *, axis=None):
 
     Parameters
     ----------
-    x : array_like
+    x : real floating array_like
         Observations of a random variable.
     axis : int or None, default: 0
         If an int, the axis of the input along which to compute the statistic.
@@ -2008,9 +2008,9 @@ def scoreatpercentile(a, per, limit=(), interpolation_method='fraction',
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         A 1-D array of values from which to extract score.
-    per : array_like
+    per : real numeric array_like
         Percentile(s) at which to extract score.  Values should be in range
         [0,100].
     limit : tuple, optional
@@ -2130,9 +2130,9 @@ def percentileofscore(a, score, kind='rank', nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         A 1-D array to which `score` is compared.
-    score : array_like
+    score : real numeric array_like
         Scores to compute percentiles for.
     kind : {'rank', 'weak', 'strict', 'mean'}, optional
         Specifies the interpretation of the resulting score.
@@ -2284,7 +2284,7 @@ def _histogram(a, numbins=10, defaultlimits=None, weights=None,
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Array of scores which will be put into bins.
     numbins : int, optional
         The number of bins to use for the histogram. Default is 10.
@@ -2293,7 +2293,7 @@ def _histogram(a, numbins=10, defaultlimits=None, weights=None,
         If no value is given, a range slightly larger than the range of the
         values in a is used. Specifically ``(a.min() - s, a.max() + s)``,
         where ``s = (1/2)(a.max() - a.min()) / (numbins - 1)``.
-    weights : array_like, optional
+    weights : real numeric array_like, optional
         The weights for each value in `a`. Default is None, which gives each
         value a weight of 1.0
     printextras : bool, optional
@@ -2366,7 +2366,7 @@ def cumfreq(a, numbins=10, defaultreallimits=None, weights=None):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Input array.
     numbins : int, optional
         The number of bins to use for the histogram. Default is 10.
@@ -2375,7 +2375,7 @@ def cumfreq(a, numbins=10, defaultreallimits=None, weights=None):
         If no value is given, a range slightly larger than the range of the
         values in `a` is used. Specifically ``(a.min() - s, a.max() + s)``,
         where ``s = (1/2)(a.max() - a.min()) / (numbins - 1)``.
-    weights : array_like, optional
+    weights : real numeric array_like, optional
         The weights for each value in `a`. Default is None, which gives each
         value a weight of 1.0
 
@@ -2448,7 +2448,7 @@ def relfreq(a, numbins=10, defaultreallimits=None, weights=None):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Input array.
     numbins : int, optional
         The number of bins to use for the histogram. Default is 10.
@@ -2457,7 +2457,7 @@ def relfreq(a, numbins=10, defaultreallimits=None, weights=None):
         If no value is given, a range slightly larger than the range of the
         values in a is used. Specifically ``(a.min() - s, a.max() + s)``,
         where ``s = (1/2)(a.max() - a.min()) / (numbins - 1)``.
-    weights : array_like, optional
+    weights : real numeric array_like, optional
         The weights for each value in `a`. Default is None, which gives each
         value a weight of 1.0
 
@@ -2530,7 +2530,7 @@ def obrientransform(*samples):
 
     Parameters
     ----------
-    sample1, sample2, ... : array_like
+    sample1, sample2, ... : real floating array_like
         Any number of arrays.
 
     Returns
@@ -2621,7 +2621,7 @@ def sem(a, axis=0, ddof=1, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         An array containing the values for which the standard error is
         returned. Must contain at least two observations.
     axis : int or None, optional
@@ -2701,7 +2701,7 @@ def zscore(a, axis=0, ddof=0, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         An array like object containing the sample data.
     axis : int or None, optional
         Axis along which to operate. Default is 0. If None, compute over
@@ -2793,7 +2793,7 @@ def gzscore(a, *, axis=0, ddof=0, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Sample data.
     axis : int or None, optional
         Axis along which to operate. Default is 0. If None, compute over
@@ -2883,9 +2883,9 @@ def zmap(scores, compare, axis=0, ddof=0, nan_policy='propagate'):
 
     Parameters
     ----------
-    scores : array_like
+    scores : real floating array_like
         The input for which z-scores are calculated.
-    compare : array_like
+    compare : real floating array_like
         The input from which the mean and standard deviation of the
         normalization are taken; assumed to have the same dimension as
         `scores`.
@@ -2967,7 +2967,7 @@ def gstd(a, axis=0, ddof=1, *, keepdims=False, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         An array containing finite, strictly positive, real numbers.
     axis : int, tuple or None, optional
         Axis along which to operate. Default is 0. If None, compute over
@@ -3102,7 +3102,7 @@ def iqr(x, axis=None, rng=(25, 75), scale=1.0, nan_policy='propagate',
 
     Parameters
     ----------
-    x : array_like
+    x : real floating array_like
         Input array or object that can be converted to an array.
     axis : int or sequence of int, optional
         Axis along which the range is computed. The default is to
@@ -3266,7 +3266,7 @@ def median_abs_deviation(x, axis=0, center=np.median, scale=1.0,
 
     Parameters
     ----------
-    x : array_like
+    x : real floating array_like
         Input array or object that can be converted to an array.
     axis : int or None, optional
         Axis along which the range is computed. Default is 0. If None, compute
@@ -3428,7 +3428,7 @@ def sigmaclip(a, low=4., high=4.):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Data array, will be raveled if not 1-D.
     low : float, optional
         Lower bound factor of sigma clipping. Default is 4.
@@ -3494,7 +3494,7 @@ def trimboth(a, proportiontocut, axis=0):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Data to trim.
     proportiontocut : float
         Proportion (in range 0-1) of total data set to trim of each end.
@@ -3579,7 +3579,7 @@ def trim1(a, proportiontocut, tail='right', axis=0):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         Input array.
     proportiontocut : float
         Fraction to cut off of 'left' or 'right' of distribution.
@@ -3663,7 +3663,7 @@ def trim_mean(a, proportiontocut, axis=0):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Input array.
     proportiontocut : float
         Fraction of the most positive and most negative elements to remove.
@@ -3791,7 +3791,7 @@ def f_oneway(*samples, axis=0, equal_var=True):
 
     Parameters
     ----------
-    sample1, sample2, ... : array_like
+    sample1, sample2, ... : real floating array_like
         The sample measurements for each group.  There must be at least
         two arguments.  If the arrays are multidimensional, then all the
         dimensions of the array must be the same except for `axis`.
@@ -4089,7 +4089,7 @@ def alexandergovern(*samples, nan_policy='propagate', axis=0):
 
     Parameters
     ----------
-    sample1, sample2, ... : array_like
+    sample1, sample2, ... : real floating array_like
         The sample measurements for each group.  There must be at least
         two samples, and each sample must contain at least two observations.
     nan_policy : {'propagate', 'raise', 'omit'}, optional
@@ -4421,9 +4421,9 @@ def pearsonr(x, y, *, alternative='two-sided', method=None, axis=0):
 
     Parameters
     ----------
-    x : array_like
+    x : real floating array_like
         Input array.
-    y : array_like
+    y : real floating array_like
         Input array.
     axis : int or None, default
         Axis along which to perform the calculation. Default is 0.
@@ -4837,7 +4837,7 @@ def fisher_exact(table, alternative=None, *, method=None):
 
     Parameters
     ----------
-    table : array_like of ints
+    table : integral array_like
         A contingency table.  Elements must be non-negative integers.
     alternative : {'two-sided', 'less', 'greater'}, optional
         Defines the alternative hypothesis for 2x2 tables; unused for other
@@ -5210,7 +5210,7 @@ def spearmanr(a, b=None, axis=0, nan_policy='propagate',
 
     Parameters
     ----------
-    a, b : 1D or 2D array_like, b is optional
+    a, b : 1D or 2D real floating array_like, b is optional
         One or two 1-D or 2-D arrays containing multiple variables and
         observations. When these are 1-D, each represents a vector of
         observations of a single variable. For the behavior in the 2-D case,
@@ -5467,9 +5467,9 @@ def pointbiserialr(x, y):
 
     Parameters
     ----------
-    x : array_like of bools
+    x : boolean array_like
         Input array.
-    y : array_like
+    y : real numeric array_like
         Input array.
 
     Returns
@@ -5566,7 +5566,7 @@ def kendalltau(x, y, *, nan_policy='propagate',
 
     Parameters
     ----------
-    x, y : array_like
+    x, y : real floating array_like
         Arrays of rankings, of the same shape. If arrays are not 1-D, they
         will be flattened to 1-D.
     nan_policy : {'propagate', 'raise', 'omit'}, optional
@@ -5797,7 +5797,7 @@ def weightedtau(x, y, rank=True, weigher=None, additive=True):
 
     Parameters
     ----------
-    x, y : array_like
+    x, y : real floating array_like
         Arrays of scores, of the same shape. If arrays are not 1-D, they will
         be flattened to 1-D.
     rank : array_like of ints or bool, optional
@@ -6057,10 +6057,10 @@ def ttest_1samp(a, popmean, axis=0, nan_policy="propagate", alternative="two-sid
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Sample observations.
-    popmean : float or array_like
-        Expected value in null hypothesis. If array_like, then its length along
+    popmean : real floating array_like
+        Expected value in null hypothesis. If non-scalar, then the length along
         `axis` must equal 1, and it must otherwise be broadcastable with `a`.
     axis : int or None, optional
         Axis along which to compute test; default is 0. If None, compute over
@@ -6344,17 +6344,17 @@ def ttest_ind_from_stats(mean1, std1, nobs1, mean2, std2, nobs2,
 
     Parameters
     ----------
-    mean1 : array_like
+    mean1 : real floating array_like
         The mean(s) of sample 1.
-    std1 : array_like
+    std1 : real floating array_like
         The corrected sample standard deviation of sample 1 (i.e. ``ddof=1``).
-    nobs1 : array_like
+    nobs1 : integral array_like
         The number(s) of observations of sample 1.
-    mean2 : array_like
+    mean2 : real floating array_like
         The mean(s) of sample 2.
-    std2 : array_like
+    std2 : real floating array_like
         The corrected sample standard deviation of sample 2 (i.e. ``ddof=1``).
-    nobs2 : array_like
+    nobs2 : integral array_like
         The number(s) of observations of sample 2.
     equal_var : bool, optional
         If True (default), perform a standard independent 2 sample test
@@ -6503,7 +6503,7 @@ def ttest_ind(a, b, *, axis=0, equal_var=True, nan_policy='propagate',
 
     Parameters
     ----------
-    a, b : array_like
+    a, b : real floating array_like
         The arrays must have the same shape, except in the dimension
         corresponding to `axis` (the first, by default).
     axis : int or None, optional
@@ -6999,7 +6999,7 @@ def _permutation_ttest(a, b, permutations, axis=0, equal_var=True,
 
     Parameters
     ----------
-    a, b : array_like
+    a, b : real floating array_like
         The arrays must be broadcastable, except along the dimension
         corresponding to `axis` (the zeroth, by default).
     axis : int, optional
@@ -7086,7 +7086,7 @@ def ttest_rel(a, b, axis=0, nan_policy='propagate', alternative="two-sided"):
 
     Parameters
     ----------
-    a, b : array_like
+    a, b : real floating array_like
         The arrays must have the same shape.
     axis : int or None, optional
         Axis along which to compute test. If None, compute over the whole
@@ -7213,9 +7213,9 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
 
     Parameters
     ----------
-    f_obs : array_like
+    f_obs : real floating array_like
         Observed frequencies in each category.
-    f_exp : array_like, optional
+    f_exp : real floating array_like, optional
         Expected frequencies in each category.  By default the categories are
         assumed to be equally likely.
     ddof : int, optional
@@ -7457,9 +7457,9 @@ def chisquare(f_obs, f_exp=None, ddof=0, axis=0, *, sum_check=True):
 
     Parameters
     ----------
-    f_obs : array_like
+    f_obs : real floating array_like
         Observed frequencies in each category.
-    f_exp : array_like, optional
+    f_exp : real floating array_like, optional
         Expected frequencies in each category. By default, the categories are
         assumed to be equally likely.
     ddof : int, optional
@@ -7603,9 +7603,9 @@ def _compute_dplus(cdfvals, x):
 
     Parameters
     ----------
-    cdfvals : array_like
+    cdfvals : real floating array_like
         Sorted array of CDF values between 0 and 1
-    x: array_like
+    x: real floating array_like
         Sorted array of the stochastic variable itself
 
     Returns
@@ -7627,9 +7627,9 @@ def _compute_dminus(cdfvals, x):
 
     Parameters
     ----------
-    cdfvals : array_like
+    cdfvals : real floating array_like
         Sorted array of CDF values between 0 and 1
-    x: array_like
+    x: real floating array_like
         Sorted array of the stochastic variable itself
 
     Returns
@@ -7669,8 +7669,8 @@ def ks_1samp(x, cdf, args=(), alternative='two-sided', method='auto'):
 
     Parameters
     ----------
-    x : array_like
-        a 1-D array of observations of iid random variables.
+    x : real floating array_like
+        array of observations of iid random variables.
     cdf : callable
         callable used to calculate the cdf.
     args : tuple, sequence, optional
@@ -8014,7 +8014,7 @@ def ks_2samp(data1, data2, alternative='two-sided', method='auto'):
 
     Parameters
     ----------
-    data1, data2 : array_like, 1-Dimensional
+    data1, data2 : real floating array_like
         Two arrays of sample observations assumed to be drawn from a continuous
         distribution, sample sizes can be different.
     alternative : {'two-sided', 'less', 'greater'}, optional
@@ -8299,15 +8299,14 @@ def kstest(rvs, cdf, args=(), N=20, alternative='two-sided', method='auto'):
 
     Parameters
     ----------
-    rvs : str, array_like, or callable
-        If an array, it should be a 1-D array of observations of random
-        variables.
+    rvs : str, real floating array_like, or callable
+        If an array, it should be an array of observations of random variables.
         If a callable, it should be a function to generate random variables;
         it is required to have a keyword argument `size`.
         If a string, it should be the name of a distribution in `scipy.stats`,
         which will be used to generate random variables.
-    cdf : str, array_like or callable
-        If array_like, it should be a 1-D array of observations of random
+    cdf : str, real floating array_like or callable
+        If array_like, it should be an array of observations of random
         variables, and the two-sample test is performed
         (and rvs must be array_like).
         If a callable, that callable is used to calculate the cdf.
@@ -8485,7 +8484,7 @@ def tiecorrect(rankvals):
 
     Parameters
     ----------
-    rankvals : array_like
+    rankvals : integral array_like
         A 1-D sequence of ranks.  Typically this will be the array
         returned by `~scipy.stats.rankdata`.
 
@@ -8544,7 +8543,7 @@ def ranksums(x, y, alternative='two-sided'):
 
     Parameters
     ----------
-    x,y : array_like
+    x,y : real floating array_like
         The data from the two samples.
     alternative : {'two-sided', 'less', 'greater'}, optional
         Defines the alternative hypothesis. Default is 'two-sided'.
@@ -8626,7 +8625,7 @@ def kruskal(*samples, nan_policy='propagate'):
 
     Parameters
     ----------
-    sample1, sample2, ... : array_like
+    sample1, sample2, ... : real floating array_like
        Two or more arrays with the sample measurements can be given as
        arguments. Samples must be one-dimensional.
     nan_policy : {'propagate', 'raise', 'omit'}, optional
@@ -8727,7 +8726,7 @@ def friedmanchisquare(*samples):
 
     Parameters
     ----------
-    sample1, sample2, sample3... : array_like
+    sample1, sample2, sample3... : real floating array_like
         Arrays of observations.  All of the arrays must have the same number
         of elements.  At least three samples must be given.
 
@@ -8822,8 +8821,8 @@ def brunnermunzel(x, y, alternative="two-sided", distribution="t",
 
     Parameters
     ----------
-    x, y : array_like
-        Array of samples, should be one-dimensional.
+    x, y : real floating array_like
+        Array of samples
     alternative : {'two-sided', 'less', 'greater'}, optional
         Defines the alternative hypothesis.
         The following options are available (default is 'two-sided'):
@@ -8950,7 +8949,7 @@ def combine_pvalues(pvalues, method='fisher', weights=None, *, axis=0):
 
     Parameters
     ----------
-    pvalues : array_like
+    pvalues : real floating array_like
         Array of p-values assumed to come from independent tests based on
         continuous distributions.
     method : {'fisher', 'pearson', 'tippett', 'stouffer', 'mudholkar_george'}
@@ -8964,7 +8963,7 @@ def combine_pvalues(pvalues, method='fisher', weights=None, *, axis=0):
         * 'mudholkar_george': Mudholkar's and George's method
         * 'tippett': Tippett's method
         * 'stouffer': Stouffer's Z-score method
-    weights : array_like, optional
+    weights : real floating array_like, optional
         Optional array of weights used only for Stouffer's Z-score method.
         Ignored by other methods.
 
@@ -9251,7 +9250,7 @@ def quantile_test(x, *, q=0, p=0.5, alternative='two-sided'):
 
     Parameters
     ----------
-    x : array_like
+    x : real floating array_like
         A one-dimensional sample.
     q : float, default: 0
         The hypothesized value of the quantile.
@@ -9592,14 +9591,14 @@ def wasserstein_distance_nd(u_values, v_values, u_weights=None, v_weights=None):
 
     Parameters
     ----------
-    u_values : 2d array_like
+    u_values : real floating 2d array_like
         A sample from a probability distribution or the support (set of all
         possible values) of a probability distribution. Each element along
         axis 0 is an observation or possible value, and axis 1 represents the
         dimensionality of the distribution; i.e., each row is a vector
         observation or possible value.
 
-    v_values : 2d array_like
+    v_values : real floating 2d array_like
         A sample from or the support of a second distribution.
 
     u_weights, v_weights : 1d array_like, optional
@@ -9798,12 +9797,12 @@ def wasserstein_distance(u_values, v_values, u_weights=None, v_weights=None):
 
     Parameters
     ----------
-    u_values : 1d array_like
+    u_values : real floating 1d array_like
         A sample from a probability distribution or the support (set of all
         possible values) of a probability distribution. Each element is an
         observation or possible value.
 
-    v_values : 1d array_like
+    v_values :real floating  1d array_like
         A sample from or the support of a second distribution.
 
     u_weights, v_weights : 1d array_like, optional
@@ -9881,9 +9880,9 @@ def energy_distance(u_values, v_values, u_weights=None, v_weights=None):
 
     Parameters
     ----------
-    u_values, v_values : array_like
+    u_values, v_values : real floating array_like
         Values observed in the (empirical) distribution.
-    u_weights, v_weights : array_like, optional
+    u_weights, v_weights : real floating array_like, optional
         Weight for each value. If unspecified, each value is assigned the same
         weight.
         `u_weights` (resp. `v_weights`) must have the same length as
@@ -9975,9 +9974,9 @@ def _cdf_distance(p, u_values, v_values, u_weights=None, v_weights=None):
 
     Parameters
     ----------
-    u_values, v_values : array_like
+    u_values, v_values :real floating array_like
         Values observed in the (empirical) distribution.
-    u_weights, v_weights : array_like, optional
+    u_weights, v_weights : real floating array_like, optional
         Weight for each value. If unspecified, each value is assigned the same
         weight.
         `u_weights` (resp. `v_weights`) must have the same length as
@@ -10053,9 +10052,9 @@ def _validate_distribution(values, weights):
 
     Parameters
     ----------
-    values : array_like
+    values : real floating array_like
         Values observed in the (empirical) distribution.
-    weights : array_like
+    weights : real floating array_like
         Weight for each value.
 
     Returns
@@ -10109,7 +10108,7 @@ def find_repeats(arr):
 
     Parameters
     ----------
-    arr : array_like
+    arr : real numeric array_like
         Input array. This is cast to float64.
 
     Returns
@@ -10144,7 +10143,7 @@ def _sum_of_squares(a, axis=0):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Input array.
     axis : int or None, optional
         Axis along which to calculate. Default is 0. If None, compute over
@@ -10170,7 +10169,7 @@ def _square_of_sums(a, axis=0):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Input array.
     axis : int or None, optional
         Axis along which to calculate. Default is 0. If None, compute over
@@ -10211,7 +10210,7 @@ def rankdata(a, method='average', *, axis=None, nan_policy='propagate'):
 
     Parameters
     ----------
-    a : array_like
+    a : real numeric array_like
         The array of values to be ranked.
     method : {'average', 'min', 'max', 'dense', 'ordinal'}, optional
         The method used to assign ranks to tied elements.
@@ -10402,7 +10401,7 @@ def expectile(a, alpha=0.5, *, weights=None):
 
     Parameters
     ----------
-    a : array_like
+    a : real floating array_like
         Array containing numbers whose expectile is desired.
     alpha : float, default: 0.5
         The level of the expectile; e.g., ``alpha=0.5`` gives the mean.
@@ -10589,7 +10588,7 @@ def lmoment(sample, order=None, *, axis=0, sorted=False, standardize=True):
 
     Parameters
     ----------
-    sample : array_like
+    sample : real floating array_like
         The real-valued sample whose L-moments are desired.
     order : array_like, optional
         The (positive integer) orders of the desired L-moments.
@@ -10684,7 +10683,7 @@ def linregress(x, y, alternative='two-sided'):
 
     Parameters
     ----------
-    x, y : array_like
+    x, y : real floating array_like
         Two sets of measurements.  Both arrays should have the same length N.
     alternative : {'two-sided', 'less', 'greater'}, optional
         Defines the alternative hypothesis. Default is 'two-sided'.
@@ -10859,14 +10858,14 @@ def _xp_mean(x, /, *, axis=None, weights=None, keepdims=False, nan_policy='propa
 
     Parameters
     ----------
-    x : real array
+    x : real floating array_like
         Array containing real numbers whose mean is desired.
     axis : int or tuple of ints, default: None
         If an int or tuple of ints, the axis or axes of the input along which
         to compute the statistic. The statistic of each axis-slice (e.g. row)
         of the input will appear in a corresponding element of the output.
         If ``None``, the input will be raveled before computing the statistic.
-    weights : real array, optional
+    weights : real floating array_like, optional
         If specified, an array of weights associated with the values in `x`;
         otherwise ``1``. If `weights` and `x` do not have the same shape, the
         arrays will be broadcasted before performing the calculation. See
