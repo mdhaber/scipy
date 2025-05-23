@@ -19,7 +19,7 @@ from scipy.stats._distr_params import distcont, distdiscrete
 from scipy.stats._distribution_infrastructure import (
     _Domain, _RealInterval, _Parameter, _Parameterization, _RealParameter,
     ContinuousDistribution, ShiftedScaledDistribution, _fiinfo,
-    _generate_domain_support, Mixture)
+    _generate_domain_support, Mixture, ShiftedScaledContinuousDistribution)
 from scipy.stats._new_distributions import StandardNormal, _LogUniform, _Gamma
 from scipy.stats._new_distributions import DiscreteDistribution
 from scipy.stats import Normal, Uniform, Binomial
@@ -1492,9 +1492,9 @@ class TestTransforms:
         # Need tests with negative scale
         rng = np.random.default_rng(seed)
 
-        class TransformedNormal(ShiftedScaledDistribution):
+        class TransformedNormal(ShiftedScaledContinuousDistribution):
             def __init__(self, *args, **kwargs):
-                super().__init__(StandardNormal(), *args, **kwargs)
+                super().__init__(StandardNormal(), **kwargs)
 
         tmp = draw_distribution_from_family(
             TransformedNormal, data, rng, proportions=(1, 0, 0, 0), min_side=1)
