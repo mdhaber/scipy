@@ -31,7 +31,7 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
+import math
 import numpy as np
 
 from scipy.fft import fft, ifft
@@ -452,3 +452,232 @@ def _swap_slices(x, slc1, slc2):
     t = x[slc1].copy()
     x[slc1] = x[slc2].copy()
     x[slc2] = t
+
+
+##### 2D special case #####
+
+# Translated from Matlab,
+# https://web.archive.org/web/20200205121851/http://www.math.wsu.edu/faculty/genz/software/matlab/bvn.m
+
+# Matlab original code is copy-pasted below, verbatim
+
+"""
+function p = bvn( xl, xu, yl, yu, r )
+%BVN
+%  A function for computing bivariate normal probabilities.
+%  bvn calculates the probability that 
+%    xl < x < xu and yl < y < yu, 
+%  with correlation coefficient r.
+%   p = bvn( xl, xu, yl, yu, r )
+%
+
+%   Author
+%       Alan Genz, Department of Mathematics
+%       Washington State University, Pullman, Wa 99164-3113
+%       Email : alangenz@wsu.edu
+%
+  p = bvnu(xl,yl,r) - bvnu(xu,yl,r) - bvnu(xl,yu,r) + bvnu(xu,yu,r); 
+  p = max( 0, min( p, 1 ) );
+%
+%   end bvn
+%
+function p = bvnu( dh, dk, r )
+%BVNU
+%  A function for computing bivariate normal probabilities.
+%  bvnu calculates the probability that x > dh and y > dk. 
+%    parameters  
+%      dh 1st lower integration limit
+%      dk 2nd lower integration limit
+%      r   correlation coefficient
+%  Example: p = bvnu( -3, -1, .35 )
+%  Note: to compute the probability that x < dh and y < dk, 
+%        use bvnu( -dh, -dk, r ). 
+%
+
+%   Author
+%       Alan Genz
+%       Department of Mathematics
+%       Washington State University
+%       Pullman, Wa 99164-3113
+%       Email : alangenz@wsu.edu
+%
+%    This function is based on the method described by 
+%        Drezner, Z and G.O. Wesolowsky, (1989),
+%        On the computation of the bivariate normal inegral,
+%        Journal of Statist. Comput. Simul. 35, pp. 101-107,
+%    with major modifications for double precision, for |r| close to 1,
+%    and for Matlab by Alan Genz. Minor bug modifications 7/98, 2/10.
+%
+%
+% Copyright (C) 2013, Alan Genz,  All rights reserved.               
+%
+% Redistribution and use in source and binary forms, with or without
+% modification, are permitted provided the following conditions are met:
+%   1. Redistributions of source code must retain the above copyright
+%      notice, this list of conditions and the following disclaimer.
+%   2. Redistributions in binary form must reproduce the above copyright
+%      notice, this list of conditions and the following disclaimer in 
+%      the documentation and/or other materials provided with the 
+%      distribution.
+%   3. The contributor name(s) may not be used to endorse or promote 
+%      products derived from this software without specific prior 
+%      written permission.
+% THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+% "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+% LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+% FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
+% COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, 
+% INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+% BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS 
+% OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND 
+% ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+% TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF USE
+% OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+%
+  if dh ==  inf | dk ==  inf, p = 0;
+  elseif dh == -inf, if dk == -inf, p = 1; else p = phid(-dk); end
+  elseif dk == -inf, p = phid(-dh);
+  elseif r == 0, p = phid(-dh)*phid(-dk);  
+  else, tp = 2*pi; h = dh; k = dk; hk = h*k; bvn = 0; 
+    if abs(r) < 0.3      % Gauss Legendre points and weights, n =  6
+      w(1:3) = [0.1713244923791705 0.3607615730481384 0.4679139345726904];
+      x(1:3) = [0.9324695142031522 0.6612093864662647 0.2386191860831970];
+    elseif abs(r) < 0.75 % Gauss Legendre points and weights, n = 12
+      w(1:3) = [.04717533638651177 0.1069393259953183 0.1600783285433464];
+      w(4:6) = [0.2031674267230659 0.2334925365383547 0.2491470458134029];
+      x(1:3) = [0.9815606342467191 0.9041172563704750 0.7699026741943050];
+      x(4:6) = [0.5873179542866171 0.3678314989981802 0.1252334085114692];
+    else,                % Gauss Legendre points and weights, n = 20
+      w(1:3) = [.01761400713915212 .04060142980038694 .06267204833410906];
+      w(4:6) = [.08327674157670475 0.1019301198172404 0.1181945319615184];
+      w(7:9) = [0.1316886384491766 0.1420961093183821 0.1491729864726037];
+      w(10) =   0.1527533871307259;
+      x(1:3) = [0.9931285991850949 0.9639719272779138 0.9122344282513259];
+      x(4:6) = [0.8391169718222188 0.7463319064601508 0.6360536807265150];
+      x(7:9) = [0.5108670019508271 0.3737060887154196 0.2277858511416451];
+      x(10) =   0.07652652113349733;
+    end, w = [w  w]; x = [1-x 1+x]; 
+    if abs(r) < 0.925, hs = ( h*h + k*k )/2; asr = asin(r)/2;  
+      sn = sin(asr*x); bvn = exp((sn*hk-hs)./(1-sn.^2))*w';
+      bvn = bvn*asr/tp + phid(-h)*phid(-k);  
+    else, if r < 0, k = -k; hk = -hk; end
+      if abs(r) < 1, as = 1-r^2; a = sqrt(as); bs = (h-k)^2;
+        asr = -( bs/as + hk )/2; c = (4-hk)/8 ; d = (12-hk)/80; 
+        if asr > -100, bvn = a*exp(asr)*(1-c*(bs-as)*(1-d*bs)/3+c*d*as^2); end
+        if hk  > -100, b = sqrt(bs); sp = sqrt(tp)*phid(-b/a);
+          bvn = bvn - exp(-hk/2)*sp*b*( 1 - c*bs*(1-d*bs)/3 );
+        end, a = a/2; xs = (a*x).^2; asr = -( bs./xs + hk )/2; 
+        ix = find( asr > -100 ); xs = xs(ix); sp = ( 1 + c*xs.*(1+5*d*xs) ); 
+        rs = sqrt(1-xs); ep = exp( -(hk/2)*xs./(1+rs).^2 )./rs; 
+        bvn = ( a*( (exp(asr(ix)).*(sp-ep))*w(ix)' ) - bvn )/tp; 
+      end 
+      if r > 0, bvn =  bvn + phid( -max( h, k ) ); 
+      elseif h >= k, bvn = -bvn;
+      else, if h < 0, L = phid(k)-phid(h); else, L = phid(-h)-phid(-k); end
+        bvn =  L - bvn;
+      end
+    end, p = max( 0, min( 1, bvn ) );
+  end
+%
+%   end bvnu
+%
+function p = phid(z), p = erfc( -z/sqrt(2) )/2; % Normal cdf
+%
+% end phid
+%
+"""
+
+from scipy.special import roots_legendre
+phid = phi  # == ndtr
+inf = float("inf")
+
+def bvnu(dh : float, dk : float, r: float):
+
+    # if dh ==  inf | dk ==  inf, p = 0;
+    if dh == inf or dk == inf:
+        return  0.
+
+    # elseif dh == -inf, if dk == -inf, p = 1; else p = phid(-dk); end
+    elif dh == -inf:
+        if dk == -inf:
+            return 1.
+        else:
+            return phid(-dk)
+
+    # elseif dk == -inf, p = phid(-dh);
+    elif dk == -inf:
+        return phid(-dh)
+
+    # elseif r == 0, p = phid(-dh)*phid(-dk);
+    elif r == 0:
+        return phid(-dh) * phid(-dk)
+
+    tp = 2 * math.pi; h = dh; k = dk; hk = h*k; bvn = 0
+
+    if abs(r) < 0.3:
+        n = 6
+    elif abs(r) < 0.75:
+        n = 12
+    else:
+        n = 20
+    x, w = roots_legendre(n)
+    x = 1 + x
+    # NB: Matlab code flips the 2nd half of x and w arrays:
+    # w = [w  w]; x = [1-x 1+x];
+    # the final result is the same, since we only do dot products.
+
+    # if abs(r) < 0.925, hs = ( h*h + k*k )/2; asr = asin(r)/2;
+    #    sn = sin(asr*x); bvn = exp((sn*hk-hs)./(1-sn.^2))*w';
+    #    bvn = bvn*asr/tp + phid(-h)*phid(-k);
+    if abs(r) < 0.925:
+        hs = (h*h + k*k) / 2.
+        asr = math.asin(r) / 2.
+        sn = np.sin(asr * x)
+        bvn = np.exp(sn*hk - hs) / (1 - sn**2) @ w
+        bvn = bvn * asr / tp + phid(-h)*phid(-k)
+        return max(0, min(1, bvn))
+
+    if r < 0:
+        k = -k; hk = -hk
+
+    if abs(r) < 1:
+        as_ = 1 - r**2
+        a = math.sqrt(as_)
+        bs = (h - k)**2;
+        asr = -( bs/as_ + hk )/2
+        c = (4. - hk) / 8
+        d = (12 - hk) / 80
+        if asr > -100:
+            factor = c * (bs - as_) * (1 - d*bs)/3 + c*d*as_**2
+            bvn = a * math.exp(asr) * (1 - factor)
+
+        if hk > -100:
+            b = math.sqrt(bs)
+            sp = math.sqrt(tp) * phid(-b / a)
+            bvn = bvn - math.exp(-hk/2) * sp * b * (1 - c*bs*(1 - d*bs)/3)
+        a = a / 2
+        xs = (a * x)**2
+        asr = - (bs / xs + hk) / 2.
+        ix = asr > -100
+        xs = xs[ix]
+        sp = 1 + c*xs*(1. + 5.*d*sx)
+        rs = np.sqrt(1 - xs)
+        ep = np.exp(-(hk/2) * xs / (1 + rs)**2) / rs
+
+        t = (exp(asr[ix]) * (sp - ep)) @ w[ix]
+        bvn = (a * t - bvn) / tp
+
+    if r > 0:
+        bvn =  bvn + phid(-max(h, k))
+    elif h >= k:
+        bvn = -bvn
+    else:
+        if h < 0:
+            L = phid(k) - phid(h)
+        else:
+            L = phid(-h) - phid(-k)
+        bvn = L - bvn;
+
+    return max(0, min(1, bvn))
+
+
