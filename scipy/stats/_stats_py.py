@@ -5951,7 +5951,8 @@ def weightedtau(x, y, rank=True, weigher=None, additive=True):
 #####################################
 
 TtestResultBase = _make_tuple_bunch('TtestResultBase',
-                                    ['statistic', 'pvalue'], ['df'])
+                                    ['statistic', 'pvalue'],
+                                    ['df', 'cohen_d'])
 
 
 class TtestResult(TtestResultBase):
@@ -5985,12 +5986,13 @@ class TtestResult(TtestResultBase):
 
     def __init__(self, statistic, pvalue, df,  # public
                  alternative, standard_error, estimate,  # private
-                 statistic_np=None, xp=None):  # private
-        super().__init__(statistic, pvalue, df=df)
+                 statistic_np=None, cohen_d=None, xp=None):  # private
+        super().__init__(statistic, pvalue, df=df, cohen_d=cohen_d)
         self._alternative = alternative
         self._standard_error = standard_error  # denominator of t-statistic
         self._estimate = estimate  # point estimate of sample mean
         self._statistic_np = statistic if statistic_np is None else statistic_np
+        self._cohen_d = cohen_d
         self._dtype = statistic.dtype
         self._xp = array_namespace(statistic, pvalue) if xp is None else xp
 
@@ -6019,25 +6021,26 @@ class TtestResult(TtestResultBase):
 
 
 def pack_TtestResult(statistic, pvalue, df, alternative, standard_error,
-                     estimate):
+                     estimate, cohen_d):
     # this could be any number of dimensions (including 0d), but there is
     # at most one unique non-NaN value
     alternative = np.atleast_1d(alternative)  # can't index 0D object
     alternative = alternative[np.isfinite(alternative)]
     alternative = alternative[0] if alternative.size else np.nan
     return TtestResult(statistic, pvalue, df=df, alternative=alternative,
-                       standard_error=standard_error, estimate=estimate)
+                       standard_error=standard_error, estimate=estimate,
+                       cohen_d=cohen_d)
 
 
 def unpack_TtestResult(res, _):
     return (res.statistic, res.pvalue, res.df, res._alternative,
-            res._standard_error, res._estimate)
+            res._standard_error, res._estimate, res._cohen_d)
 
 
 @xp_capabilities(cpu_only=True, exceptions=["cupy", "jax.numpy"],
                  jax_jit=False, allow_dask_compute=True)
 @_axis_nan_policy_factory(pack_TtestResult, default_axis=0, n_samples=2,
-                          result_to_tuple=unpack_TtestResult, n_outputs=6)
+                          result_to_tuple=unpack_TtestResult, n_outputs=7)
 # nan_policy handled by `_axis_nan_policy`, but needs to be left
 # in signature to preserve use as a positional argument
 def ttest_1samp(a, popmean, axis=0, nan_policy="propagate", alternative="two-sided"):
@@ -6206,7 +6209,7 @@ def ttest_1samp(a, popmean, axis=0, nan_policy="propagate", alternative="two-sid
         # It won't happen when the decorator is used.
         NaN = _get_nan(a)
         return TtestResult(NaN, NaN, df=NaN, alternative=NaN,
-                           standard_error=NaN, estimate=NaN)
+                           standard_error=NaN, estimate=NaN, cohen_d=NaN)
 
     mean = xp.mean(a, axis=axis)
     try:
@@ -6233,7 +6236,7 @@ def ttest_1samp(a, popmean, axis=0, nan_policy="propagate", alternative="two-sid
     alternative_num = {"less": -1, "two-sided": 0, "greater": 1}[alternative]
     return TtestResult(t, prob, df=df, alternative=alternative_num,
                        standard_error=denom, estimate=mean,
-                       statistic_np=xp.asarray(t), xp=xp)
+                       statistic_np=xp.asarray(t), cohen_d=prob, xp=xp)
 
 
 def _t_confidence_interval(df, t, confidence_level, alternative, dtype=None, xp=None):
@@ -6470,7 +6473,7 @@ def ttest_ind_from_stats(mean1, std1, nobs1, mean2, std2, nobs2,
 
 @xp_capabilities(cpu_only=True, exceptions=["cupy", "jax.numpy"])
 @_axis_nan_policy_factory(pack_TtestResult, default_axis=0, n_samples=2,
-                          result_to_tuple=unpack_TtestResult, n_outputs=6)
+                          result_to_tuple=unpack_TtestResult, n_outputs=7)
 def ttest_ind(a, b, *, axis=0, equal_var=True, nan_policy='propagate',
               alternative="two-sided", trim=0, method=None):
     """
@@ -6731,7 +6734,7 @@ def ttest_ind(a, b, *, axis=0, equal_var=True, nan_policy='propagate',
     NaN = _get_nan(a, b, shape=result_shape, xp=xp)
     if xp_size(a) == 0 or xp_size(b) == 0:
         return TtestResult(NaN, NaN, df=NaN, alternative=NaN,
-                           standard_error=NaN, estimate=NaN)
+                           standard_error=NaN, estimate=NaN, cohen_d=NaN)
 
     alternative_nums = {"less": -1, "two-sided": 0, "greater": 1}
 
@@ -6771,7 +6774,8 @@ def ttest_ind(a, b, *, axis=0, equal_var=True, nan_policy='propagate',
     estimate = m1 - m2
 
     return TtestResult(t, prob, df=df, alternative=alternative_nums[alternative],
-                       standard_error=denom, estimate=estimate)
+                       standard_error=denom, estimate=estimate,
+                       cohen_d=prob)
 
 
 def _ttest_resampling(x, y, axis, alternative, ttest_kwargs, method):
@@ -6857,7 +6861,7 @@ def _calculate_winsorized_variance(a, g, axis):
 @xp_capabilities(cpu_only=True, exceptions=["cupy", "jax.numpy"],
                  jax_jit=False, allow_dask_compute=True)
 @_axis_nan_policy_factory(pack_TtestResult, default_axis=0, n_samples=2,
-                          result_to_tuple=unpack_TtestResult, n_outputs=6,
+                          result_to_tuple=unpack_TtestResult, n_outputs=7,
                           paired=True)
 def ttest_rel(a, b, axis=0, nan_policy='propagate', alternative="two-sided"):
     """Calculate the t-test on TWO RELATED samples of scores, a and b.

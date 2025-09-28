@@ -29,7 +29,7 @@ SCIPY_XSLOW = int(os.environ.get('SCIPY_XSLOW', '0'))
 def unpack_ttest_result(res):
     low, high = res.confidence_interval()
     return (res.statistic, res.pvalue, res.df, res._standard_error,
-            res._estimate, low, high)
+            res._estimate, res._cohen_d, low, high)
 
 
 def _get_ttest_ci(ttest):
@@ -98,10 +98,10 @@ axis_nan_policy_cases = [
     (stats.moment, tuple(), dict(), 1, 1, False, lambda x: (x,)),
     (stats.moment, tuple(), dict(order=[1, 2]), 1, 2, False, None),
     (stats.jarque_bera, tuple(), dict(), 1, 2, False, None),
-    (stats.ttest_1samp, (np.array([0]),), dict(), 1, 7, False,
+    (stats.ttest_1samp, (np.array([0]),), dict(), 1, 8, False,
      unpack_ttest_result),
-    (stats.ttest_rel, tuple(), dict(), 2, 7, True, unpack_ttest_result),
-    (stats.ttest_ind, tuple(), dict(), 2, 7, False, unpack_ttest_result),
+    (stats.ttest_rel, tuple(), dict(), 2, 8, True, unpack_ttest_result),
+    (stats.ttest_ind, tuple(), dict(), 2, 8, False, unpack_ttest_result),
     (_get_ttest_ci(stats.ttest_1samp), (0,), dict(), 1, 2, False, None),
     (_get_ttest_ci(stats.ttest_rel), tuple(), dict(), 2, 2, True, None),
     (_get_ttest_ci(stats.ttest_ind), tuple(), dict(), 2, 2, False, None),
