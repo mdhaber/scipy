@@ -174,9 +174,17 @@ def _qauto(func, covar, low, high, rng, error=1e-3, limit=10_000, **kwds):
     """
     n = len(covar)
     n_samples = 0
-    if n == 1:
+    method = kwds.pop('method', None)
+    if n == 1 and method != 'generic':
         prob = phi(high / covar**0.5) - phi(low / covar**0.5)
         # More or less
+        est_error = 1e-15
+    elif n == 2 and method != 'generic':
+        xl, yl = low
+        xu, yu = high
+        p = (bvnu2(xl, yl, covar) - bvnu2(xu, yl, covar)
+             - bvnu2(xl, yu, covar) + bvnu2(xu, yu, covar))
+        prob = max(0, min(p, 1))
         est_error = 1e-15
     else:
         mi = min(limit, n * 1000)
@@ -465,8 +473,8 @@ def _swap_slices(x, slc1, slc2):
 function p = bvn( xl, xu, yl, yu, r )
 %BVN
 %  A function for computing bivariate normal probabilities.
-%  bvn calculates the probability that 
-%    xl < x < xu and yl < y < yu, 
+%  bvn calculates the probability that
+%    xl < x < xu and yl < y < yu,
 %  with correlation coefficient r.
 %   p = bvn( xl, xu, yl, yu, r )
 %
@@ -476,7 +484,7 @@ function p = bvn( xl, xu, yl, yu, r )
 %       Washington State University, Pullman, Wa 99164-3113
 %       Email : alangenz@wsu.edu
 %
-  p = bvnu(xl,yl,r) - bvnu(xu,yl,r) - bvnu(xl,yu,r) + bvnu(xu,yu,r); 
+  p = bvnu(xl,yl,r) - bvnu(xu,yl,r) - bvnu(xl,yu,r) + bvnu(xu,yu,r);
   p = max( 0, min( p, 1 ) );
 %
 %   end bvn
@@ -484,14 +492,14 @@ function p = bvn( xl, xu, yl, yu, r )
 function p = bvnu( dh, dk, r )
 %BVNU
 %  A function for computing bivariate normal probabilities.
-%  bvnu calculates the probability that x > dh and y > dk. 
-%    parameters  
+%  bvnu calculates the probability that x > dh and y > dk.
+%    parameters
 %      dh 1st lower integration limit
 %      dk 2nd lower integration limit
 %      r   correlation coefficient
 %  Example: p = bvnu( -3, -1, .35 )
-%  Note: to compute the probability that x < dh and y < dk, 
-%        use bvnu( -dh, -dk, r ). 
+%  Note: to compute the probability that x < dh and y < dk,
+%        use bvnu( -dh, -dk, r ).
 %
 
 %   Author
@@ -501,7 +509,7 @@ function p = bvnu( dh, dk, r )
 %       Pullman, Wa 99164-3113
 %       Email : alangenz@wsu.edu
 %
-%    This function is based on the method described by 
+%    This function is based on the method described by
 %        Drezner, Z and G.O. Wesolowsky, (1989),
 %        On the computation of the bivariate normal inegral,
 %        Journal of Statist. Comput. Simul. 35, pp. 101-107,
@@ -509,36 +517,36 @@ function p = bvnu( dh, dk, r )
 %    and for Matlab by Alan Genz. Minor bug modifications 7/98, 2/10.
 %
 %
-% Copyright (C) 2013, Alan Genz,  All rights reserved.               
+% Copyright (C) 2013, Alan Genz,  All rights reserved.
 %
 % Redistribution and use in source and binary forms, with or without
 % modification, are permitted provided the following conditions are met:
 %   1. Redistributions of source code must retain the above copyright
 %      notice, this list of conditions and the following disclaimer.
 %   2. Redistributions in binary form must reproduce the above copyright
-%      notice, this list of conditions and the following disclaimer in 
-%      the documentation and/or other materials provided with the 
+%      notice, this list of conditions and the following disclaimer in
+%      the documentation and/or other materials provided with the
 %      distribution.
-%   3. The contributor name(s) may not be used to endorse or promote 
-%      products derived from this software without specific prior 
+%   3. The contributor name(s) may not be used to endorse or promote
+%      products derived from this software without specific prior
 %      written permission.
 % THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-% "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
-% LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
-% FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
-% COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, 
-% INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
-% BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS 
-% OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND 
-% ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
+% "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+% LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+% FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+% COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+% INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+% BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+% OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+% ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
 % TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF USE
 % OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 %
   if dh ==  inf | dk ==  inf, p = 0;
   elseif dh == -inf, if dk == -inf, p = 1; else p = phid(-dk); end
   elseif dk == -inf, p = phid(-dh);
-  elseif r == 0, p = phid(-dh)*phid(-dk);  
-  else, tp = 2*pi; h = dh; k = dk; hk = h*k; bvn = 0; 
+  elseif r == 0, p = phid(-dh)*phid(-dk);
+  else, tp = 2*pi; h = dh; k = dk; hk = h*k; bvn = 0;
     if abs(r) < 0.3      % Gauss Legendre points and weights, n =  6
       w(1:3) = [0.1713244923791705 0.3607615730481384 0.4679139345726904];
       x(1:3) = [0.9324695142031522 0.6612093864662647 0.2386191860831970];
@@ -556,22 +564,22 @@ function p = bvnu( dh, dk, r )
       x(4:6) = [0.8391169718222188 0.7463319064601508 0.6360536807265150];
       x(7:9) = [0.5108670019508271 0.3737060887154196 0.2277858511416451];
       x(10) =   0.07652652113349733;
-    end, w = [w  w]; x = [1-x 1+x]; 
-    if abs(r) < 0.925, hs = ( h*h + k*k )/2; asr = asin(r)/2;  
+    end, w = [w  w]; x = [1-x 1+x];
+    if abs(r) < 0.925, hs = ( h*h + k*k )/2; asr = asin(r)/2;
       sn = sin(asr*x); bvn = exp((sn*hk-hs)./(1-sn.^2))*w';
-      bvn = bvn*asr/tp + phid(-h)*phid(-k);  
+      bvn = bvn*asr/tp + phid(-h)*phid(-k);
     else, if r < 0, k = -k; hk = -hk; end
       if abs(r) < 1, as = 1-r^2; a = sqrt(as); bs = (h-k)^2;
-        asr = -( bs/as + hk )/2; c = (4-hk)/8 ; d = (12-hk)/80; 
+        asr = -( bs/as + hk )/2; c = (4-hk)/8 ; d = (12-hk)/80;
         if asr > -100, bvn = a*exp(asr)*(1-c*(bs-as)*(1-d*bs)/3+c*d*as^2); end
         if hk  > -100, b = sqrt(bs); sp = sqrt(tp)*phid(-b/a);
           bvn = bvn - exp(-hk/2)*sp*b*( 1 - c*bs*(1-d*bs)/3 );
-        end, a = a/2; xs = (a*x).^2; asr = -( bs./xs + hk )/2; 
-        ix = find( asr > -100 ); xs = xs(ix); sp = ( 1 + c*xs.*(1+5*d*xs) ); 
-        rs = sqrt(1-xs); ep = exp( -(hk/2)*xs./(1+rs).^2 )./rs; 
-        bvn = ( a*( (exp(asr(ix)).*(sp-ep))*w(ix)' ) - bvn )/tp; 
-      end 
-      if r > 0, bvn =  bvn + phid( -max( h, k ) ); 
+        end, a = a/2; xs = (a*x).^2; asr = -( bs./xs + hk )/2;
+        ix = find( asr > -100 ); xs = xs(ix); sp = ( 1 + c*xs.*(1+5*d*xs) );
+        rs = sqrt(1-xs); ep = exp( -(hk/2)*xs./(1+rs).^2 )./rs;
+        bvn = ( a*( (exp(asr(ix)).*(sp-ep))*w(ix)' ) - bvn )/tp;
+      end
+      if r > 0, bvn =  bvn + phid( -max( h, k ) );
       elseif h >= k, bvn = -bvn;
       else, if h < 0, L = phid(k)-phid(h); else, L = phid(-h)-phid(-k); end
         bvn =  L - bvn;
@@ -643,7 +651,7 @@ def bvnu(dh : float, dk : float, r: float):
     if abs(r) < 1:
         as_ = 1 - r**2
         a = math.sqrt(as_)
-        bs = (h - k)**2;
+        bs = (h - k)**2
         asr = -( bs/as_ + hk )/2
         c = (4. - hk) / 8
         d = (12 - hk) / 80
@@ -660,11 +668,11 @@ def bvnu(dh : float, dk : float, r: float):
         asr = - (bs / xs + hk) / 2.
         ix = asr > -100
         xs = xs[ix]
-        sp = 1 + c*xs*(1. + 5.*d*sx)
+        sp = 1 + c*xs*(1. + 5.*d*xs)
         rs = np.sqrt(1 - xs)
         ep = np.exp(-(hk/2) * xs / (1 + rs)**2) / rs
 
-        t = (exp(asr[ix]) * (sp - ep)) @ w[ix]
+        t = (np.exp(asr[ix]) * (sp - ep)) @ w[ix]
         bvn = (a * t - bvn) / tp
 
     if r > 0:
@@ -676,8 +684,14 @@ def bvnu(dh : float, dk : float, r: float):
             L = phid(k) - phid(h)
         else:
             L = phid(-h) - phid(-k)
-        bvn = L - bvn;
+        bvn = L - bvn
 
     return max(0, min(1, bvn))
 
 
+def bvnu2(x, y, cov):
+    # bivariate normal CDF, natural parameterization
+    dh = x / np.sqrt(cov[0, 0])
+    dk = y / np.sqrt(cov[1, 1])
+    r = cov[0, 1] / np.sqrt(cov[0, 0] * cov[1, 1])
+    return bvnu(dh, dk, r)
