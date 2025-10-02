@@ -27,7 +27,15 @@ def quantile_reference_last_axis(x, p, nan_policy, method):
         res = (np.full_like(p, x[0]) if x.size == 1
                else stats.mstats.hdquantiles(x, p).data)
     elif method.startswith('winsor'):
-        res = winsor_reference_1d(np.sort(x), p, method)
+        preset_options = dict(
+            winsor=dict(round_left=np.round, round_right=np.round),
+            winsor_less=dict(round_left=np.floor, round_right=np.ceil),
+            winsor_more=dict(round_left=np.ceil, round_right=np.floor),
+        )
+        options = preset_options.get(method)
+        round_left = options.get('round_left', np.round)
+        round_right = options.get('round_right', np.round)
+        res = winsor_reference_1d(np.sort(x), p, round_left, round_right)
     else:
         res = np.quantile(x, p, method=method)
     if nan_policy == 'propagate' and np.any(np.isnan(x)):
@@ -37,16 +45,11 @@ def quantile_reference_last_axis(x, p, nan_policy, method):
 
 
 @np.vectorize(excluded={0, 2})  # type: ignore[call-arg]
-def winsor_reference_1d(y, p, method):
+def winsor_reference_1d(y, p, round_left, round_right):
     # Adapted directly from the documentation
     # Note: `y` is the sorted data array
     n = len(y)
-    if method == 'winsor_round':
-        j = int(np.round(p * n) if p < 0.5 else np.round(n * p - 1))
-    elif method == 'winsor_less':
-        j = int(np.floor(p * n) if p < 0.5 else np.ceil(n * p - 1))
-    elif method == 'winsor_more':
-        j = int(np.ceil(p * n) if p < 0.5 else np.floor(n * p - 1))
+    j = int(round_left(p * n) if p < 0.5 else round_right(n * p - 1))
     return y[j]
 
 
@@ -108,7 +111,7 @@ class TestQuantile:
          ['inverted_cdf', 'averaged_inverted_cdf', 'closest_observation',
           'hazen', 'interpolated_inverted_cdf', 'linear',
           'median_unbiased', 'normal_unbiased', 'weibull',
-          'harrell-davis', 'winsor_round', 'winsor_less', 'winsor_more'])
+          'harrell-davis', 'winsor', 'winsor_less', 'winsor_more'])
     @pytest.mark.parametrize('shape_x, shape_p, axis',
          [(10, None, -1), (10, 10, -1), (10, (2, 3), -1),
           ((10, 2), None, 0), ((10, 2), None, 0),])
@@ -118,11 +121,19 @@ class TestQuantile:
         rng = np.random.default_rng(23458924568734956)
         x = rng.random(size=shape_x)
         p = rng.random(size=shape_p)
+
         ref = quantile_reference(x, p, method=method, axis=axis,
                                  nan_policy='propagate', keepdims=shape_p is not None)
 
+        preset_options = dict(
+            winsor=None,
+            winsor_less=dict(round_left=xp.floor, round_right=xp.ceil),
+            winsor_more=dict(round_left=xp.ceil, round_right=xp.floor),
+        )
+        options = preset_options.get(method, None)
+        method = 'winsor' if method.startswith('winsor_') else method
         x, p = xp.asarray(x, dtype=dtype), xp.asarray(p, dtype=dtype)
-        res = stats.quantile(x, p, method=method, axis=axis)
+        res = stats.quantile(x, p, method=method, axis=axis, options=options)
 
         xp_assert_close(res, xp.asarray(ref, dtype=dtype))
 
@@ -132,7 +143,7 @@ class TestQuantile:
     @pytest.mark.parametrize('keepdims', [False, True])
     @pytest.mark.parametrize('nan_policy', ['omit', 'propagate', 'marray'])
     @pytest.mark.parametrize('dtype', ['float32', 'float64'])
-    @pytest.mark.parametrize('method', ['linear', 'harrell-davis', 'winsor_round'])
+    @pytest.mark.parametrize('method', ['linear', 'harrell-davis', 'winsor'])
     def test_against_reference_2(self, axis, keepdims, nan_policy, dtype, method, xp):
         # Test some methods with various combinations of arguments
         rng = np.random.default_rng(23458924568734956)

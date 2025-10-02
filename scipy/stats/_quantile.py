@@ -12,7 +12,7 @@ import scipy._lib.array_api_extra as xpx
 from scipy.stats._axis_nan_policy import _broadcast_arrays, _contains_nan
 
 
-def _quantile_iv(x, p, method, axis, nan_policy, keepdims):
+def _quantile_iv(x, p, method, axis, nan_policy, keepdims, options):
     xp = array_namespace(x, p)
 
     if not xp.isdtype(xp.asarray(x).dtype, ('integral', 'real floating')):
@@ -42,7 +42,7 @@ def _quantile_iv(x, p, method, axis, nan_policy, keepdims):
     methods = {'inverted_cdf', 'averaged_inverted_cdf', 'closest_observation',
                'hazen', 'interpolated_inverted_cdf', 'linear',
                'median_unbiased', 'normal_unbiased', 'weibull',
-               'harrell-davis', 'winsor_less', 'winsor_more', 'winsor_round'}
+               'harrell-davis', 'winsor'}
     if method not in methods:
         message = f"`method` must be one of {methods}"
         raise ValueError(message)
@@ -101,12 +101,27 @@ def _quantile_iv(x, p, method, axis, nan_policy, keepdims):
         p = xp.asarray(p, copy=True)
         p = xpx.at(p, p_mask).set(0.5)  # these get NaN-ed out at the end
 
-    return y, p, method, axis, nan_policy, keepdims, n, axis_none, ndim, p_mask, xp
+    if method != 'winsor' and options is not None:
+        message = "Only ``method='winsor'`` supports `options`."
+        raise ValueError(message)
+
+    options_out = None
+    if method == 'winsor':
+        options = {} if options is None else options
+        options_out = dict(round_left=xp.round, round_right=xp.round)
+        options_out.update(options)
+        if set(options_out) != {'round_left', 'round_right'}:
+            message = "`options` may contain only keys 'round_left' and 'round_right'."
+            raise ValueError(message)
+
+    return (y, p, method, axis, nan_policy, keepdims, n,
+            axis_none, ndim, p_mask, options_out, xp)
 
 
 @xp_capabilities(skip_backends=(("dask.array", "No take_along_axis yet."),
                                 ("jax.numpy", "No mutation.")))
-def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=None):
+def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=None,
+             options=None):
     """
     Compute the p-th quantile of the data along the specified axis.
 
@@ -135,8 +150,7 @@ def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=
         'harrell-davis' is also available to compute the quantile estimate
         according to [2]_.
 
-        `winsor_less`, `winsor_more`, and `winsor_round` are available for use
-        in trimming and winsorizing data.
+        `winsor` is available for use in trimming and winsorizing data.
 
         See Notes for details.
     axis : int or None, default: 0
@@ -172,6 +186,10 @@ def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=
         - If `keepdims` is set to True, the axis will not be reduced away.
         - If `keepdims` is set to False, the axis will be reduced away
           if possible, and an error will be raised otherwise.
+
+    options : dict, optional
+        Dictionary of method-specific options. Currently, only ``method='winsor'``
+        supports options; see Notes.
 
     Returns
     -------
@@ -248,19 +266,23 @@ def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=
     :math:`I` is the regularized, lower incomplete beta function
     (`scipy.special.betainc`).
 
-    ``method='winsor_round'`` is equivalent to indexing ``y[j]``, where::
+    ``method='winsor'`` is useful when winsorizing data: replacing ``p*n`` of the most
+    extreme observations with the next most extreme observation. By default, this is
+    equivalent to indexing ``y[j]``, where::
 
-        j = int(np.round(p*n) if p < 0.5 else np.round(n*p - 1))
+        j = int(np.round(p*n) if p < 0.5 else np.round(p*n - 1))
 
-    This is useful when winsorizing data: replacing ``p*n`` of the most extreme
-    observations with the next most extreme observation. ``method='winsor_less'``
-    adjusts the direction of rounding to winsorize fewer elements::
+    Keys ``round_left`` and ``round_right`` of `options` may be assigned functions
+    that control the direction of rounding where ``p < 0.5`` and ``p >= 0.5``,
+    respectively. For example, to winsorize fewer elements, pass
+    ``options=dict(round_left=np.floor, round_right=np.ceil)`` to index ``y[j]`` where::
 
-        j = int(np.floor(p*n) if p < 0.5 else np.ceil(n*p - 1))
+        j = int(np.floor(p*n) if p < 0.5 else np.ceil(p*n - 1))
 
-    and ``method='winsor_more'`` rounds to winsorize more elements::
+    To winsorize more elements, pass
+    ``options=dict(round_left=np.ceil, round_right=np.floor)``::
 
-        j = int(np.ceil(p*n) if p < 0.5 else np.floor(n*p - 1))
+        j = int(np.ceil(p*n) if p < 0.5 else np.floor(p*n - 1))
 
     See :ref:`outliers` for example applications.
 
@@ -300,8 +322,9 @@ def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=
     """
     # Input validation / standardization
 
-    temp = _quantile_iv(x, p, method, axis, nan_policy, keepdims)
-    y, p, method, axis, nan_policy, keepdims, n, axis_none, ndim, p_mask, xp = temp
+    temp = _quantile_iv(x, p, method, axis, nan_policy, keepdims, options)
+    (y, p, method, axis, nan_policy, keepdims,
+     n, axis_none, ndim, p_mask, options, xp) = temp
 
     if method in {'inverted_cdf', 'averaged_inverted_cdf', 'closest_observation',
                   'hazen', 'interpolated_inverted_cdf', 'linear',
@@ -309,8 +332,8 @@ def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=
         res = _quantile_hf(y, p, n, method, xp)
     elif method in {'harrell-davis'}:
         res = _quantile_hd(y, p, n, xp)
-    else:  # method.startswith('winsor'):
-        res = _quantile_winsor(y, p, n, method, xp)
+    else:  # method==('winsor'):
+        res = _quantile_winsor(y, p, n, method, options, xp)
 
     res = xpx.at(res, p_mask).set(xp.nan)
 
@@ -371,10 +394,7 @@ def _quantile_hd(y, p, n, xp):
     return xp.moveaxis(res, 0, -1)
 
 
-def _quantile_winsor(y, p, n, method, xp):
-    ops = dict(winsor_less=(xp.floor, xp.ceil),
-               winsor_more=(xp.ceil, xp.floor),
-               winsor_round=(xp.round, xp.round))
-    op_left, op_right = ops[method]
+def _quantile_winsor(y, p, n, method, options, xp):
+    op_left, op_right = options['round_left'], options['round_right']
     j = xp.where(p < 0.5, op_left(p*n), op_right(n*p - 1))
     return xp.take_along_axis(y, xp.astype(j, xp.int64), axis=-1)
