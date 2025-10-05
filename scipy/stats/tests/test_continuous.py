@@ -275,6 +275,7 @@ class TestDistributions:
                     check_ccdf2(dist, False, x, y, xy_result_shape, methods)
                     check_ccdf2(dist, True, x, y, xy_result_shape, methods)
 
+    @pytest.mark.filterwarnings("ignore:'oneOf' deprecated:DeprecationWarning")
     def test_plot(self):
         try:
             import matplotlib.pyplot as plt

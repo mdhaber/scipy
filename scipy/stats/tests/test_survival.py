@@ -372,6 +372,7 @@ class TestSurvival:
         assert_equal(res.sf._d[:-1], ref.sf._d[:-1])  # difference @ [-1]
         assert_allclose(res.sf._sf[:-1], ref.sf._sf[:-1], rtol=1e-14)
 
+    @pytest.mark.filterwarnings("ignore:'oneOf' deprecated:DeprecationWarning")
     def test_plot_iv(self):
         rng = np.random.default_rng(1769658657308472721)
         n_unique = rng.integers(10, 100)

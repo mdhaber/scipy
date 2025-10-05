@@ -1073,6 +1073,7 @@ class TestGoodnessOfFit:
         assert_allclose(simulated_quantiles, exact_quantiles, atol=0.005)
 
 class TestFitResult:
+    @pytest.mark.filterwarnings("ignore:'oneOf' deprecated:DeprecationWarning")
     def test_plot_iv(self):
         rng = np.random.default_rng(1769658657308472721)
         data = stats.norm.rvs(0, 1, size=100, random_state=rng)
