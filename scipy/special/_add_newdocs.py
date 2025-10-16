@@ -4586,6 +4586,106 @@ add_newdoc("_kolmogp",
     Internal function, do not use.
     """)
 
+
+add_newdoc(
+    "_kstwo_pdf",
+    """
+    _kstwo_pdf(x, n)
+
+    Probability density function of the Kolmogorov-Smirnov two-sided test statistic
+    distribution.
+
+    Parameters
+    ----------
+    x : array_like
+        Real-valued argument
+    n : array_like
+        Real-valued number of observations.
+
+    Returns
+    -------
+    scalar or ndarray
+    """)
+
+add_newdoc(
+    "_kstwo_cdf",
+    """
+    _kstwo_cdf(x, n)
+
+    Cumulative distribution function of the Kolmogorov-Smirnov two-sided test statistic
+    distribution.
+
+    Parameters
+    ----------
+    x : array_like
+        Real-valued argument
+    n : array_like
+        Real-valued number of observations.
+
+    Returns
+    -------
+    scalar or ndarray
+    """)
+
+add_newdoc(
+    "_kstwo_sf",
+    """
+    _kstwo_sf(x, n)
+
+    Survival function of the Kolmogorov-Smirnov two-sided test statistic
+    distribution.
+
+    Parameters
+    ----------
+    x : array_like
+        Real-valued argument
+    n : array_like
+        Real-valued number of observations.
+    Returns
+    -------
+    scalar or ndarray
+    """)
+
+add_newdoc(
+    "_kstwo_ppf",
+    """
+    _kstwo_ppf(p, n)
+
+    Percent point function of the Kolmogorov-Smirnov two-sided test statistic
+    distribution.
+
+    Parameters
+    ----------
+    p : array_like
+        Real-valued argument between 0 and 1
+    n : array_like
+        Real-valued number of observations.
+
+    Returns
+    -------
+    scalar or ndarray
+    """)
+
+add_newdoc(
+    "_kstwo_isf",
+    """
+    _kstwo_isf(p, n)
+
+    Inverse survival function of the Kolmogorov-Smirnov two-sided test statistic
+    distribution.
+
+    Parameters
+    ----------
+    p : array_like
+        Real-valued argument between 0 and 1
+    n : array_like
+        Real-valued number of observations.
+
+    Returns
+    -------
+    scalar or ndarray
+    """)
+
 add_newdoc("_lanczos_sum_expg_scaled",
     """
     Internal function, do not use.

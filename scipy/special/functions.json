@@ -456,6 +456,36 @@
             "xsf_kolmogorov": "d->d"
         }
     },
+    "_kstwo_pdf": {
+        "boost_special_functions.h++": {
+            "kstwo_pdf_float": "ff->f",
+            "kstwo_pdf_double": "dd->d"
+        }
+    },
+    "_kstwo_cdf": {
+        "boost_special_functions.h++": {
+            "kstwo_cdf_float": "ff->f",
+            "kstwo_cdf_double": "dd->d"
+        }
+    },
+    "_kstwo_sf": {
+        "boost_special_functions.h++": {
+            "kstwo_sf_float": "ff->f",
+            "kstwo_sf_double": "dd->d"
+        }
+    },
+    "_kstwo_ppf": {
+        "boost_special_functions.h++": {
+            "kstwo_ppf_float": "ff->f",
+            "kstwo_ppf_double": "dd->d"
+        }
+    },
+    "_kstwo_isf": {
+        "boost_special_functions.h++": {
+            "kstwo_isf_float": "ff->f",
+            "kstwo_isf_double": "dd->d"
+        }
+    },
     "_landau_pdf": {
         "boost_special_functions.h++": {
             "landau_pdf_float": "fff->f",

@@ -2114,6 +2114,122 @@ landau_isf_double(double p, double loc, double scale)
 
 template<typename Real>
 Real
+kstwo_pdf_wrap(const Real x, const Real n)
+{
+    if (std::isfinite(x)) {
+        return boost::math::pdf(
+            boost::math::kolmogorov_smirnov_distribution<Real, StatsPolicy>(n), x);
+    }
+    return NAN;
+}
+
+float
+kstwo_pdf_float(float x, float n)
+{
+    return kstwo_pdf_wrap(x, n);
+}
+
+double
+kstwo_pdf_double(double x, double n)
+{
+    return kstwo_pdf_wrap(x, n);
+}
+
+template<typename Real>
+Real
+kstwo_cdf_wrap(const Real x, const Real n)
+{
+    if (std::isfinite(x)) {
+        return boost::math::cdf(
+            boost::math::kolmogorov_smirnov_distribution<Real, StatsPolicy>(n), x);
+    }
+    return NAN;
+}
+
+float
+kstwo_cdf_float(float x, float n)
+{
+    return kstwo_cdf_wrap(x, n);
+}
+
+double
+kstwo_cdf_double(double x, double n)
+{
+    return kstwo_cdf_wrap(x, n);
+}
+
+template<typename Real>
+Real
+kstwo_sf_wrap(const Real x, const Real n)
+{
+    if (std::isfinite(x)) {
+        return boost::math::cdf(boost::math::complement(
+            boost::math::kolmogorov_smirnov_distribution<Real, StatsPolicy>(n), x));
+    }
+    return NAN;
+}
+
+float
+kstwo_sf_float(float x, float n)
+{
+    return kstwo_sf_wrap(x, n);
+}
+
+double
+kstwo_sf_double(double x, double n)
+{
+    return kstwo_sf_wrap(x, n);
+}
+
+template<typename Real>
+Real
+kstwo_ppf_wrap(const Real p, const Real n)
+{
+    if (std::isfinite(p)) {
+        return boost::math::quantile(
+            boost::math::kolmogorov_smirnov_distribution<Real, StatsPolicy>(n), p);
+    }
+    return NAN;
+}
+
+float
+kstwo_ppf_float(float p, float n)
+{
+    return kstwo_ppf_wrap(p, n);
+}
+
+double
+kstwo_ppf_double(double p, double n)
+{
+    return kstwo_ppf_wrap(p, n);
+}
+
+template<typename Real>
+Real
+kstwo_isf_wrap(const Real p, const Real n)
+{
+    if (std::isfinite(p)) {
+        return boost::math::quantile(boost::math::complement(
+            boost::math::kolmogorov_smirnov_distribution<Real, StatsPolicy>(n), p));
+    }
+    return NAN;
+}
+
+float
+kstwo_isf_float(float p, float n)
+{
+    return kstwo_isf_wrap(p, n);
+}
+
+double
+kstwo_isf_double(double p, double n)
+{
+    return kstwo_isf_wrap(p, n);
+}
+
+
+template<typename Real>
+Real
 f_cdf_wrap(const Real dfn, const Real dfd, const Real x)
 {
     if (std::isnan(x) || std::isnan(dfn) || std::isnan(dfd)) {
