@@ -26,8 +26,6 @@ class TestChatterjeeXi:
         #       0.7620801065573549, 0.31410063302647495, 0.7935620302236199,
         #       0.5423085761365468)
         # xicor(x, y, ties=FALSE, pvalue=TRUE)
-        if dtype == 'float32' and np.__version__ < "2":
-            pytest.skip("Scalar dtypes only respected after NEP 50.")
         dtype = xp_default_dtype(xp) if dtype is None else getattr(xp, dtype)
         rng = np.random.default_rng(25982435982346983)
         x = rng.random(size=10)

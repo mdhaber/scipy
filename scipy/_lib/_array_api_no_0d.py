@@ -56,6 +56,14 @@ def _check_scalar(actual, desired, *, xp=None, **kwargs):
     assert xp.isscalar(actual), _msg
 
 
+def _pop_check_dtype(actual, desired, *, xp=None, **kwargs):
+    # Pre-NEP 50, one has to fight NumPy to follow NEP 50 dtype rules,
+    # so don't require matching dtypes if xp is NumPy < 2.0
+    xp = array_namespace(actual) if xp is None else xp
+    check_dtype_default = not (is_numpy(xp) and xp.__version__ < "2.0")
+    return kwargs.pop('check_dtype', check_dtype_default)
+
+
 def xp_assert_equal(actual, desired, *, check_0d=False, **kwargs):
     # in contrast to xp_assert_equal_base, this defaults to check_0d=False,
     # but will do an extra check in that case, which forbids 0d-arrays for `actual`
@@ -64,7 +72,9 @@ def xp_assert_equal(actual, desired, *, check_0d=False, **kwargs):
     # array-ness (check_0d == True) is taken care of by the *_base functions
     if not check_0d:
         _check_scalar(actual, desired, **kwargs)
-    return xp_assert_equal_base(actual, desired, check_0d=check_0d, **kwargs)
+    check_dtype = _pop_check_dtype(actual, desired, **kwargs)
+    return xp_assert_equal_base(actual, desired, check_0d=check_0d,
+                                check_dtype=check_dtype, **kwargs)
 
 
 def xp_assert_close(actual, desired, *, check_0d=False, **kwargs):
@@ -73,7 +83,9 @@ def xp_assert_close(actual, desired, *, check_0d=False, **kwargs):
 
     if not check_0d:
         _check_scalar(actual, desired, **kwargs)
-    return xp_assert_close_base(actual, desired, check_0d=check_0d, **kwargs)
+    check_dtype = _pop_check_dtype(actual, desired, **kwargs)
+    return xp_assert_close_base(actual, desired, check_0d=check_0d,
+                                check_dtype=check_dtype, **kwargs)
 
 
 def xp_assert_less(actual, desired, *, check_0d=False, **kwargs):
@@ -82,7 +94,9 @@ def xp_assert_less(actual, desired, *, check_0d=False, **kwargs):
 
     if not check_0d:
         _check_scalar(actual, desired, **kwargs)
-    return xp_assert_less_base(actual, desired, check_0d=check_0d, **kwargs)
+    check_dtype = _pop_check_dtype(actual, desired, **kwargs)
+    return xp_assert_less_base(actual, desired, check_0d=check_0d,
+                               check_dtype=check_dtype, **kwargs)
 
 
 def assert_array_almost_equal(actual, desired, decimal=6, *args, **kwds):
