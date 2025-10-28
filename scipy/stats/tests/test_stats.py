@@ -35,7 +35,7 @@ from .common_tests import check_named_results
 from scipy.stats._axis_nan_policy import (_broadcast_concatenate, SmallSampleWarning,
                                           too_small_nd_omit, too_small_nd_not_omit,
                                           too_small_1d_omit, too_small_1d_not_omit)
-from scipy.stats._stats_py import (_chk_asarray, _moment,
+from scipy.stats._stats_py import (_chk_asarray, _moment, _ecdfs,
                                    LinregressResult, _xp_mean, _xp_var, _SimpleChi2)
 from scipy._lib._util import AxisError
 from scipy.conftest import skip_xp_invalid_arg
@@ -9536,3 +9536,26 @@ def test_chk_asarray(xp):
     x_out, axis_out = _chk_asarray(x[0, 0, 0], axis=axis, xp=xp)
     xp_assert_equal(x_out, xp.asarray(np.atleast_1d(x0[0, 0, 0])))
     assert_equal(axis_out, axis)
+
+
+@make_xp_test_case(_ecdfs)
+class Test_ECDFs:
+    def ecdfs_1d(self, x, y):
+        x = np.sort(x)
+        y = np.sort(y)
+        xy = np.sort(np.concatenate((x, y)))
+        cdf1 = np.searchsorted(x, xy, side='right') / len(x)
+        cdf2 = np.searchsorted(y, xy, side='right') / len(y)
+        return cdf1, cdf2
+
+    @pytest.mark.parametrize("n1, n2", [(10, 10)])
+    @pytest.mark.parametrize("sampler", [lambda rng, size: rng.random(size),
+                                         lambda rng, size: rng.integers(8, size=size)])
+    def test_basic(self, n1, n2, xp):
+        rng = np.random.default_rng(894359823598235)
+        x = rng.integers(5, size=n1)
+        y = rng.integers(5, size=n2)
+        res1, res2 = _ecdfs(xp.asarray(x), xp.asarray(y), xp=xp)
+        ref1, ref2 = self.ecdfs_1d(x, y)
+        xp_assert_close(res1, xp.asarray(ref1))
+        xp_assert_close(res2, xp.asarray(ref2))

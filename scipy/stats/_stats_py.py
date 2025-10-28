@@ -10166,6 +10166,25 @@ def _rankdata(x, method, return_ties=False, xp=None):
 
 
 @xp_capabilities(np_only=True)
+def _ecdfs(x, y, *, xp):
+    x = xp.sort(x, axis=-1)
+    y = xp.sort(y, axis=-1)
+    xy = xp.concat((x, y), axis=-1)
+    n1 = x.shape[-1]
+    n2 = y.shape[-1]
+    n = xy.shape[-1]
+    ranks = _rankdata(xy, method='min')
+    cdf_counts1 = xp.diff(ranks[..., :n1], prepend=1, append=n + 1, axis=-1)
+    cdf_counts2 = xp.diff(ranks[..., -n2:], prepend=1, append=n + 1, axis=-1)
+    cdf1_vals, cdf1_counts = np.broadcast_arrays(xp.linspace(0, 1, n1 + 1), cdf_counts1)
+    cdf2_vals, cdf2_counts = np.broadcast_arrays(xp.linspace(0, 1, n2 + 1), cdf_counts2)
+    cdf1 = xp.repeat(xp_ravel(cdf1_vals), xp_ravel(cdf1_counts), axis=-1)
+    cdf2 = xp.repeat(xp_ravel(cdf2_vals), xp_ravel(cdf2_counts), axis=-1)
+    shape = xy.shape[:-1] + (-1,)
+    return xp.reshape(cdf1, shape), xp.reshape(cdf2, shape)
+
+
+@xp_capabilities(np_only=True)
 def expectile(a, alpha=0.5, *, weights=None):
     r"""Compute the expectile at the specified level.
 
