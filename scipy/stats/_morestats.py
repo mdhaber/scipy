@@ -3168,7 +3168,8 @@ def levene(*samples, center='median', proportiontocut=0.05, axis=0):
             # keepdims=True doesn't currently work for lazy arrays
             return _stats_py.trim_mean(x, proportiontocut, axis=-1)[..., xp.newaxis]
 
-    Nis = [sample.shape[-1] for sample in samples]
+    Nis = [_length_nonmasked(sample, axis=-1, keepdims=True, xp=xp)
+           for sample in samples]
     Ycis = [func(sample) for sample in samples]
     Ntot = sum(Nis)
 
@@ -3188,10 +3189,11 @@ def levene(*samples, center='median', proportiontocut=0.05, axis=0):
                       for Zij, Zbari in zip(Zijs, Zbaris))
 
     W = numer / denom
-    W = xp.squeeze(W, axis=-1)
     dfn, dfd = xp.asarray(dfn, dtype=W.dtype), xp.asarray(dfd, dtype=W.dtype)
     pval = _get_pvalue(W, _SimpleF(dfn, dfd), 'greater', xp=xp)
-    return LeveneResult(W[()], pval[()])
+    W, pval = xp.squeeze(W, axis=-1), xp.squeeze(pval, axis=-1)
+    W, pval = (W[()], pval[()]) if W.ndim == 0 else (W, pval)
+    return LeveneResult(W, pval)
 
 
 FlignerResult = namedtuple('FlignerResult', ('statistic', 'pvalue'))

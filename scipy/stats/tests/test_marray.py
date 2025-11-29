@@ -103,6 +103,8 @@ def test_xp_mean(axis, keepdims, xp):
      make_xp_pytest_param(stats.tmax, {'upperlimit': 0.5}),
      make_xp_pytest_param(stats.tstd, {'limits': (0.1, 0.9)}),
      make_xp_pytest_param(stats.tsem, {'limits': (0.1, 0.9)}),
+     make_xp_pytest_param(stats.iqr, {}),
+     make_xp_pytest_param(stats.median_abs_deviation, {}),
      ])
 @pytest.mark.parametrize('axis', [0, 1, None])
 def test_several(fun, kwargs, axis, xp):
@@ -337,11 +339,13 @@ def test_directional_stats(xp):
 @skip_backend('jax.numpy', reason="JAX doesn't allow item assignment.")
 @skip_backend('torch', reason="array-api-compat#242")
 @skip_backend('cupy', reason="special functions won't work")
+@pytest.mark.parametrize('fun', [stats.bartlett, stats.levene])
 @pytest.mark.parametrize('axis', [0, 1, None])
-def test_bartlett(axis, xp):
+def test_bartlett_levene(fun, axis, xp):
+    # todo: add test of `levene` with `center='trimmed'`
     mxp, marrays, narrays = get_arrays(3, xp=xp)
-    res = stats.bartlett(*marrays, axis=axis)
-    ref = stats.bartlett(*narrays, nan_policy='omit', axis=axis)
+    res = fun(*marrays, axis=axis)
+    ref = fun(*narrays, nan_policy='omit', axis=axis)
     xp_assert_close(res.statistic.data, xp.asarray(ref.statistic))
     xp_assert_close(res.pvalue.data, xp.asarray(ref.pvalue))
 
