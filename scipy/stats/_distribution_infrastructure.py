@@ -1000,8 +1000,8 @@ def _set_invalid_nan(f):
             else:
                 turn = (x - a) // period
                 x = (x - a) % period + a
-            # much of the code below that deals with high/low values could be skipped
-            # leaving it untouched while adding circular distributions; optimize later
+            # Much of the code below that deals with high/low values could be skipped.
+            # Leaving it untouched while adding circular distributions. Optimize later.
 
         # Check for arguments outside of domain. They'll be replaced with NaNs,
         # and the result will be set to the appropriate value.
@@ -1208,12 +1208,32 @@ def _cdf2_input_validation(f):
     @functools.wraps(f)
     def wrapped(self, x, y, *args, **kwargs):
         func_name = f.__name__
+        circular = isinstance(self, CircularDistribution)
 
         low, high = self.support()
         x, y, low, high = np.broadcast_arrays(x, y, low, high)
         dtype = np.result_type(x.dtype, y.dtype, self._dtype)
         # yes, copy to avoid modifying input arrays
         x, y = x.astype(dtype, copy=True), y.astype(dtype, copy=True)
+
+        if circular:
+            # I'm not convinced that we should count turns for two-arg circular cdf
+            # Since subtractive cancellation is not an issue when there is more than
+            # one full turn between x and y, ISTM it would be more useful to have a
+            # function that does something different than cdf(y) - cdf(x). Also,
+            # the definition of ccdf(x, y) = 1 - cdf(x, y) doesn't really make sense
+            # when cdf(x, y) can exceed 1. Instead, cdf(x, y) could measure the
+            # cumulative probability along the shorter arc between x and y, and
+            # ccdf(x, y) could measure the cumulative probability along the longer arc?
+            # In the meantime, proceed with cdf(x, y) = cdf(y) - cdf(x) and
+            # ccdf(x, y) = 1 - cdf(x, y)
+            x[np.isinf(x)] = np.nan
+            y[np.isinf(y)] = np.nan
+            period = high - low
+            turnx = (x - low) // period
+            x = np.asarray((x - low) % period + low)
+            turny = (y - low) // period
+            y = np.asarray((y - low) % period + low)
 
         # Swap arguments to ensure that x < y, and replace
         # out-of domain arguments with domain endpoints. We'll
@@ -1251,6 +1271,11 @@ def _cdf2_input_validation(f):
             # res[i_swap] is always positive and less than 1, so it's
             # safe to ensure that the result is real
             res[i_swap] = _logexpxmexpy(np.log(2), res[i_swap]).real
+
+        if circular:
+            sign = 1 if func_name == '_cdf2' else -1
+            res += sign * (turny - turnx)
+
         return res[()]
 
     return wrapped
@@ -3819,14 +3844,6 @@ class CircularDistribution(UnivariateDistribution):
     @cached_property
     def _moment_methods(self):
         return {'cache', 'formula', 'transform', 'general', 'quadrature'}
-
-    def _cdf2(self, x, y, *, method, **kwargs):
-        raise NotImplementedError("Circular distributions do not "
-                                  "support two-argument `cdf`.")
-
-    def _ccdf2(self, x, y, *, method, **kwargs):
-        raise NotImplementedError("Circular distributions do not "
-                                  "support two-argument `ccdf`.")
 
     def _logcdf1(self, x, *, method, **kwargs):
         raise NotImplementedError("Circular distributions do not support `logcdf`.")

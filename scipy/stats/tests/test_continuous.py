@@ -282,16 +282,17 @@ class TestDistributions:
 
         # invalid and divide are to be expected; maybe look into over
         with np.errstate(invalid='ignore', divide='ignore', over='ignore'):
-            if not (isinstance(dist, ShiftedScaledDistribution)
-                    or family in circular_families):
+            if not isinstance(dist, ShiftedScaledDistribution):
                 if func == 'cdf':
                     methods = {'quadrature'}
                     check_cdf2(dist, False, x, y, xy_result_shape, methods)
-                    check_cdf2(dist, True, x, y, xy_result_shape, methods)
+                    if family not in circular_families:
+                        check_cdf2(dist, True, x, y, xy_result_shape, methods)
                 elif func == 'ccdf':
                     methods = {'addition'}
                     check_ccdf2(dist, False, x, y, xy_result_shape, methods)
-                    check_ccdf2(dist, True, x, y, xy_result_shape, methods)
+                    if family not in circular_families:
+                        check_ccdf2(dist, True, x, y, xy_result_shape, methods)
 
     def test_plot(self):
         try:
@@ -2290,12 +2291,6 @@ class TestCircular:
         with pytest.raises(NotImplementedError, match=message + '`ilogccdf`.'):
             X.ilogccdf(1)
 
-        message = "Circular distributions do not support two-argument "
-        with pytest.raises(NotImplementedError, match=message + '`cdf`.'):
-            X.cdf(1, 2)
-        with pytest.raises(NotImplementedError, match=message + '`ccdf`.'):
-            X.ccdf(1, 2)
-
         message = "`VonMises.kurtosis` supports only the default value of `convention`."
         with pytest.raises(ValueError, match=message):
             X.kurtosis(convention='excess')
@@ -2316,6 +2311,7 @@ class TestCircular:
         rng = np.random.default_rng(582348972387243524)
         X = stats.VonMises(mu=1.23, kappa=2.34)
         x = rng.uniform(-10, 10, size=shape)
+        x0 = -0.321
         period = 2 * np.pi
         x_turn = (x + np.pi) // period
         x_wrapped = (x + np.pi) % period - np.pi
@@ -2331,6 +2327,8 @@ class TestCircular:
         assert_allclose(X.logpmf(x), X.logpmf(x_wrapped))
         assert_allclose(X.cdf(x), X.cdf(x_wrapped) + x_turn)
         assert_allclose(X.ccdf(x), X.ccdf(x_wrapped) - x_turn)
+        assert_allclose(X.cdf(x0, x), X.cdf(x) - X.cdf(x0))
+        assert_allclose(X.ccdf(x0, x), 1 - (X.cdf(x) - X.cdf(x0)))
         assert_allclose(X.icdf(x), X.icdf(x % 1) + (x // 1)*period)
         assert_allclose(X.iccdf(x), X.iccdf(x % 1) - (x // 1)*period)
         assert_allclose(X.cdf(X.icdf(x)), x)
