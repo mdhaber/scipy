@@ -2111,8 +2111,8 @@ class UnivariateDistribution(_ProbabilityDistribution):
 
     ## Algorithms
 
-    def _quadrature(self, integrand, limits=None, args=None,
-                    params=None, log=False):
+    def _quadrature(self, integrand, limits=None, step=1, args=None,
+                    params=None, log=False, force_sum=False):
         # Performs numerical integration of an integrand between limits.
         # Much of this should be added to `_tanhsinh`.
         a, b = self._support(**params) if limits is None else limits
@@ -2128,15 +2128,16 @@ class UnivariateDistribution(_ProbabilityDistribution):
         rtol = None if _isnull(self.tol) else self.tol
         # For now, we ignore the status, but I want to return the error
         # estimate - see question 5 at the top.
-        if isinstance(self, ContinuousDistribution):
+        if isinstance(self, ContinuousDistribution) and not force_sum:
             res = _tanhsinh(f, a, b, args=args, log=log, rtol=rtol)
             return res.integral
         else:
-            res = nsum(f, a, b, args=args, log=log, tolerances=dict(rtol=rtol)).sum
+            res = nsum(f, a, b, step=step, args=args, log=log,
+                       tolerances=dict(rtol=rtol)).sum
             res = np.asarray(res)
             # The result should be nan when parameters are nan, so need to special
             # case this.
-            cond = np.isnan(params.popitem()[1]) if params else np.True_
+            cond = np.isnan(next(iter(params.values()))) if params else np.False_
             cond = np.broadcast_to(cond, a.shape)
             res[(a > b)] = -np.inf if log else 0  # fix in nsum?
             res[cond] = np.nan
@@ -2720,7 +2721,8 @@ class UnivariateDistribution(_ProbabilityDistribution):
 
         cdf_max = np.maximum(cdf_x, cdf_y)
         ccdf_max = np.maximum(ccdf_x, ccdf_y)
-        spacing = np.spacing(np.where(i, ccdf_max, cdf_max))
+        with np.errstate(invalid='ignore'):
+            spacing = np.spacing(np.where(i, ccdf_max, cdf_max))
         mask = np.abs(tol * out) < spacing
 
         if np.any(mask):
@@ -5937,3 +5939,134 @@ def log(X, /):
         raise NotImplementedError(message)
     return MonotonicTransformedDistribution(X, g=np.log, h=np.exp, dh=np.exp,
                                             logdh=lambda u: u)
+
+
+class WrappedDistribution(TransformedDistribution, CircularDistribution):
+    """Wrapped distribution."""
+    # Future work: implement characteristic function of ContinuousDistribution,
+    # and use it to compute moments of wrapped distribution
+
+    _lb_domain = _RealInterval(endpoints=(-inf, 'ub'), inclusive=(True, False))
+    _lb_param = _RealParameter('lb', symbol=r'b_l',
+                                domain=_lb_domain, typical=(0.1, 0.2))
+
+    _ub_domain = _RealInterval(endpoints=('lb', inf), inclusive=(False, True))
+    _ub_param = _RealParameter('ub', symbol=r'b_u',
+                                  domain=_ub_domain, typical=(0.8, 0.9))
+
+    _parameterizations = [_Parameterization(_lb_param, _ub_param)]
+
+    def __init__(self, X, /, *args, lb=-np.inf, ub=np.inf, **kwargs):
+        super().__init__(X, *args, lb=lb, ub=ub, **kwargs)
+        # see FoldedDistribution for a note about this
+        self._variable.domain.inclusive = (True, True)
+
+    def _support(self, lb, ub, **params):
+        a, b = self._dist._support(**params)
+        return np.maximum(a, lb), np.minimum(b, ub)
+
+    def _overrides(self, method_name):
+        return False
+
+    def _cdf_dispatch(self, x, *args, lb, ub, method=None, **params):
+        a, b = self._dist._support(**params)
+        period = ub - lb
+        x = x.real
+        d = x - lb
+
+        def cdf_chunk(x, d, **params):
+            return self._dist._cdf2_dispatch(x-d, x, **params)
+
+        right = self._quadrature(cdf_chunk, limits=(x+period, b), step=period,
+                                 args=(d,), params=params, force_sum=True)
+
+        left = self._quadrature(cdf_chunk, limits=(a, x-period), step=period,
+                                args=(d,), params=params, force_sum=True)
+
+        return left + right + cdf_chunk(x, d, **params)
+
+    def _logpdf_dispatch(self, x, *args, lb, ub, method=None, **params):
+        a, b = self._dist._support(**params)
+        x = x.real
+        period = ub - lb
+        # nsum requires decreasing series, so mirror pdf
+        def f(x, **params): return self._dist._logpdf_dispatch(-x, **params)
+        left = self._quadrature(f, limits=(-x + period, -a),
+                                step=period, params=params, log=True, force_sum=True)
+        right = self._quadrature(self._dist._logpdf_dispatch, limits=(x, b), step=period,
+                                 params=params, log=True, force_sum=True)
+        return np.logaddexp(left, right)
+
+    def _sample_dispatch(self, full_shape, *, lb, ub, method, rng, **params):
+        rvs = self._dist._sample_dispatch(full_shape, method=method, rng=rng, **params)
+        return (rvs - lb) % (ub - lb) + lb
+
+    def __repr__(self):
+        with np.printoptions(threshold=10):
+            return (f"wrap({repr(self._dist)}, "
+                    f"lb={repr(self.lb)}, ub={repr(self.ub)})")
+
+    def __str__(self):
+        with np.printoptions(threshold=10):
+            return (f"wrap({str(self._dist)}, "
+                    f"lb={str(self.lb)}, ub={str(self.ub)})")
+
+
+@xp_capabilities(np_only=True)
+def wrap(X, lb, ub):
+    """Wrap a real-line random variable to a circular domain.
+
+    Given a real-line random variable `X`, `wrap` returns a random variable with
+    circular support parameterized by `lb` and `ub`.
+
+    Parameters
+    ----------
+    X : `CircularDistribution`
+        The random variable to be truncated.
+    lb, ub : float array-like
+        The lower and upper wrap points, respectively. Must be
+        broadcastable with one another and the shape of `X`.
+
+    Returns
+    -------
+    X : `CircularDistribution`
+        The wrapped random variable.
+
+    References
+    ----------
+    .. [1] "Wrapped Distribution". *Wikipedia*.
+           https://en.wikipedia.org/wiki/Wrapped_distribution
+
+    Examples
+    --------
+    Compare against `scipy.stats.wrapcauchy`, which wraps a Cauchy random variable.
+
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+    >>> from scipy import stats
+    >>> scale, lb, ub = 2, 0, 2*np.pi
+    >>> X = stats.wrapcauchy(c=np.exp(-scale))
+    >>> Cauchy = stats.make_distribution(stats.cauchy)
+    >>> Y = stats.wrap(scale*Cauchy(), lb, ub)
+    >>> x = np.linspace(lb-0.5, ub+0.5, 300)
+    >>> plt.plot(x, X.pdf(x), '-', label='X')
+    >>> plt.plot(x, Y.pdf(x), '--', label='Y')
+    >>> plt.xlabel('x')
+    >>> plt.ylabel('PDF')
+    >>> plt.title('Wrapped Cauchy')
+    >>> plt.legend()
+    >>> plt.show()
+
+    The difference is that `Y` now represents a circular random variable rather than
+    a truncated random variable with the PDF of a wrapped cauchy distribution.
+
+    `wrap` can be applied to any continuous random variable:
+
+    >>> Z = stats.wrap(stats.Normal(), lb=-np.pi, ub=np.pi)
+    >>> ax = plt.subplot(projection="polar")
+    >>> Z.plot(ax=ax)
+    >>> ax.set_title("Wrapped Normal")
+    >>> plt.show()
+
+    """
+    return WrappedDistribution(X, lb=lb, ub=ub)

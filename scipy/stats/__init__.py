@@ -479,6 +479,7 @@ Random Variables
    Mixture
    order_statistic
    truncate
+   wrap
    abs
    exp
    log
@@ -652,7 +653,7 @@ from ._covariance import Covariance
 from ._sensitivity_analysis import *
 from ._survival import *
 from ._distribution_infrastructure import (
-    make_distribution, Mixture, order_statistic, truncate, exp, log, abs
+    make_distribution, Mixture, order_statistic, truncate, wrap, exp, log, abs
 )
 from ._new_distributions import Normal, Logistic, Uniform, Binomial, VonMises
 from ._mgc import multiscale_graphcorr

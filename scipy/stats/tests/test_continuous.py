@@ -24,6 +24,7 @@ from scipy.stats._new_distributions import (StandardNormal, _LogUniform, _Gamma,
                                             _TestCircular, VonMises)
 from scipy.stats._new_distributions import DiscreteDistribution
 from scipy.stats import Normal, Logistic, Uniform, Binomial
+from scipy.stats.tests.test_axis_nan_policy import SCIPY_XSLOW
 
 
 class Test_RealInterval:
@@ -1915,6 +1916,38 @@ class TestTransforms:
         assert_allclose(Y.ilogccdf(np.log(p)), Y0.isf(p))
         sample = Y.sample(10)
         assert np.all(sample > 0)
+
+    @pytest.mark.slow()
+    def test_wrap(self):
+        rng = np.random.default_rng(81345982345826)
+        scale = rng.random((3, 1))
+        lb, ub = 0, 2*np.pi
+
+        Cauchy = stats.make_distribution(stats.cauchy)
+        Y = stats.wrap(scale*Cauchy(), lb=lb, ub=ub)
+        Y0 = stats.wrapcauchy(c=np.exp(-scale))
+
+        y = Y0.rvs((3, 5), random_state=rng)
+
+        assert_allclose(Y.support(), Y0.support())
+        assert_allclose(Y.logentropy(), np.log(Y0.entropy() + 0j))
+        assert_allclose(Y.entropy(), Y0.entropy())
+        assert np.all(np.isclose(Y.mean(), 0) | np.isclose(Y.mean(), 2*np.pi))
+        assert_allclose(Y.variance(), 1-np.exp(-scale))
+        assert_allclose(Y.standard_deviation()**2, -2*np.log(1 - Y.variance()))
+        assert_allclose(Y.pdf(y), Y0.pdf(y))
+        assert_allclose(Y.cdf(y), Y0.cdf(y))
+        assert_allclose(Y.ccdf(y), Y0.sf(y))
+        sample = Y.sample(10)
+        assert np.all((sample > lb) & (sample < ub))
+
+        if SCIPY_XSLOW:
+            p = Y0.cdf(y)
+            assert_allclose(Y.icdf(p), Y0.ppf(p))
+            assert_allclose(Y.iccdf(p), Y0.isf(p))
+            median = Y.median()
+            assert np.all(np.isclose(median, 0) | np.isclose(median, 2*np.pi))
+
 
 class TestOrderStatistic:
     @pytest.mark.fail_slow(20)  # Moments require integration
