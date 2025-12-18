@@ -17,7 +17,8 @@ import pytest
 from pytest import raises as assert_raises
 
 from scipy import optimize, stats, special
-from scipy.stats._morestats import _abw_state, _get_As_weibull, _Avals_weibull
+from scipy.stats._morestats import (_abw_state, _get_As_weibull, _Avals_weibull,
+                                    _boxcox_llf)
 from .common_tests import check_named_results
 from .._hypotests import _get_wilcoxon_distr, _get_wilcoxon_distr2
 from scipy.stats._binomtest import _binary_search_for_binom_tst
@@ -2254,7 +2255,7 @@ class TestBoxcox_llf:
         xp_assert_close(llf, xp.asarray(-15.32401272869016598, dtype=xp.float64),
                         rtol=5e-7)  # bumped tolerance from 1e-7 for Accelerate
 
-    @pytest.mark.skip_xp_backends('dask.array', 'no _axis_nan_policy decorator')
+    @pytest.mark.skip_xp_backends('dask.array', reason='no _axis_nan_policy decorator')
     def test_axis(self, xp):
         data = xp.asarray([[100, 200], [300, 400]])
         llf_axis_0 = stats.boxcox_llf(1, data, axis=0)
@@ -2269,6 +2270,16 @@ class TestBoxcox_llf:
             stats.boxcox_llf(1, data[1, :]),
         ])
         xp_assert_close(llf_axis_1, llf_1)
+
+    def test_array_lambda(self, xp):
+        rng = np.random.default_rng(4079206592)
+        data = xp.asarray(rng.random((2, 4)))
+        lmb = xp.asarray(rng.random((2, 3)))
+        with pytest.raises(ValueError, match="`lmb` must be a scalar."):
+            stats.boxcox_llf(lmb, data, axis=-1)
+
+        res = _boxcox_llf(data, lmb=lmb, axis=-1)
+        assert res.shape == (2, 3)
 
 
 # This is the data from GitHub user Qukaiyi, given as an example

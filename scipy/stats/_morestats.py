@@ -881,13 +881,15 @@ def _log_mean(logx, axis):
     )
 
 
-def _log_var(logx, xp, axis):
+def _log_var(logx, xp, axis, keepdims=False):
     # compute log of variance of x from log(x)
     logmean = xp.broadcast_to(_log_mean(logx, axis=axis), logx.shape)
     ones = xp.ones_like(logx)
-    logxmu, _ = special.logsumexp(xp.stack((logx, logmean), axis=0), axis=0,
-                                  b=xp.stack((ones, -ones), axis=0), return_sign=True)
-    return special.logsumexp(2 * logxmu, axis=axis) - math.log(logx.shape[axis])
+    logxmu, _ = special.logsumexp(xp.stack((logx, logmean), axis=0),
+                                  b=xp.stack((ones, -ones), axis=0),
+                                  axis=0, return_sign=True)
+    return (special.logsumexp(2 * logxmu, axis=axis, keepdims=keepdims)
+            - math.log(logx.shape[axis]))
 
 
 @xp_capabilities()
@@ -994,6 +996,12 @@ def boxcox_llf(lmb, data, *, axis=0, keepdims=False, nan_policy='propagate'):
     >>> plt.show()
 
     """
+    # _boxcox_llf now supports ndarray `lmb` for internal use. More work (e.g. tests,
+    # documentation) would be needed to make this public. Ideally, we'd also swap
+    # the order of the `lmb` and `data` args.
+    if not np.isscalar(lmb):
+        raise ValueError('`lmb` must be a scalar.')
+
     # _axis_nan_policy decorator does not currently support these for lazy arrays.
     # We want to run tests with lazy backends, so don't pass the arguments explicitly
     # unless necessary.
@@ -1010,6 +1018,9 @@ def boxcox_llf(lmb, data, *, axis=0, keepdims=False, nan_policy='propagate'):
 def _boxcox_llf(data, lmb, *, axis=-1):
     xp = array_namespace(data)
     data, lmb = xp_promote(data, lmb, force_floating=True, xp=xp)
+    lmb_shape = lmb.shape
+    data, lmb = _broadcast_arrays((data, lmb), axis=-1, xp=xp)
+    data, lmb = data[..., xp.newaxis, :], lmb[..., :, xp.newaxis]
 
     N = data.shape[-1]
     if N == 0:
@@ -1018,17 +1029,24 @@ def _boxcox_llf(data, lmb, *, axis=-1):
     logdata = xp.log(data)
 
     # Compute the variance of the transformed data.
-    if lmb == 0:
-        logvar = xp.log(xp.var(logdata, axis=-1))
-    else:
+    def _logvar_lmb_0(logdata, _):
+        return xp.log(xp.var(logdata, axis=-1, keepdims=True))
+
+    def _logvar_lmb(logdata, lmb):
         # Transform without the constant offset 1/lmb.  The offset does
         # not affect the variance, and the subtraction of the offset can
         # lead to loss of precision.
         # Division by lmb can be factored out to enhance numerical stability.
         logx = lmb * logdata
-        logvar = _log_var(logx, xp, -1) - 2 * xp.log(xp.abs(lmb))
+        return _log_var(logx, xp, axis=-1, keepdims=True) - 2 * xp.log(xp.abs(lmb))
 
-    res = (lmb - 1) * xp.sum(logdata, axis=-1) - N/2 * logvar
+    mask = (lmb == 0)
+    lmb_ = xp.where(mask, 1., lmb)
+    logvar = xp.where(mask, _logvar_lmb_0(logdata, lmb), _logvar_lmb(logdata, lmb_))
+
+    res = (lmb - 1) * xp.sum(logdata, axis=-1, keepdims=True) - N/2 * logvar
+    res = xp.squeeze(res, axis=-1)  # sample dimension
+    res = xp.squeeze(res, axis=-1) if lmb_shape == () else res  # lmb dimension
     return res[()] if res.ndim == 0 else res
 
 
