@@ -1359,6 +1359,23 @@ def boxcox_normmax(
     >>> stats.boxcox_normmax(x, optimizer=optimizer)
     6.000000000
     """
+    x, _optimizer, ymax, end_msg = _boxcox_normmax_iv(x, brack, method, optimizer, ymax)
+
+    if method == 'pearsonr':
+        res = _boxcox_normmax_pearsonr(x, _optimizer)
+    elif method == 'mle':
+        res = _boxcox_normmax_mle(x, _optimizer)
+    elif method == 'all':
+        res = np.stack((_boxcox_normmax_pearsonr(x, _optimizer),
+                        _boxcox_normmax_mle(x, _optimizer)))
+
+    res = _boxcox_normmax_postprocess(res, x, ymax, end_msg)
+
+    return res[()]
+
+
+def _boxcox_normmax_iv(x, brack, method, optimizer, ymax):
+    # input validation for boxcox_normmax
     x = np.asarray(x)
 
     if not np.all(np.isfinite(x) & (x >= 0)):
@@ -1375,6 +1392,16 @@ def boxcox_normmax(
     elif ymax <= 0:
         raise ValueError("`ymax` must be strictly positive")
 
+    _optimizer = _get_optimizer(optimizer, brack)
+
+    methods = {'pearsonr', 'mle', 'all'}
+    if method not in methods:
+        raise ValueError(f"Method {method} not recognized.")
+
+    return x, _optimizer, ymax, end_msg
+
+
+def _get_optimizer(optimizer, brack):
     # If optimizer is not given, define default 'brent' optimizer.
     if optimizer is None:
 
@@ -1400,45 +1427,35 @@ def boxcox_normmax(
                 return func(x, *args)
             return getattr(optimizer(func_wrapped), 'x', None)
 
-    def _pearsonr(x):
-        osm_uniform = _calc_uniform_order_statistic_medians(len(x))
-        xvals = distributions.norm.ppf(osm_uniform)
+    return _optimizer
 
-        def _eval_pearsonr(lmbda, xvals, samps):
-            # This function computes the x-axis values of the probability plot
-            # and computes a linear regression (including the correlation) and
-            # returns ``1 - r`` so that a minimization function maximizes the
-            # correlation.
-            y = boxcox(samps, lmbda)
-            yvals = np.sort(y)
-            r, prob = _stats_py.pearsonr(xvals, yvals)
-            return 1 - r
 
-        return _optimizer(_eval_pearsonr, args=(xvals, x))
+def _boxcox_normmax_pearsonr(x, _optimizer):
+    osm_uniform = _calc_uniform_order_statistic_medians(len(x))
+    xvals = distributions.norm.ppf(osm_uniform)
 
-    def _mle(x):
-        def _eval_mle(lmb, data):
-            # function to minimize
-            return -boxcox_llf(lmb, data)
+    def _eval_pearsonr(lmbda, xvals, samps):
+        # This function computes the x-axis values of the probability plot
+        # and computes a linear regression (including the correlation) and
+        # returns ``1 - r`` so that a minimization function maximizes the
+        # correlation.
+        y = boxcox(samps, lmbda)
+        yvals = np.sort(y)
+        r, prob = _stats_py.pearsonr(xvals, yvals)
+        return 1 - r
 
-        return _optimizer(_eval_mle, args=(x,))
+    return _optimizer(_eval_pearsonr, args=(xvals, x))
 
-    def _all(x):
-        maxlog = np.empty(2, dtype=float)
-        maxlog[0] = _pearsonr(x)
-        maxlog[1] = _mle(x)
-        return maxlog
 
-    methods = {'pearsonr': _pearsonr,
-               'mle': _mle,
-               'all': _all}
-    if method not in methods.keys():
-        raise ValueError(f"Method {method} not recognized.")
+def _boxcox_normmax_mle(x, _optimizer):
+    def _eval_mle(lmb, data):
+        # function to minimize
+        return -boxcox_llf(lmb, data)
 
-    optimfunc = methods[method]
+    return _optimizer(_eval_mle, args=(x,))
 
-    res = optimfunc(x)
 
+def _boxcox_normmax_postprocess(res, x, ymax, end_msg):
     if res is None:
         message = ("The `optimizer` argument of `boxcox_normmax` must return "
                    "an object containing the optimal `lmbda` in attribute `x`.")
@@ -1473,6 +1490,7 @@ def boxcox_normmax(
                 res[mask] = constrained_res
             else:
                 res = constrained_res
+
     return res
 
 
