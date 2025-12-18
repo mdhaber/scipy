@@ -2254,6 +2254,7 @@ class TestBoxcox_llf:
         xp_assert_close(llf, xp.asarray(-15.32401272869016598, dtype=xp.float64),
                         rtol=5e-7)  # bumped tolerance from 1e-7 for Accelerate
 
+    @pytest.mark.skip_xp_backends('dask.array', 'no _axis_nan_policy decorator')
     def test_axis(self, xp):
         data = xp.asarray([[100, 200], [300, 400]])
         llf_axis_0 = stats.boxcox_llf(1, data, axis=0)
