@@ -1250,7 +1250,8 @@ _BigFloat_singleton = _BigFloat()
 
 @xp_capabilities(np_only=True)
 def boxcox_normmax(
-    x, brack=None, method='pearsonr', optimizer=None, *, ymax=_BigFloat_singleton
+    x, brack=None, method='pearsonr', optimizer=None, *, ymax=_BigFloat_singleton,
+    axis=0, keepdims=False, nan_policy='propagate'
 ):
     """Compute optimal Box-Cox transform parameter for input data.
 
@@ -1303,6 +1304,26 @@ def boxcox_normmax(
         the maximum value of the input dtype. If set to infinity,
         `boxcox_normmax` returns the unconstrained optimal lambda.
         Ignored when ``method='pearsonr'``.
+    axis : int or tuple of ints, default: None
+        If an int or tuple of ints, the axis or axes of the input along which
+        to compute the statistic. The statistic of each axis-slice (e.g. row)
+        of the input will appear in a corresponding element of the output.
+        If ``None``, the input will be raveled before computing the statistic.
+    keepdims : boolean, optional
+        If this is set to ``True``, the axes which are reduced are left
+        in the result as dimensions with length one. With this option,
+        the result will broadcast correctly against the input array.
+    nan_policy : {'propagate', 'omit', 'raise'}, default: 'propagate'
+        Defines how to handle input NaNs.
+
+        - ``propagate``: if a NaN is present in the axis slice (e.g. row) along
+          which the statistic is computed, the corresponding entry of the output
+          will be NaN.
+        - ``omit``: NaNs will be omitted when performing the calculation.
+          If insufficient data remains in the axis slice along which the
+          statistic is computed, the corresponding entry of the output will be
+          NaN.
+        - ``raise``: if a NaN is present, a ``ValueError`` will be raised.
 
     Returns
     -------
@@ -1359,17 +1380,33 @@ def boxcox_normmax(
     >>> stats.boxcox_normmax(x, optimizer=optimizer)
     6.000000000
     """
+    return _boxcox_normmax(x, brack=brack, method=method, optimizer=optimizer,
+                           ymax=ymax, axis=axis, keepdims=keepdims,
+                           nan_policy=nan_policy)
+
+
+def _boxcox_normmax(
+    x, brack=None, method='pearsonr', optimizer=None, *, ymax=_BigFloat_singleton,
+    axis=0, keepdims=False, nan_policy='propagate', _no_deco=False
+):
     x, _optimizer, ymax, end_msg = _boxcox_normmax_iv(x, brack, method, optimizer, ymax)
 
-    if method == 'pearsonr':
-        res = _boxcox_normmax_pearsonr(x, _optimizer)
-    elif method == 'mle':
-        res = _boxcox_normmax_mle(x, _optimizer)
-    elif method == 'all':
-        res = np.stack((_boxcox_normmax_pearsonr(x, _optimizer),
-                        _boxcox_normmax_mle(x, _optimizer)))
+    if _no_deco and (np.any(np.isnan(x))  # for _axis_nan_policy decorator testing only
+        or (method == 'mle' and x.size <= 1)
+        or (method == 'pearsonr' and x.size <= 3)
+    ):
+        return _get_nan(x)
 
-    res = _boxcox_normmax_postprocess(res, x, ymax, end_msg)
+    args = (x, _optimizer, ymax, end_msg)
+    kwargs = (dict(_no_deco=_no_deco) if _no_deco else
+              dict(axis=axis, keepdims=keepdims, nan_policy=nan_policy))
+    if method == 'pearsonr':
+        res = _boxcox_normmax_pearsonr(*args, **kwargs)
+    elif method == 'mle':
+        res = _boxcox_normmax_mle(*args, **kwargs)
+    elif method == 'all':
+        res = np.stack((_boxcox_normmax_pearsonr(*args, **kwargs),
+                        _boxcox_normmax_mle(*args, **kwargs)))
 
     return res[()]
 
@@ -1378,10 +1415,11 @@ def _boxcox_normmax_iv(x, brack, method, optimizer, ymax):
     # input validation for boxcox_normmax
     x = np.asarray(x)
 
-    if not np.all(np.isfinite(x) & (x >= 0)):
-        message = ("The `x` argument of `boxcox_normmax` must contain "
-                   "only positive, finite, real numbers.")
-        raise ValueError(message)
+    # The `x` argument must contain only positive, finite, reals numbers.
+    dtype = xp_result_type(x, force_floating=True, xp=np)
+    x = np.astype(x, dtype, copy=True)
+    x[np.isinf(x)] = np.nan
+    x[x < 0] = np.nan
 
     end_msg = "exceed specified `ymax`."
     if ymax is _BigFloat_singleton:
@@ -1430,7 +1468,10 @@ def _get_optimizer(optimizer, brack):
     return _optimizer
 
 
-def _boxcox_normmax_pearsonr(x, _optimizer):
+@_axis_nan_policy_factory(
+        lambda x: x, n_samples=1, n_outputs=1, too_small=3,
+        result_to_tuple=lambda x, _: (x,))
+def _boxcox_normmax_pearsonr(x, _optimizer, ymax, end_msg):
     osm_uniform = _calc_uniform_order_statistic_medians(len(x))
     xvals = distributions.norm.ppf(osm_uniform)
 
@@ -1444,15 +1485,22 @@ def _boxcox_normmax_pearsonr(x, _optimizer):
         r, prob = _stats_py.pearsonr(xvals, yvals)
         return 1 - r
 
-    return _optimizer(_eval_pearsonr, args=(xvals, x))
+    res = _optimizer(_eval_pearsonr, args=(xvals, x))
+    res = _boxcox_normmax_postprocess(res, x, ymax, end_msg)
+    return res
 
 
-def _boxcox_normmax_mle(x, _optimizer):
+@_axis_nan_policy_factory(
+        lambda x: x, n_samples=1, n_outputs=1, too_small=1,
+        result_to_tuple=lambda x, _: (x,))
+def _boxcox_normmax_mle(x, _optimizer, ymax, end_msg):
     def _eval_mle(lmb, data):
         # function to minimize
         return -boxcox_llf(lmb, data)
 
-    return _optimizer(_eval_mle, args=(x,))
+    res = _optimizer(_eval_mle, args=(x,))
+    res = _boxcox_normmax_postprocess(res, x, ymax, end_msg)
+    return res
 
 
 def _boxcox_normmax_postprocess(res, x, ymax, end_msg):
