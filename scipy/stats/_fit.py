@@ -1347,3 +1347,94 @@ def _gof_iv(dist, data, known_params, fit_params, guessed_params, statistic,
 
     return (dist, data, fixed_nhd_params, fixed_rfd_params, guessed_nhd_params,
             guessed_rfd_params, statistic, n_mc_samples_int, rng)
+
+
+# def pdf(x, y):
+#     return np.ones_like(y) / (x[1] - x[0])
+#
+# def dpdf(x, y):
+#     bma = x[1] - x[0]
+#     return np.ones_like(y) * bma**-2. * np.asarray([[1], [-1]])
+#
+# a, b = -3, 5
+# X = stats.Uniform(a=-3, b=5)
+# p0 = np.asarray([-4., 6.])
+# Ai = np.asarray([[1, 0], [0, -1], [-1, 1]])
+# bi = np.asarray([np.min(y), -np.max(y), 0])
+
+def pdf(x, y):
+    return stats.norm.pdf(y, *x)
+
+def dpdf(x, y):
+    mu, sigma = x
+    dpdf0 = pdf(x, y) * (y - mu) / sigma**2
+    dpdf1 = pdf(x, y) * ((y - mu)**2 / sigma**3 - 1/sigma)
+    return np.stack((dpdf0, dpdf1))
+
+X = stats.Normal(mu=-3, sigma=5)
+p0 = np.asarray([-4., 6.])
+Ai = np.zeros((0, 2))
+bi = np.zeros((0,))
+
+def f(x, y):
+    return -np.sum(np.log(pdf(x, y)), axis=-1)
+
+def df(x, y):
+    return -np.sum(dpdf(x, y) / pdf(x, y), axis=-1)
+
+
+y = X.sample(100)
+
+x = p0
+# stats.uniform.nnlf((a, b-a), y)
+
+# add simple numerical differentiation with step-doubling quality check
+
+def project(A, i, d):
+    Ai = A[i, :]
+    lam = np.linalg.solve(Ai @ Ai.T, Ai @ d)
+    return d - Ai.T @ lam
+
+def armijo(x, a, d):
+    c1 = 0.1
+    f_current = f(x, y)
+    df_current = df(x, y)
+    f_proposed = f(x + a*d, y)
+    return f_proposed <=  f_current + c1*a*(df_current @ d)
+
+print(f(x, y))
+
+def fit(x, df, Ai, bi):
+    i = np.zeros(Ai.shape[0], dtype=np.bool)
+
+    for j in range(1000):
+
+        d = project(Ai, i, -df(x, y))  # search direction
+        with np.errstate(invalid='ignore', divide='ignore'):
+            max_steps = np.where((Ai @ d) == 0, np.inf, (bi - Ai@x) / (Ai @ d))
+        max_step = np.min(max_steps) if max_steps.size else 1.0
+        step = max_step
+
+        if np.linalg.vector_norm(d) < 1e-6:
+            break
+
+        while not armijo(x, step, d):
+            step /= 2
+
+        x += step * d
+        # no - `i` should be created fresh from the constraints that would be violated
+        # by a very small step in the search direction, *then* we project
+        i |= (step == max_steps)
+        # print(j, step, f(x, y), np.linalg.vector_norm(d))
+    return x
+
+print(x)
+
+
+# curvature condition is not satisfied at the boundary
+# def wolfe(x, a, d):
+#     c2 = 0.9
+#     df_current = df(x, y)
+#     df_proposed = df(x + a*d, y)
+#     return abs(df_proposed @ d) <= c2 * abs(df_current @ d)
+# wolfe(x, step, d)
