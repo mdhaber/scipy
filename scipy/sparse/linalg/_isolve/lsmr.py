@@ -97,7 +97,7 @@ def lsmr(A, b, damp=0.0, atol=1e-6, btol=1e-6, conlim=1e8,
     x : ndarray of float
         Least-square solution returned.
     istop : int
-        istop gives the reason for stopping::
+        Gives the reason for stopping::
 
           istop   = 0 means x=0 is a solution.  If x0 was given, then x=x0 is a
                       solution.

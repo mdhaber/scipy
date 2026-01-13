@@ -158,7 +158,7 @@ def spsolve(A, b, permc_spec=None, use_umfpack=True):
     Returns
     -------
     x : ndarray or sparse array or matrix
-        the solution of the sparse linear equation.
+        The solution of the sparse linear equation.
         If b is a vector, then x is a vector of size A.shape[1]
         If b is a matrix, then x is a matrix of size (A.shape[1], b.shape[1])
 

@@ -51,7 +51,7 @@ def ascent():
     Returns
     -------
     ascent : ndarray
-       convenient image to use for testing and demonstration
+       Convenient image to use for testing and demonstration
 
     Examples
     --------
@@ -196,7 +196,7 @@ def face(gray=False):
     Returns
     -------
     face : ndarray
-        image of a raccoon face
+        Image of a raccoon face
 
     Examples
     --------

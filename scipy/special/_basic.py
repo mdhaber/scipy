@@ -967,7 +967,7 @@ def yvp(v, z, n=1):
     >>> ax.set_ylim(-10, 10)
     >>> plt.legend()
     >>> plt.show()
-    """
+    """  # numpydoc ignore=RT04
     n = _nonneg_int_or_fail(n, 'n')
     if n == 0:
         return yv(v, z)
@@ -1129,7 +1129,7 @@ def ivp(v, z, n=1):
     >>> ax.plot(x, ivp(1, x, 3), label=r"$I_1'''$")
     >>> plt.legend()
     >>> plt.show()
-    """
+    """  # numpydoc ignore=RT04
     n = _nonneg_int_or_fail(n, 'n')
     if n == 0:
         return iv(v, z)

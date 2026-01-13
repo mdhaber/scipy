@@ -1622,7 +1622,7 @@ def ttest_1samp(a, popmean, axis=0, alternative='two-sided'):
     Returns
     -------
     statistic : float or array
-        t-statistic
+        The t-statistic
     pvalue : float or array
         The p-value
 
@@ -1764,9 +1764,9 @@ def ttest_rel(a, b, axis=0, alternative='two-sided'):
     Returns
     -------
     statistic : float or array
-        t-statistic
+        The t-statistic
     pvalue : float or array
-        two-tailed p-value
+        Two-tailed p-value
 
     Notes
     -----
@@ -3103,22 +3103,22 @@ def describe(a, axis=0, ddof=0, bias=True):
     Returns
     -------
     nobs : int
-        (size of the data (discarding missing values)
+        Size of the data (discarding missing values)
 
     minmax : (int, int)
-        min, max
+        Minimum and maximum
 
     mean : float
-        arithmetic mean
+        Arithmetic mean
 
     variance : float
-        unbiased variance
+        Unbiased variance
 
     skewness : float
-        biased skewness
+        Biased skewness
 
     kurtosis : float
-        biased kurtosis
+        Biased kurtosis
 
     Examples
     --------
@@ -3682,9 +3682,9 @@ def friedmanchisquare(*args):
     Returns
     -------
     statistic : float
-        the test statistic.
+        The test statistic.
     pvalue : float
-        the associated p-value.
+        The associated p-value.
 
     """
     data = argstoarray(*args).astype(float)
@@ -3747,7 +3747,7 @@ def brunnermunzel(x, y, alternative="two-sided", distribution="t"):
     statistic : float
         The Brunner-Munzer W statistic.
     pvalue : float
-        p-value assuming an t distribution. One-sided or
+        The p-value assuming an t distribution. One-sided or
         two-sided, depending on the choice of `alternative` and `distribution`.
 
     See Also

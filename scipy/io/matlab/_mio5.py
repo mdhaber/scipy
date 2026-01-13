@@ -395,7 +395,7 @@ def varmats_from_mat(file_obj):
     Returns
     -------
     named_mats : list
-        list contains tuples of (name, BytesIO) where BytesIO is a file-like
+        List contains tuples of (name, BytesIO) where BytesIO is a file-like
         object containing mat file contents as for a single variable. The
         BytesIO contains a string with the original header and a single var. If
         ``var_file_obj`` is an individual BytesIO instance, then save as a mat

@@ -40,7 +40,7 @@ def inv(A):
     Returns
     -------
     Ainv : (M, M) sparse arrays
-        inverse of `A`
+        Inverse of `A`
 
     Notes
     -----

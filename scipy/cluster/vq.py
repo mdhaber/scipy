@@ -713,7 +713,7 @@ def kmeans2(data, k, iter=10, thresh=1e-5, minit='random',
         A 'k' by 'N' array of centroids found at the last iteration of
         k-means.
     label : ndarray
-        label[i] is the code or index of the centroid the
+        ``label[i]`` is the code or index of the centroid the
         ith observation is closest to.
 
     See Also

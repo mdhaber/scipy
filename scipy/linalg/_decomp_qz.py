@@ -371,7 +371,7 @@ def ordqz(A, B, sort='lhp', output='real', overwrite_a=False,
     BB : (N, N) ndarray
         Generalized Schur form of B.
     alpha : (N,) ndarray
-        alpha = alphar + alphai * 1j. See notes.
+        ``alpha = alphar + alphai * 1j``. See notes.
     beta : (N,) ndarray
         See notes.
     Q : (N, N) ndarray

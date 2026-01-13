@@ -354,7 +354,7 @@ def leastsq(func, x0, args=(), Dfun=None, full_output=False,
         multiplied by the variance of the residuals -- see curve_fit. Only
         returned if `full_output` is ``True``.
     infodict : dict
-        a dictionary of optional outputs with the keys:
+        A dictionary of optional outputs with the keys:
 
         ``nfev``
             The number of function calls
@@ -725,7 +725,7 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         (e.g. computed with `numpy.linalg.cond`) may indicate that results are
         unreliable.
     infodict : dict (returned only if `full_output` is True)
-        a dictionary of optional outputs with the keys:
+        A dictionary of optional outputs with the keys:
 
         ``nfev``
             The number of function calls. Methods 'trf' and 'dogbox' do not

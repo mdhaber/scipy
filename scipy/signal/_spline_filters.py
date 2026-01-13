@@ -38,7 +38,7 @@ def spline_filter(Iin, lmbda=5.0):
     Returns
     -------
     res : ndarray
-        filtered input data
+        Filtered input data
 
     Examples
     --------

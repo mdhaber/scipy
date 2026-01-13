@@ -37,7 +37,7 @@ def ellip_harm(h2, k2, n, p, s, signm=1, signn=1):
     Returns
     -------
     E : float
-        the harmonic :math:`E^p_n(s)`
+        The harmonic :math:`E^p_n(s)`
 
     See Also
     --------

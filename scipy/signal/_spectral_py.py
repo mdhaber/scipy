@@ -1695,7 +1695,7 @@ def istft(Zxx, fs=1.0, window='hann_periodic', nperseg=None, noverlap=None, nfft
     t : ndarray
         Array of output data times.
     x : ndarray
-        iSTFT of `Zxx`.
+        Inverse STFT of `Zxx`.
 
     See Also
     --------

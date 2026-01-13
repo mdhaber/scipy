@@ -729,7 +729,7 @@ def kron(A, B, format=None):
     Returns
     -------
     sparse matrix or array
-        kronecker product in a sparse format. Returns a sparse matrix unless either
+        Kronecker product in a sparse format. Returns a sparse matrix unless either
         `A` or `B` is a sparse array in which case returns a sparse array.
 
     Examples
@@ -844,7 +844,7 @@ def kronsum(A, B, format=None):
     Returns
     -------
     sparse matrix or array
-        kronecker sum in a sparse format. Returns a sparse matrix unless either
+        Kronecker sum in a sparse format. Returns a sparse matrix unless either
         `A` or `B` is a sparse array in which case returns a sparse array.
 
     Examples

@@ -570,7 +570,9 @@ def cramervonmises(rvs, cdf, args=(), *, axis=0):
 
     Returns
     -------
-    res : object with attributes
+    res : CramerVonMisesResult
+        Object with attributes:
+
         statistic : float
             Cramér-von Mises statistic :math:`T`.
         pvalue : float
@@ -1679,7 +1681,9 @@ def cramervonmises_2samp(x, y, method='auto', *, axis=0):
 
     Returns
     -------
-    res : object with attributes
+    res : CramerVonMisesResult
+        Object with attributes:
+
         statistic : float
             Cramér-von Mises statistic :math:`T`.
         pvalue : float

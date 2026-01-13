@@ -38,7 +38,7 @@ def minkowski_distance_p(x, y, p=2.0):
     >>> minkowski_distance_p([[0, 0], [0, 0]], [[1, 1], [0, 1]])
     array([2., 1.])
 
-    """
+    """  # numpydoc ignore=RT04
     x = np.asarray(x)
     y = np.asarray(y)
 

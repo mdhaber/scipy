@@ -2728,30 +2728,31 @@ def place_poles(A, B, poles, method="YT", rtol=1e-3, maxiter=30):
     Returns
     -------
     full_state_feedback : Bunch object
-        full_state_feedback is composed of:
-            gain_matrix : 2-D ndarray
-                The closed loop matrix K such as the eigenvalues of ``A-BK``
-                are as close as possible to the requested poles.
-            computed_poles : 1-D ndarray
-                The poles corresponding to ``A-BK`` sorted as first the real
-                poles in increasing order, then the complex conjugates in
-                lexicographic order.
-            requested_poles : 1-D ndarray
-                The poles the algorithm was asked to place sorted as above,
-                they may differ from what was achieved.
-            X : 2-D ndarray
-                The transfer matrix such as ``X * diag(poles) = (A - B*K)*X``
-                (see Notes)
-            rtol : float
-                The relative tolerance achieved on ``det(X)`` (see Notes).
-                `rtol` will be NaN if it is possible to solve the system
-                ``diag(poles) = (A - B*K)``, or 0 when the optimization
-                algorithms can't do anything i.e when ``B.shape[1] == 1``.
-            nb_iter : int
-                The number of iterations performed before converging.
-                `nb_iter` will be NaN if it is possible to solve the system
-                ``diag(poles) = (A - B*K)``, or 0 when the optimization
-                algorithms can't do anything i.e when ``B.shape[1] == 1``.
+        Object composed of:
+
+        gain_matrix : 2-D ndarray
+            The closed loop matrix K such as the eigenvalues of ``A-BK``
+            are as close as possible to the requested poles.
+        computed_poles : 1-D ndarray
+            The poles corresponding to ``A-BK`` sorted as first the real
+            poles in increasing order, then the complex conjugates in
+            lexicographic order.
+        requested_poles : 1-D ndarray
+            The poles the algorithm was asked to place sorted as above,
+            they may differ from what was achieved.
+        X : 2-D ndarray
+            The transfer matrix such as ``X * diag(poles) = (A - B*K)*X``
+            (see Notes)
+        rtol : float
+            The relative tolerance achieved on ``det(X)`` (see Notes).
+            `rtol` will be NaN if it is possible to solve the system
+            ``diag(poles) = (A - B*K)``, or 0 when the optimization
+            algorithms can't do anything i.e when ``B.shape[1] == 1``.
+        nb_iter : int
+            The number of iterations performed before converging.
+            `nb_iter` will be NaN if it is possible to solve the system
+            ``diag(poles) = (A - B*K)``, or 0 when the optimization
+            algorithms can't do anything i.e when ``B.shape[1] == 1``.
 
     Notes
     -----

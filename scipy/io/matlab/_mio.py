@@ -151,7 +151,7 @@ def loadmat(file_name, mdict=None, appendmat=True, *, spmatrix=True, **kwargs):
     Returns
     -------
     mat_dict : dict
-       dictionary with variable names as keys, and loaded matrices as values.
+       Dictionary with variable names as keys, and loaded matrices as values.
 
     Notes
     -----

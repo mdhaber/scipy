@@ -34,7 +34,7 @@ def fft(x, n=None, axis=-1, overwrite_x=False):
     Returns
     -------
     z : complex ndarray
-        with the elements::
+        Array with the elements::
 
             [y(0),y(1),..,y(n/2),y(1-n/2),...,y(-1)]        if n is even
             [y(0),y(1),..,y((n-1)/2),y(-(n-1)/2),...,y(-1)]  if n is odd

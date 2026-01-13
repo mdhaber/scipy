@@ -350,10 +350,10 @@ def directed_hausdorff(u, v, rng=0):
         The directed Hausdorff distance between arrays `u` and `v`,
 
     index_1 : int
-        index of point contributing to Hausdorff pair in `u`
+        Index of point contributing to Hausdorff pair in `u`
 
     index_2 : int
-        index of point contributing to Hausdorff pair in `v`
+        Index of point contributing to Hausdorff pair in `v`
 
     Raises
     ------

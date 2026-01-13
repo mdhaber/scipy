@@ -202,9 +202,9 @@ def matfile_version(file_name, *, appendmat=True):
     Returns
     -------
     major_version : {0, 1, 2}
-        major MATLAB File format version
+        Major MATLAB File format version
     minor_version : int
-        minor MATLAB file format version
+        Minor MATLAB file format version
 
     Raises
     ------
