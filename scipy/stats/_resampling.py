@@ -2423,3 +2423,8 @@ class BootstrapMethod(ResamplingMethod):
         if self.random_state is not None:
             d['random_state'] = self.random_state
         return d
+
+
+@xp_capabilities()
+def get_random_value(a, rng):
+    return rng.random()

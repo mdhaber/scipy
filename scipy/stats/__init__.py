@@ -611,7 +611,8 @@ from . import contingency
 from .contingency import chi2_contingency
 from ._censored_data import CensoredData
 from ._resampling import (bootstrap, monte_carlo_test, permutation_test, power,
-                          MonteCarloMethod, PermutationMethod, BootstrapMethod)
+                          MonteCarloMethod, PermutationMethod, BootstrapMethod,
+                          get_random_value)
 from ._entropy import *
 from ._hypotests import *
 from ._page_trend_test import page_trend_test

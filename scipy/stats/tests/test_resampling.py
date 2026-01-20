@@ -2083,3 +2083,12 @@ class TestMonteCarloMethod:
         rng = np.random.default_rng(34982345)
         with pytest.raises(ValueError, match=message):
             stats.MonteCarloMethod(rvs=rng.random, rng=rng)
+
+
+@make_xp_test_case(stats.get_random_value)
+def test_get_random_value(xp):
+    rng = np.random.default_rng(34982345)
+    a = xp.asarray(1.)
+    x = stats.get_random_value(a, rng)
+    y = stats.get_random_value(a, rng)
+    assert not np.allclose(x, y)
