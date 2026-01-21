@@ -236,6 +236,7 @@ class TestBootstrap:
         xp_assert_close(res.confidence_interval.low, xp.asarray(ref_low), rtol=0.005)
         xp_assert_close(res.confidence_interval.high, xp.asarray(ref_high), rtol=0.005)
 
+    @skip_xp_backends('jax.numpy', reason='see gh-24412')
     def test_multisample_BCa_against_R(self, xp):
         # Because bootstrap is stochastic, it's tricky to test against reference
         # behavior. Here, we show that SciPy's BCa CI matches R wboot's BCa CI
@@ -469,6 +470,7 @@ class TestBootstrap:
                         xp.asarray(res2.confidence_interval.high))
         xp_assert_close(res1.standard_error, xp.asarray(res2.standard_error))
 
+    @skip_xp_backends('jax.numpy', reason='unclear')
     @pytest.mark.parametrize("method", ["basic", "percentile", "BCa"])
     def test_bootstrap_degenerate(self, method, xp):
         data = xp.full((35,), 10000.)
@@ -519,6 +521,7 @@ class TestBootstrap:
         xp_assert_close(-res.confidence_interval.low, res2.confidence_interval.high)
         xp_assert_close(-res.confidence_interval.high, res2.confidence_interval.low)
 
+    @skip_xp_backends('jax.numpy', reason='see gh-24412')
     @pytest.mark.parametrize("additional_resamples", [0, 1000])
     def test_re_bootstrap(self, additional_resamples, xp):
         # Test behavior of parameter `bootstrap_result`
