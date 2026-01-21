@@ -18,6 +18,7 @@ from scipy._lib._array_api import (
     xp_device,
     xp_swapaxes,
     is_lazy_array,
+    xp_ravel,
 )
 from scipy._lib import array_api_extra as xpx
 from scipy.special import ndtr, ndtri
@@ -1087,16 +1088,12 @@ def _power_iv(rvs, test, n_observations, significance, vectorized,
 
     # Broadcast, then ravel nobs/kwarg combinations. In the end,
     # `nobs` and `vals` have shape (# of combinations, number of variables)
-    # todo: find a better way to do this without combining arrays
-    tmp = xp.stack(xp.broadcast_arrays(*n_observations, *vals))
-    shape = tmp.shape
-    if tmp.ndim == 1:
-        tmp = xp.expand_dims(tmp, axis=0)
-    else:
-        tmp = xp.reshape(tmp, (shape[0], -1)).T
-    nobs, vals = tmp[:, :len(rvs)], tmp[:, len(rvs):]
-    integer_dtype = xp_result_type(*n_observations, xp=xp)
-    nobs = xp.astype(nobs, integer_dtype)
+    n_shapes = [xp.asarray(n).shape for n in n_observations]
+    val_shapes = [xp.asarray(val).shape for val in vals]
+    shape = xpx.broadcast_shapes(*n_shapes, *val_shapes)
+    nobs = xp.stack([xp_ravel(xp.broadcast_to(n, shape)) for n in n_observations]).T
+    vals = (xp.stack([xp_ravel(xp.broadcast_to(val, shape)) for val in vals]).T
+            if vals else xp.empty((math.prod(shape), 0)))
 
     if not callable(test):
         raise TypeError("`test` must be callable.")
@@ -1128,11 +1125,11 @@ def _power_iv(rvs, test, n_observations, significance, vectorized,
             raise ValueError("`batch` must be a positive integer or None.")
 
     return (wrapped_rvs, test_vectorized, nobs, significance, vectorized,
-            n_resamples_int, batch_iv, vals, keys, shape[1:], xp)
+            n_resamples_int, batch_iv, vals, keys, shape, xp)
 
 
 @xp_capabilities(skip_backends=[('dask.array', 'just because')],
-                 jax_jit=False)  # some problem with batch looping
+                 jax_jit=False)  # values in n_observations determine sample sizes
 def power(test, rvs, n_observations, *, significance=0.01, vectorized=None,
           n_resamples=10000, batch=None, kwargs=None):
     r"""Simulate the power of a hypothesis test under an alternative hypothesis.
