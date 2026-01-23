@@ -149,6 +149,7 @@ py3.install_sources([
     '_result_classes.py',
     '_sampling.py',
     '_sensitivity_analysis.py',
+    '_stable.py',
     '_stats_mstats_common.py',
     '_stats_py.py',
     '_survival.py',
