@@ -2308,22 +2308,26 @@ def _histogram(a, numbins=10, defaultlimits=None, weights=None,
     default if default limits is not set.
 
     """
-    a = np.ravel(a)
+    xp = array_namespace(a)
+    a = xp_ravel(a)
     if defaultlimits is None:
-        if a.size == 0:
+        if xp_size(a) == 0:
             # handle empty arrays. Undetermined range, so use 0-1.
             defaultlimits = (0, 1)
         else:
             # no range given, so use values in `a`
-            data_min = a.min()
-            data_max = a.max()
+            data_min = xp.min(a)
+            data_max = xp.max(a)
             # Have bins extend past min and max values slightly
             s = (data_max - data_min) / (2. * (numbins - 1.))
             defaultlimits = (data_min - s, data_max + s)
 
     # use numpy's histogram method to compute bins
-    hist, bin_edges = np.histogram(a, bins=numbins, range=defaultlimits,
-                                   weights=weights)
+    bin_edges = xp.linspace(*defaultlimits, numbins+1)
+    # hist, bin_edges = np.histogram(a, bins=numbins, range=defaultlimits, weights=weights)
+    weights = xp.ones_like(a) if weights is None else weights
+
+
     # hist are not always floats, convert to keep with old output
     hist = np.array(hist, dtype=float)
     # fixed width for bins is assumed, as numpy's histogram gives
@@ -2417,8 +2421,8 @@ def cumfreq(a, numbins=10, defaultreallimits=None, weights=None):
     >>> plt.show()
 
     """
-    h, l, b, e = _histogram(a, numbins, defaultreallimits, weights=weights)
-    cumhist = np.cumsum(h * 1, axis=0)
+    h, l, b, e = _histogram(a, numbins, defaultreallimits,
+                            weights=weights, cumulative=True)
     return CumfreqResult(cumhist, l, b, e)
 
 
@@ -2497,10 +2501,8 @@ def relfreq(a, numbins=10, defaultreallimits=None, weights=None):
     >>> plt.show()
 
     """
-    a = np.asanyarray(a)
-    h, l, b, e = _histogram(a, numbins, defaultreallimits, weights=weights)
-    h = h / a.shape[0]
-
+    h, l, b, e = _histogram(a, numbins, defaultreallimits,
+                            weights=weights, cumulative=False, density=True)
     return RelfreqResult(h, l, b, e)
 
 
