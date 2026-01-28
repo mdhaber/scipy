@@ -72,7 +72,10 @@ def Fi(x, a, b, *, a1):
     def integrand(th, x, a, b):
         return np.exp(-g(th, x, a, b, a1=a1))
 
-    bounds = (-th0(a, b, a1=a1), np.pi / 2)
+    # When a and |b| are both ~ 1, g goes haywire at the right bound. The adjustment
+    # here to the right endpoint is a numerical hack to be replaced with more stable g.
+    bounds = (-th0(a, b, a1=a1), np.pi / 2 - 20*np.spacing(np.pi/2))
+
     integral = integrate.tanhsinh(integrand, *bounds, args=(x, a, b)).integral
     return np.asarray(c1(a, b, a1=a1) + c3(a, a1=a1) * integral)
 
@@ -141,7 +144,6 @@ def f(x, a, b):
 
     # First, assume a != 1, and just evaluate according to strategy in [1].
     res = fi(x, a, b, a1=False)
-    res = np.asarray(res)
 
     # Use asymptotic expansions for small and large |x - zeta| from [2],
     # assuming a != 1.
