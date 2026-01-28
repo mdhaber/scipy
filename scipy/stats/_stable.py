@@ -3,7 +3,7 @@ from scipy import stats, special, integrate
 from scipy.optimize import elementwise
 import scipy._lib.array_api_extra as xpx
 from scipy._lib._array_api import xp_promote
-import matplotlib.pyplot as plt
+from scipy.special._ufuncs import _log1mexp
 
 # Stable Distribution
 # [1]: Nolan, John P. "Numerical calculation of stable densities and distribution
@@ -46,6 +46,18 @@ def V(th, a, b, *, a1):
             1/b * (np.pi/2 + b*th) * np.tan(th))
 
 
+def logV(th, a, b, *, a1):
+    if not a1:
+        th0_ = th0(a, b, a1=a1)
+        t1 = np.log(np.cos(a * th0_)) * (1 / (a - 1))
+        t2 = (np.log(np.cos(th)) - np.log(np.sin(a * (th0_ + th)))) * (a / (a - 1))
+        t3 = np.log(np.cos(a*th0_ + (a - 1)*th)) - np.log(np.cos(th))  # unstable at np.pi/2
+        return t1 + t2 + t3
+    else:
+        return np.log(2 / np.pi * (np.pi/2 + b*th) / np.cos(th)) + (
+            1/b * (np.pi/2 + b*th) * np.tan(th))
+
+
 # # [1], p. 766, eq. (4)
 def c2(x, a, b, *, a1):
     if not a1:
@@ -68,16 +80,32 @@ def g(th, x, a, b, *, a1):
         return np.exp(-np.pi/2 * x/b) * V(th, 1, b, a1=a1)
 
 
-def Fi(x, a, b, *, a1):
-    def integrand(th, x, a, b):
-        return np.exp(-g(th, x, a, b, a1=a1))
+def logg(th, x, a, b, *, a1):
+    if not a1:
+        return np.log(x - zeta(a, b, a1=a1)) * (a/(a - 1)) + logV(th, a, b, a1=a1)
+    else:
+        return -np.pi/2 * x/b + logV(th, 1, b, a1=a1)
+
+
+def Fi(x, a, b, *, a1, log=False):
+    if log:
+        def integrand(th, x, a, b):
+            return -g(th, x, a, b, a1=a1)
+    else:
+        def integrand(th, x, a, b):
+            return np.exp(-g(th, x, a, b, a1=a1))
 
     # When a and |b| are both ~ 1, g goes haywire at the right bound. The adjustment
     # here to the right endpoint is a numerical hack to be replaced with more stable g.
     bounds = (-th0(a, b, a1=a1), np.pi / 2 - 20*np.spacing(np.pi/2))
 
-    integral = integrate.tanhsinh(integrand, *bounds, args=(x, a, b)).integral
-    return np.asarray(c1(a, b, a1=a1) + c3(a, a1=a1) * integral)
+    integral = integrate.tanhsinh(integrand, *bounds, args=(x, a, b), log=log).integral
+    if log:
+        res = special.logsumexp(np.stack([np.zeros_like(integral), integral]), axis=0,
+                                b=np.stack([c1(a, b, a1=a1), c3(a, a1=a1)]))
+    else:
+        res = c1(a, b, a1=a1) + c3(a, a1=a1) * integral
+    return np.asarray(res.real)
 
 
 def fi(x, a, b, *, a1):
@@ -111,7 +139,7 @@ def fi(x, a, b, *, a1):
     return np.asarray(c2(x, a, b, a1=a1) * integral)
 
 
-def F(x, a, b):
+def F(x, a, b, log=False):
     x, a, b = xp_promote(x, a, b, force_floating=True, broadcast=True, xp=np)
 
     # [1], p. 761, Thm. 1 (c) and (d)
@@ -121,15 +149,16 @@ def F(x, a, b):
     b = np.where(i, b, -b)
 
     # First, assume a != 1, and just evaluate according to strategy in [1].
-    res = Fi(x, a, b, a1=False)
+    res = Fi(x, a, b, a1=False, log=log)
     # a == 1 also evaluated according to [1], but the integrand takes a different form
-    res[a1] = Fi(x[a1], a[a1], b[a1], a1=True)
+    res[a1] = Fi(x[a1], a[a1], b[a1], a1=True, log=log)
 
     # Cauchy distribution
     cauchy = (a == 1) & (b == 0)
-    res[cauchy] = np.atan(x[cauchy])/np.pi + 1/2
+    res_cauchy = np.atan(x[cauchy])/np.pi + 1/2
+    res[cauchy] = np.log(res_cauchy) if log else res_cauchy
 
-    res[~i] = 1 - res[~i]
+    res[~i] = _log1mexp(res[~i]) if log else 1 - res[~i]
     return res
 
 
