@@ -74,7 +74,7 @@ def Fi(x, a, b, *, a1):
 
     bounds = (-th0(a, b, a1=a1), np.pi / 2)
     integral = integrate.tanhsinh(integrand, *bounds, args=(x, a, b)).integral
-    return c1(a, b, a1=a1) + c3(a, a1=a1) * integral
+    return np.asarray(c1(a, b, a1=a1) + c3(a, a1=a1) * integral)
 
 
 def fi(x, a, b, *, a1):
@@ -105,16 +105,29 @@ def fi(x, a, b, *, a1):
     integral2 = integrate.tanhsinh(integrand, th2, bounds[1], args=(x, a, b))
     integral = integral1.integral + integral2.integral
 
-    return c2(x, a, b, a1=a1) * integral
+    return np.asarray(c2(x, a, b, a1=a1) * integral)
 
 
 def F(x, a, b):
     x, a, b = xp_promote(x, a, b, force_floating=True, broadcast=True, xp=np)
-    a1 = np.all(a == 1)
-    i = (b > 0) if a1 else (x >= zeta(a, b, a1=a1))
-    return xpx.apply_where(i, (x, a, b),
-                           lambda x, a, b: Fi(x, a, b, a1=a1),
-                           lambda x, a, b: 1 - Fi(-x, a, -b, a1=a1))[()]
+
+    # [1], p. 761, Thm. 1 (c) and (d)
+    a1 = a == 1
+    i = (~a1 & (x >= zeta(a, b, a1=False))) | (a1 & (b > 0))
+    x = np.where(i, x, -x)  # when a == 1, (d) doesn't say to negate x...
+    b = np.where(i, b, -b)
+
+    # First, assume a != 1, and just evaluate according to strategy in [1].
+    res = Fi(x, a, b, a1=False)
+    # a == 1 also evaluated according to [1], but the integrand takes a different form
+    res[a1] = Fi(x[a1], a[a1], b[a1], a1=True)
+
+    # Cauchy distribution
+    cauchy = (a == 1) & (b == 0)
+    res[cauchy] = np.atan(x[cauchy])/np.pi + 1/2
+
+    res[~i] = 1 - res[~i]
+    return res
 
 
 def f(x, a, b):
