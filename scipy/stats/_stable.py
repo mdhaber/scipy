@@ -1,9 +1,9 @@
 import numpy as np
 from scipy import stats, special, integrate
 from scipy.optimize import elementwise
-import scipy._lib.array_api_extra as xpx
 from scipy._lib._array_api import xp_promote
 from scipy.special._ufuncs import _log1mexp
+import matplotlib.pyplot as plt
 
 # Stable Distribution
 # [1]: Nolan, John P. "Numerical calculation of stable densities and distribution
@@ -108,15 +108,26 @@ def Fi(x, a, b, *, a1, log=False):
     return np.asarray(res.real)
 
 
-def fi(x, a, b, *, a1):
-    def integrand(th, x, a, b):
-        g_ = g(th, x, a, b, a1=a1)
-        res = np.asarray(g_ * np.exp(-g_))
-        # [1], pp. 766-767 "is continuous, positive, strictly monotonic... Thus g has
-        # the same properties..." But this is not true numerically. Experimentally,
-        # when the result is negative or NaN, it should have been ~0.
-        res[(res < 0) | np.isnan(res)] = 0
-        return res
+def fi(x, a, b, *, a1, log=False):
+    if log:
+        def integrand(th, x, a, b):
+            logg_ = logg(th, x, a, b, a1=a1)
+            g_ = np.exp(logg_)  # g(th, x, a, b, a1=a1)?
+            res = np.asarray(logg_ - g_)
+            # [1], pp. 766-767 "is continuous, positive, strictly monotonic... Thus g has
+            # the same properties..." But this is not true numerically. Experimentally,
+            # when the result is negative or NaN, it should have been ~0.
+            res[np.isnan(res)] = -np.inf  # better results when this is 0?
+            return res.real
+    else:
+        def integrand(th, x, a, b):
+            g_ = g(th, x, a, b, a1=a1)
+            res = np.asarray(g_ * np.exp(-g_))
+            # [1], pp. 766-767 "is continuous, positive, strictly monotonic... Thus g
+            # has the same properties..." But this is not true numerically.
+            # Experimentally, when the result is < 0 or NaN, it should have been ~0.
+            res[(res < 0) | np.isnan(res)] = 0
+            return res
 
     bounds = (-th0(a, b, a1=a1), np.pi/2)
 
@@ -132,11 +143,14 @@ def fi(x, a, b, *, a1):
     th2 = np.where(th2_res.success, th2_res.x, np.pi/2)
 
     # Note: can get substantially better accuracy by increasing `minlevel`.
-    integral1 = integrate.tanhsinh(integrand, bounds[0], th2, args=(x, a, b))
-    integral2 = integrate.tanhsinh(integrand, th2, bounds[1], args=(x, a, b))
-    integral = integral1.integral + integral2.integral
+    integral1 = integrate.tanhsinh(integrand, bounds[0], th2, args=(x, a, b), log=log)
+    integral2 = integrate.tanhsinh(integrand, th2, bounds[1], args=(x, a, b), log=log)
+    integral = (np.logaddexp(integral1.integral, integral2.integral) if log
+                else integral1.integral + integral2.integral)
 
-    return np.asarray(c2(x, a, b, a1=a1) * integral)
+    res = (np.log(c2(x, a, b, a1=a1)) + integral if log else
+           c2(x, a, b, a1=a1) * integral)
+    return np.asarray(res.real)
 
 
 def F(x, a, b, log=False):
@@ -162,7 +176,7 @@ def F(x, a, b, log=False):
     return res
 
 
-def f(x, a, b):
+def f(x, a, b, log=False):
     x, a, b = xp_promote(x, a, b, force_floating=True, broadcast=True, xp=np)
 
     # [1], p. 761, Thm. 1 (c)
@@ -172,13 +186,13 @@ def f(x, a, b):
     b = np.where(i, b, -b)
 
     # First, assume a != 1, and just evaluate according to strategy in [1].
-    res = fi(x, a, b, a1=False)
+    res = np.asarray(fi(x, a, b, a1=False, log=log))
 
     # Use asymptotic expansions for small and large |x - zeta| from [2],
     # assuming a != 1.
     z = zeta(a, b, a1=False)
     rtol = 1e-14
-    eps = rtol * res
+    eps = rtol * (np.exp(res) if log else res)
     n = 30
 
     # [2], eq. (2.24)
@@ -189,9 +203,18 @@ def f(x, a, b):
     i = np.abs(x - z) <= B0
     # [2], eq. (2.18)
     k = np.reshape(np.arange(0, n+1), (-1,) + (1,)*x.ndim)
-    S0 = 1/(a*np.pi) * np.sum(special.gamma((k + 1)/a)/special.gamma(k + 1)
-                              * (1 + z**2)**(-(k+1)/(2*a))
-                              * np.sin((np.pi/2 + np.atan(z)/a)*(k+1)) * (x - z)**k, axis=0)
+    if log:
+        S0 = special.logsumexp(special.gammaln((k + 1)/a) - special.gammaln(k + 1)
+                               + special.logsumexp([np.zeros_like(z), 2*np.log(z + 0j)], axis=0) * (-(k+1)/(2*a))
+                               + np.log(np.sin((np.pi/2 + np.atan(z)/a)*(k+1)) + 0j)
+                               + np.log(x - z + 0j) * k,
+                               axis=0)
+        S0 = S0 - np.log(a*np.pi)
+    else:
+        S0 = 1/(a*np.pi) * np.sum(special.gamma((k + 1)/a)/special.gamma(k + 1)
+                                  * (1 + z**2)**(-(k+1)/(2*a))
+                                  * np.sin((np.pi/2 + np.atan(z)/a)*(k+1)) * (x - z)**k,
+                                  axis=0)
     res[i] = S0[i]
 
     # [2], eq. (2.29)
@@ -201,18 +224,26 @@ def f(x, a, b):
     i = (np.abs(x - zeta(a, b, a1=False)) > B_inf)
     # [2], eq. (2.25)
     k = np.reshape(np.arange(1, n), (-1,) + (1,)*x.ndim)
-    S_inf = a / np.pi * np.sum((-1)**(k+1) * special.gamma(a*k)/special.gamma(k)
-                               * (1 + z**2)**(k/2) * np.sin((np.pi*a/2 - np.atan(z))*k)
-                               * (x - z)**(-a*k-1), axis=0)
+    if log:
+        S_inf = special.logsumexp(np.log(-1 + 0j) * (k+1) + special.gammaln(a*k) - special.gammaln(k)
+                                  + special.logsumexp([np.zeros_like(z), 2*np.log(z + 0j)], axis=0) * (k/2)
+                                  + np.log(np.sin((np.pi*a/2 - np.atan(z))*k) + 0j)
+                                  + np.log(x - z + 0j) * (-a*k-1), axis=0)
+        S_inf = S_inf + np.log(a / np.pi)
+    else:
+        S_inf = a / np.pi * np.sum((-1)**(k+1) * special.gamma(a*k)/special.gamma(k)
+                                   * (1 + z**2)**(k/2) * np.sin((np.pi*a/2 - np.atan(z))*k)
+                                   * (x - z)**(-a*k-1), axis=0)
     res[i] = S_inf[i]
 
     # a == 1 also evaluated according to [1], but the integrand takes a different form
     a1 = (a == 1)
-    res[a1] = fi(x[a1], a[a1], b[a1], a1=True)
+    res[a1] = fi(x[a1], a[a1], b[a1], a1=True, log=log)
 
     # Cauchy distribution
     cauchy = (a == 1) & (b == 0)
-    res[cauchy] = 1 / (np.pi * (1 + x[cauchy]**2))
+    res[cauchy] = (-(np.log(np.pi) + np.logaddexp(0, 2*np.log(x[cauchy]))) if log
+                   else 1 / (np.pi * (1 + x[cauchy]**2)))
 
     # Normal distribution - already accurate, so not worth the time to special case
     # normal = (a == 2)
