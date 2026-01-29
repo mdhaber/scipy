@@ -2434,35 +2434,41 @@ class TestRegression:
         xp_assert_equal(res.intercept_stderr, NaN)
 
 
-def test_cumfreq():
-    x = [1, 4, 2, 1, 3, 1]
+@make_xp_test_case(stats.cumfreq)
+def test_cumfreq(xp):
+    x = xp.asarray([1, 4, 2, 1, 3, 1])
     cumfreqs, lowlim, binsize, extrapoints = stats.cumfreq(x, numbins=4)
-    assert_array_almost_equal(cumfreqs, np.array([3., 4., 5., 6.]))
+    xp_assert_equal(cumfreqs, xp.asarray([3., 4., 5., 6.]))
     cumfreqs, lowlim, binsize, extrapoints = stats.cumfreq(
         x, numbins=4, defaultreallimits=(1.5, 5))
-    assert_(extrapoints == 3)
+    assert extrapoints == 3
 
     # test for namedtuple attribute results
     attributes = ('cumcount', 'lowerlimit', 'binsize', 'extrapoints')
     res = stats.cumfreq(x, numbins=4, defaultreallimits=(1.5, 5))
-    check_named_results(res, attributes)
+    check_named_results(res, attributes, xp=xp)
 
 
-def test_relfreq():
-    a = np.array([1, 4, 2, 1, 3, 1])
+@make_xp_test_case(stats.relfreq)
+def test_relfreq(xp):
+    a = xp.asarray([1, 4, 2, 1, 3, 1])
     relfreqs, lowlim, binsize, extrapoints = stats.relfreq(a, numbins=4)
-    assert_array_almost_equal(relfreqs,
-                              array([0.5, 0.16666667, 0.16666667, 0.16666667]))
+    xp_assert_close(relfreqs, xp.asarray([0.5, 0.16666667, 0.16666667, 0.16666667]))
 
     # test for namedtuple attribute results
     attributes = ('frequency', 'lowerlimit', 'binsize', 'extrapoints')
     res = stats.relfreq(a, numbins=4)
-    check_named_results(res, attributes)
+    check_named_results(res, attributes, xp=xp)
 
+
+@skip_xp_backends(np_only=True, reason='array-like input is NumPy-only')
+def test_relfreq_array_like():
     # check array_like input is accepted
-    relfreqs2, lowlim, binsize, extrapoints = stats.relfreq([1, 4, 2, 1, 3, 1],
-                                                            numbins=4)
-    assert_array_almost_equal(relfreqs, relfreqs2)
+    a = [1, 4, 2, 1, 3, 1]
+    res, _, _, _ = stats.relfreq(a, numbins=4)
+    ref, _, _, _ = stats.relfreq(np.asarray(a), numbins=4)
+    xp_assert_equal(res, ref)
+
 
 
 class TestScoreatpercentile:
