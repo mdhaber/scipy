@@ -601,6 +601,7 @@ class Akima1DInterpolator(CubicHermiteSpline):
         self.axis = axis
 
     def extend(self, c, x, right=True):
+        """Extending a 1-D Akima interpolator is not yet implemented."""
         raise NotImplementedError("Extending a 1-D Akima interpolator is not "
                                   "yet implemented")
 
@@ -644,7 +645,7 @@ class CubicSpline(CubicHermiteSpline):
         Axis along which `y` is assumed to be varying. Meaning that for
         ``x[i]`` the corresponding values are ``np.take(y, i, axis=axis)``.
         Default is 0.
-    bc_type : string or 2-tuple, optional
+    bc_type : str or 2-tuple, optional
         Boundary condition type. Two additional equations, given by the
         boundary conditions, are required to determine all coefficients of
         polynomials on each segment [2]_.
