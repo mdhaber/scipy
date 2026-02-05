@@ -11,8 +11,12 @@ import scipy._external.array_api_extra as xpx
 
 
 class WilcoxonDistribution:
+    # Instance used to retain state between calls, but free-threading made this
+    # a little more challenging, and now we're avoiding side-effects for JAX JIT,
+    # so there's not much benefit to the original class structure.
+    # Enhancement: move implementation to `scipy.special` and compile
 
-    def __init__(self, n):
+    def _initialize(self, n):
         n = np.asarray(n).astype(int, copy=False)
         self.n = n
         self._dists = {ni: _get_wilcoxon_distr(ni) for ni in np.unique(n)}
@@ -31,26 +35,27 @@ class WilcoxonDistribution:
     def _sf(self, k, n):
         return np.vectorize(self._sf1, otypes=[float])(k, n)
 
-    def mean(self):
+    def _mean(self):
         return self.n * (self.n + 1) / 4
 
-    def _prep(self, k):
+    def _prep(self, k, n):
+        self._initialize(n)
         k = np.asarray(k).astype(int, copy=False)
-        mn = self.mean()
+        mn = self._mean()
         out = np.empty(k.shape, dtype=np.float64)
         return k, mn, out
 
-    def cdf(self, k):
-        k, mn, out = self._prep(k)
+    def cdf(self, k, n):
+        k, mn, out = self._prep(k, n)
         return xpx.apply_where(
-            k <= mn, (k, self.n),
+            k <= mn, (k, n),
             self._cdf,
             lambda k, n: 1 - self._sf(k+1, n))[()]
 
-    def sf(self, k):
-        k, mn, out = self._prep(k)
+    def sf(self, k, n):
+        k, mn, out = self._prep(k, n)
         return xpx.apply_where(
-            k <= mn, (k, self.n),
+            k <= mn, (k, n),
             self._sf,
             lambda k, n: 1 - self._cdf(k-1, n))[()]
 
@@ -110,9 +115,8 @@ def _wilcoxon_iv(x, y, zero_method, correction, alternative, method, axis):
             raise ValueError(message)
     output_z = True if method == 'asymptotic' else False
 
-    if is_jax(xp) and str(method) in {"auto", "exact"}:
-        message = ("When using `wilcoxon` with `jax.numpy` arrays, `method` must be "
-                   "either 'asymptotic' or an instance of `stats.PermutationMethod`.")
+    if is_jax(xp) and str(method) == "auto":
+        message = "`method='auto'` is incompatible with JAX arrays."
         raise ValueError(message)
 
     # For small samples, we decide later whether to perform an exact test or a
@@ -241,7 +245,7 @@ def _wilcoxon_nd(x, y=None, zero_method='wilcox', correction=True,
             z = xpx.at(z)[...].subtract(sign * 0.5 / se)
         p = _get_pvalue(z, _SimpleNormal(), alternative, xp=xp)
     elif method == 'exact':
-        dist = WilcoxonDistribution(count)
+        dist = WilcoxonDistribution()
         # The null distribution in `dist` is exact only if there are no ties
         # or zeros. If there are ties or zeros, the statistic can be non-
         # integral, but the null distribution is only defined for integral
@@ -249,16 +253,20 @@ def _wilcoxon_nd(x, y=None, zero_method='wilcox', correction=True,
         # non-integral statistic up before computing CDF and down before
         # computing SF. This preserves symmetry w.r.t. alternatives and
         # order of the input arguments. See gh-19872.
-        r_plus_np = np.asarray(r_plus)
         if alternative == 'less':
-            p = dist.cdf(np.ceil(r_plus_np))
+            p = xpx.lazy_apply(dist.cdf, xp.ceil(r_plus), count,
+                               as_numpy=True, dtype=xp.float64)
         elif alternative == 'greater':
-            p = dist.sf(np.floor(r_plus_np))
+            p = xpx.lazy_apply(dist.sf, xp.floor(r_plus), count,
+                               as_numpy=True, dtype=xp.float64)
         else:
-            p = 2 * np.minimum(dist.sf(np.floor(r_plus_np)),
-                               dist.cdf(np.ceil(r_plus_np)))
-            p = np.clip(p, 0, 1)
-        p = xp.asarray(p, dtype=d.dtype)
+            p_left = xpx.lazy_apply(dist.cdf, xp.ceil(r_plus), count,
+                                    as_numpy=True, dtype=xp.float64)
+            p_right = xpx.lazy_apply(dist.sf, xp.floor(r_plus), count,
+                                     as_numpy=True, dtype=xp.float64)
+            p = 2 * xp.minimum(p_left, p_right)
+            p = xp.clip(p, 0., 1.)
+        p = xp.astype(p, d.dtype, copy=False)
     else:  # `PermutationMethod` instance (already validated)
         p = stats.permutation_test(
             # permutation_test always uses `axis=-1` as `_wilcoxon_statistic` assumes

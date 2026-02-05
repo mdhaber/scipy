@@ -1823,11 +1823,11 @@ class TestWilcoxon:
         ref = special.ndtri(res.pvalue/2)
         xp_assert_close(res.zstatistic, ref)
 
-        if is_jax(xp):
-            return
-
         res = stats.wilcoxon(x, y, method="exact")
         assert not hasattr(res, 'zstatistic')
+
+        if is_jax(xp):
+            return
 
         res = stats.wilcoxon(x, y)
         assert not hasattr(res, 'zstatistic')
@@ -1899,7 +1899,6 @@ class TestWilcoxon:
             assert_equal(sum(pmf1), 1)
             assert_array_almost_equal(pmf1, pmf2)
 
-    @skip_xp_backends("jax.numpy", reason="`method='exact'` is incompatible with JAX")
     @pytest.mark.parametrize('dtype', [None, 'float32', 'float64'])
     def test_exact_pval(self, dtype, xp):
         # expected values computed with "R version 4.0.3 (2020-10-10)"
@@ -1935,12 +1934,11 @@ class TestWilcoxon:
     # even).  Also, the numbers are chosen so that the W statistic is the
     # sum of the positive values.
 
-    @skip_xp_backends("jax.numpy", reason="`method='exact'` is incompatible with JAX")
     @pytest.mark.parametrize('x', [[-1, -2, 3],
                                    [-1, 2, -3, -4, 5],
                                    [-1, -2, 3, -4, -5, -6, 7, 8]])
     def test_exact_p_1(self, x, xp):
-        w, p = stats.wilcoxon(xp.asarray(x))
+        w, p = stats.wilcoxon(xp.asarray(x), method='exact')
         x = np.array(x)
         wtrue = x[x > 0].sum()
         xp_assert_equal(w, xp.asarray(float(wtrue)))
@@ -1952,11 +1950,9 @@ class TestWilcoxon:
         y = xp.arange(50., 0., -1.)
 
         if is_jax(xp):  #
-            message = "When using `wilcoxon` with `jax.numpy` arrays..."
+            message = "`method='auto'` is incompatible with JAX arrays."
             with pytest.raises(ValueError, match=message):
                 stats.wilcoxon(x, y, method="auto")
-            with pytest.raises(ValueError, match=message):
-                stats.wilcoxon(x, y, method="exact")
             return
 
         xp_assert_equal(stats.wilcoxon(x, y).pvalue,
@@ -1986,8 +1982,7 @@ class TestWilcoxon:
         _, p = stats.wilcoxon(d)
         xp_assert_equal(stats.wilcoxon(d, method="asymptotic").pvalue, xp.asarray(p))
 
-    @pytest.mark.xslow
-    @pytest.mark.skip_xp_backends(np_only=True)
+    @skip_xp_backends("jax.numpy", reason="`method='auto'` is incompatible with JAX")
     def test_auto_permutation_edge_case(self, xp):
         # Check that `PermutationMethod()` is used and results are deterministic when
         # `method='auto'`, there are zeros or ties in `d = x-y`, and `len(d) <= 13`.
@@ -2048,8 +2043,6 @@ class TestWilcoxon:
 
     @pytest.mark.parametrize('method', ['exact', 'asymptotic'])
     def test_symmetry_gh19872_gh20752(self, method, xp):
-        if is_jax(xp) and method == 'exact':
-            pytest.skip("`method='exact'` is incompatible with JAX")
         # Check that one-sided exact tests obey required symmetry. Bug reported
         # in gh-19872 and again in gh-20752; example from gh-19872 is more concise:
         var1 = xp.asarray([62, 66, 61, 68, 74, 62, 68, 62, 55, 59])
@@ -2063,8 +2056,6 @@ class TestWilcoxon:
 
     @pytest.mark.parametrize("method", ('exact', stats.PermutationMethod()))
     def test_all_zeros_exact(self, method, xp):
-        if is_jax(xp) and method == 'exact':
-            pytest.skip("`method='exact'` is incompatible with JAX")
         # previously, this raised a RuntimeWarning when calculating Z, even
         # when the Z value was not needed. Confirm that this no longer
         # occurs when `method` is 'exact' or a `PermutationMethod`.
