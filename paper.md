@@ -23,7 +23,7 @@ authors:
 affiliations:
  - name: California Polytechnic State University, San Luis Obispo, USA
    index: 1
- - name: Quansight Labs, Austin, USA
+ - name: Quansight, Austin, USA
    index: 2
  - name: Consulting Manao GMBH, Vienna, Austria
    index: 3
@@ -43,7 +43,7 @@ This paper discusses several new features that fill this gap, included in SciPy 
 - `scipy.differentiate` [@differentiate], a sub-package for numerical differentiation of scalar or vector-valued functions of one or more variables,
 - `scipy.integrate.tanhsinh` [@tanhsinh] for quadrature of scalar or vector-valued integrands of one variable,
 - `scipy.integrate.nsum` [@nsum] for summation of real-valued finite or infinite series,
-- `scipy.optimize.elementwise` [@optimize_elementwise] for finding roots and minimization of a single-input, single-output function.
+- `scipy.optimize.elementwise` [@optimize_elementwise] for finding roots and minimization of single-input, single-output functions.
 
 Although the details of the algorithms are inherently distinct, these features rely on a common framework for elementwise iterative methods and share similar interfaces, and the same implementation works with several Python Array API Standard [@arrayapi] compatible arrays, including CuPy and PyTorch. These features will dramatically improve performance of end-user applications, and together, they form the backbone of SciPy's new random variable infrastructure.
 
