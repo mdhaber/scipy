@@ -8,6 +8,7 @@ from scipy.optimize._chandrupatla import (_chandrupatla, _chandrupatla_minimize,
 import scipy._lib._elementwise_iterative_method as eim
 from scipy._lib._util import _RichResult
 from scipy._lib._array_api import xp_capabilities
+from scipy._external import array_api_extra as xpx
 
 
 @xp_capabilities(
@@ -62,7 +63,7 @@ def find_root(f, init, /, *, args=(), kwargs=None, method=None,
         If the callable for which the root is desired requires arguments that are
         not broadcastable with `x`, wrap that callable with `f` such that `f`
         accepts only `x` and broadcastable ``*args``.
-    method : {'chandrupatla', 'secant'}, optional
+    method : {'chandrupatla', 'mod_ab'}, optional
         Method for finding a root.
 
         - ``'chandrupatla'``: uses Chandrupatla's algorithm [1]_. `initial` must
@@ -261,9 +262,11 @@ def find_root(f, init, /, *, args=(), kwargs=None, method=None,
     if method in {'chandrupatla', None}:
         res = _chandrupatla(f, xl, xr, args=args, kwargs=kwargs, **tolerances,
                             maxiter=maxiter, callback=_callback)
-    elif method == 'secant':
-        res = _secant(f, xl, xr, args=args, kwargs=kwargs, **tolerances,
-                      maxiter=maxiter, callback=_callback)
+    elif method == 'mod_ab':
+        res = _mod_ab(f, xl, xr, args=args, kwargs=kwargs, **tolerances,
+                     maxiter=maxiter, callback=_callback)
+    else:
+        raise ValueError("foo")
 
     return reformat_result(res)
 
@@ -855,94 +858,164 @@ def bracket_minimum(f, xm0, *, xl0=None, xr0=None, xmin=None, xmax=None,
     return res
 
 
-def _secant(func, a, b, *, args=(), kwargs=None, xatol=None, xrtol=None,
-            fatol=None, frtol=0, maxiter=None, callback=None):
-    res = _chandrupatla_iv(func, args, kwargs, xatol, xrtol,
-                           fatol, frtol, maxiter, callback)
+def _mod_ab(
+    func, a, b, *, args=(), kwargs=None, xatol=None, xrtol=None,
+    fatol=None, frtol=0.0, maxiter=None, callback=None,
+):
+    res = _chandrupatla_iv(
+        func, args, kwargs, xatol, xrtol, fatol, frtol, maxiter, callback
+    )
     func, args, kwargs, xatol, xrtol, fatol, frtol, maxiter, callback = res
 
     # Initialization
     temp = eim._initialize(func, (a, b), args, kwargs=kwargs)
-    func, xs, fs, args, shape, dtype, xp = temp
+    func, xs, ys, args, shape, dtype, xp = temp
     x1, x2 = xs
-    f1, f2 = fs
-    status = xp.full_like(x1, xp.asarray(eim._EINPROGRESS),
+    y1, y2 = ys
+    status = xp.full_like(x1, eim._EINPROGRESS,
                           dtype=xp.int32)  # in progress
     nit, nfev = 0, 2  # two function evaluations performed above
     finfo = xp.finfo(dtype)
     xatol = 4*finfo.smallest_normal if xatol is None else xatol
     xrtol = 4*finfo.eps if xrtol is None else xrtol
     fatol = finfo.smallest_normal if fatol is None else fatol
-    frtol = frtol * xp.minimum(xp.abs(f1), xp.abs(f2))
+    frtol = frtol * xp.minimum(xp.abs(y1), xp.abs(y2))
     maxiter = (math.log2(finfo.max) - math.log2(finfo.smallest_normal)
                if maxiter is None else maxiter)
-    work = _RichResult(x1=x1, f1=f1, x2=x2, f2=f2, x3=None, f3=None, t=0.5,
-                       xatol=xatol, xrtol=xrtol, fatol=fatol, frtol=frtol,
-                       nit=nit, nfev=nfev, status=status)
-    res_work_pairs = [('status', 'status'), ('x', 'xmin'), ('fun', 'fmin'),
+    # Threshold to fall back to bisection if AB fails to shrink the interval enough
+    threshold = x2 - x1
+    side = xp.zeros_like(x1, dtype=xp.int32)
+    bisection = xp.full_like(x1, True, dtype=xp.bool)
+    work = _RichResult(
+        x1=x1, y1=y1, x2=x2, y2=y2, x3=None, y3=None,
+        threshold=threshold, bisection=bisection, side=side,
+        xatol=xatol, xrtol=xrtol, fatol=fatol, frtol=frtol,
+        nit=nit, nfev=nfev, status=status,)
+    res_work_pairs = [('status', 'status'), ('x', 'x3'), ('fun', 'y3'),
                       ('nit', 'nit'), ('nfev', 'nfev'), ('xl', 'x1'),
-                      ('fl', 'f1'), ('xr', 'x2'), ('fr', 'f2')]
+                      ('fl', 'y1'), ('xr', 'x2'), ('fr', 'y2')]
 
     def pre_func_eval(work):
-        with np.errstate(divide='ignore'):
-            x = (work.x2*work.f1 - work.x1*work.f2) / (work.f1 - work.f2)
+        def bisection_step(x1, x2, y1, y2):
+            return (x1 + x2) / 2.0
+
+        def false_position_step(x1, x2, y1, y2):
+            return (x1 * y2 - y1 * x2) / (y2 - y1)
+
+        x = xpx.apply_where(
+            work.bisection,
+            (work.x1, work.x2, work.y1, work.y2),
+            bisection_step,
+            false_position_step,
+        )
         return x
 
-    def post_func_eval(x, f, work):
-        work.x1, work.x2 = x, work.x1
-        work.f1, work.f2 = f, work.f1
+    def post_func_eval(x, y, work):
+        work.x3, work.y3 = x, y
 
     def check_termination(work):
-        # [1] Figure 1 (second diamond)
-        # Check for all terminal conditions and record statuses.
-
-        # See [1] Section 4 (first two sentences)
-        i = xp.abs(work.f1) < xp.abs(work.f2)
-        work.xmin = xp.where(i, work.x1, work.x2)
-        work.fmin = xp.where(i, work.f1, work.f2)
         stop = xp.zeros_like(work.x1, dtype=xp.bool)  # termination condition met
 
+        if work.x3 is None:
+            # first check
+            work.x3 = work.x1
+            work.y3 = work.y1
+            for x, y in [(work.x1, work.y1), (work.x2, work.y2)]:
+                i = xp.abs(y) <= work.fatol + work.frtol
+                work.status[i] = eim._ECONVERGED
+                stop[i] = True
+                work.x3[i] = x[i]
+                work.y3[i] = y[i]
+
+            return stop
+
         # If function value tolerance is met, report successful convergence,
-        # regardless of other conditions. Note that `frtol` has been redefined
-        # as `frtol = frtol * minimum(f1, f2)`, where `f1` and `f2` are the
-        # function evaluated at the original ends of the bracket.
-        i = xp.abs(work.fmin) <= work.fatol + work.frtol
+        # regardless of other conditions.
+        i = xp.abs(work.y3) <= work.fatol + work.frtol
         work.status[i] = eim._ECONVERGED
+        stop[i] = True
+
+        # If the bracket is no longer valid, report failure (unless a function
+        # tolerance is met, as detected above).
+        i = (xp.sign(work.y1) == xp.sign(work.y2)) & ~stop
+        NaN = xp.asarray(xp.nan, dtype=work.x3.dtype)
+        work.x3[i], work.y3[i], work.status[i] = NaN, NaN, eim._ESIGNERR
         stop[i] = True
 
         # If the abscissae are non-finite or either function value is NaN,
         # report failure.
-        NaN = xp.asarray(xp.nan, dtype=work.xmin.dtype)
         x_nonfinite = ~(xp.isfinite(work.x1) & xp.isfinite(work.x2))
-        f_nan = xp.isnan(work.f1) & xp.isnan(work.f2)
+        f_nan = xp.isnan(work.y1) & xp.isnan(work.y2)
         i = (x_nonfinite | f_nan) & ~stop
-        work.xmin[i], work.fmin[i], work.status[i] = NaN, NaN, eim._EVALUEERR
+        work.x3[i], work.y3[i], work.status[i] = NaN, NaN, eim._EVALUEERR
         stop[i] = True
 
-        # This is the convergence criterion used in bisect. Chandrupatla's
-        # criterion is equivalent to this except with a factor of 4 on `xrtol`.
-        work.dx = xp.abs(work.x2 - work.x1)
-        work.tol = xp.abs(work.xmin) * work.xrtol + work.xatol
-        i = work.dx < work.tol
+        # Bracket convergence check
+        dx = xp.abs(work.x2 - work.x1)
+        tol = xp.abs(work.x3) * work.xrtol + work.xatol
+        i = dx < tol
         work.status[i] = eim._ECONVERGED
         stop[i] = True
-
         return stop
 
     def post_termination_check(work):
-        pass
+        C = 16 # safetly factor for threshold corresponding to 4 iterations = 2^4
+
+        # Check if the function is close enough to linear
+        ym = (work.y1 + work.y2) / 2.0 # Ordinate of chord at midpoint
+        r = 1 - xp.abs(ym / (work.y2 - work.y1)) # Symmetry factor
+        k = r * r # Deviation factor
+        i = xp.logical_and(work.bisection, (xp.abs(ym - work.y3) < k * (xp.abs(work.y3) + xp.abs(ym))))
+        threshold_bisection = xp.where(i, (work.x2 - work.x1) * C, work.threshold)
+        work.threshold = xp.where(work.bisection, threshold_bisection, work.threshold / 2)
+        work.bisection = xp.where(i, False, work.bisection)
+
+        j = xp.sign(work.y1) == xp.sign(work.y3)
+        nj = ~j
+        side_1 = work.side == 1
+        side_neg1 = work.side == -1
+
+        work.side = xpx.at(work.side)[xp.logical_and(j, ~work.bisection)].set(1)
+        work.side = xpx.at(work.side)[xp.logical_and(~j, ~work.bisection)].set(-1)
+
+        m2 = 1 - work.y3 / work.y1
+        m1 = 1 - work.y3 / work.y2
+
+        update_y2 = xp.logical_and(j, side_1) 
+        update_y1 = xp.logical_and(nj, side_neg1)
+
+        new_y2 = xpx.apply_where(m2 <= 0, (m2, work.y2), lambda m, y: y / 2, lambda m, y: m * y)
+        new_y1 = xpx.apply_where(m1 <= 0, (m1, work.y1), lambda m, y: y / 2, lambda m, y: m * y)
+
+        work.y2 = xpx.at(work.y2)[update_y2].set(new_y2[update_y2])
+        work.y1 = xpx.at(work.y1)[update_y1].set(new_y1[update_y1])
+
+        work.x1[j], work.y1[j] = work.x3[j], work.y3[j]
+        work.x2[nj], work.y2[nj] = work.x3[nj], work.y3[nj]
+        
+        # AB failed to shrink the interval enough
+        i = work.x2 - work.x1 > work.threshold 
+        work.bisection[i] = True
+        work.side[i] = 0
 
     def customize_result(res, shape):
+        x3, y3 = res["x"], res["fun"]
+        j = xp.sign(res["fl"]) == xp.sign(y3)
+        nj = ~j
+        res["xl"][j], res["fl"][j] = x3[j], y3[j]
+        res["xr"][nj], res["fr"][nj] = x3[nj], y3[nj]
+
         xl, xr, fl, fr = res['xl'], res['xr'], res['fl'], res['fr']
         i = res['xl'] < res['xr']
         res['xl'] = xp.where(i, xl, xr)
         res['xr'] = xp.where(i, xr, xl)
         res['fl'] = xp.where(i, fl, fr)
         res['fr'] = xp.where(i, fr, fl)
+
         return shape
 
-
-    return eim._loop(work, callback, shape, maxiter, func, args, dtype,
-                     pre_func_eval, post_func_eval, check_termination,
-                     post_termination_check, customize_result, res_work_pairs,
-                     xp=xp)
+    return eim._loop(
+        work, callback, shape, maxiter, func, args, dtype, pre_func_eval,
+        post_func_eval, check_termination, post_termination_check, customize_result,
+        res_work_pairs, xp=xp
+    )
