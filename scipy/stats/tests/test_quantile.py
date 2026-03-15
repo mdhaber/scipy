@@ -302,8 +302,8 @@ class TestQuantile:
 
     @pytest.mark.parametrize('zero_weights', [False, True])
     def test_weights_against_numpy(self, zero_weights, xp):
-        if is_numpy(xp) and xp.__version__ < "2.0":
-            pytest.skip('`weights` not supported by NumPy < 2.0.')
+        if is_numpy(xp) and xp.__version__ < "2.1.3" and zero_weights:
+            pytest.skip('`Bug in np.quantile (numpy/numpy#27563) fixed in 2.1.3')
         dtype = xp_default_dtype(xp)
         rng = np.random.default_rng(85468924398205602)
         method = 'inverted_cdf'
@@ -367,6 +367,24 @@ class TestQuantile:
         res = stats.quantile(x, p, weights=weights, method=method)
         ref = stats.quantile(x, p, method=method)
         xp_assert_close(res, ref)
+
+    @skip_xp_backends(cpu_only=True, reason="PyTorch doesn't have `betainc`.",
+                      exceptions=['cupy', 'jax.numpy'])
+    def test_all_nan_harrell_davis_gh24707(self, xp):
+        # While working on gh-24707, there was a case in which if *all* elements of one
+        # slice were NaN, only some elements of another slice were NaN, and
+        # `nan_policy='omit'`, then the NaNs would not be ignored in the other slice.
+        # The same test case could fail with `nan_policy='propagate'` for a different
+        # reason, if the fix were not made carefully. Check that both these cases are
+        # resolved.
+        kwargs = dict(method='harrell-davis', axis=-1)
+        x = xp.asarray([[xp.nan, xp.nan, xp.nan], [xp.nan, 2, 3]])
+
+        res = stats.quantile(x, 0.5, **kwargs, nan_policy='omit')
+        xp_assert_close(res, xp.asarray([xp.nan, 2.5]))
+
+        res = stats.quantile(x, 0.5, **kwargs, nan_policy='propagate')
+        xp_assert_close(res, xp.asarray([xp.nan, xp.nan]))
 
 
 @_apply_over_batch(('a', 1), ('v', 1))

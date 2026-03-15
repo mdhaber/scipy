@@ -73,6 +73,7 @@ class TestBSplines:
         xp_assert_close(signal.spline_filter(data_array_real, 0),
                         result_array_real)
 
+    @xfail_xp_backends("cupy", reason="https://github.com/cupy/cupy/issues/9758")
     @make_xp_test_case(signal.spline_filter)
     def test_spline_filter_complex(self, xp):
         rng = np.random.RandomState(12457)
@@ -247,7 +248,7 @@ sepfir_dtype_map = {np.uint8: np.float32, int: np.float64,
                     np.complex64: np.complex64, complex: complex}
 
 
-@skip_xp_backends(np_only=True)
+@make_xp_test_case(signal.sepfir2d)
 class TestSepfir2d:
     def test_sepfir2d_invalid_filter(self, xp):
         filt = xp.asarray([1.0, 2.0, 4.0, 2.0, 1.0])

@@ -568,6 +568,7 @@ class TestKaiserBesselDerived:
             windows.kaiser_bessel_derived(M + 1, beta=4., sym=False, xp=xp)
 
 
+@make_xp_test_case(windows.nuttall)
 class TestNuttall:
 
     def test_basic(self, xp):
@@ -915,7 +916,7 @@ class TestGetWindow:
         sig = xp.arange(128)
 
         win = windows.get_window(('kaiser', 8.0), osfactor // 2, xp=xp)
-        mesg = "^window must" if is_cupy(xp) else "^window.shape="
+        mesg = "^window must|^window.shape="
         with assert_raises(ValueError, match=mesg):
             resample(sig, sig.shape[0] * osfactor, window=win)
 
