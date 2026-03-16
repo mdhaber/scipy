@@ -280,7 +280,7 @@ Frequency statistics
    :toctree: generated/
 
    quantile
-   ogive
+   estimated_cdf
    cumfreq
    relfreq
    percentileofscore
@@ -628,7 +628,7 @@ from ._distribution_infrastructure import (
 from ._new_distributions import Normal, Logistic, Uniform, Binomial
 from ._mgc import multiscale_graphcorr
 from ._correlation import chatterjeexi, spearmanrho, theilslopes, siegelslopes
-from ._quantile import quantile, ogive
+from ._quantile import quantile, estimated_cdf
 
 
 # Deprecated namespaces, to be removed in v2.0.0

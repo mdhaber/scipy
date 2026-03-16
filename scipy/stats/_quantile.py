@@ -30,7 +30,7 @@ def _quantile_iv(x, p, method, axis, nan_policy, keepdims, weights, fun='quantil
         var2_name = 'p'
         var2_type_msg = '`p` must have real floating dtype.'
     else:
-        methods = set(_ogive_methods)
+        methods = set(_estimated_cdf_methods)
         allowed_types = ('integral', 'real floating')
         mask_fun = xp.isnan
         var2_name = 'y'
@@ -154,7 +154,8 @@ def _quantile_iv(x, p, method, axis, nan_policy, keepdims, weights, fun='quantil
             n, axis_none, ndim, p_mask, weights, xp)
 
 
-@xp_capabilities(skip_backends=[("dask.array", "No take_along_axis yet.")])
+@xp_capabilities(skip_backends=[("dask.array", "No take_along_axis yet.")],
+                 marray=True)
 def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=None,
              weights=None):
     """
@@ -247,6 +248,7 @@ def quantile(x, p, *, method='linear', axis=0, nan_policy='propagate', keepdims=
     See Also
     --------
     numpy.quantile
+    estimated_cdf
     :ref:`outliers`
 
     Notes
@@ -547,9 +549,10 @@ def _xp_searchsorted(x, y, *, side='left', xp=None):
 
 @xp_capabilities(skip_backends=[("dask.array", "No take_along_axis yet.")],
                  jax_jit=False)
-def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=None):
+def estimated_cdf(x, y, *, method='linear',
+                  axis=0, nan_policy='propagate', keepdims=None):
     """
-    Compute the empirical distribution function of the data along the specified axis.
+    Estimate the cumulative distribution function of the data along the specified axis.
 
     Parameters
     ----------
@@ -559,10 +562,10 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
         Datum or data for which to estimate the cumulative probabilities.
         See `axis`, `keepdims`, and the examples for broadcasting behavior.
     method : str, default: 'linear'
-        The method to use for estimating the empirical distribution function.
+        The method to use for estimating the cumulative distribution function.
         The available options, numbered as they appear in [1]_, are:
 
-        1. 'inverted_cdf'
+        1. 'inverted_cdf' (AKA *the* empirical cumulative distribution function)
         2. 'averaged_inverted_cdf'
         3. 'closest_observation'
         4. 'interpolated_inverted_cdf'
@@ -595,9 +598,9 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
 
         If NaNs are present in `y`, the corresponding entries in the output will be NaN.
     keepdims : bool, optional
-        Consider the case in which `x` is 1-D and `y` is a scalar: the empirical
-        distribution function is a reducing statistic, and the default behavior is to
-        return a scalar.
+        Consider the case in which `x` is 1-D and `y` is a scalar: the estimated
+        cumulative distribution function at a point is a reducing statistic, and the
+        default behavior is to return a scalar.
         If `keepdims` is set to True, the axis will not be reduced away, and the
         result will be a 1-D array with one element.
 
@@ -618,10 +621,14 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
         The resulting probabilities(s). The dtype is the result dtype of `x`, `y`, and
         the Python ``float`` type.
 
+    See Also
+    --------
+    quantile
+
     Notes
     -----
-    Given a sample `x` from an underlying distribution, `ogive` provides a
-    nonparametric estimate of the empirical distribution function.
+    Given a sample `x` from an underlying distribution, `estimated_cdf` provides a
+    nonparametric estimate of the cumulative distribution function.
 
     By default, this is done by computing the "fractional index" ``p`` at which ``y``
     would appear within ``z``, a sorted copy of `x`::
@@ -670,8 +677,8 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
     3. ``closest_observation``: ``m = -1/2`` and
        ``g = 1 - int((index == j) & (j%2 == 1))``
 
-    When all the data in ``x`` are unique, the empirical distribution and quantile
-    functions are inverses of one another within a certain domain, hence the name.
+    When all the data in ``x`` are unique, `estimated_cdf` and `quantile` are are
+    inverses of one another within a certain domain.
     Although `quantile` with ``method='linear'`` is invertible over the whole domain
     of ``p`` from ``0`` to ``1``, this is not true of other methods.
 
@@ -687,47 +694,47 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
     >>> from scipy import stats
     >>> x = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-    Calculate the empirical distribution function of one sample at a single point.
+    Estimate the cumulative distribution function of one sample at a single point.
 
-    >>> stats.ogive(x, 5, axis=-1)
+    >>> stats.estimated_cdf(x, 5, axis=-1)
     np.float64(0.5)
 
-    Calculate the empirical distribution function of one sample at two points.
+    Estimate the cumulative distribution function of one sample at two points.
 
-    >>> stats.ogive(x, [2.5, 7.5], axis=-1)
+    >>> stats.estimated_cdf(x, [2.5, 7.5], axis=-1)
     array([0.25, 0.75])
 
-    Calculate the empirical distribution function of two samples at different points.
+    Estimate the cumulative distribution function of two samples at different points.
 
     >>> x = np.stack((np.arange(0, 11), np.arange(10, 21)))
-    >>> stats.ogive(x, [[2.5], [17.5]], axis=-1, keepdims=True)
+    >>> stats.estimated_cdf(x, [[2.5], [17.5]], axis=-1, keepdims=True)
     array([[0.25],
            [0.75]])
 
-    Calculate the empirical distribution function at many points for each of two
+    Estimate the cumulative distribution function at many points for each of two
     samples.
 
     >>> import matplotlib.pyplot as plt
     >>> rng = np.random.default_rng(6110515095)
     >>> x = stats.Normal(mu=[-1, 1]).sample(10000)
     >>> y = np.linspace(-4, 4, 5000)[:, np.newaxis]
-    >>> p = stats.ogive(x, y, axis=0)
+    >>> p = stats.estimated_cdf(x, y, axis=0)
     >>> plt.plot(y, p)
     >>> plt.show()
 
-    Note that the `quantile` and `ogive` functions are inverses of one another
+    Note that the `quantile` and `estimated_cdf` functions are inverses of one another
     within a certain domain.
 
     >>> p = np.linspace(0, 1, 300)
     >>> x = rng.standard_normal(300)
     >>> y = stats.quantile(x, p)
-    >>> p2 = stats.ogive(x, y)
+    >>> p2 = stats.estimated_cdf(x, y)
     >>> np.testing.assert_allclose(p2, p)
     >>> y2 = stats.quantile(x, p2)
     >>> np.testing.assert_allclose(y2, y)
 
-    However, the domain over which `quantile` can be inverted by `ogive` depends on
-    the `method` used. This is most noticeable when there are few observations in the
+    However, the domain over which `quantile` can be inverted by `estimated_cdf` depends
+    on the `method` used. This is most noticeable when there are few observations in the
     sample.
 
     >>> x = np.asarray([0, 1])
@@ -742,29 +749,29 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
 
     For example, in the case above, `quantile` is only invertible from
     ``p = 0.5`` to ``p = 1.0`` with ``method = 'interpolated_inverted_cdf'``. This is a
-    fundamental characteristic of the methods, not a shortcoming of `ogive`.
+    fundamental characteristic of the methods, not a shortcoming of `estimated_cdf`.
 
     """
     temp = _quantile_iv(x, y, method, axis, nan_policy, keepdims, weights=None,
-                        fun='ogive')
+                        fun='estimated_cdf')
     x, y, method, axis, nan_policy, keepdims, n, axis_none, ndim, y_mask, _, xp = temp
 
     if xp_size(x) == 0:
         res = xp.full_like(y, xp.nan)
     else:
-        res = _ogive_hf(x, y, n, method, xp)
+        res = _estimated_cdf_hf(x, y, n, method, xp)
 
     return _post_quantile(res, y_mask, axis, axis_none, ndim, keepdims, xp)
 
 
-_ogive_discontinuous_methods = dict(
+_estimated_cdf_discontinuous_methods = dict(
     inverted_cdf=0.0,
     averaged_inverted_cdf=0.0,
     closest_observation=0.5,
 )
 
 
-_ogive_continuous_methods = dict(
+_estimated_cdf_continuous_methods = dict(
     interpolated_inverted_cdf=(0, 1),
     hazen=(0.5, 0.5),
     weibull=(0, 0),
@@ -774,18 +781,18 @@ _ogive_continuous_methods = dict(
 )
 
 
-_ogive_methods = (set(_ogive_continuous_methods).union(
-                      set(_ogive_discontinuous_methods)))
+_estimated_cdf_methods = (set(_estimated_cdf_continuous_methods).union(
+                          set(_estimated_cdf_discontinuous_methods)))
 
 
-def _ogive_hf(x, y, n, method, xp):
+def _estimated_cdf_hf(x, y, n, method, xp):
     n_int = xp.astype(n, xp.int64)
     j_max = n_int - 1
     j_min = xp.minimum(j_max, xp.asarray(1, dtype=j_max.dtype))
     jp1 = _xp_searchsorted(x, y, side='right')
 
-    if method in _ogive_discontinuous_methods:
-        dp = _ogive_discontinuous_methods[method]
+    if method in _estimated_cdf_discontinuous_methods:
+        dp = _estimated_cdf_discontinuous_methods[method]
         p = (xp.astype(jp1, x.dtype)+dp)/n
 
     else:
@@ -796,7 +803,7 @@ def _ogive_hf(x, y, n, method, xp):
         with np.errstate(divide='ignore', invalid='ignore'):  # refactor to apply_where?
             delta = xp.where((xjp1 > xj) & xp.isfinite(xj), (y - xj) / (xjp1 - xj), 1.)
 
-        a, b = _ogive_continuous_methods[method]
+        a, b = _estimated_cdf_continuous_methods[method]
         p = (xp.astype(jp1, x.dtype) + delta - a) / (n + 1 - a - b)
 
     xmin = x[..., :1]
