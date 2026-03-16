@@ -146,7 +146,7 @@ def _quantile_iv(x, p, method, axis, nan_policy, keepdims, weights, fun='quantil
     # same number of dimensions as `y`, yet it still appears to work correctly?
     # should refactor for clarity, and p_mask that gets returned here should probably
     # get a different name - `nan_out` would be more appropriate!
-    p_mask = mask_fun(p) if nan_out is None else mask_fun(p) | nan_out[..., xp.newaxis]
+    p_mask = mask_fun(p) if nan_out is None else mask_fun(p) | nan_out
     if is_lazy_array(p_mask) or xp.any(p_mask):
         p = xp.where(p_mask, 0.5, p)  # these get NaN-ed out at the end
 

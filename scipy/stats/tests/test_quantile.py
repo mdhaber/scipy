@@ -18,7 +18,7 @@ from scipy._lib._array_api import (
 )
 from scipy._lib._array_api_no_0d import xp_assert_close, xp_assert_equal
 from scipy._lib._util import _apply_over_batch
-import scipy._lib.array_api_extra as xpx
+import scipy._external.array_api_extra as xpx
 from scipy.stats._axis_nan_policy import _broadcast_arrays
 
 skip_xp_backends = pytest.mark.skip_xp_backends
