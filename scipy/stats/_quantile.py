@@ -562,6 +562,9 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
         The method to use for estimating the empirical distribution function.
         The available options, numbered as they appear in [1]_, are:
 
+        1. 'inverted_cdf'
+        2. 'averaged_inverted_cdf'
+        3. 'closest_observation'
         4. 'interpolated_inverted_cdf'
         5. 'hazen'
         6. 'weibull'
@@ -569,10 +572,9 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
         8. 'median_unbiased'
         9. 'normal_unbiased'
 
-        Only the continuous methods are available at this time.
         See Notes for details.
     axis : int or None, default: 0
-        Axis along which the quantiles are computed.
+        Axis along which the calculation is performed.
         ``None`` ravels both `x` and `y` before performing the calculation,
         without checking whether the original shapes were compatible.
         As in other `scipy.stats` functions, a positive integer `axis` is resolved
@@ -599,10 +601,10 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
         If `keepdims` is set to True, the axis will not be reduced away, and the
         result will be a 1-D array with one element.
 
-        The general case is more subtle, since multiple probabilities may be
-        requested for each axis-slice of `x`. For instance, if both `x` and `y`
+        The general case is more subtle, since multiple values of `y` may be
+        specified for each axis-slice of `x`. For instance, if both `x` and `y`
         are 1-D and ``y.size > 1``, no axis can be reduced away; there must be an
-        axis to contain the number of probabilities given by ``y.size``. Therefore:
+        axis to contain the number of values given by ``y.size``. Therefore:
 
         - By default, the axis will be reduced away if possible (i.e. if there is
           exactly one element of `y` per axis-slice of `x`).
@@ -613,7 +615,8 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
     Returns
     -------
     probability : scalar or ndarray
-        The resulting probabilities(s). The dtype is the result dtype of `x` and `y`.
+        The resulting probabilities(s). The dtype is the result dtype of `x`, `y`, and
+        the Python ``float`` type.
 
     Notes
     -----
@@ -655,6 +658,18 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
     range of non-negative indices, and resulting ``p`` is clipped to the range
     ``0`` to ``1``.
 
+    The table above includes only the estimators from [1]_ that are continuous
+    functions of probability `p` (estimators 4-9). SciPy also provides the
+    three discontinuous estimators from [1]_ (estimators 1-3), where ``j`` is
+    defined as above, ``m`` is defined as follows, and ``g`` is ``0`` when
+    ``index = p*n + m - 1`` is less than ``0`` and otherwise is defined below.
+
+    1. ``inverted_cdf``: ``m = 0`` and ``g = int(index - j > 0)``
+    2. ``averaged_inverted_cdf``: ``m = 0`` and
+       ``g = (1 + int(index - j > 0)) / 2``
+    3. ``closest_observation``: ``m = -1/2`` and
+       ``g = 1 - int((index == j) & (j%2 == 1))``
+
     When all the data in ``x`` are unique, the empirical distribution and quantile
     functions are inverses of one another within a certain domain, hence the name.
     Although `quantile` with ``method='linear'`` is invertible over the whole domain
@@ -663,8 +678,8 @@ def ogive(x, y, *, method='linear', axis=0, nan_policy='propagate', keepdims=Non
     References
     ----------
     .. [1] R. J. Hyndman and Y. Fan,
-       "Sample quantiles in statistical packages,"
-       The American Statistician, 50(4), pp. 361-365, 1996
+           "Sample quantiles in statistical packages,"
+           The American Statistician, 50(4), pp. 361-365, 1996
 
     Examples
     --------
