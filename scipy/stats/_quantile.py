@@ -548,7 +548,7 @@ def _xp_searchsorted(x, y, *, side='left', xp=None):
 
 
 @xp_capabilities(skip_backends=[("dask.array", "No take_along_axis yet.")],
-                 jax_jit=False)
+                 marray=True)
 def estimated_cdf(x, y, *, method='linear',
                   axis=0, nan_policy='propagate', keepdims=None):
     """

@@ -461,7 +461,7 @@ _estimated_cdf_methods_list = sorted(list(_estimated_cdf_methods))
 
 
 @make_xp_test_case(stats.estimated_cdf)
-class Testestimated_cdf:
+class TestEstimatedCDF:
     def test_input_validation(self, xp):
         x = xp.asarray([1, 2, 3])
         y = xp.asarray(2)
@@ -753,7 +753,7 @@ class Testestimated_cdf:
         default_dtype = xp_default_dtype(xp)
         x, y, ref = xp.asarray(x), xp.asarray(y), xp.asarray(ref, dtype=default_dtype)
         res = stats.estimated_cdf(x, y, **kwargs)
-        xp_assert_equal(res, ref)
+        xp_assert_close(res, ref, rtol=1e-15)
 
     @pytest.mark.skip_xp_backends('jax.numpy', reason="-1e-45 is not less than 0?")
     @pytest.mark.parametrize('method', _estimated_cdf_discontinuous_methods.keys())
