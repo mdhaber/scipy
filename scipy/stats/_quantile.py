@@ -642,7 +642,7 @@ def estimated_cdf(x, y, *, method='linear',
     simplifies to the intuitive ``j / (n - 1)``. The full formula linearly interpolates
     between ``j / (n - 1)`` and ``(j + 1) / (n - 1)``.
 
-    This is a special case of the more general:
+    This is a special case of the more general::
 
         p = (j + (y - z[j]) / (z[j+1] - z[j] + 1 - m) / n
 
