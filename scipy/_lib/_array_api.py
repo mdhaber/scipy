@@ -926,9 +926,11 @@ def xp_capabilities(
             allow_dask_compute=False,
             jax_jit=True,
             marray=False,
+            mparray=False,
         ) | capabilities
-        if not method_capabilities[method]["marray"]:
-            method_capabilities[method]["skip_backends"] += [("mparray", "mparray not supported for this method")]
+        if not method_capabilities[method]["mparray"]:
+            method_capabilities[method]["skip_backends"] += (
+                [("mparray", "mparray not supported for this method")])
 
     if not mparray:
         skip_backends += [("mparray", "mparray not supported for this function")]
