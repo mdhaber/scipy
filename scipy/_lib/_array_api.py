@@ -915,8 +915,8 @@ def xp_capabilities(
         # Fill in missing entries of method capabilities with
         # defaults if any entries are missing.
         method_capabilities[method] = dict(
-            skip_backends=(),
-            xfail_backends=(),
+            skip_backends=[],
+            xfail_backends=[],
             cpu_only=False,
             np_only=False,
             out_of_scope=False,
@@ -927,6 +927,8 @@ def xp_capabilities(
             jax_jit=True,
             marray=False,
         ) | capabilities
+        if not method_capabilities[method]["marray"]:
+            method_capabilities[method]["skip_backends"] += [("mparray", "mparray not supported for this method")]
 
     if not mparray:
         skip_backends += [("mparray", "mparray not supported for this function")]
