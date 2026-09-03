@@ -767,12 +767,11 @@ def _make_sphinx_capabilities(
         # Note: Dask+CuPy is currently untested and unsupported
         "dask.array": _XPSphinxCapability(cpu=True, gpu=None,
             warnings=["computes graph"] if allow_dask_compute else []),
+        "mparray": _XPSphinxCapability(cpu=True, gpu=None),
     }
 
     # documentation doesn't display the reason
     for module, _ in list(skip_backends) + list(xfail_backends):
-        if module == "mparray":
-            continue  # don't document for now
         backend = capabilities[module]
         if backend.cpu is not None:
             backend.cpu = False
@@ -838,6 +837,7 @@ def _make_capabilities_note(fun_name, capabilities, extra_note=None):
         PyTorch               {capabilities['torch']                   }
         JAX                   {capabilities['jax.numpy']               }
         Dask                  {capabilities['dask.array']              }
+        MPArray               {capabilities['mparray']                 }
         ====================  ====================  ====================
 
     {textwrap.indent(marray_note or "", ' '*4)}

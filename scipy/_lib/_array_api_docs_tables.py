@@ -112,8 +112,8 @@ def _process_capabilities_table_entry(
     # Entries start as boolean, but upon returning, will take values
     # from the BackendSupportStatus Enum.
     output = {
-        "cpu": {"torch": False, "jax": False, "dask": False},
-        "gpu": {"cupy": False, "torch": False, "jax": False},
+        "cpu": {"torch": False, "jax": False, "dask": False, "mparray": True},
+        "gpu": {"cupy": False, "torch": False, "jax": False, "mparray": False},
         "jit": {"jax": False},
         "lazy": {"dask": False},
     }
