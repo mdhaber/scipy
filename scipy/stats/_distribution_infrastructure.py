@@ -2002,8 +2002,8 @@ class UnivariateDistribution(_ProbabilityDistribution):
 
     ## Algorithms
 
-    def _differentiation(self, f, x, args=None, params=None):
-        a, b = self._support(**params)
+    def _differentiation(self, f, x, bounds=None, args=None, params=None):
+        a, b = self._support(**params) if bounds is None else bounds
         x = x.real  # logentropy makes dtype complex
         step = np.minimum(0.5, (b - a)/2)
         direction = -(np.sign(x - a - step) + np.sign(x - b + step))
@@ -2035,6 +2035,8 @@ class UnivariateDistribution(_ProbabilityDistribution):
 
     def _solve_bounded(self, f, p, *, bounds=None, params=None, xatol=None):
         # Finds the argument of a function that produces the desired output.
+        p = p.real
+
         xmin, xmax = self._support(**params) if bounds is None else bounds
         xmin = np.asarray(xmin, dtype=self._dtype)
         xmax = np.asarray(xmax, dtype=self._dtype)
@@ -2379,10 +2381,14 @@ class UnivariateDistribution(_ProbabilityDistribution):
         elif self._overrides('_logpdf_formula') or self._overrides('_logpdf_dispatch'):
             method = self._pdf_logexp
         elif isinstance(self, ContinuousDistribution):
-            if self._overrides('_icdf_formula'):
+            if self._overrides('_cdf_formula'):
                 method = self._pdf_differentiation_cdf
-            elif self._overrides('_iccdf_formula'):
+            elif self._overrides('_ccdf_formula'):
                 method = self._pdf_differentiation_ccdf
+            elif self._overrides('_icdf_formula'):
+                method = self._pdf_differentiation_icdf
+            elif self._overrides('_iccdf_formula'):
+                method = self._pdf_differentiation_iccdf
 
         return method
 
@@ -2394,6 +2400,16 @@ class UnivariateDistribution(_ProbabilityDistribution):
 
     def _pdf_differentiation_ccdf(self, x, **params):
         return -self._differentiation(self._ccdf_dispatch, x, params=params)
+
+    def _pdf_differentiation_icdf(self, x, **params):
+        p = self._cdf_dispatch(x, **params)
+        return 1 / self._differentiation(self._icdf_dispatch, p,
+                                         bounds=(0, 1), params=params)
+
+    def _pdf_differentiation_iccdf(self, x, **params):
+        p = self._ccdf_dispatch(x, **params)
+        return -1 / self._differentiation(self._iccdf_dispatch, p,
+                                          bounds=(0, 1), params=params)
 
     def _pdf_logexp(self, x, **params):
         return np.exp(self._logpdf_dispatch(x, **params))
@@ -3935,7 +3951,7 @@ def make_distribution(dist):
     another class that satisfies the interface described below.
 
     The returned value is a `ContinuousDistribution` subclass if the input defines a
-    ``pdf``, ``icdf``, or ``iccdf`` method; it is a `DiscreteDistribution` subclass if
+    ``pdf`` or ``(i)(c)cdf`` method; it is a `DiscreteDistribution` subclass if
     the input defines a ``pmf`` method. Like any subclass of `UnivariateDistribution`,
     it must be instantiated (i.e. by passing all shape parameters as keyword arguments)
     before use. Once instantiated, the resulting object will have the same interface as
@@ -4004,11 +4020,11 @@ def make_distribution(dist):
             A dictionary describing the support of the distribution or a tuple
             describing the endpoints of the support. This behaves identically to
             the values of the parameters dict described above. (``domain_type`` is
-            inferred from whether ``pdf`` or ``pmf`` is defined.)
+            inferred which methods are defined.)
 
         The class **must** also define either:
 
-        - a ``pdf``, ``icdf``, or ``iccdf`` method; OR
+        - a ``pdf``, ``cdf``, ``ccdf``, ``icdf``, or ``iccdf`` method; OR
         - a ``pmf`` method.
 
         This determines whether the support of the distribution is continuous or
@@ -4413,7 +4429,10 @@ def _make_distribution_custom(dist):
     elif hasattr(dist, 'pmf') and not hasattr(dist, 'pdf'):
         pxf = 'PMF'
         distribution_subclass = DiscreteDistribution
-    elif hasattr(dist, 'icdf') or hasattr(dist, 'iccdf') and not hasattr(dist, 'pmf'):
+    elif not hasattr(dist, 'pmf') and (hasattr(dist, 'cdf') or
+                                       hasattr(dist, 'ccdf') or
+                                       hasattr(dist, 'icdf') or
+                                       hasattr(dist, 'iccdf')):
         pxf = 'PDF'
         distribution_subclass = ContinuousDistribution
     else:

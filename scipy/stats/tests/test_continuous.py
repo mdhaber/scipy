@@ -2111,7 +2111,8 @@ class TestOrderStatistic:
 
 class TestQuantileDefinedDistribution:
     @pytest.mark.slow
-    def test_tukey_lambda(self):
+    @pytest.mark.parametrize('fun', ['cdf', 'ccdf', 'icdf', 'iccdf'])
+    def test_tukey_lambda(self, fun):
         class MyTukeyLambda:
             __make_distribution_version__ = "1.16.0"
 
@@ -2126,9 +2127,22 @@ class TestQuantileDefinedDistribution:
                                       lambda *, lam: np.where(lam > 0, 1/lam, np.inf)),
                         'inclusive': (False, False)}
 
-            def icdf(self, x, lam):
-                with np.errstate(divide='ignore'):
-                    return 1/lam * (x**lam - (1 - x)**lam)
+        def cdf(self, x, lam):
+            return special.tklmbda(x, lam)
+
+        def ccdf(self, x, lam):
+            return 1 - special.tklmbda(x, lam)
+
+        def icdf(self, x, lam):
+            with np.errstate(divide='ignore'):
+                return 1/lam * (x**lam - (1 - x)**lam)
+
+        def iccdf(self, x, lam):
+            with np.errstate(divide='ignore'):
+                return 1/lam * ((1-x)**lam - x**lam)
+
+        funs = {'cdf': cdf, 'ccdf': ccdf, 'icdf': icdf, 'iccdf': iccdf}
+        setattr(MyTukeyLambda, fun, funs[fun])
 
         TukeyLambda1 = stats.make_distribution(MyTukeyLambda())
         TukeyLambda2 = stats.make_distribution(stats.tukeylambda)
