@@ -2376,15 +2376,14 @@ class UnivariateDistribution(_ProbabilityDistribution):
     def _pdf_dispatch(self, x, *, method=None, **params):
         if self._overrides('_pdf_formula'):
             method = self._pdf_formula
-        elif (not self._overrides('_logpdf_formula')
-              and not self._overrides('_logpdf_dispatch')
-              and isinstance(self, ContinuousDistribution)):
+        elif self._overrides('_logpdf_formula') or self._overrides('_logpdf_dispatch'):
+            method = self._pdf_logexp
+        elif isinstance(self, ContinuousDistribution):
             if self._overrides('_icdf_formula'):
                 method = self._pdf_differentiation_cdf
             elif self._overrides('_iccdf_formula'):
                 method = self._pdf_differentiation_ccdf
-        else:
-            method = self._pdf_logexp
+
         return method
 
     def _pdf_formula(self, x, **params):
