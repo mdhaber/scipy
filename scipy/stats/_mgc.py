@@ -101,6 +101,11 @@ def multiscale_graphcorr(x, y, compute_distance=_euclidean_dist, reps=1000,
                          workers=1, is_twosamp=False, random_state=None):
     r"""Computes the Multiscale Graph Correlation (MGC) test statistic.
 
+    .. deprecated:: 2.0.0
+       `scipy.stats.multiscale_graphcorr` is deprecated as of SciPy 2.0 and
+       will be removed in SciPy 2.2. Please import ``multiscale_graphcorr``
+       from the `hyppo <https://hyppo.neurodata.io>`__ package.
+
     Specifically, for each point, MGC finds the :math:`k`-nearest neighbors for
     one property (e.g. cloud density), and the :math:`l`-nearest neighbors for
     the other property (e.g. grass wetness) [1]_. This pair :math:`(k, l)` is
@@ -296,6 +301,11 @@ def multiscale_graphcorr(x, y, compute_distance=_euclidean_dist, reps=1000,
     (-0.008021809890200488, 1.0)
 
     """
+    message = ("`scipy.stats.multiscale_graphcorr` is deprecated as of SciPy 2.0 and "
+               "will be removed in SciPy 2.2. Please import `multiscale_graphcorr` "
+               "from the `hyppo` package.")
+    warnings.warn(message, category=DeprecationWarning, stacklevel=2)
+
     if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
         raise ValueError("x and y must be ndarrays")
 

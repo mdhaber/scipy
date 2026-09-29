@@ -907,6 +907,7 @@ if HAVE_SCPDT:
         'scipy.spatial.minkowski_distance',
         'scipy.spatial.distance_matrix',
         'scipy.stats.tiecorrect',
+        'scipy.stats.multiscale_graphcorr',
     ])
 
     # help pytest collection a bit: these names are either private
@@ -944,6 +945,7 @@ if HAVE_SCPDT:
         "sampling_pinv.rst": "__cinit__ unexpected argument",
         "sampling_srou.rst": "nan in scalar_power",
         "probability_distributions.rst": "integration warning",
+        "multiscale_graphcorr.rst": "deprecation warning",
     }
 
     # tutorials
