@@ -7,6 +7,8 @@ from numpy.testing import assert_approx_equal, assert_allclose, assert_equal
 from scipy.spatial.distance import cdist
 from scipy import stats
 
+pytestmark = pytest.mark.filterwarnings("ignore:`scipy.stats.multiscale_graphcorr` is deprecated:DeprecationWarning")  # noqa: E501
+
 class TestMGCErrorWarnings:
     """ Tests errors and warnings derived from MGC.
     """

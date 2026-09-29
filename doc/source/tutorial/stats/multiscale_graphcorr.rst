@@ -1,6 +1,11 @@
 Multiscale Graph Correlation (MGC)
 ----------------------------------
 
+.. deprecated:: 2.0.0
+    `scipy.stats.multiscale_graphcorr` is deprecated as of SciPy 2.0 and
+    will be removed in SciPy 2.2. Please import ``multiscale_graphcorr``
+    from the `hyppo <https://hyppo.neurodata.io>`__ package.
+
 With :func:`scipy.stats.multiscale_graphcorr`, we can test for independence on
 high-dimensional and nonlinear data. Before we start, let us import some useful
 packages:
