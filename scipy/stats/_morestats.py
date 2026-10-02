@@ -33,7 +33,8 @@ from scipy._lib._array_api import (
 from ._ansari_swilk_statistics import gscale
 from . import _stats_py, _wilcoxon
 from ._stats_py import (_get_pvalue, SignificanceResult, _SimpleExponential,
-                        _SimpleNormal, _SimpleChi2, _SimpleF, _demean)
+                        _SimpleNormal, _SimpleChi2, _SimpleF, _demean, _xp_mean,
+                        _SimpleGumbelL, _SimpleGumbelR)
 from .contingency import chi2_contingency  # noqa:F401
 from . import distributions
 from ._distn_infrastructure import rv_generic
@@ -2346,6 +2347,49 @@ def _weibull_fit_check(params, x):
     return m, u, s
 
 
+def _fit_gumbel(data, *, xp):
+    # adapted from `stats.gumbel_r.fit`
+    def func(scale, data):
+        # remember original shape: (n_batch, n_abscissae) where n_batch is the total batch
+        # size and n_abscissae is the number of points (per element of the batch) to
+        # be evaluated per function call (one or two).
+        shape = scale.shape
+        # There is a (new) bug in `bracket_root` w/ `keepdims=True`. The shape is right, but
+        # it appears that there was an invalid reshaping that scrambles the data... like
+        # [[1, 1, 1], [2, 2, 2]] was reshaped into
+        # [[1, 1], [1, 2], [2, 2]] instead of transposing into
+        # [[1, 2], [1, 2], [1, 2]]. We need to unscramble it.
+        scale = xp.reshape(scale, shape[::-1])
+        # Besides unscrambling, we've transposed the array. It turns out the shape of
+        # `scale` is how we want it: `(n_abscissae, n_batch)``.
+        # because `data` has shape:  `(n_batch, n_obs)`.
+        # To make them broadcast correctly, we append a dimension to the end of `scale`.
+        sdata = -data / scale[..., xp.newaxis]
+        wavg = _average_with_log_weights(data, logweights=sdata)
+        res = xp.mean(data, axis=-1) - wavg - scale
+        # Finally, undo the unscrambling, and return the result to the original shape.
+        return xp.reshape(res, shape)
+
+    def get_loc_from_scale(scale, data):
+        return (-scale * (special.logsumexp(-data / scale[..., xp.newaxis], axis=-1)
+                          - math.log(data.shape[-1])))
+
+    def _average_with_log_weights(x, logweights):
+        maxlogw = xp.max(logweights, axis=-1, keepdims=True)
+        weights = xp.exp(logweights - maxlogw)
+        return _xp_mean(x, weights=weights, axis=-1)
+
+    xl = xp.full(data.shape[:-1], fill_value=0.5)
+    xr = xp.full(data.shape[:-1], fill_value=2)
+    res_bracket = optimize.elementwise.bracket_root(lambda scale: func(scale, data),
+                                                    xl, xr, xmin=0, preserve_shape=True)
+    res_root = optimize.elementwise.find_root(lambda scale: func(scale, data),
+                                              res_bracket.bracket,preserve_shape=True)
+    scale = res_root.x
+    loc = get_loc_from_scale(scale, data)
+    return loc, scale
+
+
 @xp_capabilities()
 @_axis_nan_policy_factory(SignificanceResult)
 def anderson(x, dist='norm', *, method="interpolate", axis=0):
@@ -2463,7 +2507,7 @@ def anderson(x, dist='norm', *, method="interpolate", axis=0):
     xp = array_namespace(x)
     x = xp.asarray(x)
 
-    if dist not in {'norm', 'expon'}:
+    if dist not in {'norm', 'expon', 'gumbel_l', 'gumbel_r'}:
         if not is_numpy(xp):
             message = f"`dist='{dist}'` is not implemented for the provided array type."
             raise NotImplementedError(message)
@@ -2526,17 +2570,17 @@ def anderson(x, dist='norm', *, method="interpolate", axis=0):
         sig = array([25, 10, 5, 2.5, 1, 0.5])
         critical = _Avals_logistic / (1.0 + 0.25/N)
     elif dist == 'gumbel_r':
-        xbar, s = distributions.gumbel_r.fit(x)
-        w = (y - xbar) / s
-        logcdf = distributions.gumbel_r.logcdf(w)
-        logsf = distributions.gumbel_r.logsf(w)
+        xbar, s = _fit_gumbel(x, xp=xp)
+        w = (y - xbar[..., xp.newaxis]) / s[..., xp.newaxis]
+        logcdf = _SimpleGumbelR().logcdf(w)
+        logsf = _SimpleGumbelR().logsf(w)
         sig = array([25, 10, 5, 2.5, 1])
         critical = _Avals_gumbel / (1.0 + 0.2/sqrt(N))
     elif dist == 'gumbel_l':
-        xbar, s = distributions.gumbel_l.fit(x)
-        w = (y - xbar) / s
-        logcdf = distributions.gumbel_l.logcdf(w)
-        logsf = distributions.gumbel_l.logsf(w)
+        xbar, s = _fit_gumbel(-x, xp=xp)
+        w = (y + xbar[..., xp.newaxis]) / s[..., xp.newaxis]
+        logcdf = _SimpleGumbelL().logcdf(w)
+        logsf = _SimpleGumbelL().logsf(w)
         sig = array([25, 10, 5, 2.5, 1])
         critical = _Avals_gumbel / (1.0 + 0.2/sqrt(N))
     elif dist == 'weibull_min':

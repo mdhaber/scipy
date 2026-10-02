@@ -11347,3 +11347,27 @@ class _SimpleExponential:
 
     def logsf(self, x):
         return -x
+
+
+class _SimpleGumbelL:
+    # A very simple, array-API compatible GumbelL distribution for use in
+    # `anderson` tests. May be replaced by new infrastructure Exponential
+    # distribution in due time.
+
+    def logcdf(self, x):
+        return _log1mexp(-np.exp(x))
+
+    def logsf(self, x):
+        return -np.exp(x)
+
+
+class _SimpleGumbelR:
+    # A very simple, array-API compatible GumbelR distribution for use in
+    # `anderson` tests. May be replaced by new infrastructure Exponential
+    # distribution in due time.
+
+    def logcdf(self, x):
+        return -np.exp(-x)
+
+    def logsf(self, x):
+        return _log1mexp(-np.exp(-x))
