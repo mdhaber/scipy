@@ -20,12 +20,14 @@ from scipy.stats._distr_params import distcont, distdiscrete
 from scipy.stats._distribution_infrastructure import (
     _Domain, _RealInterval, _Parameter, _Parameterization, _RealParameter,
     ContinuousDistribution, DiscreteDistribution, CircularDistribution, Mixture,
-    ShiftedScaledDistribution, _fiinfo, _generate_domain_support, _logexpxmexpy)
+    ShiftedScaledDistribution, _generate_domain_support, _logexpxmexpy)
 from scipy.stats._new_distributions import (
     StandardNormal, _LogUniform, _Gamma, _TestCircular)
 from scipy.stats import Normal, Uniform
 from scipy._lib._testutils import mutually_broadcastable_shapes
 from scipy._lib._util import _RichResult
+from scipy._lib._array_api import make_xp_test_case, is_numpy
+from scipy._lib._array_api_no_0d import xp_assert_close, xp_assert_equal
 
 
 class Test_RealInterval:
@@ -35,7 +37,7 @@ class Test_RealInterval:
         domain = _RealInterval(endpoints=('a', 'b'))
         message = "The endpoints of the distribution are defined..."
         with pytest.raises(TypeError, match=message):
-            domain.get_numerical_endpoints(dict)
+            domain.get_numerical_endpoints(dict, xp=np)
 
     @pytest.mark.parametrize('x', [rng.uniform(10, 10, size=(2, 3, 4)),
                                    -np.inf, np.pi])
@@ -43,7 +45,7 @@ class Test_RealInterval:
         # Test `contains` when endpoints are defined by constants
         a, b = -np.inf, np.pi
         domain = _RealInterval(endpoints=(a, b), inclusive=(False, True))
-        assert_equal(domain.contains(x), (a < x) & (x <= b))
+        assert_equal(domain.contains(x, xp=np), (a < x) & (x <= b))
 
     @pytest.mark.slow
     @given(shapes=npst.mutually_broadcastable_shapes(num_shapes=3, min_side=0),
@@ -77,7 +79,7 @@ class Test_RealInterval:
         domain.define_parameters(_RealParameter('a', domain=_RealInterval()),
                                  _RealParameter('b', domain=_RealInterval()))
         # Check that domain and string evaluation give the same result
-        res = domain.contains(x, dict(a=a, b=b))
+        res = domain.contains(x, dict(a=a, b=b), xp=np)
 
         # Apparently, `np.float16([2]) < np.float32(2.0009766)` is False
         # but `np.float16([2]) < np.float32([2.0009766])` is True
@@ -97,10 +99,11 @@ class Test_RealInterval:
         endpoints = (lambda a, b: (a - b) / 2, lambda a, b: (a + b) / 2)
         domain = _RealInterval(endpoints=endpoints, inclusive=inclusive)
         x = np.asarray([(a - 2*b)/2, (a - b)/2, a/2, (a + b)/2, (a + 2*b)/2])
-        res = domain.contains(x, dict(a=a, b=b))
+        params = dict(a=a, b=b)
+        res = domain.contains(x, params, xp=np)
 
         numerical_endpoints = ((a - b) / 2, (a + b) / 2)
-        assert numerical_endpoints == domain.get_numerical_endpoints(dict(a=a, b=b))
+        assert numerical_endpoints == domain.get_numerical_endpoints(params, xp=np)
         alpha, beta = numerical_endpoints
 
         above_left = alpha <= x if inclusive[0] else alpha < x
@@ -149,8 +152,7 @@ class Test_RealInterval:
         assert domain1.symbols is not domain2.symbols
 
 
-def draw_distribution_from_family(family, rng, shape_options,
-                                  proportions=None):
+def draw_distribution_from_family(family, rng, shape_options, proportions=None, xp=np):
     # If the distribution has parameters, choose a parameterization and
     # draw broadcastable shapes for the parameter arrays.
     proportions = (0.7, 0.1, 0.1, 0.1) if proportions is None else proportions
@@ -160,11 +162,11 @@ def draw_distribution_from_family(family, rng, shape_options,
         n_parameters = family._num_parameters(i)
         shapes = mutually_broadcastable_shapes(num_shapes=n_parameters,
                                                rng=rng, **shape_options)
-        result_shape = np.broadcast_shapes(*shapes)
+        result_shape = xp.broadcast_shapes(*shapes)
         dist = family._draw(shapes, rng=rng, proportions=proportions,
-                            i_parameterization=i)
+                            i_parameterization=i, xp=xp)
     else:
-        dist = family._draw(rng=rng)
+        dist = family._draw(rng=rng, xp=xp)
         result_shape = tuple()
 
     # Draw a broadcastable shape for the arguments, and draw values for the
@@ -172,18 +174,18 @@ def draw_distribution_from_family(family, rng, shape_options,
     x_shape, = mutually_broadcastable_shapes(1, base_shape=result_shape,
                                              rng=rng, **shape_options)
     x = dist._variable.draw(x_shape, parameter_values=dist._parameters,
-                            proportions=proportions, rng=rng, region='typical')
-    x_result_shape = np.broadcast_shapes(x_shape, result_shape)
+                            proportions=proportions, rng=rng, region='typical', xp=xp)
+    x_result_shape = xp.broadcast_shapes(x_shape, result_shape)
     y_shape, = mutually_broadcastable_shapes(1, base_shape=x_result_shape,
                                              rng=rng, **shape_options)
     y = dist._variable.draw(y_shape, parameter_values=dist._parameters,
-                            proportions=proportions, rng=rng, region='typical')
-    xy_result_shape = np.broadcast_shapes(y_shape, x_result_shape)
+                            proportions=proportions, rng=rng, region='typical', xp=xp)
+    xy_result_shape = xp.broadcast_shapes(y_shape, x_result_shape)
     p_domain = _RealInterval((0, 1), (True, True))
     p_var = _RealParameter('p', domain=p_domain)
-    p = p_var.draw(x_shape, proportions=proportions, rng=rng)
+    p = p_var.draw(x_shape, proportions=proportions, rng=rng, xp=xp)
     with np.errstate(divide='ignore', invalid='ignore'):
-        logp = np.log(p)
+        logp = xp.log(p)
 
     return _RichResult(dist=dist, x=x, y=y, p=p, logp=logp, result_shape=result_shape,
                        x_result_shape=x_result_shape, xy_result_shape=xy_result_shape)
@@ -206,21 +208,21 @@ class DistributionsTest:
         return request.param
 
     @pytest.fixture
-    def case(self, options):
+    def case(self, options, xp):
         i, _options = options
         shape_options, proportions = _options
         rng = np.random.default_rng([i, self.seed])
         tmp = draw_distribution_from_family(self.family, rng,
-                                            shape_options, proportions)
+                                            shape_options, proportions, xp=xp)
         return _RichResult(family=self.family, rng=rng, **tmp)
 
     @pytest.fixture
-    def valid_dist_x(self):
+    def valid_dist_x(self, xp):
         shape_options = dict(min_dims=1, max_dims=1, min_side=20, max_side=21)
         proportions = (1, 0, 0, 0)  # all valid
         rng = np.random.default_rng(self.seed)
         tmp = draw_distribution_from_family(self.family, rng,
-                                            shape_options, proportions)
+                                            shape_options, proportions, xp=xp)
         return tmp.dist, tmp.x
 
     def test_purported_distribution(self, valid_dist_x):
@@ -228,189 +230,198 @@ class DistributionsTest:
                    "distribution is the purported one.")
         raise NotImplementedError(message)
 
-    def test_support(self, case):
-        check_support(case.dist)
+    def test_support(self, case, *, xp):
+        check_support(case.dist, xp=xp)
 
     @pytest.mark.thread_unsafe(reason="tests cache of shared `case.dist`")
-    def test_moment(self, case, tol_override=None):
-        check_moment_funcs(case.dist, case.result_shape, tol_override=tol_override)
+    def test_moment(self, case, *, tol_override=None, xp):
+        check_moment_funcs(case.dist, case.result_shape,
+                           tol_override=tol_override, xp=xp)
 
     @pytest.mark.thread_unsafe(reason="tests cache of shared `case.dist`")
-    def test_lmoment(self, case, tol_override=None):
+    def test_lmoment(self, case, *, tol_override=None, xp):
         if isinstance(case.dist, CircularDistribution):
             pytest.skip("`CircularDistributions` don't support `lmoment`.")
-        check_lmoment_funcs(case.dist, case.result_shape, tol_override=tol_override)
+        check_lmoment_funcs(case.dist, case.result_shape,
+                            tol_override=tol_override, xp=xp)
 
-    def test_random_sample(self, case):
+    def test_random_sample(self, case, *, xp):
         sample_shape, = mutually_broadcastable_shapes(1, max_side=20, rng=case.rng)
         check_sample_shape_NaNs(case.dist, 'sample', sample_shape,
-                                case.result_shape, case.rng)
+                                case.result_shape, case.rng, xp=xp)
 
     @pytest.mark.thread_unsafe(reason="looks like an _rng_spawn issue?")
-    def test_quasi_random_sample(self, case):
+    def test_quasi_random_sample(self, case, *, xp):
         sample_shape, = mutually_broadcastable_shapes(1, max_side=20, rng=case.rng)
         qrng = qmc.Halton(d=1, seed=case.rng)
         check_sample_shape_NaNs(case.dist, 'sample', sample_shape,
-                                case.result_shape, qrng)
+                                case.result_shape, qrng, xp=xp)
 
-    def test_entropy(self, case, tol_override=None):
+    def test_entropy(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'entropy', None, case.result_shape,
                         {'log/exp', 'quadrature'},
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
-    def test_logentropy(self, case, tol_override=None):
+    def test_logentropy(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'logentropy', None, case.result_shape,
                         {'log/exp', 'quadrature'},
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
-    def test_median(self, case, tol_override=None):
+    def test_median(self, case, *, tol_override=None, xp):
         methods = ({'optimization'} if isinstance(case.dist, CircularDistribution)
                    else {'icdf'})
         check_dist_func(case.dist, 'median', None, case.result_shape, methods,
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
-    def test_mode(self, case, tol_override=None):
+    def test_mode(self, case, *, tol_override=None, xp):
         tol_override = {'atol': 1e-6} if tol_override is None else tol_override
         check_dist_func(case.dist, 'mode', None, case.result_shape,
-                        {'optimization'}, tol_override=tol_override)
+                        {'optimization'}, tol_override=tol_override, xp=xp)
 
     @pytest.mark.thread_unsafe(reason="tests cache of shared `case.dist`")
-    def test_mean(self, case, tol_override=None):
+    def test_mean(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'mean', None, case.result_shape, {'cache'},
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
     @pytest.mark.thread_unsafe(reason="tests cache of shared `case.dist`")
-    def test_variance(self, case, tol_override=None):
+    def test_variance(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'variance', None, case.result_shape, {'cache'},
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
-    def test_standard_deviation(self, case, tol_override=None):
+    def test_standard_deviation(self, case, *, tol_override=None, xp):
         tol_override = {} if tol_override is None else tol_override
         std = case.dist.standard_deviation()
-        res = (1 - np.exp(-0.5*std**2) if isinstance(case.dist, CircularDistribution)
+        res = (1 - xp.exp(-0.5*std**2) if isinstance(case.dist, CircularDistribution)
                else std**2)
-        assert_allclose(res, case.dist.variance(), **tol_override)
+        xp_assert_close(res, case.dist.variance(), **tol_override)
 
     @pytest.mark.thread_unsafe(reason="tests cache of shared `case.dist`")
-    def test_skewness(self, case, tol_override=None):
+    def test_skewness(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'skewness', None, case.result_shape,
-                        {'cache'}, tol_override=tol_override)
+                        {'cache'}, tol_override=tol_override, xp=xp)
 
     @pytest.mark.thread_unsafe(reason="tests cache of shared `case.dist`")
-    def test_kurtosis(self, case, tol_override=None):
+    def test_kurtosis(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'kurtosis', None, case.result_shape,
-                        {'cache'}, tol_override=tol_override)
+                        {'cache'}, tol_override=tol_override, xp=xp)
 
-    def test_pdf(self, case, tol_override=None):
+    def test_pdf(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'pdf', case.x, case.x_result_shape,
-                        {'log/exp'}, tol_override=tol_override)
+                        {'log/exp'}, tol_override=tol_override, xp=xp)
 
-    def test_logpdf(self, case, tol_override=None):
+    def test_logpdf(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'logpdf', case.x, case.x_result_shape,
-                        {'log/exp'}, tol_override=tol_override)
+                        {'log/exp'}, tol_override=tol_override, xp=xp)
 
-    def test_pmf(self, case, tol_override=None):
+    def test_pmf(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'pmf', case.x, case.x_result_shape,
-                        {'log/exp'}, tol_override=tol_override)
+                        {'log/exp'}, tol_override=tol_override, xp=xp)
 
-    def test_logpmf(self, case, tol_override=None):
+    def test_logpmf(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'logpmf', case.x, case.x_result_shape,
-                        {'log/exp'}, tol_override=tol_override)
+                        {'log/exp'}, tol_override=tol_override, xp=xp)
 
-    def test_logcdf(self, case, tol_override=None):
+    def test_logcdf(self, case, *, tol_override=None, xp):
         if isinstance(case.dist, CircularDistribution):
             pytest.skip("`CircularDistributions` don't support `logcdf`.")
         check_dist_func(case.dist, 'logcdf', case.x, case.x_result_shape,
                         {'log/exp', 'complement', 'quadrature'},
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
-    def test_cdf(self, case, tol_override=None):
+    def test_cdf(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'cdf', case.x, case.x_result_shape,
                         {'log/exp', 'complement', 'quadrature'},
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
-    def test_cdf2(self, case, tol_override=None):
+    def test_cdf2(self, case, *, tol_override=None, xp):
         if isinstance(case.dist, CircularDistribution):
             pytest.skip("`CircularDistributions` don't support two-arg `cdf`.")
         check_cdf2(case.dist, False, case.x, case.y,
-                    case.xy_result_shape, {'quadrature'}, tol_override=tol_override)
+                    case.xy_result_shape, {'quadrature'},
+                    tol_override=tol_override, xp=xp)
         check_cdf2(case.dist, True, case.x, case.y,
-                    case.xy_result_shape, {'quadrature'}, tol_override=tol_override)
+                    case.xy_result_shape, {'quadrature'},
+                    tol_override=tol_override, xp=xp)
 
-    def test_logccdf(self, case, tol_override=None):
+    def test_logccdf(self, case, *, tol_override=None, xp):
         if isinstance(case.dist, CircularDistribution):
             pytest.skip("`CircularDistributions` don't support `logccdf`.")
         check_dist_func(case.dist, 'logccdf', case.x, case.x_result_shape,
                         {'log/exp', 'complement', 'quadrature'},
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
-    def test_ccdf(self, case, tol_override=None):
+    def test_ccdf(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'ccdf', case.x, case.x_result_shape,
                         {'log/exp', 'complement', 'quadrature'},
-                        tol_override=tol_override)
+                        tol_override=tol_override, xp=xp)
 
-    def test_ccdf2(self, case, tol_override=None):
+    def test_ccdf2(self, case, *, tol_override=None, xp):
         if isinstance(case.dist, CircularDistribution):
             pytest.skip("`CircularDistributions` don't support two-arg `ccdf`.")
         check_ccdf2(case.dist, False, case.x, case.y,
-                    case.xy_result_shape, {'addition'}, tol_override=tol_override)
+                    case.xy_result_shape, {'addition'},
+                    tol_override=tol_override, xp=xp)
         check_ccdf2(case.dist, True, case.x, case.y,
-                    case.xy_result_shape, {'addition'}, tol_override=tol_override)
+                    case.xy_result_shape, {'addition'},
+                    tol_override=tol_override, xp=xp)
 
-    def test_ilogcdf(self, case, tol_override=None):
+    def test_ilogcdf(self, case, *, tol_override=None, xp):
         if isinstance(case.dist, CircularDistribution):
             pytest.skip("`CircularDistributions` don't support `ilogcdf`.")
         with np.errstate(divide='ignore', over='ignore'):
             check_dist_func(case.dist, 'ilogcdf', case.logp, case.x_result_shape,
-                            {'complement', 'inversion'}, tol_override=tol_override)
+                {'complement', 'inversion'}, tol_override=tol_override, xp=xp)
 
-    def test_icdf(self, case, tol_override=None):
+    def test_icdf(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'icdf', case.p, case.x_result_shape,
-                        {'complement', 'inversion'}, tol_override=tol_override)
+            {'complement', 'inversion'}, tol_override=tol_override, xp=xp)
 
-    def test_ilogccdf(self, case, tol_override=None):
+    def test_ilogccdf(self, case, *, tol_override=None, xp):
         if isinstance(case.dist, CircularDistribution):
             pytest.skip("`CircularDistributions` don't support `ilogccdf`.")
         with np.errstate(divide='ignore', over='ignore'):
             check_dist_func(case.dist, 'ilogccdf', case.logp, case.x_result_shape,
-                            {'complement', 'inversion'}, tol_override=tol_override)
+                {'complement', 'inversion'}, tol_override=tol_override, xp=xp)
 
-    def test_iccdf(self, case, tol_override=None):
+    def test_iccdf(self, case, *, tol_override=None, xp):
         check_dist_func(case.dist, 'iccdf', case.p, case.x_result_shape,
-                        {'complement', 'inversion'}, tol_override=tol_override)
+            {'complement', 'inversion'}, tol_override=tol_override, xp=xp)
 
 
 # Since this distributions is not public, the tests is really included to test the
 # distribution infrastructure more than the distribution itself. It also avoids
 # `DistributionTest` being detected as a misnamed test class by `check_test_name.py`
+@make_xp_test_case(_LogUniform)
 class Test_LogUniform(DistributionsTest):
     seed = 260607439
     family = _LogUniform
 
-    def test_purported_distribution(self, valid_dist_x):
+    def test_purported_distribution(self, valid_dist_x, xp):
         dist, x = valid_dist_x
-        np.testing.assert_allclose(dist.pdf(x), stats.loguniform(dist.a, dist.b).pdf(x))
+        xp_assert_close(dist.pdf(x),
+                        stats.loguniform(dist.a, dist.b).pdf(x))
 
     @pytest.mark.fail_slow(10)
     @pytest.mark.thread_unsafe(reason="tests cache of shared `case.dist`")
-    def test_lmoment(self, case):
-        return super().test_lmoment(case)
+    def test_lmoment(self, case, xp):
+        return super().test_lmoment(case, xp=xp)
 
 
 # Since this distributions is not public, the tests is really included to test the
 # distribution infrastructure more than the distribution itself. It also avoids
 # `DistributionTest` being detected as a misnamed test class by `check_test_name.py`
+@make_xp_test_case(_TestCircular)
 class Test_TestCircular(DistributionsTest):
     seed = 586247944
     family = _TestCircular
 
-    def test_purported_distribution(self, valid_dist_x):
+    def test_purported_distribution(self, valid_dist_x, xp):
         dist, x = valid_dist_x
-        np.testing.assert_allclose(dist.pdf(x), 0.75 * (1 - x**2))
+        xp_assert_close(dist.pdf(x), 0.75 * (1 - x**2))
 
-    def test_median(self, case):
+    def test_median(self, case, xp):
         # can only expect about half precision with optimization
-        return super().test_median(case, tol_override={'atol': 1e-6})
+        return super().test_median(case, tol_override={'atol': 1e-6}, xp=xp)
 
 
 class TestOtherMethods:
@@ -527,30 +538,33 @@ class TestOtherMethods:
         assert res1[1] != ref[1]
 
 
-def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape, rng):
+def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape, rng, *, xp):
     full_shape = sample_shape + result_shape
     if fname == 'sample':
         sample_method = dist.sample
 
     methods = {'inverse_transform'}
-    if dist._overrides(f'_{fname}_formula') and not isinstance(rng, qmc.QMCEngine):
+    if (is_numpy(xp)
+            and dist._overrides(f'_{fname}_formula')
+            and not isinstance(rng, qmc.QMCEngine)):
         methods.add('formula')
 
     for method in methods:
         res = sample_method(sample_shape, method=method, rng=rng)
-        valid_parameters = np.broadcast_to(get_valid_parameters(dist),
-                                           res.shape)
-        assert_equal(res.shape, full_shape)
-        np.testing.assert_equal(res.dtype, dist._dtype)
+        valid_parameters = xp.broadcast_to(get_valid_parameters(dist), res.shape)
+        assert res.shape == full_shape
+        assert res.dtype == dist._dtype
 
-        if full_shape == ():
+        if is_numpy(xp) and full_shape == ():
             # NumPy random makes a distinction between a 0d array and a scalar.
             # In stats, we consistently turn 0d arrays into scalars, so
             # maintain that behavior here. (With Array API arrays, this will
             # change.)
             assert np.isscalar(res)
-        assert np.all(np.isfinite(res[valid_parameters]))
-        assert_equal(res[~valid_parameters], np.nan)
+
+        strict = dict(check_dtype=False, check_shape=False, check_0d=False)
+        assert xp.all(xp.isfinite(res[valid_parameters]))
+        xp_assert_equal(res[~valid_parameters], np.nan, **strict)
 
         sample1 = sample_method(sample_shape, method=method, rng=42)
         sample2 = sample_method(sample_shape, method=method, rng=42)
@@ -558,21 +572,21 @@ def check_sample_shape_NaNs(dist, fname, sample_shape, result_shape, rng):
             # The idea is that it's very unlikely that the random sample
             # for a randomly chosen seed will match that for seed 42,
             # but it is not so unlikely if `dist` is a discrete distribution.
-            assert not np.any(np.equal(res, sample1))
-        assert_equal(sample1, sample2)
+            assert not xp.any(xp.equal(res, sample1))
+        xp_assert_equal(sample1, sample2)
 
 
-def check_support(dist):
+def check_support(dist, *, xp):
     a, b = dist.support()
-    check_nans_and_edges(dist, 'support', None, a)
-    check_nans_and_edges(dist, 'support', None, b)
+    check_nans_and_edges(dist, 'support', None, a, xp=xp)
+    check_nans_and_edges(dist, 'support', None, b, xp=xp)
     assert a.shape == dist._shape
     assert b.shape == dist._shape
     assert a.dtype == dist._dtype
     assert b.dtype == dist._dtype
 
 
-def check_dist_func(dist, fname, arg, result_shape, methods, tol_override=None):
+def check_dist_func(dist, fname, arg, result_shape, methods, tol_override=None, *, xp):
     # Check that all computation methods of all distribution functions agree
     # with one another, effectively testing the correctness of the generic
     # computation methods and confirming the consistency of specific
@@ -589,39 +603,39 @@ def check_dist_func(dist, fname, arg, result_shape, methods, tol_override=None):
             getattr(dist, fname)(*args, method="cache")
 
     ref = getattr(dist, fname)(*args)
-    check_nans_and_edges(dist, fname, arg, ref)
+    check_nans_and_edges(dist, fname, arg, ref, xp=xp)
 
     if dist._overrides(f'_{fname}_formula'):
         methods.add('formula')
 
-    np.testing.assert_equal(ref.shape, result_shape)
+    assert ref.shape == result_shape
     # Until we convert to array API, let's do the familiar thing:
     # 0d things are scalars, not arrays
-    if result_shape == tuple():
+    if is_numpy(xp) and result_shape == tuple():
         assert np.isscalar(ref)
 
     for method in methods:
         res = getattr(dist, fname)(*args, method=method)
         if 'log' in fname:
-            np.testing.assert_allclose(np.exp(res), np.exp(ref), **tol_override)
+            xp_assert_close(xp.exp(res), xp.exp(ref), **tol_override)
         else:
             if fname in {'median', 'mode'} and isinstance(dist, CircularDistribution):
                 # wrap to center around 0
                 a, b = dist.support()
                 period = b - a
-                res = np.where(res > period/2, res - period, res)[()]
-                ref = np.where(ref > period/2, ref - period, ref)[()]
-            np.testing.assert_allclose(res, ref, **tol_override)
+                res = xp.where(res > period/2, res - period, res)[()]
+                ref = xp.where(ref > period/2, ref - period, ref)[()]
+            xp_assert_close(res, ref, **tol_override)
 
         # for now, make sure dtypes are consistent; later, we can check whether
         # they are correct.
-        np.testing.assert_equal(res.dtype, ref.dtype)
-        np.testing.assert_equal(res.shape, result_shape)
-        if result_shape == tuple():
+        assert res.dtype == ref.dtype
+        assert res.shape == result_shape
+        if is_numpy(xp) and result_shape == tuple():
             assert np.isscalar(res)
 
 
-def check_cdf2(dist, log, x, y, result_shape, methods, tol_override=None):
+def check_cdf2(dist, log, x, y, result_shape, methods, *, tol_override=None, xp):
     # Specialized test for 2-arg cdf since the interface is a bit different
     # from the other methods. Here, we'll use 1-arg cdf as a reference, and
     # since we have already checked 1-arg cdf in `check_nans_and_edges`, this
@@ -648,9 +662,10 @@ def check_cdf2(dist, log, x, y, result_shape, methods, tol_override=None):
             methods.add('log/exp')
 
     ref = dist.cdf(y) - dist.cdf(x)
-    np.testing.assert_equal(ref.shape, result_shape)
+    ref = ref + 0j if log else ref
+    assert ref.shape == result_shape
 
-    if result_shape == tuple():
+    if is_numpy(xp) and result_shape == tuple():
         assert np.isscalar(ref)
 
     for method in methods:
@@ -658,24 +673,21 @@ def check_cdf2(dist, log, x, y, result_shape, methods, tol_override=None):
             message = ("Two argument cdf functions are currently only supported for "
                        "continuous distributions.")
             with pytest.raises(NotImplementedError, match=message):
-                res = (np.exp(dist.logcdf(x, y, method=method)) if log
+                res = (xp.exp(dist.logcdf(x, y, method=method)) if log
                        else dist.cdf(x, y, method=method))
             continue
         with np.errstate(invalid='ignore'):
             # np.exp(np.nan) raises on some platforms?
-            res = (np.exp(dist.logcdf(x, y, method=method)) if log
+            res = (xp.exp(dist.logcdf(x, y, method=method)) if log
                 else dist.cdf(x, y, method=method))
-        np.testing.assert_allclose(res, ref, **tol_override)
-        if log:
-            np.testing.assert_equal(res.dtype, (ref + 0j).dtype)
-        else:
-            np.testing.assert_equal(res.dtype, ref.dtype)
-        np.testing.assert_equal(res.shape, result_shape)
-        if result_shape == tuple():
+        xp_assert_close(res, ref, **tol_override)
+        assert res.dtype == ref.dtype
+        assert res.shape == result_shape
+        if is_numpy(xp) and result_shape == tuple():
             assert np.isscalar(res)
 
 
-def check_ccdf2(dist, log, x, y, result_shape, methods, tol_override=None):
+def check_ccdf2(dist, log, x, y, result_shape, methods, *, tol_override=None, xp):
     # Specialized test for 2-arg ccdf since the interface is a bit different
     # from the other methods. Could be combined with check_cdf2 above, but
     # writing it separately is simpler.
@@ -686,9 +698,9 @@ def check_ccdf2(dist, log, x, y, result_shape, methods, tol_override=None):
         methods.add('formula')
 
     ref = dist.cdf(x) + dist.ccdf(y)
-    np.testing.assert_equal(ref.shape, result_shape)
+    assert ref.shape == result_shape
 
-    if result_shape == tuple():
+    if is_numpy(xp) and result_shape == tuple():
         assert np.isscalar(ref)
 
     for method in methods:
@@ -696,19 +708,19 @@ def check_ccdf2(dist, log, x, y, result_shape, methods, tol_override=None):
                    "continuous distributions.")
         if isinstance(dist, DiscreteDistribution):
             with pytest.raises(NotImplementedError, match=message):
-                res = (np.exp(dist.logccdf(x, y, method=method)) if log
+                res = (xp.exp(dist.logccdf(x, y, method=method)) if log
                        else dist.ccdf(x, y, method=method))
             continue
-        res = (np.exp(dist.logccdf(x, y, method=method)) if log
+        res = (xp.exp(dist.logccdf(x, y, method=method)) if log
                else dist.ccdf(x, y, method=method))
-        np.testing.assert_allclose(res, ref, **tol_override)
-        np.testing.assert_equal(res.dtype, ref.dtype)
-        np.testing.assert_equal(res.shape, result_shape)
-        if result_shape == tuple():
+        xp_assert_close(res, ref, **tol_override)
+        assert res.dtype == ref.dtype
+        assert res.shape == result_shape
+        if is_numpy(xp) and result_shape == tuple():
             assert np.isscalar(res)
 
 
-def check_nans_and_edges(dist, fname, arg, res):
+def check_nans_and_edges(dist, fname, arg, res, *, xp):
 
     valid_parameters = get_valid_parameters(dist)
     if fname in {'icdf', 'iccdf'}:
@@ -718,23 +730,24 @@ def check_nans_and_edges(dist, fname, arg, res):
     else:
         arg_domain = dist._variable.domain
 
-    classified_args = classify_arg(dist, arg, arg_domain)
-    valid_parameters, *classified_args = np.broadcast_arrays(valid_parameters,
+    classified_args = classify_arg(dist, arg, arg_domain, xp=xp)
+    valid_parameters, *classified_args = xp.broadcast_arrays(valid_parameters,
                                                              *classified_args)
     valid_arg, endpoint_arg, outside_arg, nan_arg = classified_args
     all_valid = valid_arg & valid_parameters
 
+    strict = dict(check_dtype=False, check_shape=False, check_0d=False)
     # Check NaN pattern and edge cases
-    assert_equal(res[~valid_parameters], np.nan)
-    assert_equal(res[nan_arg], np.nan)
+    xp_assert_equal(res[~valid_parameters], xp.nan, **strict)
+    xp_assert_equal(res[nan_arg], xp.nan, **strict)
 
     a, b = dist.support()
-    a = np.broadcast_to(a, res.shape)
-    b = np.broadcast_to(b, res.shape)
+    a = xp.broadcast_to(a, res.shape)
+    b = xp.broadcast_to(b, res.shape)
 
     if isinstance(dist, CircularDistribution):
         return check_periodicity(dist, fname, arg, res, a, b, valid_parameters,
-                                 classified_args)
+                                 classified_args, xp=xp)
 
     outside_arg_minus = (outside_arg == -1) & valid_parameters
     outside_arg_plus = (outside_arg == 1) & valid_parameters
@@ -745,51 +758,51 @@ def check_nans_and_edges(dist, fname, arg, res):
     # Writing this independently of how the are set in the distribution
     # infrastructure. That is very compact; this is very verbose.
     if fname in {'logpdf'}:
-        assert_equal(res[outside_arg_minus], -np.inf)
-        assert_equal(res[outside_arg_plus], -np.inf)
+        xp_assert_equal(res[outside_arg_minus], -np.inf, **strict)
+        xp_assert_equal(res[outside_arg_plus], -np.inf, **strict)
         ref = -np.inf if not is_discrete else np.inf
-        assert_equal(res[endpoint_arg_minus & ~valid_arg], ref)
-        assert_equal(res[endpoint_arg_plus & ~valid_arg], ref)
+        xp_assert_equal(res[endpoint_arg_minus & ~valid_arg], ref, **strict)
+        xp_assert_equal(res[endpoint_arg_plus & ~valid_arg], ref, **strict)
     elif fname in {'pdf'}:
-        assert_equal(res[outside_arg_minus], 0)
-        assert_equal(res[outside_arg_plus], 0)
+        xp_assert_equal(res[outside_arg_minus], 0, **strict)
+        xp_assert_equal(res[outside_arg_plus], 0, **strict)
         ref = 0 if not is_discrete else np.inf
-        assert_equal(res[endpoint_arg_minus & ~valid_arg], ref)
-        assert_equal(res[endpoint_arg_plus & ~valid_arg], ref)
+        xp_assert_equal(res[endpoint_arg_minus & ~valid_arg], ref, **strict)
+        xp_assert_equal(res[endpoint_arg_plus & ~valid_arg], ref, **strict)
     elif fname in {'logcdf'}:
-        assert_equal(res[outside_arg_minus], -inf)
-        assert_equal(res[outside_arg_plus], 0)
+        xp_assert_equal(res[outside_arg_minus], -inf, **strict)
+        xp_assert_equal(res[outside_arg_plus], 0, **strict)
         if not is_discrete:
-            assert_equal(res[endpoint_arg_minus], -inf)
-        assert_equal(res[endpoint_arg_plus], 0)
+            xp_assert_equal(res[endpoint_arg_minus], -inf, **strict)
+        xp_assert_equal(res[endpoint_arg_plus], 0, **strict)
     elif fname in {'cdf'}:
-        assert_equal(res[outside_arg_minus], 0)
-        assert_equal(res[outside_arg_plus], 1)
+        xp_assert_equal(res[outside_arg_minus], 0, **strict)
+        xp_assert_equal(res[outside_arg_plus], 1, **strict)
         if not is_discrete:
-            assert_equal(res[endpoint_arg_minus], 0)
-        assert_equal(res[endpoint_arg_plus], 1)
+            xp_assert_equal(res[endpoint_arg_minus], 0, **strict)
+        xp_assert_equal(res[endpoint_arg_plus], 1, **strict)
     elif fname in {'logccdf'}:
-        assert_equal(res[outside_arg_minus], 0)
-        assert_equal(res[outside_arg_plus], -inf)
+        xp_assert_equal(res[outside_arg_minus], 0, **strict)
+        xp_assert_equal(res[outside_arg_plus], -inf, **strict)
         if not is_discrete:
-            assert_equal(res[endpoint_arg_minus], 0)
-        assert_equal(res[endpoint_arg_plus], -inf)
+            xp_assert_equal(res[endpoint_arg_minus], 0, **strict)
+        xp_assert_equal(res[endpoint_arg_plus], -inf, **strict)
     elif fname in {'ccdf'}:
-        assert_equal(res[outside_arg_minus], 1)
-        assert_equal(res[outside_arg_plus], 0)
+        xp_assert_equal(res[outside_arg_minus], 1, **strict)
+        xp_assert_equal(res[outside_arg_plus], 0, **strict)
         if not is_discrete:
-            assert_equal(res[endpoint_arg_minus], 1)
-        assert_equal(res[endpoint_arg_plus], 0)
+            xp_assert_equal(res[endpoint_arg_minus], 1, **strict)
+        xp_assert_equal(res[endpoint_arg_plus], 0, **strict)
     elif fname in {'ilogcdf', 'icdf'}:
-        assert_equal(res[outside_arg == -1], np.nan)
-        assert_equal(res[outside_arg == 1], np.nan)
-        assert_equal(res[endpoint_arg == -1], a[endpoint_arg == -1])
-        assert_equal(res[endpoint_arg == 1], b[endpoint_arg == 1])
+        xp_assert_equal(res[outside_arg == -1], np.nan, **strict)
+        xp_assert_equal(res[outside_arg == 1], np.nan, **strict)
+        xp_assert_equal(res[endpoint_arg == -1], a[endpoint_arg == -1], **strict)
+        xp_assert_equal(res[endpoint_arg == 1], b[endpoint_arg == 1], **strict)
     elif fname in {'ilogccdf', 'iccdf'}:
-        assert_equal(res[outside_arg == -1], np.nan)
-        assert_equal(res[outside_arg == 1], np.nan)
-        assert_equal(res[endpoint_arg == -1], b[endpoint_arg == -1])
-        assert_equal(res[endpoint_arg == 1], a[endpoint_arg == 1])
+        xp_assert_equal(res[outside_arg == -1], np.nan, **strict)
+        xp_assert_equal(res[outside_arg == 1], np.nan, **strict)
+        xp_assert_equal(res[endpoint_arg == -1], b[endpoint_arg == -1], **strict)
+        xp_assert_equal(res[endpoint_arg == 1], a[endpoint_arg == 1], **strict)
 
     exclude = {'mean', 'skewness', 'support'}
     if isinstance(dist, ContinuousDistribution):
@@ -804,50 +817,51 @@ def check_nans_and_edges(dist, fname, arg, res):
         variance = dist.variance()
         dist.cache_policy = None
         mask_finite = all_valid & (endpoint_arg == 0) & (variance > 0)
-        assert np.isfinite(res[mask_finite]).all()
+        assert xp.all(xp.isfinite(res[mask_finite]))
 
 
-def check_periodicity(dist, fname, arg, res, a, b, valid_parameters, classified_args):
+def check_periodicity(dist, fname, arg, res, a, b,
+                      valid_parameters, classified_args, *, xp):
     inside_arg, endpoint_arg, outside_arg, nan_arg = classified_args
     # we've already checked NaN patterns; don't include known NaNs in these checks
-    inside_arg = np.where(valid_parameters, inside_arg, False)
-    endpoint_arg = np.where(valid_parameters, endpoint_arg, 0)
+    inside_arg = xp.where(valid_parameters, inside_arg, False)
+    endpoint_arg = xp.where(valid_parameters, endpoint_arg, 0)
     method = getattr(dist, fname)
     period = (b - a)
     if fname in {'pdf', 'logpdf'}:
-        np.testing.assert_allclose(method(arg + period), res)
-        np.testing.assert_allclose(method(arg - period), res)
+        xp_assert_close(method(arg + period), res)
+        xp_assert_close(method(arg - period), res)
     elif fname in {'cdf'}:
-        np.testing.assert_allclose(method(arg + period), res + 1)
-        np.testing.assert_allclose(method(arg - period), res - 1)
-        assert np.all(res[inside_arg] <= 1.)
-        assert np.all(res[inside_arg] >= 0.)
-        assert np.all(res[endpoint_arg == 1] == 1.)
-        assert np.all(res[endpoint_arg == -1] == 0.)
+        xp_assert_close(method(arg + period), res + 1)
+        xp_assert_close(method(arg - period), res - 1)
+        assert xp.all(res[inside_arg] <= 1.)
+        assert xp.all(res[inside_arg] >= 0.)
+        assert xp.all(res[endpoint_arg == 1] == 1.)
+        assert xp.all(res[endpoint_arg == -1] == 0.)
     elif fname in {'icdf'}:
-        np.testing.assert_allclose(method(arg + 1), res + period)
-        np.testing.assert_allclose(method(arg - 1), res - period)
-        assert np.all(res[inside_arg] <= b[inside_arg])
-        assert np.all(res[inside_arg] >= a[inside_arg])
-        assert np.all(res[endpoint_arg == 1] == b[endpoint_arg == 1])
-        assert np.all(res[endpoint_arg == -1] == a[endpoint_arg == -1])
+        xp_assert_close(method(arg + 1), res + period)
+        xp_assert_close(method(arg - 1), res - period)
+        assert xp.all(res[inside_arg] <= b[inside_arg])
+        assert xp.all(res[inside_arg] >= a[inside_arg])
+        assert xp.all(res[endpoint_arg == 1] == b[endpoint_arg == 1])
+        assert xp.all(res[endpoint_arg == -1] == a[endpoint_arg == -1])
     elif fname in {'ccdf'}:
-        np.testing.assert_allclose(method(arg + period), res - 1)
-        np.testing.assert_allclose(method(arg - period), res + 1)
-        assert np.all(res[inside_arg] <= 1.)
-        assert np.all(res[inside_arg] >= 0.)
-        assert np.all(res[endpoint_arg == 1] == 0.)
-        assert np.all(res[endpoint_arg == -1] == 1.)
+        xp_assert_close(method(arg + period), res - 1)
+        xp_assert_close(method(arg - period), res + 1)
+        assert xp.all(res[inside_arg] <= 1.)
+        assert xp.all(res[inside_arg] >= 0.)
+        assert xp.all(res[endpoint_arg == 1] == 0.)
+        assert xp.all(res[endpoint_arg == -1] == 1.)
     elif fname in {'iccdf'}:
-        np.testing.assert_allclose(method(arg + 1), res - period)
-        np.testing.assert_allclose(method(arg - 1), res + period)
-        assert np.all(res[inside_arg] <= b[inside_arg])
-        assert np.all(res[inside_arg] >= a[inside_arg])
-        assert np.all(res[endpoint_arg == 1] == a[endpoint_arg == 1])
-        assert np.all(res[endpoint_arg == -1] == b[endpoint_arg == -1])
+        xp_assert_close(method(arg + 1), res - period)
+        xp_assert_close(method(arg - 1), res + period)
+        assert xp.all(res[inside_arg] <= b[inside_arg])
+        assert xp.all(res[inside_arg] >= a[inside_arg])
+        assert xp.all(res[endpoint_arg == 1] == a[endpoint_arg == 1])
+        assert xp.all(res[endpoint_arg == -1] == b[endpoint_arg == -1])
 
 
-def check_moment_funcs(dist, result_shape, tol_override=None):
+def check_moment_funcs(dist, result_shape, *, tol_override=None, xp):
     # Check that all computation methods of all distribution functions agree
     # with one another, effectively testing the correctness of the generic
     # computation methods and confirming the consistency of specific
@@ -860,7 +874,7 @@ def check_moment_funcs(dist, result_shape, tol_override=None):
     def check(order, kind, method=None, ref=None, success=True):
         if success:
             res = dist.moment(order, kind, method=method)
-            assert_allclose(res, ref, rtol=tol_override['rtol'],
+            xp_assert_close(res, ref, rtol=tol_override['rtol'],
                             atol=tol_override['atol']*10**order)
             assert res.shape == ref.shape
         else:
@@ -882,7 +896,7 @@ def check_moment_funcs(dist, result_shape, tol_override=None):
     for i in range(6):
         check(i, 'raw', 'cache', success=False)  # not cached yet
         ref = dist.moment(i, 'raw', method='quadrature')
-        check_nans_and_edges(dist, 'moment', None, ref)
+        check_nans_and_edges(dist, 'moment', None, ref, xp=xp)
         assert ref.shape == result_shape
         check(i, 'raw','cache', ref, success=True)  # cached now
         check(i, 'raw', 'formula', ref, success=has_formula(i, 'raw'))
@@ -973,7 +987,7 @@ def check_moment_funcs(dist, result_shape, tol_override=None):
     dist.reset_cache()
 
 
-def check_lmoment_funcs(dist, result_shape, tol_override=None):
+def check_lmoment_funcs(dist, result_shape, *, tol_override=None, xp):
     # Perform consistency check for L-moments similar to check_moment_funcs above
     tol_override = {'atol' : 5e-13} if tol_override is None else tol_override
 
@@ -986,7 +1000,7 @@ def check_lmoment_funcs(dist, result_shape, tol_override=None):
     def check(order, standardize=False, method=None, ref=None, success=True):
         if success:
             res = dist.lmoment(order, standardize=standardize, method=method)
-            assert_allclose(res, ref, **tol_override)
+            xp_assert_close(res, ref, **tol_override)
             assert res.shape == ref.shape
         else:
             with pytest.raises(NotImplementedError):
@@ -998,14 +1012,14 @@ def check_lmoment_funcs(dist, result_shape, tol_override=None):
     for i in range(1, 6):
         check(i, standardize, 'cache', success=standardize)  # not cached yet
         ref = dist.lmoment(i, standardize=standardize, method='order_statistics')
-        check_nans_and_edges(dist, 'lmoment', None, ref)
+        check_nans_and_edges(dist, 'lmoment', None, ref, xp=xp)
         assert ref.shape == result_shape
         check(i, standardize, 'cache', ref, success=True)  # cached now
         check(i, standardize, 'formula', ref,
               success=dist._overrides('_lmoment_formula')
                       and (i < 5 or dist.__class__.__name__ == "Uniform"))
         check(i, standardize, 'general', ref, success=(i == 1))
-        if dist._overrides('_icdf_formula'):
+        if is_numpy(xp) and dist._overrides('_icdf_formula'):
             check(i, standardize, 'quadrature_icdf', ref, success=True)
 
     standardize=True
@@ -1016,7 +1030,7 @@ def check_lmoment_funcs(dist, result_shape, tol_override=None):
               success=dist._overrides('_lmoment_formula')
                       and (i < 5 or dist.__class__.__name__ == "Uniform"))
         check(i, standardize, 'general', ref, success=False)
-        if dist._overrides('_icdf_formula'):
+        if is_numpy(xp) and dist._overrides('_icdf_formula'):
             check(i, standardize, 'quadrature_icdf', ref, success=True)
 
 
@@ -1032,7 +1046,7 @@ def test_sample_against_cdf(family, dist_shape, x_shape, fname, rng_type):
     if dist_shape and num_parameters == 0:
         pytest.skip("Distribution can't have a shape without parameters.")
 
-    dist = family._draw(dist_shape, rng)
+    dist = family._draw(dist_shape, rng, xp=np)
 
     n = 1024
     sample_size = (n,) + x_shape
@@ -1063,12 +1077,13 @@ def get_valid_parameters(dist):
     # without referring to that code, so it is a somewhat independent check.
 
     # Get all parameter values and `_Parameter` objects
+    xp = dist._xp
     parameter_values = dist._parameters
     parameters = {}
     for parameterization in dist._parameterizations:
         parameters.update(parameterization.parameters)
 
-    all_valid = np.ones(dist._shape, dtype=bool)
+    all_valid = xp.ones(dist._shape, dtype=xp.bool)
     for name, value in parameter_values.items():
         if name not in parameters:  # cached value not part of parameterization
             continue
@@ -1078,47 +1093,47 @@ def get_valid_parameters(dist):
         # agree with the `contains` method about which parameter values are
         # within the domain.
         a, b = parameter.domain.get_numerical_endpoints(
-            parameter_values=parameter_values)
+            parameter_values=parameter_values, xp=xp)
         a_included, b_included = parameter.domain.inclusive
         valid = (a <= value) if a_included else a < value
         valid &= (value <= b) if b_included else value < b
-        assert_equal(valid, parameter.domain.contains(
-            value, parameter_values=parameter_values))
+        xp_assert_equal(valid, parameter.domain.contains(
+            value, parameter_values=parameter_values, xp=xp))
 
         # Form `all_valid` mask that is True where *all* parameters are valid
         all_valid &= valid
 
     # Check that the `all_valid` mask formed here is the complement of the
     # `dist._invalid` mask stored by the infrastructure
-    assert_equal(~all_valid, dist._invalid)
+    xp_assert_equal(~all_valid, dist._invalid)
 
     return all_valid
 
 
-def classify_arg(dist, arg, arg_domain):
+def classify_arg(dist, arg, arg_domain, *, xp):
     if arg is None:
-        valid_args = np.ones(dist._shape, dtype=bool)
-        endpoint_args = np.zeros(dist._shape, dtype=bool)
-        outside_args = np.zeros(dist._shape, dtype=bool)
-        nan_args = np.zeros(dist._shape, dtype=bool)
+        valid_args = xp.ones(dist._shape, dtype=bool)
+        endpoint_args = xp.zeros(dist._shape, dtype=bool)
+        outside_args = xp.zeros(dist._shape, dtype=bool)
+        nan_args = xp.zeros(dist._shape, dtype=bool)
         return valid_args, endpoint_args, outside_args, nan_args
 
     a, b = arg_domain.get_numerical_endpoints(
-        parameter_values=dist._parameters)
+        parameter_values=dist._parameters, xp=xp)
 
-    a, b, arg = np.broadcast_arrays(a, b, arg)
+    a, b, arg = xp.broadcast_arrays(a, b, arg)
     a_included, b_included = arg_domain.inclusive
 
     inside = (a <= arg) if a_included else a < arg
     inside &= (arg <= b) if b_included else arg < b
     # TODO: add `supported` method and check here
-    on = np.zeros(a.shape, dtype=int)
+    on = xp.zeros(a.shape, dtype=xp.int64)
     on[a == arg] = -1
     on[b == arg] = 1
-    outside = np.zeros(a.shape, dtype=int)
+    outside = xp.zeros(a.shape, dtype=xp.int64)
     outside[(arg < a) if a_included else arg <= a] = -1
     outside[(b < arg) if b_included else b <= arg] = 1
-    nan = np.isnan(arg)
+    nan = xp.isnan(arg)
 
     return inside, on, outside, nan
 
@@ -1819,157 +1834,162 @@ class TestMakeDistribution:
         assert X.support() == (-np.inf, np.inf)
 
 
+@make_xp_test_case(stats._distribution_infrastructure.TransformedDistribution)
 class TestTransforms:
 
-    def test_ContinuousDistribution_only(self):
-        X = stats.Binomial(n=10, p=0.5)
+    def test_ContinuousDistribution_only(self, xp):
+        X = stats.Binomial(n=10, p=0.5, xp=xp)
         # This is applied at the top level TransformedDistribution,
         # so testing one subclass is enough
         message = "Transformations are currently supported only for..."
         with pytest.raises(NotImplementedError, match=message):
             stats.exp(X)
 
-    def test_truncate(self):
+    def test_truncate(self, xp):
         rng = np.random.default_rng(81345982345826)
         lb = rng.random((3, 1))
         ub = rng.random((3, 1))
         lb, ub = np.minimum(lb, ub), np.maximum(lb, ub)
-
-        Y = stats.truncate(Normal(), lb=lb, ub=ub)
         Y0 = stats.truncnorm(lb, ub)
+
+        lb, ub = xp.asarray(lb), xp.asarray(ub)
+        Y = stats.truncate(Normal(xp=xp), lb=lb, ub=ub)
 
         y = Y0.rvs((3, 10), random_state=rng)
         p = Y0.cdf(y)
+        y_xp, p_xp = xp.asarray(y), xp.asarray(p)
 
-        assert_allclose(Y.logentropy(), np.log(Y0.entropy() + 0j))
-        assert_allclose(Y.entropy(), Y0.entropy())
-        assert_allclose(Y.median(), Y0.ppf(0.5))
-        assert_allclose(Y.mean(), Y0.mean())
-        assert_allclose(Y.variance(), Y0.var())
-        assert_allclose(Y.standard_deviation(), np.sqrt(Y0.var()))
-        assert_allclose(Y.skewness(), Y0.stats('s'))
-        assert_allclose(Y.kurtosis(), Y0.stats('k') + 3)
-        assert_allclose(Y.support(), Y0.support())
-        assert_allclose(Y.pdf(y), Y0.pdf(y))
-        assert_allclose(Y.cdf(y), Y0.cdf(y))
-        assert_allclose(Y.ccdf(y), Y0.sf(y))
-        assert_allclose(Y.icdf(p), Y0.ppf(p))
-        assert_allclose(Y.iccdf(p), Y0.isf(p))
-        assert_allclose(Y.logpdf(y), Y0.logpdf(y))
-        assert_allclose(Y.logcdf(y), Y0.logcdf(y))
-        assert_allclose(Y.logccdf(y), Y0.logsf(y))
-        assert_allclose(Y.ilogcdf(np.log(p)), Y0.ppf(p))
-        assert_allclose(Y.ilogccdf(np.log(p)), Y0.isf(p))
+        xp_assert_close(Y.logentropy(), xp.log(xp.asarray(Y0.entropy() + 0j)))
+        xp_assert_close(Y.entropy(), xp.asarray(Y0.entropy()))
+        xp_assert_close(Y.median(), xp.asarray(Y0.ppf(0.5)))
+        xp_assert_close(Y.mean(), xp.asarray(Y0.mean()))
+        xp_assert_close(Y.variance(), xp.asarray(Y0.var()))
+        xp_assert_close(Y.standard_deviation(), xp.asarray(Y0.var()**0.5))
+        xp_assert_close(Y.skewness(), xp.asarray(Y0.stats('s')))
+        xp_assert_close(Y.kurtosis(), xp.asarray(Y0.stats('k') + 3))
+        xp_assert_close(Y.support()[0], xp.asarray(Y0.support()[0]))
+        xp_assert_close(Y.support()[1], xp.asarray(Y0.support()[1]))
+        xp_assert_close(Y.pdf(y_xp), xp.asarray(Y0.pdf(y)))
+        xp_assert_close(Y.cdf(y_xp), xp.asarray(Y0.cdf(y)))
+        xp_assert_close(Y.ccdf(y_xp), xp.asarray(Y0.sf(y)))
+        xp_assert_close(Y.icdf(p_xp), xp.asarray(Y0.ppf(p)))
+        xp_assert_close(Y.iccdf(p_xp), xp.asarray(Y0.isf(p)))
+        xp_assert_close(Y.logpdf(y_xp), xp.asarray(Y0.logpdf(y)))
+        xp_assert_close(Y.logcdf(y_xp), xp.asarray(Y0.logcdf(y)))
+        xp_assert_close(Y.logccdf(y_xp), xp.asarray(Y0.logsf(y)))
+        xp_assert_close(Y.ilogcdf(xp.log(p_xp)), xp.asarray(Y0.ppf(p)))
+        xp_assert_close(Y.ilogccdf(xp.log(p_xp)), xp.asarray(Y0.isf(p)))
         sample = Y.sample(10)
-        assert np.all((sample > lb) & (sample < ub))
+        assert xp.all((sample > lb) & (sample < ub))
 
     @pytest.mark.fail_slow(10)
     @pytest.mark.parametrize('seed', 911679639 + np.arange(20))
-    def test_loc_scale(self, seed):
+    def test_loc_scale(self, seed, xp):
         # Need tests with negative scale
         rng = np.random.default_rng(seed)
 
         class TransformedNormal(ShiftedScaledDistribution):
             def __init__(self, *args, **kwargs):
-                super().__init__(StandardNormal(), *args, **kwargs)
+                super().__init__(StandardNormal(xp=xp), *args, **kwargs)
 
         tmp = draw_distribution_from_family(
-            TransformedNormal, rng, {'min_side': 1}, proportions=(1, 0, 0, 0))
+            TransformedNormal, rng, {'min_side': 1}, proportions=(1, 0, 0, 0), xp=xp)
         dist, x, y, p, logp = tmp.dist, tmp.x, tmp.y, tmp.p, tmp.logp
 
         loc = dist.loc
         # negative scale tested in test_abs_finite_support, test_reciprocal, etc.
         scale = dist.scale
-        dist0 = StandardNormal()
-        dist_ref = stats.norm(loc=loc, scale=scale)
-        dist_ref_lmoment = Normal(mu=loc, sigma=scale)
+        dist0 = StandardNormal(xp=xp)
+        dist_ref = Normal(mu=loc, sigma=scale, xp=xp)
+        z = xp.zeros_like(scale)  # compact broadcasting
 
         x0 = (x - loc) / scale
         y0 = (y - loc) / scale
 
         a, b = dist.support()
         a0, b0 = dist0.support()
-        assert_allclose(a, a0 + loc)
-        assert_allclose(b, b0 + loc)
+        xp_assert_close(a, a0 + loc)
+        xp_assert_close(b, b0 + loc)
 
         with np.errstate(invalid='ignore', divide='ignore'):
-            assert_allclose(np.exp(dist.logentropy()), dist.entropy())
-            assert_allclose(dist.entropy(), dist_ref.entropy())
-            assert_allclose(dist.median(), dist0.median() + loc)
-            assert_allclose(dist.mode(), dist0.mode() + loc)
-            assert_allclose(dist.mean(), dist0.mean() + loc)
-            assert_allclose(dist.variance(), dist0.variance() * scale**2)
-            assert_allclose(dist.standard_deviation(), dist.variance()**0.5)
-            assert_allclose(dist.skewness(), dist0.skewness() * np.sign(scale))
-            assert_allclose(dist.kurtosis(), dist0.kurtosis())
-            assert_allclose(dist.logpdf(x), dist0.logpdf(x0) - np.log(scale))
-            assert_allclose(dist.pdf(x), dist0.pdf(x0) / scale)
-            assert_allclose(dist.logcdf(x), dist0.logcdf(x0))
-            assert_allclose(dist.cdf(x), dist0.cdf(x0))
-            assert_allclose(dist.logccdf(x), dist0.logccdf(x0))
-            assert_allclose(dist.ccdf(x), dist0.ccdf(x0))
-            assert_allclose(dist.logcdf(x, y), dist0.logcdf(x0, y0))
-            assert_allclose(dist.cdf(x, y), dist0.cdf(x0, y0))
-            assert_allclose(dist.logccdf(x, y), dist0.logccdf(x0, y0))
-            assert_allclose(dist.ccdf(x, y), dist0.ccdf(x0, y0))
-            assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp)*scale + loc)
-            assert_allclose(dist.icdf(p), dist0.icdf(p)*scale + loc)
-            assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp)*scale + loc)
-            assert_allclose(dist.iccdf(p), dist0.iccdf(p)*scale + loc)
+            xp_assert_close(xp.exp(dist.logentropy()), dist.entropy() + 0j)
+            xp_assert_close(dist.entropy(), dist_ref.entropy())
+            xp_assert_close(dist.median(), dist0.median() + loc)
+            xp_assert_close(dist.mode(), dist0.mode() + loc)
+            xp_assert_close(dist.mean(), dist0.mean() + loc)
+            xp_assert_close(dist.variance(), dist0.variance() * scale**2)
+            xp_assert_close(dist.standard_deviation(), dist.variance()**0.5)
+            xp_assert_close(dist.skewness(), dist0.skewness() * xp.sign(scale))
+            xp_assert_close(dist.kurtosis(), dist0.kurtosis() + z)
+            xp_assert_close(dist.logpdf(x), dist0.logpdf(x0) - xp.log(scale))
+            xp_assert_close(dist.pdf(x), dist0.pdf(x0) / scale)
+            xp_assert_close(dist.logcdf(x), dist0.logcdf(x0))
+            xp_assert_close(dist.cdf(x), dist0.cdf(x0))
+            xp_assert_close(dist.logccdf(x), dist0.logccdf(x0))
+            xp_assert_close(dist.ccdf(x), dist0.ccdf(x0))
+            xp_assert_close(dist.logcdf(x, y), dist0.logcdf(x0, y0))
+            xp_assert_close(dist.cdf(x, y), dist0.cdf(x0, y0))
+            xp_assert_close(dist.logccdf(x, y), dist0.logccdf(x0, y0))
+            xp_assert_close(dist.ccdf(x, y), dist0.ccdf(x0, y0))
+            xp_assert_close(dist.ilogcdf(logp), dist0.ilogcdf(logp)*scale + loc)
+            xp_assert_close(dist.icdf(p), dist0.icdf(p)*scale + loc)
+            xp_assert_close(dist.ilogccdf(logp), dist0.ilogccdf(logp)*scale + loc)
+            xp_assert_close(dist.iccdf(p), dist0.iccdf(p)*scale + loc)
             for i in range(1, 5):
-                assert_allclose(dist.moment(i, 'raw'), dist_ref.moment(i))
-                assert_allclose(dist.moment(i, 'central'),
+                xp_assert_close(dist.moment(i, 'raw'), dist_ref.moment(i))
+                xp_assert_close(dist.moment(i, 'central'),
                                 dist0.moment(i, 'central') * scale**i)
-                assert_allclose(dist.moment(i, 'standardized'),
+                xp_assert_close(dist.moment(i, 'standardized'),
                                 dist0.moment(i, 'standardized') * np.sign(scale)**i)
             for i in range(1, 5):
-                assert_allclose(dist.lmoment(i), dist_ref_lmoment.lmoment(i), atol=1e-8)
+                xp_assert_close(dist.lmoment(i), dist_ref.lmoment(i), atol=1e-8)
                 if i >= 3:
-                    assert_allclose(dist.lmoment(i, standardize=True),
-                                    dist_ref_lmoment.lmoment(i, standardize=True),
+                    xp_assert_close(dist.lmoment(i, standardize=True),
+                                    dist_ref.lmoment(i, standardize=True),
                                     atol=1e-8)
 
         # Transform back to the original distribution using all arithmetic
         # operations; check that it behaves as expected.
         dist = (dist - 2*loc) + loc
         dist = dist/scale**2 * scale
-        z = np.zeros(dist._shape)  # compact broadcasting
 
         a, b = dist.support()
         a0, b0 = dist0.support()
-        assert_allclose(a, a0 + z)
-        assert_allclose(b, b0 + z)
+        xp_assert_close(a, a0 + z)
+        xp_assert_close(b, b0 + z)
 
         with np.errstate(invalid='ignore', divide='ignore'):
-            assert_allclose(dist.logentropy(), dist0.logentropy() + z)
-            assert_allclose(dist.entropy(), dist0.entropy() + z)
-            assert_allclose(dist.median(), dist0.median() + z)
-            assert_allclose(dist.mode(), dist0.mode() + z)
-            assert_allclose(dist.mean(), dist0.mean() + z)
-            assert_allclose(dist.variance(), dist0.variance() + z)
-            assert_allclose(dist.standard_deviation(), dist0.standard_deviation() + z)
-            assert_allclose(dist.skewness(), dist0.skewness() + z)
-            assert_allclose(dist.kurtosis(), dist0.kurtosis() + z)
-            assert_allclose(dist.logpdf(x), dist0.logpdf(x)+z)
-            assert_allclose(dist.pdf(x), dist0.pdf(x) + z)
-            assert_allclose(dist.logcdf(x), dist0.logcdf(x) + z)
-            assert_allclose(dist.cdf(x), dist0.cdf(x) + z)
-            assert_allclose(dist.logccdf(x), dist0.logccdf(x) + z)
-            assert_allclose(dist.ccdf(x), dist0.ccdf(x) + z)
-            assert_allclose(dist.ilogcdf(logp), dist0.ilogcdf(logp) + z)
-            assert_allclose(dist.icdf(p), dist0.icdf(p) + z)
-            assert_allclose(dist.ilogccdf(logp), dist0.ilogccdf(logp) + z)
-            assert_allclose(dist.iccdf(p), dist0.iccdf(p) + z)
+            xp_assert_close(dist.logentropy(), dist0.logentropy() + z)
+            xp_assert_close(dist.entropy(), dist0.entropy() + z)
+            xp_assert_close(dist.median(), dist0.median() + z)
+            xp_assert_close(dist.mode(), dist0.mode() + z)
+            xp_assert_close(dist.mean(), dist0.mean() + z)
+            xp_assert_close(dist.variance(), dist0.variance() + z)
+            xp_assert_close(dist.standard_deviation(), dist0.standard_deviation() + z)
+            xp_assert_close(dist.skewness(), dist0.skewness() + z)
+            xp_assert_close(dist.kurtosis(), dist0.kurtosis() + z)
+            xp_assert_close(dist.logpdf(x), dist0.logpdf(x)+z)
+            xp_assert_close(dist.pdf(x), dist0.pdf(x) + z)
+            xp_assert_close(dist.logcdf(x), dist0.logcdf(x) + z)
+            xp_assert_close(dist.cdf(x), dist0.cdf(x) + z)
+            xp_assert_close(dist.logccdf(x), dist0.logccdf(x) + z)
+            xp_assert_close(dist.ccdf(x), dist0.ccdf(x) + z)
+            xp_assert_close(dist.ilogcdf(logp), dist0.ilogcdf(logp) + z)
+            xp_assert_close(dist.icdf(p), dist0.icdf(p) + z)
+            xp_assert_close(dist.ilogccdf(logp), dist0.ilogccdf(logp) + z)
+            xp_assert_close(dist.iccdf(p), dist0.iccdf(p) + z)
             for i in range(1, 5):
-                assert_allclose(dist.moment(i, 'raw'), dist0.moment(i, 'raw'))
-                assert_allclose(dist.moment(i, 'central'), dist0.moment(i, 'central'))
-                assert_allclose(dist.moment(i, 'standardized'),
-                                dist0.moment(i, 'standardized'))
+                xp_assert_close(dist.moment(i, 'raw'),
+                                dist0.moment(i, 'raw') + z)
+                xp_assert_close(dist.moment(i, 'central'),
+                                dist0.moment(i, 'central') + z)
+                xp_assert_close(dist.moment(i, 'standardized'),
+                                dist0.moment(i, 'standardized') + z)
             for i in range(1, 5):
-                assert_allclose(dist.lmoment(i), dist0.lmoment(i))
+                xp_assert_close(dist.lmoment(i), dist0.lmoment(i) + z)
                 if i >= 3:
-                    assert_allclose(dist.lmoment(i, standardize=True),
-                                    dist0.lmoment(i, standardize=True))
+                    xp_assert_close(dist.lmoment(i, standardize=True),
+                                    dist0.lmoment(i, standardize=True) + z)
 
             # These are tough to compare because of the way the shape works
             # rng = np.random.default_rng(seed)
@@ -1980,42 +2000,44 @@ class TestTransforms:
 
     @pytest.mark.fail_slow(5)
     @pytest.mark.parametrize('exp_pow', ['exp', 'pow'])
-    def test_exp_pow(self, exp_pow):
+    def test_exp_pow(self, exp_pow, xp):
         rng = np.random.default_rng(81345982345826)
         mu = rng.random((3, 1))
         sigma = rng.random((3, 1))
 
-        X = Normal()*sigma + mu
+        X = Normal(xp=xp)*xp.asarray(sigma) + xp.asarray(mu)
         if exp_pow == 'exp':
             Y = stats.exp(X)
         else:
-            Y = np.e ** X
+            Y = xp.e ** X
         Y0 = stats.lognorm(sigma, scale=np.exp(mu))
 
         y = Y0.rvs((3, 10), random_state=rng)
         p = Y0.cdf(y)
+        y_xp, p_xp = xp.asarray(y), xp.asarray(p)
 
-        assert_allclose(Y.logentropy(), np.log(Y0.entropy()))
-        assert_allclose(Y.entropy(), Y0.entropy())
-        assert_allclose(Y.median(), Y0.ppf(0.5))
-        assert_allclose(Y.mean(), Y0.mean())
-        assert_allclose(Y.variance(), Y0.var())
-        assert_allclose(Y.standard_deviation(), np.sqrt(Y0.var()))
-        assert_allclose(Y.skewness(), Y0.stats('s'))
-        assert_allclose(Y.kurtosis(), Y0.stats('k') + 3)
-        assert_allclose(Y.support(), Y0.support())
-        assert_allclose(Y.pdf(y), Y0.pdf(y))
-        assert_allclose(Y.cdf(y), Y0.cdf(y))
-        assert_allclose(Y.ccdf(y), Y0.sf(y))
-        assert_allclose(Y.icdf(p), Y0.ppf(p))
-        assert_allclose(Y.iccdf(p), Y0.isf(p))
-        assert_allclose(Y.logpdf(y), Y0.logpdf(y))
-        assert_allclose(Y.logcdf(y), Y0.logcdf(y))
-        assert_allclose(Y.logccdf(y), Y0.logsf(y))
-        assert_allclose(Y.ilogcdf(np.log(p)), Y0.ppf(p))
-        assert_allclose(Y.ilogccdf(np.log(p)), Y0.isf(p))
+        xp_assert_close(Y.logentropy(), xp.asarray(np.log(Y0.entropy()) + 0j))
+        xp_assert_close(Y.entropy(), xp.asarray(Y0.entropy()))
+        xp_assert_close(Y.median(), xp.asarray(Y0.ppf(0.5)))
+        xp_assert_close(Y.mean(), xp.asarray(Y0.mean()))
+        xp_assert_close(Y.variance(), xp.asarray(Y0.var()))
+        xp_assert_close(Y.standard_deviation(), xp.asarray(Y0.var()**0.5))
+        xp_assert_close(Y.skewness(), xp.asarray(Y0.stats('s')))
+        xp_assert_close(Y.kurtosis(), xp.asarray(Y0.stats('k') + 3))
+        xp_assert_close(Y.support()[0], xp.asarray(Y0.support()[0]))
+        xp_assert_close(Y.support()[1], xp.asarray(Y0.support()[1]))
+        xp_assert_close(Y.pdf(y_xp), xp.asarray(Y0.pdf(y)))
+        xp_assert_close(Y.cdf(y_xp), xp.asarray(Y0.cdf(y)))
+        xp_assert_close(Y.ccdf(y_xp), xp.asarray(Y0.sf(y)))
+        xp_assert_close(Y.icdf(p_xp), xp.asarray(Y0.ppf(p)))
+        xp_assert_close(Y.iccdf(p_xp), xp.asarray(Y0.isf(p)))
+        xp_assert_close(Y.logpdf(y_xp), xp.asarray(Y0.logpdf(y)))
+        xp_assert_close(Y.logcdf(y_xp), xp.asarray(Y0.logcdf(y)))
+        xp_assert_close(Y.logccdf(y_xp), xp.asarray(Y0.logsf(y)))
+        xp_assert_close(Y.ilogcdf(xp.log(p_xp)), xp.asarray(Y0.ppf(p)))
+        xp_assert_close(Y.ilogccdf(xp.log(p_xp)), xp.asarray(Y0.isf(p)))
         seed = 3984593485
-        assert_allclose(Y.sample(rng=seed), np.exp(X.sample(rng=seed)))
+        xp_assert_close(Y.sample(rng=seed), xp.asarray(np.exp(X.sample(rng=seed))))
 
 
     @pytest.mark.fail_slow(10)
@@ -2392,7 +2414,7 @@ class TestFullCoverage:
         parameter = _RealParameter('x', domain=domain)
 
         x = np.asarray([0.5, 2.5], dtype=dtype_in)
-        arr, dtype, valid = parameter.validate(x, parameter_values={})
+        arr, dtype, valid = parameter.validate(x, parameter_values={}, xp=np)
         assert_equal(arr, x)
         assert dtype == dtype_out
         assert_equal(valid, [True, False])
@@ -2412,10 +2434,6 @@ class TestFullCoverage:
         X._dtype = dtype
         x = np.asarray([0.5], dtype=dtype)
         assert X.logpdf(x).dtype == dtype
-
-    def test_fiinfo(self):
-        assert _fiinfo(np.float64(1.)).max == np.finfo(np.float64).max
-        assert _fiinfo(np.int64(1)).max == np.iinfo(np.int64).max
 
     def test_generate_domain_support(self):
         msg = _generate_domain_support(StandardNormal)
@@ -2805,17 +2823,17 @@ class Test_logexpxmexpy:
     def test_x_equals_y(self):
         # Test x - x == 0 in log-space
         x = np.asarray(2.)
-        assert_equal(_logexpxmexpy(x, x), -np.inf)
+        assert_equal(_logexpxmexpy(x, x, xp=np), -np.inf)
 
     def test_y_neg_inf(self):
         # Test x - 0 == x in log-space
         x, y = np.asarray(2.), np.asarray(-inf)
-        assert_equal(_logexpxmexpy(x, y), x)
+        assert_equal(_logexpxmexpy(x, y, xp=np), x)
 
     def test_nan(self):
         # operations involving NaNs should not produce warnings
         x = np.asarray(np.nan)
-        assert_equal(_logexpxmexpy(x, x), x)
+        assert_equal(_logexpxmexpy(x, x, xp=np), x)
 
 
 def test_gh_25180():

@@ -43,7 +43,7 @@ def _check_scalar(actual, desired, *, xp=None, **kwargs):
 
     # Only NumPy distinguishes between scalars and arrays;
     # shape check in xp_assert_* is sufficient except for shape == ()
-    if not (is_numpy(xp) and desired.shape == ()):
+    if not (is_numpy(xp) and actual.shape == ()):
         return
 
     _msg = ("Result is a NumPy 0d-array. Many SciPy functions intend to follow "

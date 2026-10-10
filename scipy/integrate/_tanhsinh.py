@@ -830,7 +830,8 @@ def _tanhsinh_iv(f, a, b, log, maxfun, maxlevel, minlevel,
                  atol, rtol, args, kwargs, preserve_shape, callback):
     # Input validation and standardization
 
-    xp = array_namespace(a, b)
+    kwargs = {} if kwargs is None else kwargs
+    xp = array_namespace(a, b, *args, *kwargs.values())
     a, b = xp_promote(a, b, broadcast=True, force_floating=True, xp=xp)
 
     message = '`f` must be callable.'
