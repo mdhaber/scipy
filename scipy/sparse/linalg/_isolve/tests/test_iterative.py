@@ -2,7 +2,6 @@
 """
 
 from contextlib import nullcontext
-from enum import StrEnum, auto
 import itertools
 import platform
 import pytest
@@ -26,7 +25,9 @@ from scipy.sparse import dia_array, csr_array, kronsum
 
 from scipy.sparse.linalg import _isolve
 from scipy.sparse.linalg import LinearOperator, aslinearoperator
-from scipy.sparse.linalg._isolve import gmres, qmr
+from scipy.sparse.linalg._isolve import (bicg, bicgstab, cg, cgs,
+                                         gcrotmk, gmres, lgmres,
+                                         minres, qmr, tfqmr)
 from scipy.sparse.linalg._interface import IdentityOperator
 
 # TODO check that method preserve shape and type
@@ -34,26 +35,8 @@ from scipy.sparse.linalg._interface import IdentityOperator
 
 
 # list of all solvers under test
-class SOLVERS(StrEnum):
-    bicg = auto()
-    bicgstab = auto()
-    cg = auto()
-    cgs = auto()
-    gcrotmk = auto()
-    gmres = auto()
-    lgmres = auto()
-    minres = auto()
-    qmr = auto()
-    tfqmr = auto()
-
-    @property
-    def impl(self):
-        return getattr(_isolve, self.value)
-
-    @classmethod
-    def from_list(cls, values):
-        return [cls(v) for v in values]
-
+_SOLVERS = [bicg, bicgstab, cg, cgs, gcrotmk, gmres, lgmres,
+            minres, qmr, tfqmr]
 
 CB_TYPE_FILTER = ".*called without specifying `callback_type`.*"
 
@@ -71,7 +54,7 @@ def _assert_success(*, A, x, b, xp, rtol=1.0, atol=0.0, less_equal=False):
 
 
 def skip_if_batching_unsupported(solver, batch_A, batch_b, inverse=False):
-    batched_solvers = [SOLVERS.cg]
+    batched_solvers = [cg]
     batched = batch_A != () or batch_b != ()
     if batched and solver not in batched_solvers and not inverse:
         pytest.skip(f"batching unsupported for {solver}")
@@ -82,8 +65,8 @@ def skip_if_batching_unsupported(solver, batch_A, batch_b, inverse=False):
 @pytest.fixture(
     scope="session",
     params=[
-        pytest.param(func, marks=make_xp_pytest_marks(func.impl))
-        for func in SOLVERS
+        pytest.param(func, marks=make_xp_pytest_marks(func))
+        for func in _SOLVERS
     ]
 )
 def solver(request):
@@ -104,7 +87,7 @@ class Case:
         if skip is None:
             self.skip = []
         else:
-            self.skip = SOLVERS.from_list(skip)
+            self.skip = skip
         if nonconvergence is None:
             self.nonconvergence = []
         else:
@@ -118,7 +101,7 @@ class SingleTest:
         self.b = b
         self.solver = solver
         self.casename = casename
-        self.name = casename + '-' + solver
+        self.name = casename + '-' + solver.__name__
         self.convergence = convergence
 
     def __repr__(self):
@@ -160,9 +143,9 @@ def xp_case(case, xp, batch_A, batch_b, rng=None):
 
 class IterativeParams:
     def __init__(self):
-        sym_solvers = ["minres", "cg"]
-        posdef_solvers = ["cg"]
-        real_solvers = ["minres"]
+        sym_solvers = [minres, cg]
+        posdef_solvers = [cg]
+        real_solvers = [minres]
 
         # list of Cases
         self.cases = []
@@ -177,23 +160,23 @@ class IterativeParams:
         self.cases.append(Case("poisson1d", Poisson1D))
         # note: minres fails for single precision
         self.cases.append(Case("poisson1d-F", Poisson1D.astype(np.float32),
-                               skip=["minres"]))
+                               skip=[minres]))
 
         # Symmetric and Negative Definite
         self.cases.append(Case("neg-poisson1d", -Poisson1D,
                                skip=posdef_solvers))
         # note: minres fails for single precision
         self.cases.append(Case("neg-poisson1d-F", (-Poisson1D).astype('f'),
-                               skip=posdef_solvers + ["minres"]))
+                               skip=posdef_solvers + [minres]))
 
         # 2-dimensional Poisson equations
         Poisson2D = kronsum(Poisson1D, Poisson1D)
         # note: minres fails for 2-d poisson problem,
         # it will be fixed in the future PR
-        self.cases.append(Case("poisson2d", Poisson2D, skip=["minres"]))
+        self.cases.append(Case("poisson2d", Poisson2D, skip=[minres]))
         # note: minres fails for single precision
         self.cases.append(Case("poisson2d-F", Poisson2D.astype('f'),
-                               skip=["minres"]))
+                               skip=[minres]))
 
         # Symmetric and Indefinite
         data = array([[6, -5, 2, 7, -1, 10, 4, -3, -8, 9]], dtype='d')
@@ -225,7 +208,7 @@ class IterativeParams:
         self.cases.append(Case("rand-sym-pd", data))
         # note: minres fails for single precision
         self.cases.append(Case("rand-sym-pd-F", data.astype('f'),
-                               skip=["minres"]))
+                               skip=[minres]))
 
         # Random complex-valued
         rng = np.random.RandomState(1234)
@@ -263,9 +246,9 @@ class IterativeParams:
         data[1, :] = -1
         A = dia_array((data, [0, -1]), shape=(10, 10)).tocsr()
         self.cases.append(Case("nonsymposdef", A,
-                               skip=sym_solvers + ["cgs", "qmr", "bicg", "tfqmr"]))
+                               skip=sym_solvers + [cgs, qmr, bicg, tfqmr]))
         self.cases.append(Case("nonsymposdef-F", A.astype('F'),
-                               skip=sym_solvers + ["cgs", "qmr", "bicg", "tfqmr"]))
+                               skip=sym_solvers + [cgs, qmr, bicg, tfqmr]))
 
         # Symmetric, non-pd, hitting cgs/bicg/bicgstab/qmr/tfqmr breakdown
         A = np.array([[0, 0, 0, 0, 0, 1, -1, -0, -0, -0, -0],
@@ -281,16 +264,17 @@ class IterativeParams:
                       [0, 0, 0, 0, -1, 0, -0, -0, -0, -0, -1]], dtype=float)
         b = np.array([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], dtype=float)
         assert (A == A.T).all()
-        self.cases.append(
-            Case("sym-nonpd", A, b, skip=posdef_solvers,
-                 nonconvergence=["cgs", "bicg", "bicgstab", "qmr", "tfqmr"])
-        )
+        self.cases.append(Case("sym-nonpd", A, b,
+                               skip=posdef_solvers,
+                               nonconvergence=[cgs, bicg, bicgstab, qmr, tfqmr]
+                               )
+                          )
 
     def generate_tests(self):
         # generate test cases with skips applied
         tests = []
         for case in self.cases:
-            for solver in SOLVERS:
+            for solver in _SOLVERS:
                 if (solver in case.skip):
                     continue
                 if solver in case.nonconvergence:
@@ -309,7 +293,7 @@ cases = IterativeParams().generate_tests()
 @pytest.fixture(
     params=[pytest.param(
         c, marks=[
-            *make_xp_pytest_marks(c.solver.impl),
+            *make_xp_pytest_marks(c.solver),
             *(
                 [pytest.mark.fail_slow(10), pytest.mark.slow]
                 if "poisson2d" in c.name else []
@@ -346,13 +330,13 @@ def test_maxiter(case, xp, batch_A, batch_b):
             Ax = xp.squeeze(case.A @ x[..., xp.newaxis], axis=-1)
             residuals.append(xp_vector_norm(b - Ax, axis=-1))
 
-    if case.solver == SOLVERS.gmres:
+    if case.solver == gmres:
         with pytest.warns(DeprecationWarning, match=CB_TYPE_FILTER):
-            x, info = case.solver.impl(
+            x, info = case.solver(
                 A, b, x0=x0, rtol=rtol, maxiter=1, callback=callback
             )
     else:
-        x, info = case.solver.impl(A, b, x0=x0, rtol=rtol, maxiter=1, callback=callback)
+        x, info = case.solver(A, b, x0=x0, rtol=rtol, maxiter=1, callback=callback)
 
     empty = batch_A == (0,) or batch_b == (0, 1)
     if not empty:
@@ -365,9 +349,9 @@ def test_maxiter(case, xp, batch_A, batch_b):
 @pytest.mark.parametrize("batch_A", [(), (5,), (0,)])
 @pytest.mark.parametrize("batch_b", [(), (6, 1), (0, 1)])
 def test_convergence(case, xp, batch_A, batch_b):
-    if (case.solver == SOLVERS.tfqmr) and ("poisson2d-F" in case.name):
+    if (case.solver is tfqmr) and ("poisson2d-F" in case.name):
         pytest.skip("Struggles to converge with single precision on some platforms")
-    if (case.solver == SOLVERS.tfqmr) and ("rand-sym-pd-F" in case.name):
+    if (case.solver is tfqmr) and ("rand-sym-pd-F" in case.name):
         # Numerical stability is borderline for single precision, tfqmr stagnates at a
         # relative residual ||b - Ax||/||b|| of ~2e-2, failure yes/no depends on
         # platform-specific rounding behavior (see, e.g., scipy#25522)
@@ -384,7 +368,7 @@ def test_convergence(case, xp, batch_A, batch_b):
     b = case.b
     x0 = 0 * b
 
-    x, info = case.solver.impl(A, b, x0=x0, rtol=rtol)
+    x, info = case.solver(A, b, x0=x0, rtol=rtol)
     xp_assert_equal(x0, 0 * b)  # ensure that x0 is not overwritten
 
     if case.convergence:
@@ -401,14 +385,14 @@ def test_convergence(case, xp, batch_A, batch_b):
 def test_precond_dummy(case, xp, batch_A, batch_b):
     case = xp_case(case, xp, batch_A, batch_b, rng=38)
     dtype = case.A.dtype
-    if (case.solver == SOLVERS.cgs) and ("pd-F" in case.name):
+    if (case.solver is cgs) and ("pd-F" in case.name):
         pytest.skip("Struggles to converge with single precision")
-    if (case.solver == SOLVERS.tfqmr) and ("poisson2d-F" in case.name):
+    if (case.solver is tfqmr) and ("poisson2d-F" in case.name):
         pytest.skip("Hits divide-by-zero with single precision")
-    if (case.solver == SOLVERS.tfqmr) and ("rand-sym-pd-F" in case.name):
+    if (case.solver is tfqmr) and ("rand-sym-pd-F" in case.name):
         # Numerical stability is borderline for float32 (see, scipy#25522)
         pytest.skip("Fails to converge with single precision on some platforms")
-    if IS_WASM and (case.solver == SOLVERS.cg) and ("rand-cmplx-sym-pd-F" in case.name):
+    if IS_WASM and (case.solver is cg) and ("rand-cmplx-sym-pd-F" in case.name):
         pytest.skip("Struggles to converge with single-precision complex on WASM")
     if not case.convergence:
         pytest.skip("Solver - Breakdown case, see gh-8829")
@@ -432,10 +416,10 @@ def test_precond_dummy(case, xp, batch_A, batch_b):
 
     precond = IdentityOperator(shape=A.shape, xp=xp)
 
-    if case.solver == SOLVERS.qmr:
-        x, info = case.solver.impl(A, b, M1=precond, M2=precond, x0=x0, rtol=rtol)
+    if case.solver is qmr:
+        x, info = case.solver(A, b, M1=precond, M2=precond, x0=x0, rtol=rtol)
     else:
-        x, info = case.solver.impl(A, b, M=precond, x0=x0, rtol=rtol)
+        x, info = case.solver(A, b, M=precond, x0=x0, rtol=rtol)
 
     fudge_factor = 1
     if dtype in [xp.float32, xp.complex64]:
@@ -446,7 +430,7 @@ def test_precond_dummy(case, xp, batch_A, batch_b):
 
     A = aslinearoperator(A)
 
-    x, info = case.solver.impl(A, b, x0=x0, rtol=rtol)
+    x, info = case.solver(A, b, x0=x0, rtol=rtol)
     assert info == 0
     _assert_success(A=A, x=x, b=b, xp=xp, rtol=fudge_factor * rtol)
 
@@ -457,7 +441,7 @@ def test_precond_dummy(case, xp, batch_A, batch_b):
 def test_precond_inverse(case, xp, batch_A, batch_b):
     if case.casename not in ('poisson1d', 'poisson2d'):
         pytest.skip("specific to poisson1d and poisson2d cases")
-    if case.solver == SOLVERS.qmr:
+    if case.solver is qmr:
         pytest.skip("skipped for qmr")
 
     case = xp_case(case, xp, batch_A, batch_b, rng=38)
@@ -495,7 +479,7 @@ def test_precond_inverse(case, xp, batch_A, batch_b):
 
     # Solve with preconditioner
     matvec_count = [0]
-    x, info = case.solver.impl(A, b, M=precond, x0=x0, rtol=rtol)
+    x, info = case.solver(A, b, M=precond, x0=x0, rtol=rtol)
 
     assert info == 0
     _assert_success(A=case.A, x=x, b=b, xp=xp, rtol=rtol)
@@ -510,7 +494,7 @@ def test_atol(solver, xp, batch_A, batch_b):
     skip_if_batching_unsupported(solver, batch_A, batch_b)
     # TODO: minres / tfqmr. It didn't historically use absolute tolerances, so
     # fixing it is less urgent.
-    if solver in (SOLVERS.minres, SOLVERS.tfqmr):
+    if solver in (minres, tfqmr):
         pytest.skip("TODO: Add atol to minres/tfqmr")
 
     # Historically this is tested as below, all pass but for some reason
@@ -544,15 +528,15 @@ def test_atol(solver, xp, batch_A, batch_b):
         if rtol == 0 and atol == 0:
             continue
 
-        if solver == SOLVERS.qmr:
+        if solver is qmr:
             if M is not None:
                 M = aslinearoperator(M)
                 M2 = IdentityOperator(shape=(*batch_A, 10, 10))
             else:
                 M2 = None
-            x, info = solver.impl(A, b, M1=M, M2=M2, rtol=rtol, atol=atol)
+            x, info = solver(A, b, M1=M, M2=M2, rtol=rtol, atol=atol)
         else:
-            x, info = solver.impl(A, b, M=M, rtol=rtol, atol=atol)
+            x, info = solver(A, b, M=M, rtol=rtol, atol=atol)
 
         assert info == 0
         _assert_success(A=A, x=x, b=b, xp=xp, rtol=rtol, atol=atol)
@@ -573,24 +557,24 @@ def test_zero_rhs(solver, xp, batch_A, batch_b):
     expected = xp.broadcast_to(b, (*np.broadcast_shapes(batch_A, batch_b), 10))
     for tol in tols:
         tol = float(tol)
-        x, info = solver.impl(A, b, rtol=tol)
+        x, info = solver(A, b, rtol=tol)
         assert info == 0
         xp_assert_close(x, expected, atol=1e-15)
 
-        x, info = solver.impl(A, b, rtol=tol, x0=xp.ones((*batch_b, 10)))
+        x, info = solver(A, b, rtol=tol, x0=xp.ones((*batch_b, 10)))
         assert info == 0
         xp_assert_close(x, expected, atol=tol)
 
-        if solver != SOLVERS.minres:
-            x, info = solver.impl(A, b, rtol=tol, atol=0.0, x0=xp.ones((*batch_b, 10)))
+        if solver is not minres:
+            x, info = solver(A, b, rtol=tol, atol=0.0, x0=xp.ones((*batch_b, 10)))
             if info == 0:
                 xp_assert_close(x, expected)
 
-            x, info = solver.impl(A, b, rtol=tol, atol=tol)
+            x, info = solver(A, b, rtol=tol, atol=tol)
             assert info == 0
             xp_assert_close(x, expected, atol=1e-300)
 
-            x, info = solver.impl(A, b, rtol=tol, atol=0.0)
+            x, info = solver(A, b, rtol=tol, atol=0.0)
             assert info == 0
             xp_assert_close(x, expected, atol=1e-300)
 
@@ -598,14 +582,14 @@ def test_zero_rhs(solver, xp, batch_A, batch_b):
 # unbatched test
 @pytest.mark.xfail(reason="see gh-18697")
 def test_maxiter_worsening(solver, xp):
-    if solver not in (SOLVERS.gmres, SOLVERS.lgmres, SOLVERS.qmr):
+    if solver not in (gmres, lgmres, qmr):
         # these were skipped from the very beginning, see gh-9201; gh-14160
         pytest.skip("Solver breakdown case")
     # Check error does not grow (boundlessly) with increasing maxiter.
     # This can occur due to the solvers hitting close to breakdown,
     # which they should detect and halt as necessary.
     # cf. gh-9100
-    if (solver == SOLVERS.lgmres and
+    if (solver is lgmres and
             platform.machine() not in ['x86_64' 'x86', 'aarch64', 'arm64']):
         # see gh-17839
         pytest.xfail(reason="fails on at least ppc64le, ppc64 and riscv64")
@@ -630,7 +614,7 @@ def test_maxiter_worsening(solver, xp):
 
     rtol = 1e-8
     for maxiter in range(1, 20):
-        x, info = solver.impl(A, v, maxiter=maxiter, rtol=rtol, atol=0.0)
+        x, info = solver(A, v, maxiter=maxiter, rtol=rtol, atol=0.0)
         if info == 0:
             _assert_success(A=A, x=x, b=v, xp=xp, rtol=rtol)
 
@@ -661,12 +645,12 @@ def test_x0_working(solver, xp, batch_A, batch_b):
     A, b, x0 = _setup_random_system(xp, batch_A, batch_b)
 
     rtol = 1e-6
-    if solver == SOLVERS.minres:
+    if solver is minres:
         kw = dict(rtol=rtol)
     else:
         kw = dict(atol=0.0, rtol=rtol)
 
-    x, info = solver.impl(A, b, **kw)
+    x, info = solver(A, b, **kw)
     assert info == 0
 
     if is_torch(xp) and b.dtype == xp.float32:
@@ -674,11 +658,11 @@ def test_x0_working(solver, xp, batch_A, batch_b):
 
     _assert_success(A=A, x=x, b=b, xp=xp, rtol=rtol)
 
-    x, info = solver.impl(A, b, x0=x0, **kw)
+    x, info = solver(A, b, x0=x0, **kw)
     assert info == 0
     OSX_64 = sys.platform == 'darwin' and platform.machine() == 'x86_64'
     WIN_ARM64 = sysconfig.get_platform() == 'win-arm64'
-    if solver == SOLVERS.tfqmr and (OSX_64 or WIN_ARM64):
+    if solver is tfqmr and (OSX_64 or WIN_ARM64):
         rtol = 6 * rtol
     _assert_success(A=A, x=x, b=b, xp=xp, rtol=rtol)
 
@@ -688,19 +672,19 @@ def test_x0_working(solver, xp, batch_A, batch_b):
 def test_x0_equals_Mb(case, xp, batch_A, batch_b):
     dtype = case.A.dtype
     case = xp_case(case, xp, batch_A, batch_b, rng=38)
-    if (case.solver == SOLVERS.cgs) and ("pd-F" in case.name):
+    if (case.solver is cgs) and ("pd-F" in case.name):
         pytest.skip("Struggles to converge with single precision")
-    if (case.solver == SOLVERS.bicgstab) and (case.name == 'nonsymposdef-bicgstab'):
+    if (case.solver is bicgstab) and (case.name == 'nonsymposdef-bicgstab'):
         pytest.skip("Solver fails due to numerical noise "
                     "on some architectures (see gh-15533).")
-    if case.solver == SOLVERS.tfqmr:
+    if case.solver is tfqmr:
         pytest.skip("Solver does not support x0='Mb'")
 
     A = case.A
     b = case.b
     x0 = 'Mb'
     rtol = 1e-8 if np.finfo(dtype).eps < 1e-8 else 1.5e-3
-    x, info = case.solver.impl(A, b, x0=x0, rtol=rtol)
+    x, info = case.solver(A, b, x0=x0, rtol=rtol)
 
     assert x0 == 'Mb'  # ensure that x0 is not overwritten
     assert info == 0
@@ -718,7 +702,7 @@ def test_x0_solves_problem_exactly(solver, xp, batch_A, batch_b):
     mat = xp.tile(xp.eye(2, dtype=dtype), (*batch_A, 1, 1))
     rhs = xp.tile(xp.asarray([-1., -1.], dtype=dtype), (*batch_b, 1))
 
-    sol, info = solver.impl(mat, rhs, x0=rhs)
+    sol, info = solver(mat, rhs, x0=rhs)
     expected = xp.broadcast_to(rhs, (*np.broadcast_shapes(batch_A, batch_b), 2))
     xp_assert_close(sol, expected)
     assert info == 0
@@ -727,7 +711,7 @@ def test_x0_solves_problem_exactly(solver, xp, batch_A, batch_b):
 @pytest.mark.parametrize("batch_A", [(), (5,), (0,)])
 @pytest.mark.parametrize("batch_b", [(), (6, 1), (0, 1)])
 def test_show(case, capsys, xp, batch_A, batch_b):
-    if case.solver != SOLVERS.tfqmr:
+    if case.solver != tfqmr:
         pytest.skip("tfqmr specific test")
     if "poisson2d-F" in case.name:
         pytest.skip("Hits divide-by-zero with single precision")
@@ -743,7 +727,7 @@ def test_show(case, capsys, xp, batch_A, batch_b):
         else nullcontext()
     )
     with ctx:
-        x, info = _isolve.tfqmr(case.A, case.b, callback=cb, show=True)
+        x, info = tfqmr(case.A, case.b, callback=cb, show=True)
 
     out, err = capsys.readouterr()
 
@@ -765,7 +749,7 @@ def test_show(case, capsys, xp, batch_A, batch_b):
 def test_positional_error(solver, xp, batch_A, batch_b):
     A, b, x0 = _setup_random_system(xp, batch_A, batch_b)
     with pytest.raises(TypeError, match="positional arguments"):
-        solver.impl(A, b, x0, 1e-5)
+        solver(A, b, x0, 1e-5)
 
 
 @pytest.mark.parametrize("batch_A", [(), (5,), (0,)])
@@ -773,11 +757,11 @@ def test_positional_error(solver, xp, batch_A, batch_b):
 @pytest.mark.parametrize("atol", ["legacy", None, -1])
 def test_invalid_atol(solver, atol, xp, batch_A, batch_b):
     skip_if_batching_unsupported(solver, batch_A, batch_b)
-    if solver == SOLVERS.minres:
+    if solver == minres:
         pytest.skip("minres has no `atol` argument")
     A, b, x0 = _setup_random_system(xp, batch_A, batch_b)
     with pytest.raises(ValueError):
-        solver.impl(A, b, x0, atol=atol)
+        solver(A, b, x0, atol=atol)
 
 
 class TestQMR:
@@ -1012,4 +996,4 @@ def test_nD(solver, xp):
     A = LinearOperator(shape=(*batch_A, 2, 2), matvec=id, dtype=xp.float64, xp=xp)
     b = xp.ones((*batch_b, 2))
     with pytest.raises(ValueError, match="expected 2-D"):
-        solver.impl(A, b)
+        solver(A, b)
