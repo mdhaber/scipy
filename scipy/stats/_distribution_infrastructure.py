@@ -1660,7 +1660,7 @@ class UnivariateDistribution(_ProbabilityDistribution):
 
         if not len(self._parameterizations):
             if np.lib.NumpyVersion(np.__version__) < "2.1.0":
-                xp_info_array = self._xp.asarray(1.)
+                xp_info_array = self._xp.asarray(1.)  # skip device check
                 inferred_dtype = xp_info_array.dtype
                 inferred_device = xp_device(xp_info_array)
             else:
@@ -2117,7 +2117,7 @@ class UnivariateDistribution(_ProbabilityDistribution):
         if len(cls._parameterizations) == 0:
             # xpx.default_device may not be the device on which arrays are created;
             # see gh-26576.
-            return cls(xp=xp, device=xp_device(xp.asarray(0)))
+            return cls(xp=xp, device=xp_device(xp.asarray(0)))  # skip device check
         if i_parameterization is None:
             n = cls._num_parameterizations()
             i_parameterization = rng.integers(0, max(0, n - 1), endpoint=True)
