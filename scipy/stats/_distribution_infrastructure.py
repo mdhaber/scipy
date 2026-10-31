@@ -1349,7 +1349,8 @@ def _generate_example(dist_family):
     shapes = [()] * n_parameters
     rng = np.random.default_rng(615681484984984)
     i = 0
-    dist = dist_family._draw(shapes, rng=rng, i_parameterization=i, xp=np)
+    xp = array_namespace(np.asarray(0))
+    dist = dist_family._draw(shapes, rng=rng, i_parameterization=i, xp=xp)
 
     rng = np.random.default_rng(2354873452)
     name = dist_family.__name__
@@ -1623,7 +1624,7 @@ class UnivariateDistribution(_ProbabilityDistribution):
             else:
                 self._xp = xp or self._xp
         except TypeError:
-            self._xp = np
+            self._xp = array_namespace(np.asarray(0))  # need array API version
 
         self.tol = tol
         self._dtype = dtype
@@ -1659,14 +1660,9 @@ class UnivariateDistribution(_ProbabilityDistribution):
         self._size = 1
 
         if not len(self._parameterizations):
-            if np.lib.NumpyVersion(np.__version__) < "2.1.0":
-                xp_info_array = self._xp.asarray(1.)  # skip device check
-                inferred_dtype = xp_info_array.dtype
-                inferred_device = xp_device(xp_info_array)
-            else:
-                xp_info = self._xp.__array_namespace_info__()
-                inferred_dtype = xp_info.default_dtypes()['real floating']
-                inferred_device = xp_info.default_device()
+            xp_info = self._xp.__array_namespace_info__()
+            inferred_dtype = xp_info.default_dtypes()['real floating']
+            inferred_device = xp_info.default_device()
 
             if parameters:
                 message = (f"The `{self.__class__.__name__}` distribution "

@@ -532,7 +532,12 @@ class _Gamma(ContinuousDistribution):
         return x ** (a - 1) * xp.exp(-x) / special.gamma(a)
 
 
-@xp_capabilities(cpu_only=True, skip_backends=[('cupy', 'needs special functions')])
+@xp_capabilities(cpu_only=True, skip_backends=[
+    ('cupy', 'needs special functions'),
+    ('array_api_strict', 'fancy indexing in EIM'),
+    ('jax.numpy', 'mutation'),
+    ('dask.array', 'no attempt')],
+)
 class Binomial(DiscreteDistribution):
     r"""Binomial distribution with prescribed success probability and number of trials
 

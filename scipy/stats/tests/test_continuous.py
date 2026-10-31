@@ -29,7 +29,7 @@ from scipy._external import array_api_extra as xpx
 from scipy._lib._testutils import mutually_broadcastable_shapes
 from scipy._lib._util import _RichResult
 from scipy._lib._array_api import (
-    make_xp_test_case, is_numpy, is_cupy, is_torch, xp_copy)
+    make_xp_test_case, is_numpy, is_cupy, is_torch, xp_copy, array_namespace)
 from scipy._lib._array_api_no_0d import xp_assert_close, xp_assert_equal, xp_assert_less
 
 
@@ -156,7 +156,7 @@ class Test_RealInterval:
         assert domain1.symbols is not domain2.symbols
 
 
-def draw_distribution_from_family(family, rng, shape_options, proportions=None, xp=np):
+def draw_distribution_from_family(family, rng, shape_options, proportions=None, *, xp):
     # If the distribution has parameters, choose a parameterization and
     # draw broadcastable shapes for the parameter arrays.
     proportions = (0.7, 0.1, 0.1, 0.1) if proportions is None else proportions
@@ -1074,7 +1074,7 @@ def test_sample_against_cdf(family, dist_shape, x_shape, fname, rng_type):
     if dist_shape and num_parameters == 0:
         pytest.skip("Distribution can't have a shape without parameters.")
 
-    dist = family._draw(dist_shape, rng, xp=np)
+    dist = family._draw(dist_shape, rng, xp=array_namespace(np.asarray(0)))
 
     n = 1024
     sample_size = (n,) + x_shape
